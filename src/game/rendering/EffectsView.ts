@@ -161,9 +161,6 @@ export class EffectsView {
     v?.flash(this.session.sim.now);
     if (e.element === 'physical') this.playFx('blood', x, y + 8, DEPTH.overlay);
     this.session.audio.play(isPlayer ? 'hurt' : 'hit');
-    if (isPlayer) {
-      this.scene.cameras.main.shake(90, 0.0025);
-    }
   }
 
   private onHeal(e: GameEventMap['heal']): void {
