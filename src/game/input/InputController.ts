@@ -40,6 +40,12 @@ export class InputController {
       this.downAt = { x: p.x, y: p.y, t: p.downTime };
     });
     scene.input.on('pointerup', (p: Phaser.Input.Pointer) => this.pointerUp(p));
+    session.setScreenTapHandler((cx, cy) => {
+      const canvas = this.scene.game.canvas;
+      const r = canvas.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      this.tapAt(((cx - r.left) * this.scene.scale.width) / r.width, ((cy - r.top) * this.scene.scale.height) / r.height);
+    });
   }
 
   private isTyping(e: KeyboardEvent): boolean {
@@ -132,8 +138,13 @@ export class InputController {
     this.downAt = null;
     if (!d || Math.hypot(p.x - d.x, p.y - d.y) > 14 * (window.devicePixelRatio || 1)) return;
     if (p.button === 2) return;
+    this.tapAt(p.x, p.y);
+  }
+
+  /** Toque/clique em coordenadas do canvas: seleciona entidade, abre loot ou caminha até o tile. */
+  tapAt(x: number, y: number): void {
     const cam = this.scene.cameras.main;
-    const wp = cam.getWorldPoint(p.x, p.y);
+    const wp = cam.getWorldPoint(x, y);
     const sim = this.session.sim;
     const hit = this.views.pick(wp.x, wp.y);
     if (hit) {
@@ -156,6 +167,7 @@ export class InputController {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
+    this.session.setScreenTapHandler(null);
     this.scene.input.removeAllListeners();
   }
 }

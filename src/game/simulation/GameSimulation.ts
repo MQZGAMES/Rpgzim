@@ -17,6 +17,7 @@ import type { NpcEntity, PlayerEntity } from '../entities/types';
 import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
 import { currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
 import { castSpell } from '../abilities/spells';
+import { bankGold, depotDeposit, depotDepositAll, depotWithdraw } from '../economy/depotService';
 import { createMonster, findSpawnCell, updateMonster } from '../ai/monsterAi';
 import {
   chooseDialogOption,
@@ -91,7 +92,7 @@ export class GameSimulation {
       corpses: new Map(),
       occupancy: new Map(),
       doorsOpen: new Map(),
-      ui: { dialog: null, shop: null, lootId: null, regionId: null, buildingId: null, pending: null },
+      ui: { dialog: null, shop: null, depot: null, lootId: null, regionId: null, buildingId: null, pending: null },
       seq: 0,
       nextDoorCheckAt: 0,
     };
@@ -266,7 +267,24 @@ export class GameSimulation {
     if (p.dead) return false;
     w.ui.pending = null;
     const solid = isSolid(w.map, x, y);
-    const path = pathTo(w, p, { x, y }, false, { stopWithin: solid ? 1 : 0, maxNodes: 3000 });
+    let path = pathTo(w, p, { x, y }, false, { stopWithin: solid ? 1 : 0, maxNodes: 12000 });
+    // destino bloqueado (água, árvore grande, muro, alguém parado ali): tenta o tile livre mais próximo
+    for (let r = 1, tries = 0; !path && r <= 10 && tries < 8; r++) {
+      const ring: { x: number; y: number; d: number }[] = [];
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (canEnter(w, nx, ny, false, p.id)) ring.push({ x: nx, y: ny, d: Math.hypot(dx, dy) + Math.hypot(nx - p.x, ny - p.y) * 0.01 });
+        }
+      ring.sort((a, b) => a.d - b.d);
+      for (const n of ring.slice(0, 3)) {
+        tries++;
+        path = pathTo(w, p, n, false, { maxNodes: 12000 });
+        if (path) break;
+      }
+    }
     if (!path) {
       message(w, 'Não há caminho até lá.', 'warning');
       return false;
@@ -338,6 +356,21 @@ export class GameSimulation {
   }
   closeShop(): void {
     this.world.ui.shop = null;
+  }
+  closeDepot(): void {
+    this.world.ui.depot = null;
+  }
+  depotDeposit(invIndex: number): boolean {
+    return depotDeposit(this.world, invIndex);
+  }
+  depotWithdraw(depotIndex: number): boolean {
+    return depotWithdraw(this.world, depotIndex);
+  }
+  depotDepositAll(): boolean {
+    return depotDepositAll(this.world);
+  }
+  bankGold(op: 'deposit' | 'withdraw', amount: number): boolean {
+    return bankGold(this.world, op, amount);
   }
   buy(itemId: string, qty: number): boolean {
     return buyItem(this.world, itemId, qty);

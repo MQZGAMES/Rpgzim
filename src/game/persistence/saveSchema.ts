@@ -7,7 +7,7 @@ import { isVocationId } from '../../domain/value-objects/ids';
 import { MAX_LEVEL, levelForXp } from '../../domain/rules/experience';
 import { sanitizeName } from '../../domain/rules/character';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveFile {
   version: number;
@@ -29,6 +29,13 @@ const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string
     if (!Array.isArray(c.hotbar)) c.hotbar = [];
     if (!isObj(c.stats)) c.stats = { monstersKilled: 0, deaths: 0, playTimeMs: 0 };
     return { ...raw, version: 2, character: c };
+  },
+  // v2 não tinha banco/depósito
+  2: (raw) => {
+    const c = isObj(raw.character) ? { ...raw.character } : {};
+    if (!Array.isArray(c.depot)) c.depot = [];
+    if (typeof c.bankGold !== 'number') c.bankGold = 0;
+    return { ...raw, version: 3, character: c };
   },
 };
 
@@ -77,6 +84,10 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
   const invRaw = Array.isArray(c.inventory) ? c.inventory : [];
   const inventory: (ItemStack | null)[] = new Array(slots).fill(null);
   for (let i = 0; i < Math.min(slots, invRaw.length); i++) inventory[i] = validStack(data, invRaw[i]);
+  const depotSlots = data.balance.player.depotSlots;
+  const depotRaw = Array.isArray(c.depot) ? c.depot : [];
+  const depot: (ItemStack | null)[] = new Array(depotSlots).fill(null);
+  for (let i = 0; i < Math.min(depotSlots, depotRaw.length); i++) depot[i] = validStack(data, depotRaw[i]);
   const equipment: CharacterState['equipment'] = {};
   const eqRaw = isObj(c.equipment) ? c.equipment : {};
   for (const slot of EQUIP_SLOTS as readonly EquipSlot[]) {
@@ -101,6 +112,8 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     inventory,
     equipment,
     gold: Math.floor(num(c.gold, 0, 0, 1e9)),
+    depot,
+    bankGold: Math.floor(num(c.bankGold, 0, 0, 1e9)),
     position: { x: Math.floor(num(pos.x, 0, 0, 10000)), y: Math.floor(num(pos.y, 0, 0, 10000)) },
     facing: c.facing === 'up' || c.facing === 'left' || c.facing === 'right' ? c.facing : 'down',
     hotbar: hotbar.length ? hotbar : [...data.vocations[c.vocation].spells],

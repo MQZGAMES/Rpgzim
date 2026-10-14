@@ -1,10 +1,11 @@
 // Mochila + equipamentos com detalhes do item, comparação com o equipado e ações (usar/equipar/descartar).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EQUIP_SLOTS, type EquipSlot } from '../../domain/entities/definitions';
 import { GAME_DATA } from '../../data';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import type { ItemView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
+import { ItemCell, ItemStats } from './ItemCell';
 
 type Selection = { from: 'bag'; index: number } | { from: 'slot'; slot: EquipSlot } | null;
 
@@ -69,6 +70,8 @@ export function ItemDetails({ item, equipped, actions }: { item: ItemView; equip
             {item.name}
             {item.count > 1 ? ` x${item.count}` : ''}
           </div>
+          <ItemStats item={item} size="md" />
+          {item.better && <div className="text-[11px] text-heal">Melhor que o equipado</div>}
           <div className="text-[12px] leading-snug text-muted">{item.description}</div>
         </div>
       </div>
@@ -94,6 +97,22 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
   const gold = useSnap((s) => s.player.gold);
   const stats = useSnap((s) => s.stats);
   const [sel, setSel] = useState<Selection>(null);
+  const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 1800);
+    return () => clearTimeout(t);
+  }, [notice]);
+  const quickUse = (i: number) => {
+    const it = inv[i];
+    if (!it) return;
+    if (it.equipable) {
+      if (session.equip(i)) {
+        setNotice({ id: Date.now(), text: `${it.name} equipado!` });
+        setSel(null);
+      }
+    } else if (it.usable) session.useItem(i);
+  };
   const selected = sel?.from === 'bag' ? inv[sel.index] : sel?.from === 'slot' ? eq[sel.slot] : null;
   const equippedSame = selected?.slot ? eq[selected.slot] : null;
 
@@ -111,6 +130,11 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
       >
         {it ? <ItemIcon icon={it.icon} size={36} /> : <ItemIcon icon={SLOT_ICON[slot]} size={30} className="opacity-20 grayscale" />}
         {it && it.count > 1 && <span className="text-outline absolute bottom-[-4px] right-[-2px] text-[10px]">{it.count}</span>}
+        {it && (
+          <span className="pointer-events-none absolute left-[-3px] top-[-4px]">
+            <ItemStats item={it} />
+          </span>
+        )}
       </button>
     );
   };
@@ -150,29 +174,18 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <div className="grid grid-cols-5 gap-1">
-            {inv.map((it, i) => {
-              const active = sel?.from === 'bag' && sel.index === i;
-              return (
-                <button
-                  type="button"
-                  key={i}
-                  onClick={() => setSel(it ? { from: 'bag', index: i } : null)}
-                  onDoubleClick={() => it && (it.equipable ? session.equip(i) : it.usable && session.useItem(i))}
-                  className={`frame-slot relative flex aspect-square items-center justify-center !border-[5px] ${active ? 'outline-2 outline-gold-light' : ''}`}
-                  aria-label={it ? `${it.name}${it.count > 1 ? ` x${it.count}` : ''}` : 'Espaço vazio'}
-                  data-testid={`bag-${i}`}
-                >
-                  {it && <ItemIcon icon={it.icon} size={32} className={it.blockedReason ? 'opacity-60' : ''} />}
-                  {it && it.count > 1 && <span className="text-outline absolute bottom-[-4px] right-[-2px] text-[10px]">{it.count}</span>}
-                </button>
-              );
-            })}
+            {inv.map((it, i) => (
+              <ItemCell key={i} item={it} active={sel?.from === 'bag' && sel.index === i} onTap={() => setSel(it ? { from: 'bag', index: i } : null)} onDoubleTap={() => quickUse(i)} testId={`bag-${i}`} />
+            ))}
           </div>
         </div>
       </div>
-      {selected && (
-        <div className="mt-3" />
+      {notice && (
+        <div key={notice.id} className="anim-pop mt-2 text-center text-[13px] text-heal" role="status" data-testid="equip-notice">
+          {notice.text}
+        </div>
       )}
+      {selected && <div className="mt-3" />}
       {selected && (
         <ItemDetails
           item={selected}
@@ -181,7 +194,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
             sel?.from === 'bag' ? (
               <>
                 {selected.equipable && (
-                  <PixelButton variant="gold" disabled={!selected.canEquipNow} onClick={() => session.equip(sel.index)}>
+                  <PixelButton variant="gold" disabled={!selected.canEquipNow} onClick={() => quickUse(sel.index)}>
                     Equipar
                   </PixelButton>
                 )}
@@ -214,7 +227,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
           }
         />
       )}
-      {!selected && <p className="mt-3 text-[12px] text-muted">Toque em um item para ver detalhes, comparar e equipar. Toque duplo equipa/usa direto.</p>}
+      {!selected && <p className="mt-3 text-[12px] text-muted">Toque em um item para ver detalhes e comparar. Toque duplo equipa ou usa direto. Números verdes (▲) indicam um item melhor que o equipado.</p>}
     </Panel>
   );
 }

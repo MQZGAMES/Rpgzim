@@ -39,7 +39,7 @@ function InteractButton({ size = 56 }: { size?: number }) {
         e.preventDefault();
         session.interact();
       }}
-      className="btn-gold anim-pop flex items-center gap-1 px-1 text-[12px]"
+      className="btn-gold anim-pop pointer-events-auto flex items-center gap-1 px-1 text-[12px]"
       style={{ minHeight: size - 12 }}
       data-testid="interact-button"
     >

@@ -82,6 +82,15 @@ export function buildWorld(): GameMap {
   b.npc('alchemist', 64, 14, 'down');
   b.sign(66, 21, 'Alquimia da Selene — poções e artefatos.');
 
+  // ------------------------------------------------------------------ Banco de Pedraluz (oeste da avenida)
+  b.building({ id: 'bank', sideWindows: [{ side: 'l', y: 11 }], name: 'Banco de Pedraluz', x: 9, y: 7, w: 11, h: 9, wall: 'stone', interior: 'stone', floor: 'marble', roof: 'blue', doorX: 14, windows: [11, 17], interiorWindows: [11, 17] });
+  b.carpet({ x: 13, y: 11, w: 3, h: 3 });
+  b.prop('counter', 13, 10).prop('chest', 10, 9).prop('chest', 18, 9).prop('bookshelf', 16, 9).prop('plant', 10, 13).prop('candle', 18, 13);
+  b.npc('banker', 14, 9, 'down');
+  b.reserve({ x: 7, y: 6, w: 15, h: 12 });
+  b.path([[14, 16], [14, 21]], 2);
+  b.sign(16, 18, 'Banco de Pedraluz — guarde ouro e itens com segurança.');
+
   // ------------------------------------------------------------------ praça
   b.prop('fountain', 46, 28);
   b.prop('stall_fruit', 39, 25).prop('stall_cloth', 55, 25);

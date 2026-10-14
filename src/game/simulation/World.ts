@@ -11,6 +11,8 @@ import type { Corpse, LootContainer, MonsterEntity, NpcEntity, PlayerEntity } fr
 export interface UiState {
   dialog: { npcId: string; pageId: string } | null;
   shop: { shopId: string; npcId: string } | null;
+  /** Banco/depósito aberto junto a um NPC banqueiro. */
+  depot: { npcId: string } | null;
   lootId: string | null;
   regionId: string | null;
   buildingId: string | null;

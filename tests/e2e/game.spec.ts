@@ -170,3 +170,49 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   await page.getByTestId('spell-arcane_bolt').tap();
   await expect.poll(async () => (await api(page, (a) => a.player())).mana).toBeLessThan(mana);
 });
+
+test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'um projeto basta');
+  await createCharacter(page, 'knight', 'Cofre');
+  const banker = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:banker')!;
+  await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).teleport(x!, y!), [banker.x, banker.y + 2]);
+  await page.getByTestId('interact-button').click();
+  await page.getByRole('button', { name: 'Abrir depósito' }).click();
+  await expect(page.getByTestId('depot-panel')).toBeVisible();
+  await page.getByTestId('depot-amount').fill('25');
+  await page.getByRole('button', { name: 'Depositar', exact: true }).click();
+  await expect(page.getByTestId('depot-bank-gold')).toContainText('25');
+  const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
+  await page.getByTestId(`depot-bag-${axe}`).click();
+  await expect(page.getByTestId('depot-slot-0')).toHaveAttribute('aria-label', /Machadinha/);
+  await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
+  // loot no chão: o botão contextual abre a janela
+  await api(page, (a) => a.teleport(80, 22));
+  const id = await api(page, (a) => a.teleportNear('slime', 1));
+  await page.evaluate((m) => (window.__RPGZIM__ as Api & { target(id: string): void }).target(m!), id);
+  await expect.poll(async () => (await api(page, (a) => a.loot())).length, { timeout: 30_000 }).toBeGreaterThan(0);
+  await api(page, (a) => a.ui()).then(async (ui) => ui.lootId === null && (await page.getByTestId('interact-button').click()));
+  await expect(page.getByTestId('loot-window')).toBeVisible();
+});
+
+test('mobile: toque duplo equipa; toque curto na área do joystick anda até o ponto', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
+  await createCharacter(page, 'knight', 'Dedos');
+  await expect(page.getByTestId('joystick')).toHaveCount(0);
+  await api(page, (a) => a.teleport(47, 24));
+  const before = await api(page, (a) => a.player());
+  const zone = (await page.getByTestId('joystick-zone').boundingBox())!;
+  await page.touchscreen.tap(zone.x + zone.width * 0.3, zone.y + zone.height * 0.5);
+  await expect.poll(async () => { const p = await api(page, (a) => a.player()); return p.x !== before.x || p.y !== before.y; }).toBe(true);
+  await expect(page.getByTestId('joystick')).toHaveCount(0);
+  // mochila: machadinha marcada como melhor e equipada com toque duplo
+  await page.getByTestId('btn-inventory').tap();
+  const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
+  const cell = page.getByTestId(`bag-${axe}`);
+  await expect(cell).toHaveAttribute('data-better', 'true');
+  const box = (await cell.boundingBox())!;
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.getByTestId('equip-notice')).toContainText('Machadinha');
+  expect((await api(page, (a) => a.player())).equipment.mainHand?.itemId).toBe('axe_hand');
+});

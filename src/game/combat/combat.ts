@@ -209,6 +209,7 @@ function killPlayer(w: World, killer: MonsterEntity): void {
   setTarget(w, null);
   w.ui.pending = null;
   w.ui.shop = null;
+  w.ui.depot = null;
   w.ui.dialog = null;
   w.ui.lootId = null;
   const before = c.experience;

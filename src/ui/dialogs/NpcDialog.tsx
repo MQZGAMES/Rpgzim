@@ -7,8 +7,8 @@ export function NpcDialog() {
   const d = useSnap((s) => s.dialog);
   if (!d) return null;
   return (
-    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(8px,env(safe-area-inset-bottom))] lg:bottom-6">
-      <div className="frame-parchment anim-sheet w-full max-w-[640px]" role="dialog" aria-label={`Conversa com ${d.npcName}`} data-testid="npc-dialog">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-[max(8px,env(safe-area-inset-bottom))] lg:bottom-6">
+      <div className="frame-parchment anim-sheet pointer-events-auto w-full max-w-[640px]" role="dialog" aria-label={`Conversa com ${d.npcName}`} data-testid="npc-dialog">
         <div className="flex gap-3">
           <div className="frame-slot-light hidden h-[74px] w-[58px] shrink-0 items-end justify-center overflow-hidden !border-[6px] sm:flex">
             <SpriteFrame sheet={d.sprite} scale={2} />
@@ -38,8 +38,8 @@ export function LootWindow() {
   const loot = useSnap((s) => s.loot);
   if (!loot) return null;
   return (
-    <div className="pointer-events-auto fixed inset-x-0 bottom-[max(196px,28dvh)] z-40 flex justify-center px-2 lg:bottom-auto lg:top-24">
-      <div className="frame-dark anim-pop w-full max-w-[340px]" role="dialog" aria-label={loot.title} data-testid="loot-window">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[max(196px,28dvh)] z-40 flex justify-center px-2 lg:bottom-auto lg:top-24">
+      <div className="frame-dark anim-pop pointer-events-auto w-full max-w-[340px]" role="dialog" aria-label={loot.title} data-testid="loot-window">
         <div className="mb-2 flex items-center gap-2">
           <ItemIcon icon="ui_bag" size={20} />
           <span className="flex-1 text-[14px] text-gold-light">{loot.title}</span>

@@ -40,6 +40,7 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
     n.facing = Math.abs(p.x - n.x) >= Math.abs(p.y - n.y) ? (p.x < n.x ? 'left' : 'right') : p.y < n.y ? 'up' : 'down';
     w.ui.dialog = { npcId: n.id, pageId: n.def.dialog[0]!.id };
     w.ui.shop = null;
+    w.ui.depot = null;
     w.ui.lootId = null;
     w.events.emit('dialogOpened', { npcId: n.id });
   } else if (target.kind === 'loot') {
@@ -49,6 +50,7 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
     w.ui.lootId = l.id;
     w.ui.dialog = null;
     w.ui.shop = null;
+    w.ui.depot = null;
     w.events.emit('lootChanged', { containerId: l.id });
   } else {
     const s = w.map.signs[Number(target.id)];
@@ -101,12 +103,13 @@ export function updatePendingInteraction(w: World): void {
 /** Fecha diálogos/lojas/loot quando o jogador se afasta. */
 export function updateUiDistance(w: World): void {
   const p = w.player;
-  const npcId = w.ui.dialog?.npcId ?? w.ui.shop?.npcId;
+  const npcId = w.ui.dialog?.npcId ?? w.ui.shop?.npcId ?? w.ui.depot?.npcId;
   if (npcId) {
     const n = w.npcs.get(npcId);
     if (!n || chebyshev(n, p) > NPC_RANGE + 1) {
       w.ui.dialog = null;
       w.ui.shop = null;
+      w.ui.depot = null;
     }
   }
   if (w.ui.lootId) {
@@ -138,6 +141,11 @@ export function chooseDialogOption(w: World, index: number): void {
         w.ui.shop = { shopId: npc.def.shopId, npcId: npc.id };
         w.events.emit('shopOpened', { shopId: npc.def.shopId, npcId: npc.id });
       }
+      break;
+    case 'openDepot':
+      w.ui.dialog = null;
+      w.ui.depot = { npcId: npc.id };
+      w.events.emit('depotOpened', { npcId: npc.id });
       break;
     case 'heal': {
       const c = w.player.character;

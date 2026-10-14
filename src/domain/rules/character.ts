@@ -39,6 +39,8 @@ export function createCharacter(
     inventory: new Array(data.balance.player.inventorySlots).fill(null),
     equipment: {},
     gold: voc.startingGold,
+    depot: new Array(data.balance.player.depotSlots).fill(null),
+    bankGold: 0,
     position: { ...opts.position },
     facing: 'down',
     hotbar: [...voc.spells],

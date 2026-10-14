@@ -1,5 +1,5 @@
 // Ícones 16x16 de itens, magias e interface. Formas desenhadas por primitivas com contorno automático.
-import { PixelCanvas, mix, type Color } from './lib/canvas.ts';
+import { PixelCanvas, mix, rgb, type Color } from './lib/canvas.ts';
 import { P, type Ramp } from './lib/palette.ts';
 import type { AtlasEntry } from './lib/atlas.ts';
 
@@ -157,6 +157,77 @@ function book(cover: Ramp) {
     c.disc(9.5, 6.5, 2.2, P.gold[3]!);
     c.set(9, 6, P.arcane[3]!);
     c.set(10, 7, P.arcane[2]!);
+  };
+}
+
+
+// ---------------------------------------------------------------- rampas e formas dos equipamentos avançados
+const rampOf = (...hex: string[]): Ramp => hex.map((h) => rgb(h));
+const R = {
+  runic: rampOf('#1c2240', '#2f3f74', '#4f6cb0', '#7fa4e0', '#bcd8ff', '#f0f8ff'),
+  dragon: rampOf('#3a0d10', '#6e1a14', '#a8321c', '#dc5a2a', '#f69a4a', '#ffd88a'),
+  royal: rampOf('#4a2e14', '#8a5a18', '#c48c22', '#ecbc3e', '#ffe27a', '#fff8cc'),
+  voidc: rampOf('#0c0818', '#22143e', '#3e2470', '#6a3cb0', '#a070e8', '#e0c8ff'),
+  emerald: rampOf('#0c2a1c', '#145032', '#1f7a48', '#33a862', '#6ad48a', '#c8f8d4'),
+  night: rampOf('#14122a', '#232046', '#363270', '#504a9e', '#7a72cc', '#b8b0f0'),
+  silk: rampOf('#4a4058', '#7a6e8e', '#a89cbc', '#d4cce0', '#f4f0fa'),
+  forestc: rampOf('#16261c', '#24402a', '#365e38', '#4e7e44', '#74a45a'),
+};
+
+function axeDouble(head: Ramp) {
+  return (c: PixelCanvas) => {
+    diag(c, 2, 14, 11, P.wood[3]!);
+    diag(c, 3, 14, 10, P.wood[2]!);
+    const cx = 10;
+    const cy = 5;
+    c.ellipse(cx + 3, cy - 1, 3, 4, (x, y, nx) => (nx < -0.2 ? head[4]! : nx < 0.4 ? head[3]! : head[2]!));
+    c.ellipse(cx - 1, cy + 3, 3, 3, (x, y, nx, ny) => (nx + ny < 0 ? head[4]! : head[2]!));
+    c.set(cx + 1, cy + 1, head[1]!);
+  };
+}
+
+function hammer(head: Ramp) {
+  return (c: PixelCanvas) => {
+    diag(c, 2, 14, 9, P.leather[3]!);
+    diag(c, 3, 14, 8, P.leather[2]!);
+    for (let i = 0; i < 5; i++) {
+      c.set(8 + i, 1 + i, head[4]!);
+      c.set(9 + i, 1 + i, head[3]!);
+      c.set(8 + i, 2 + i, head[3]!);
+      c.set(9 + i, 2 + i, head[2]!);
+      c.set(7 + i, 3 + i, head[2]!);
+      c.set(10 + i, 1 + i, head[2]!);
+    }
+    c.set(12, 3, head[5] ?? head[4]!);
+  };
+}
+
+function spearOf(tip: Ramp, shaft: Ramp, tassel: Ramp) {
+  return (c: PixelCanvas) => {
+    diag(c, 1, 14, 11, shaft[3]!);
+    diag(c, 2, 14, 10, shaft[2]!);
+    c.set(12, 3, tip[4]!);
+    c.set(13, 2, tip[5] ?? tip[4]!);
+    c.set(14, 1, tip[5] ?? tip[4]!);
+    c.set(12, 2, tip[3]!);
+    c.set(13, 3, tip[2]!);
+    c.set(11, 2, tip[3]!);
+    c.set(13, 4, tip[2]!);
+    c.set(10, 5, tassel[3]!);
+    c.set(9, 5, tassel[2]!);
+  };
+}
+
+function towerShield(face: Ramp, emblem: Ramp) {
+  return (c: PixelCanvas) => {
+    c.rect(3, 1, 10, 14, face[3]!);
+    c.vline(3, 1, 14, face[4]!);
+    c.hline(3, 12, 1, face[4]!);
+    c.vline(12, 1, 14, face[2]!);
+    c.hline(3, 12, 14, face[1]!);
+    for (const [x, y] of [[4, 2], [11, 2], [4, 13], [11, 13]] as const) c.set(x, y, emblem[4]!);
+    c.rect(7, 3, 2, 10, emblem[3]!);
+    c.rect(5, 6, 6, 2, emblem[3]!);
   };
 }
 
@@ -362,6 +433,46 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   ['boots_swift', shape(BOOTS, P.teal, P.gold)],
   ['ring_vigor', ring(P.red)],
   ['amulet_mana', amulet(P.blue)],
+  // equipamentos avançados
+  ['sword_steel', sword(P.steel, P.iron, 10)],
+  ['sword_runic', sword(R.runic, P.gold, 11)],
+  ['sword_dragon', sword(R.dragon, R.royal, 11)],
+  ['axe_double', axeDouble(P.steel)],
+  ['axe_executioner', axeDouble(R.dragon)],
+  ['hammer_war', hammer(P.steel)],
+  ['morningstar', mace(R.runic)],
+  ['bow_elven', bow(R.silk)],
+  ['bow_royal', bow(R.royal)],
+  ['spear_royal', spearOf(R.royal, P.wood, P.blue)],
+  ['wand_inferno', wand(R.dragon)],
+  ['wand_void', wand(R.voidc)],
+  ['rod_thorns', wand(R.emerald, true)],
+  ['rod_glacier', wand(R.runic, true)],
+  ['shield_steel', roundShield(P.steel, R.royal)],
+  ['shield_tower', towerShield(P.steel, P.blue)],
+  ['spellbook_adept', book(P.blue)],
+  ['spellbook_master', book(R.dragon)],
+  ['armor_scale', shape(TORSO, R.runic, P.iron)],
+  ['armor_ranger', shape(TORSO, R.forestc, P.leather)],
+  ['armor_plate', shape(TORSO, P.steel, R.royal)],
+  ['armor_royal', shape(TORSO, R.royal, P.red)],
+  ['robe_mystic', shape(ROBE, R.silk, P.purple)],
+  ['robe_archmage', shape(ROBE, R.night, R.royal)],
+  ['helmet_steel', shape(HELMET, P.steel, P.iron)],
+  ['helmet_royal', shape(HELMET, R.royal, P.red)],
+  ['hat_wizard', shape(HAT, R.night, R.silk)],
+  ['legs_silk', shape(LEGS, R.silk, P.purple)],
+  ['legs_plate', shape(LEGS, P.steel, R.royal)],
+  ['legs_royal', shape(LEGS, R.royal, P.red)],
+  ['boots_steel', shape(BOOTS, P.steel, P.iron)],
+  ['boots_wind', shape(BOOTS, P.ice, R.silk)],
+  ['ring_power', ring(P.red)],
+  ['ring_wisdom', ring(P.purple)],
+  ['ring_life', ring(R.emerald)],
+  ['amulet_guard', amulet(R.royal)],
+  ['amulet_archmage', amulet(R.dragon)],
+  ['potion_health_supreme', potion(R.dragon, true)],
+  ['potion_mana_supreme', potion(R.voidc, true)],
   ['arrow', arrow()],
   ['potion_health', potion(P.red)],
   ['potion_mana', potion(P.blue)],

@@ -67,21 +67,25 @@ export function useItemById(w: World, itemId: string): boolean {
 }
 
 export function equipItem(w: World, index: number): boolean {
+  const name = w.data.items[w.player.character.inventory[index]?.itemId ?? '']?.name;
   const res = equipFromInventory(w.data, w.player.character, index);
   if (!res.ok) {
     warnThrottled(w, `equip:${res.reason}`, res.reason === 'level' ? `Requer nível ${res.detail}.` : EQUIP_FAIL_MESSAGE[res.reason], 600);
     return false;
   }
+  if (name) message(w, `Equipado: ${name}.`, 'info');
   afterEquipmentChange(w);
   return true;
 }
 
 export function unequipSlot(w: World, slot: EquipSlot): boolean {
+  const name = w.data.items[w.player.character.equipment[slot]?.itemId ?? '']?.name;
   const res = unequip(w.data, w.player.character, slot);
   if (!res.ok) {
     warnThrottled(w, `unequip:${res.reason}`, EQUIP_FAIL_MESSAGE[res.reason], 600);
     return false;
   }
+  if (name) message(w, `Desequipado: ${name}.`, 'info');
   afterEquipmentChange(w);
   return true;
 }

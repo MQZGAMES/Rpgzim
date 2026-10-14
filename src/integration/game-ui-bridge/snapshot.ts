@@ -6,6 +6,7 @@ import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
 import { skillProgress } from '../../domain/rules/skills';
 import { castFailMessage } from '../../domain/rules/spells';
 import { countItem } from '../../domain/rules/inventory';
+import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
 import type { GameSimulation } from '../../game/simulation/GameSimulation';
@@ -27,6 +28,11 @@ export interface ItemView {
   canEquipNow: boolean;
   blockedReason: string | null;
   value: number;
+  /** Ataque (armas) e defesa (armadura + escudo) para exibição rápida. */
+  atk: number | null;
+  def: number | null;
+  /** Equipável agora e melhor que o item do mesmo slot. */
+  better: boolean;
 }
 
 export interface SpellView {
@@ -91,6 +97,7 @@ export interface UiSnapshot {
     sells: { item: ItemView; price: number; canAfford: boolean }[];
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
+  depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
   loot: { title: string; bags: number; gold: number; items: { bagId: string; index: number; item: ItemView }[] } | null;
   region: string | null;
   regionId: string | null;
@@ -143,6 +150,9 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     canEquipNow: !!def.slot && !blocked,
     blockedReason: blocked,
     value: def.value,
+    atk: itemAttack(def),
+    def: itemDefense(def),
+    better: isUpgrade(w.data, c, def),
   };
 }
 
@@ -188,6 +198,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const page = dialogNpc?.def.dialog.find((pg) => pg.id === w.ui.dialog!.pageId);
   const shopDef = w.ui.shop ? w.data.shops[w.ui.shop.shopId] : undefined;
   const shopNpc = w.ui.shop ? w.npcs.get(w.ui.shop.npcId) : undefined;
+  const depotNpc = w.ui.depot ? w.npcs.get(w.ui.depot.npcId) : undefined;
   const bags = w.ui.lootId ? nearbyLootBags(w) : [];
   const region = regionAt(w.map, p.x, p.y);
   const building = buildingAt(w.map, p.x, p.y);
@@ -241,7 +252,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     inventory: c.inventory.map((st) => (st ? itemView(sim, st) : null)),
     equipment,
     slotLabels: SLOT_LABEL,
-    potions: { health: countItem(c.inventory, 'potion_health') + countItem(c.inventory, 'potion_health_great'), mana: countItem(c.inventory, 'potion_mana') + countItem(c.inventory, 'potion_mana_great'), cooldown: remaining(p.cooldowns, POTION, w.now) },
+    potions: { health: ['potion_health', 'potion_health_great', 'potion_health_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), mana: ['potion_mana', 'potion_mana_great', 'potion_mana_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), cooldown: remaining(p.cooldowns, POTION, w.now) },
     ammo: p.stats.weapon.ammo ? (ammo && w.data.items[ammo.itemId]?.ammoType === p.stats.weapon.ammo ? ammo.count : 0) : null,
     interaction: near ? { kind: near.kind, id: near.id, label: near.label } : null,
     dialog: dialogNpc && page ? { npcName: dialogNpc.def.name, npcTitle: dialogNpc.def.title, sprite: dialogNpc.def.sprite, text: page.text, options: page.options.map((o) => o.label) } : null,
@@ -254,6 +265,9 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
             buys: shopDef.buys.map((o) => ({ item: itemView(sim, { itemId: o.itemId, count: 1 }), price: o.price, owned: countItem(c.inventory, o.itemId) })),
           }
         : null,
+    depot: depotNpc
+      ? { npcName: depotNpc.def.name, gold: c.gold, bankGold: c.bankGold, items: c.depot.map((st) => (st ? itemView(sim, st) : null)) }
+      : null,
     loot: bags.length
       ? {
           title: bags.length === 1 ? `Loot: ${bags[0]!.sourceName}` : `Loot ao redor (${bags.length} sacos)`,

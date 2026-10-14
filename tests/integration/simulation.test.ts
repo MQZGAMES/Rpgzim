@@ -376,3 +376,58 @@ describe('ajustes de jogabilidade', () => {
     expect(entered).toBe(false);
   });
 });
+
+describe('banco e melhorias de controle', () => {
+  it('fala com a banqueira, guarda e retira item e ouro', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    const c = w.player.character;
+    const banker = w.npcs.get('npc:banker')!;
+    expect(banker).toBeTruthy();
+    sim.teleportPlayer(banker.x, banker.y + 2);
+    sim.tapEntity(banker.id);
+    runUntil(sim, () => w.ui.dialog !== null, 4000);
+    expect(sim.depotDeposit(0)).toBe(false); // depósito ainda fechado
+    sim.dialogChoose(0);
+    expect(w.ui.depot?.npcId).toBe(banker.id);
+    const idx = c.inventory.findIndex((s) => s?.itemId === 'axe_hand');
+    expect(sim.depotDeposit(idx)).toBe(true);
+    expect(c.inventory[idx]).toBeNull();
+    const d = c.depot.findIndex((s) => s?.itemId === 'axe_hand');
+    expect(d).toBeGreaterThanOrEqual(0);
+    expect(sim.bankGold('deposit', 30)).toBe(true);
+    expect(c.bankGold).toBe(30);
+    expect(sim.depotWithdraw(d)).toBe(true);
+    expect(c.inventory.some((s) => s?.itemId === 'axe_hand')).toBe(true);
+    // afastar-se fecha o banco
+    sim.teleportPlayer(banker.x, banker.y + 5);
+    advance(sim, 200);
+    expect(w.ui.depot).toBeNull();
+  });
+
+  it('equipar avisa no registro de mensagens', () => {
+    const sim = makeSim('knight');
+    const msgs: string[] = [];
+    sim.events.on('message', (m) => msgs.push(m.text));
+    const idx = sim.world.player.character.inventory.findIndex((s) => s?.itemId === 'axe_hand');
+    expect(sim.equip(idx)).toBe(true);
+    expect(msgs).toContain('Equipado: Machadinha.');
+  });
+
+  it('clicar num tile bloqueado (meio do lago) caminha até a margem mais próxima', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    expect(sim.walkTo(13, 30)).toBe(true);
+    const last = w.player.path![w.player.path!.length - 1]!;
+    expect(Math.max(Math.abs(last.x - 13), Math.abs(last.y - 30))).toBeLessThanOrEqual(7);
+  });
+
+  it('o snapshot indica ataque/defesa e itens melhores na mochila', () => {
+    const sim = makeSim('knight');
+    const snap = buildSnapshot(sim, 1);
+    const axe = snap.inventory.find((i) => i?.itemId === 'axe_hand')!;
+    expect(axe.atk).toBe(12);
+    expect(axe.better).toBe(true);
+    expect(snap.equipment.offHand?.def).toBe(8);
+  });
+});

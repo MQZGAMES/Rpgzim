@@ -217,7 +217,7 @@ export interface MonsterDef {
 }
 
 // ------------------------------------------------------------------ NPCs e lojas
-export type DialogAction = 'close' | 'openShop' | 'heal' | 'next';
+export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next';
 
 export interface DialogOption {
   label: string;
@@ -272,6 +272,6 @@ export interface BalanceConfig {
     maxBlockChance: number;
     shieldingTriesPerHit: number;
   };
-  player: { inventorySlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
+  player: { inventorySlots: number; depotSlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };
 }

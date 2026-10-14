@@ -7,6 +7,7 @@ import { CharacterPanel } from '../character/CharacterPanel';
 import { SpellBookPanel } from '../spells/SpellBookPanel';
 import { NpcDialog, LootWindow } from '../dialogs/NpcDialog';
 import { ShopPanel } from '../shops/ShopPanel';
+import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { StatusPanel } from './StatusPanel';
 import { TargetFrame } from './TargetFrame';
@@ -59,6 +60,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       <NpcDialog />
       <LootWindow />
       <ShopPanel />
+      <DepotPanel />
       {panel === 'inventory' && <InventoryPanel onClose={close} />}
       {panel === 'character' && <CharacterPanel onClose={close} />}
       {panel === 'spells' && <SpellBookPanel onClose={close} />}

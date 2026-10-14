@@ -30,6 +30,25 @@ describe('formato de save', () => {
     expect(parsed.character.hotbar).toEqual(D.vocations.druid.spells);
     expect(parsed.character.stats.deaths).toBe(0);
   });
+  it('migra saves da versão 2 (sem banco) com depósito vazio', () => {
+    const c = make() as unknown as Record<string, unknown>;
+    delete c.depot;
+    delete c.bankGold;
+    const parsed = parseSave(D, { version: 2, savedAt: 1, character: c });
+    expect(parsed.character.bankGold).toBe(0);
+    expect(parsed.character.depot).toHaveLength(D.balance.player.depotSlots);
+    expect(parsed.character.depot.every((s) => s === null)).toBe(true);
+  });
+  it('preserva o depósito e o ouro do banco', () => {
+    const c = make();
+    c.depot[3] = { itemId: 'wolf_pelt', count: 7 };
+    c.depot[4] = { itemId: 'hack_item', count: 1 };
+    c.bankGold = 1234;
+    const back = parseSave(D, JSON.parse(JSON.stringify(toSaveFile(c)))).character;
+    expect(back.depot[3]).toEqual({ itemId: 'wolf_pelt', count: 7 });
+    expect(back.depot[4]).toBeNull();
+    expect(back.bankGold).toBe(1234);
+  });
   it('rejeita dados inválidos', () => {
     expect(() => parseSave(D, null)).toThrow(SaveValidationError);
     expect(() => parseSave(D, { version: 99, character: {} })).toThrow(SaveValidationError);

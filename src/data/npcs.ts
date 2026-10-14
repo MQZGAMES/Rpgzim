@@ -89,6 +89,30 @@ const list: NpcDef[] = [
     ],
   },
   {
+    id: 'banker',
+    name: 'Banqueira Clara',
+    title: 'Banco de Pedraluz',
+    sprite: 'npc_banker',
+    wanderRadius: 0,
+    greeting: 'Seus bens estão seguros aqui.',
+    dialog: [
+      {
+        id: 'start',
+        text: 'Bem-vindo ao Banco de Pedraluz! Guarde ouro e itens no seu depósito: nada se perde aqui, nem se você cair em batalha.',
+        options: [
+          { label: 'Abrir depósito', action: 'openDepot' },
+          { label: 'Como funciona?', action: 'next', goto: 'help' },
+          close,
+        ],
+      },
+      {
+        id: 'help',
+        text: 'Toque num item da mochila para guardá-lo e num item do depósito para retirá-lo. "Guardar loot" leva tudo, menos poções e flechas. O ouro pode ser depositado e sacado quando quiser.',
+        options: [{ label: 'Abrir depósito', action: 'openDepot' }, close],
+      },
+    ],
+  },
+  {
     id: 'guard',
     name: 'Guarda Tomé',
     title: 'Sentinela do portão leste',
@@ -128,7 +152,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Pode explorar as casas da vila à vontade. Dica: quando estiver com pouca vida, volte ao templo e peça uma bênção ao Sacerdote Oriel.',
+        text: 'Pode explorar as casas da vila à vontade. Dica: quando estiver com pouca vida, volte ao templo e peça uma bênção ao Sacerdote Oriel. E guarde seus tesouros no Banco de Pedraluz, a oeste da avenida!',
         options: [close],
       },
     ],
@@ -158,6 +182,32 @@ const equipmentSells: [string, number][] = [
   ['legs_chain', 240],
   ['boots_leather', 30],
   ['boots_swift', 650],
+  // nível 8+
+  ['helmet_steel', 800],
+  ['armor_scale', 1000],
+  ['shield_steel', 1000],
+  ['sword_steel', 900],
+  ['boots_steel', 700],
+  ['hammer_war', 1100],
+  ['legs_plate', 1100],
+  ['bow_elven', 1400],
+  ['spear_royal', 1500],
+  ['axe_double', 1600],
+  ['ring_power', 1600],
+  ['amulet_guard', 1900],
+  ['sword_runic', 2400],
+  ['armor_ranger', 2500],
+  ['armor_plate', 2700],
+  ['helmet_royal', 2600],
+  ['legs_royal', 2900],
+  ['ring_life', 2900],
+  ['shield_tower', 3200],
+  ['morningstar', 3300],
+  ['boots_wind', 3600],
+  ['bow_royal', 4400],
+  ['axe_executioner', 5000],
+  ['sword_dragon', 6200],
+  ['armor_royal', 6800],
 ];
 const potionSells: [string, number][] = [
   ['potion_health', 40],
@@ -174,6 +224,21 @@ const potionSells: [string, number][] = [
   ['robe_druid', 130],
   ['ring_vigor', 380],
   ['amulet_mana', 420],
+  ['potion_health_supreme', 260],
+  ['potion_mana_supreme', 270],
+  // nível 8+
+  ['legs_silk', 600],
+  ['hat_wizard', 900],
+  ['robe_mystic', 1100],
+  ['spellbook_adept', 1300],
+  ['ring_wisdom', 1600],
+  ['wand_inferno', 2100],
+  ['rod_thorns', 2100],
+  ['amulet_archmage', 4000],
+  ['spellbook_master', 4200],
+  ['robe_archmage', 4600],
+  ['wand_void', 5400],
+  ['rod_glacier', 5400],
 ];
 
 const list2: ShopDef[] = [

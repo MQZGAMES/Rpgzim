@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemDetails } from '../inventory/InventoryPanel';
+import { ItemStats } from '../inventory/ItemCell';
 
 export function ShopPanel() {
   const session = useSession();
@@ -42,7 +43,10 @@ export function ShopPanel() {
             >
               <ItemIcon icon={o.item.icon} size={32} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px]">{o.item.name}</span>
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 truncate text-[13px]">{o.item.name}</span>
+                  <ItemStats item={o.item} size="md" />
+                </span>
                 <span className={`block text-[11px] ${tab === 'buy' && o.extra ? 'text-hp-light' : 'text-gold-light'}`}>
                   {o.price} ouro{tab === 'sell' ? ` · você tem ${o.owned}` : ''}
                 </span>

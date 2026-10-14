@@ -40,6 +40,8 @@ export class GameSession {
   private frames = 0;
   private fpsAt = 0;
   private disposed = false;
+  /** Registrado pela cena Phaser: trata um toque em coordenadas de tela (clientX/clientY). */
+  private screenTapHandler: ((clientX: number, clientY: number) => void) | null = null;
 
   constructor(opts: SessionOptions) {
     let character = opts.character;
@@ -62,7 +64,7 @@ export class GameSession {
   private wireEvents(): void {
     const ev = this.sim.events;
     const markDirty = () => (this.dirty = true);
-    for (const type of ['damage', 'heal', 'itemsChanged', 'goldChanged', 'targetChanged', 'lootChanged', 'lootDropped', 'dialogOpened', 'shopOpened', 'levelUp', 'skillUp', 'playerDied', 'playerRespawned', 'buffApplied', 'spellCast', 'regionEntered', 'buildingChanged', 'xpGained'] as const) {
+    for (const type of ['damage', 'heal', 'itemsChanged', 'goldChanged', 'targetChanged', 'lootChanged', 'lootDropped', 'dialogOpened', 'shopOpened', 'depotOpened', 'levelUp', 'skillUp', 'playerDied', 'playerRespawned', 'buffApplied', 'spellCast', 'regionEntered', 'buildingChanged', 'xpGained'] as const) {
       this.disposers.push(ev.on(type, markDirty));
     }
     this.disposers.push(
@@ -164,14 +166,22 @@ export class GameSession {
       this.local.update({ panel: null });
       return true;
     }
-    if (w.ui.dialog || w.ui.shop || w.ui.lootId) {
+    if (w.ui.dialog || w.ui.shop || w.ui.depot || w.ui.lootId) {
       w.ui.dialog = null;
       w.ui.shop = null;
+      w.ui.depot = null;
       w.ui.lootId = null;
       this.dirty = true;
       return true;
     }
     return false;
+  }
+  setScreenTapHandler(fn: ((clientX: number, clientY: number) => void) | null): void {
+    this.screenTapHandler = fn;
+  }
+  /** Toque repassado pela interface (ex.: zona do joystick sem arrasto) como se fosse no mapa. */
+  tapScreen(clientX: number, clientY: number): void {
+    this.screenTapHandler?.(clientX, clientY);
   }
   move(x: number, y: number): void {
     this.sim.setMoveVector(x, y);
@@ -195,9 +205,7 @@ export class GameSession {
     this.dirty = true;
   }
   quickPotion(kind: 'health' | 'mana'): void {
-    const inv = this.sim.world.player.character.inventory;
-    const order = kind === 'health' ? ['potion_health', 'potion_health_great'] : ['potion_mana', 'potion_mana_great'];
-    const id = order.find((i) => inv.some((s) => s?.itemId === i));
+    const id = this.pickPotion(kind);
     if (!id) {
       this.pushMessage(kind === 'health' ? 'Sem poções de vida.' : 'Sem poções de mana.', 'warning');
       this.audio.play('error');
@@ -206,13 +214,26 @@ export class GameSession {
     this.sim.useItemById(id);
     this.dirty = true;
   }
+  /** Escolhe a menor poção que cobre o que falta; se nenhuma cobre, a mais forte disponível. */
+  private pickPotion(kind: 'health' | 'mana'): string | undefined {
+    const w = this.sim.world;
+    const c = w.player.character;
+    const missing = kind === 'health' ? w.player.stats.maxHealth - c.health : w.player.stats.maxMana - c.mana;
+    const owned = [...new Set(c.inventory.filter((s) => s).map((s) => s!.itemId))]
+      .map((id) => ({ id, v: (kind === 'health' ? w.data.items[id]?.use?.heal : w.data.items[id]?.use?.mana) ?? 0, other: kind === 'health' ? w.data.items[id]?.use?.mana : w.data.items[id]?.use?.heal }))
+      .filter((p) => p.v > 0 && !p.other && w.data.items[p.id]?.type === 'potion')
+      .sort((a, b) => a.v - b.v);
+    return (owned.find((p) => p.v >= missing * 0.8) ?? owned[owned.length - 1])?.id;
+  }
   useItem(index: number): void {
     this.sim.useItem(index);
     this.dirty = true;
   }
-  equip(index: number): void {
-    if (this.sim.equip(index)) this.audio.play('equip');
+  equip(index: number): boolean {
+    const ok = this.sim.equip(index);
+    if (ok) this.audio.play('equip');
     this.dirty = true;
+    return ok;
   }
   unequip(slot: EquipSlot): void {
     if (this.sim.unequip(slot)) this.audio.play('equip');
@@ -233,6 +254,30 @@ export class GameSession {
   }
   closeShop(): void {
     this.sim.closeShop();
+    this.dirty = true;
+  }
+  closeDepot(): void {
+    this.sim.closeDepot();
+    this.dirty = true;
+  }
+  depotDeposit(invIndex: number): boolean {
+    const ok = this.sim.depotDeposit(invIndex);
+    if (ok) this.audio.play('pickup');
+    this.dirty = true;
+    return ok;
+  }
+  depotWithdraw(depotIndex: number): boolean {
+    const ok = this.sim.depotWithdraw(depotIndex);
+    if (ok) this.audio.play('pickup');
+    this.dirty = true;
+    return ok;
+  }
+  depotDepositAll(): void {
+    if (this.sim.depotDepositAll()) this.audio.play('pickup');
+    this.dirty = true;
+  }
+  bankGold(op: 'deposit' | 'withdraw', amount: number): void {
+    if (this.sim.bankGold(op, amount)) this.audio.play('coin');
     this.dirty = true;
   }
   buy(itemId: string, qty: number): void {

@@ -6,6 +6,7 @@ import { test } from 'vitest';
 import { buildWorld } from '../../src/data/maps/world';
 import { PROPS } from '../../src/data/props';
 import { MONSTERS } from '../../src/data/monsters';
+import { NPCS } from '../../src/data/npcs';
 import { decodePng } from '../../scripts/art/lib/pngdecode.ts';
 import { PixelCanvas } from '../../scripts/art/lib/canvas.ts';
 import { roofTileName } from '../../src/game/world/roof';
@@ -62,7 +63,7 @@ test('renderiza o mundo', () => {
       items.push({ depth: -2, draw: () => c.blit(img, d.x * T, (d.y + 1) * T - img.h) });
     }
     for (const n of map.npcs) {
-      const img = sheet(`char_npc_${n.npcId === 'priest' ? 'priest' : n.npcId === 'smith' ? 'smith' : n.npcId === 'alchemist' ? 'alchemist' : n.npcId === 'merchant' ? 'merchant' : n.npcId === 'guard' ? 'guard' : n.npcId === 'farmer' ? 'farmer' : 'villager'}.png`, 24, 32);
+      const img = sheet(`char_${NPCS[n.npcId]!.sprite}.png`, 24, 32);
       items.push({ depth: (n.y + 1) * T + 1, draw: () => c.blit(img, n.x * T - 4, (n.y + 1) * T - 32) });
     }
     for (const s of map.spawns) {

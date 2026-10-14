@@ -29,6 +29,10 @@ export interface CharacterState {
   inventory: (ItemStack | null)[];
   equipment: Partial<Record<EquipSlot, ItemStack>>;
   gold: number;
+  /** Depósito do banco (capacidade fixa): itens guardados com segurança. */
+  depot: (ItemStack | null)[];
+  /** Ouro guardado no banco. */
+  bankGold: number;
   position: { x: number; y: number };
   facing: Facing;
   /** Barra de atalhos de magias (ids). */
