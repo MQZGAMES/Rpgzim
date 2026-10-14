@@ -112,3 +112,23 @@ describe('espiar o interior', () => {
     expect(isPeekingInside(b, b.doorX, front + 1)).toBe(false);
   });
 });
+
+describe('janelas laterais e do fundo', () => {
+  it('o lado de fora de cada janela é acessível e permite ver o interior', async () => {
+    const { isPeekingInside } = await import('../../src/game/world/roof');
+    let checked = 0;
+    for (const b of map.buildings) {
+      for (const s of b.sideWindows) {
+        const x = s.side === 'l' ? b.x - 1 : b.x + b.w;
+        expect(isSolid(map, x, s.y), `${b.id} janela ${s.side}`).toBe(false);
+        expect(isPeekingInside(b, x, s.y)).toBe(true);
+        checked++;
+      }
+      for (const wx of b.interiorWindows) {
+        expect(isPeekingInside(b, wx, b.y - 1)).toBe(true);
+        expect(isPeekingInside(b, wx + 100, b.y - 1)).toBe(false);
+      }
+    }
+    expect(checked).toBeGreaterThan(4);
+  });
+});

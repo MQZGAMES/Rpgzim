@@ -562,9 +562,22 @@ function wallTopSide(side: 'l' | 'r', style: IWall): PixelCanvas {
   }
   return c;
 }
+function wallTopSideWindow(side: 'l' | 'r', style: IWall): PixelCanvas {
+  const c = wallTopSide(side, style);
+  const frame = style === 'temple' ? P.gold : P.wood;
+  // moldura e vidro ocupando o centro do topo da parede lateral
+  c.rect(4, 2, 8, 12, frame[1]!);
+  c.rect(5, 3, 6, 10, P.water[4]!);
+  for (let i = 0; i < 4; i++) c.set(6 + (i % 2), 4 + i * 2, P.water[5]!);
+  c.hline(5, 10, 8, frame[2]!);
+  c.vline(side === 'l' ? 11 : 4, 2, 13, frame[3]!);
+  return c;
+}
 for (const style of ['wood', 'stone', 'temple'] as const) {
   add(`wtop_${style}_l`, wallTopSide('l', style));
   add(`wtop_${style}_r`, wallTopSide('r', style));
+  add(`wtop_${style}_l_window`, wallTopSideWindow('l', style));
+  add(`wtop_${style}_r_window`, wallTopSideWindow('r', style));
 }
 
 // ---------------------------------------------------------------- telhados

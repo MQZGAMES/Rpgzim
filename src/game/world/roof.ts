@@ -18,9 +18,14 @@ export function roofTileName(b: BuildingDef, x: number, y: number): string {
   return `roof_${b.roof}_${row}_${part}`;
 }
 
-/** Em frente à porta ou a uma janela (linha logo abaixo da fachada) ou na soleira: o interior fica visível. */
+/** Junto a uma porta ou janela (frente, fundo ou laterais), por fora: o interior fica visível. */
 export function isPeekingInside(b: BuildingDef, x: number, y: number): boolean {
   const frontRow = b.y + b.h;
-  if (y !== frontRow && !(y === frontRow - 1 && x === b.doorX)) return false;
-  return x === b.doorX || b.windows.includes(x);
+  // frente: porta (inclusive a soleira) e janelas da fachada
+  if (y === frontRow && (x === b.doorX || b.windows.includes(x))) return true;
+  if (y === frontRow - 1 && x === b.doorX) return true;
+  // fundo: logo atrás da parede, alinhado a uma janela da parede do fundo
+  if (y === b.y - 1 && b.interiorWindows.includes(x)) return true;
+  // laterais: ao lado da parede, alinhado a uma janela lateral
+  return b.sideWindows.some((s) => s.y === y && (s.side === 'l' ? x === b.x - 1 : x === b.x + b.w));
 }

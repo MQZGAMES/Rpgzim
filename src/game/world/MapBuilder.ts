@@ -175,8 +175,8 @@ export class MapBuilder {
   }
 
   // ------------------------------------------------------------------ construções (interior no mesmo mapa)
-  building(def: Omit<BuildingDef, 'windows' | 'interiorWindows'> & { windows?: number[]; interiorWindows?: number[] }): this {
-    const b: BuildingDef = { windows: [], interiorWindows: [], ...def };
+  building(def: Omit<BuildingDef, 'windows' | 'interiorWindows' | 'sideWindows'> & { windows?: number[]; interiorWindows?: number[]; sideWindows?: BuildingDef['sideWindows'] }): this {
+    const b: BuildingDef = { windows: [], interiorWindows: [], sideWindows: [], ...def };
     const index = this.buildings.length;
     this.buildings.push(b);
     const { x, y, w, h } = b;
@@ -200,8 +200,10 @@ export class MapBuilder {
     }
     // topo das paredes laterais
     for (let yy = y; yy < frontTop; yy++) {
-      this.walls[this.idx(x, yy)] = this.tile(`wtop_${b.interior}_l`);
-      this.walls[this.idx(x + w - 1, yy)] = this.tile(`wtop_${b.interior}_r`);
+      const winL = b.sideWindows.some((s) => s.side === 'l' && s.y === yy) ? '_window' : '';
+      const winR = b.sideWindows.some((s) => s.side === 'r' && s.y === yy) ? '_window' : '';
+      this.walls[this.idx(x, yy)] = this.tile(`wtop_${b.interior}_l${winL}`);
+      this.walls[this.idx(x + w - 1, yy)] = this.tile(`wtop_${b.interior}_r${winR}`);
       for (const xx of [x, x + w - 1]) {
         this.setSolid(xx, yy);
         this.sight[this.idx(xx, yy)] = 1;
@@ -234,6 +236,7 @@ export class MapBuilder {
     // a linha do telhado acima da construção e a frente da porta ficam livres de decoração
     this.reserve({ x: x - 1, y: y - 2, w: w + 2, h: 2 });
     this.reserve({ x: b.doorX - 1, y: frontBot + 1, w: 3, h: 2 });
+    for (const s of b.sideWindows) this.reserve({ x: s.side === 'l' ? x - 1 : x + w, y: s.y, w: 1, h: 1 });
     return this;
   }
 

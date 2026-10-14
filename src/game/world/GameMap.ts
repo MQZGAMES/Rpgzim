@@ -22,7 +22,10 @@ export interface BuildingDef {
   roof: RoofStyle;
   doorX: number;
   windows: number[];
+  /** Janelas da parede do fundo (colunas). */
   interiorWindows: number[];
+  /** Janelas das paredes laterais (lado e linha). */
+  sideWindows: { side: 'l' | 'r'; y: number }[];
   chimneyX?: number;
 }
 

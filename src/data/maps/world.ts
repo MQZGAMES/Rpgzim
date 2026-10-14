@@ -15,7 +15,7 @@ export function buildWorld(): GameMap {
 
   // ------------------------------------------------------------------ regiões
   b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: WORLD_H, pz: true, music: 'town', priority: 1 });
-  b.region({ id: 'temple', name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: true, music: 'temple', priority: 3 });
+  b.region({ id: 'temple',  name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: true, music: 'temple', priority: 3 });
   b.region({ id: 'wild', name: 'Bosque Selvagem', x: 72, y: 0, w: 32, h: WORLD_H, pz: false, music: 'wild', priority: 1 });
   b.region({ id: 'meadow', name: 'Clareira dos Slimes', x: 73, y: 24, w: 18, h: 20, pz: false, music: 'wild', priority: 2 });
   b.region({ id: 'boarwoods', name: 'Mata dos Javalis', x: 73, y: 3, w: 29, h: 18, pz: false, music: 'wild', priority: 2 });
@@ -46,7 +46,7 @@ export function buildWorld(): GameMap {
   b.path([[84, 30], [89, 31]], 2);
 
   // ------------------------------------------------------------------ Templo da Aurora (nascimento, área segura)
-  b.building({ id: 'temple', name: 'Templo da Aurora', x: 40, y: 4, w: 15, h: 12, wall: 'marble', interior: 'temple', floor: 'marble', roof: 'slate', doorX: 47, windows: [42, 44, 50, 52], interiorWindows: [44, 50] });
+  b.building({ id: 'temple', sideWindows: [{ side: 'l', y: 9 }, { side: 'r', y: 9 }], name: 'Templo da Aurora', x: 40, y: 4, w: 15, h: 12, wall: 'marble', interior: 'temple', floor: 'marble', roof: 'slate', doorX: 47, windows: [42, 44, 50, 52], interiorWindows: [44, 50] });
   b.carpet({ x: 46, y: 9, w: 3, h: 5 });
   b.prop('statue', 47, 6).prop('brazier', 45, 6).prop('brazier', 49, 6);
   b.prop('altar', 46, 7);
@@ -63,14 +63,14 @@ export function buildWorld(): GameMap {
   b.reserve({ x: 39, y: 3, w: 17, h: 18 });
 
   // ------------------------------------------------------------------ Vila: lojas ao norte da avenida
-  b.building({ id: 'smith', name: 'Ferraria', x: 26, y: 12, w: 9, h: 9, wall: 'stone', interior: 'stone', floor: 'stone', roof: 'red', doorX: 30, windows: [28, 32], interiorWindows: [], chimneyX: 28 });
+  b.building({ id: 'smith', sideWindows: [{ side: 'r', y: 16 }], name: 'Ferraria', x: 26, y: 12, w: 9, h: 9, wall: 'stone', interior: 'stone', floor: 'stone', roof: 'red', doorX: 30, windows: [28, 32], interiorWindows: [], chimneyX: 28 });
   b.prop('anvil', 27, 14).prop('weapon_rack', 31, 14).prop('armor_stand', 33, 14);
   b.prop('counter', 28, 15);
   b.prop('barrel', 33, 17).prop('crate', 27, 17);
   b.npc('smith', 29, 14, 'down');
   b.sign(32, 21, 'Ferraria de Pedraluz — armas, escudos e armaduras.');
 
-  b.building({ id: 'alchemy', name: 'Alquimia', x: 60, y: 12, w: 9, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'green', doorX: 64, windows: [62, 66], interiorWindows: [62], chimneyX: 66 });
+  b.building({ id: 'alchemy', sideWindows: [{ side: 'l', y: 16 }], name: 'Alquimia', x: 60, y: 12, w: 9, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'green', doorX: 64, windows: [62, 66], interiorWindows: [62], chimneyX: 66 });
   b.prop('potion_shelf', 61, 14).prop('cauldron', 66, 14).prop('bookshelf', 67, 14);
   b.prop('counter', 63, 15);
   b.prop('plant', 61, 17).prop('candle', 67, 17);
@@ -88,14 +88,14 @@ export function buildWorld(): GameMap {
   b.prop('well', 24, 25);
 
   // ------------------------------------------------------------------ casas exploráveis (sem troca de tela)
-  b.building({ id: 'house_rosa', name: 'Casa da Dona Rosa', x: 26, y: 38, w: 8, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'blue', doorX: 29, windows: [27, 31], interiorWindows: [31], chimneyX: 31 });
+  b.building({ id: 'house_rosa', sideWindows: [{ side: 'l', y: 42 }], name: 'Casa da Dona Rosa', x: 26, y: 38, w: 8, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'blue', doorX: 29, windows: [27, 31], interiorWindows: [31], chimneyX: 31 });
   b.prop('bed', 27, 41).prop('wardrobe', 28, 40).prop('fireplace', 31, 40).prop('table', 30, 42).prop('chair', 32, 42).prop('plant', 27, 43);
   b.npc('villager', 29, 42, 'down');
 
-  b.building({ id: 'house_elder', name: 'Casa do Ancião', x: 44, y: 38, w: 9, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'red', doorX: 48, windows: [46, 50], interiorWindows: [46, 50], chimneyX: 45 });
+  b.building({ id: 'house_elder', sideWindows: [{ side: 'r', y: 42 }, { side: 'l', y: 41 }], name: 'Casa do Ancião', x: 44, y: 38, w: 9, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'red', doorX: 48, windows: [46, 50], interiorWindows: [46, 50], chimneyX: 45 });
   b.prop('bookshelf', 45, 40).prop('bookshelf', 46, 40).prop('bed', 51, 41).prop('table_small', 49, 40).prop('chair', 50, 40).prop('chest', 45, 43).prop('candle', 51, 43);
 
-  b.building({ id: 'house_hunter', name: 'Casa do Caçador', x: 60, y: 38, w: 8, h: 9, wall: 'stone', interior: 'wood', floor: 'wood', roof: 'green', doorX: 63, windows: [61, 65], interiorWindows: [65], chimneyX: 61 });
+  b.building({ id: 'house_hunter', sideWindows: [{ side: 'r', y: 41 }], name: 'Casa do Caçador', x: 60, y: 38, w: 8, h: 9, wall: 'stone', interior: 'wood', floor: 'wood', roof: 'green', doorX: 63, windows: [61, 65], interiorWindows: [65], chimneyX: 61 });
   b.prop('weapon_rack', 61, 40).prop('bed', 66, 41).prop('table', 62, 42).prop('chair', 61, 42).prop('barrel', 66, 43).prop('crate', 61, 43);
 
   // ------------------------------------------------------------------ lago, fazenda e jardins
