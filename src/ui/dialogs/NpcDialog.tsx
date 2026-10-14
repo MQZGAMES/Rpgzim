@@ -49,13 +49,20 @@ export function LootWindow() {
         </div>
         <div className="flex flex-wrap gap-1">
           {loot.gold > 0 && (
-            <button type="button" className="frame-slot relative flex h-[50px] w-[50px] items-center justify-center !border-[5px]" onClick={() => session.takeLoot(-1)} title={`${loot.gold} de ouro`}>
+            <button type="button" className="frame-slot relative flex h-[50px] w-[50px] items-center justify-center !border-[5px]" onClick={() => session.takeLoot('gold')} title={`${loot.gold} de ouro`}>
               <ItemIcon icon="item_gold" size={32} />
               <span className="text-outline absolute bottom-[-4px] right-[-2px] text-[10px]">{loot.gold}</span>
             </button>
           )}
-          {loot.items.map((it, i) => (
-            <button type="button" key={`${it.itemId}-${i}`} className="frame-slot relative flex h-[50px] w-[50px] items-center justify-center !border-[5px]" onClick={() => session.takeLoot(i)} title={it.name}>
+          {loot.items.map(({ bagId, index, item: it }) => (
+            <button
+              type="button"
+              key={`${bagId}-${index}-${it.itemId}`}
+              className="frame-slot relative flex h-[50px] w-[50px] items-center justify-center !border-[5px]"
+              onClick={() => session.takeLoot({ bagId, index })}
+              title={`${it.name}${it.count > 1 ? ` x${it.count}` : ''}`}
+              aria-label={`Pegar ${it.name}`}
+            >
               <ItemIcon icon={it.icon} size={32} />
               {it.count > 1 && <span className="text-outline absolute bottom-[-4px] right-[-2px] text-[10px]">{it.count}</span>}
             </button>
@@ -64,6 +71,7 @@ export function LootWindow() {
         <PixelButton variant="gold" className="mt-3 w-full py-1" onClick={() => session.takeLoot('all')}>
           Pegar tudo
         </PixelButton>
+        <p className="mt-2 text-center text-[11px] text-muted">Toque num item para pegar só ele. O que ficar continua no chão.</p>
       </div>
     </div>
   );

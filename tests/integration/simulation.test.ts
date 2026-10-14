@@ -12,6 +12,7 @@ import { buildingAt } from '../../src/game/world/GameMap';
 import { advance, fixedLoot, makeSim, runUntil, worldMap } from '../helpers';
 import { hasLineOfSight } from '../../src/game/combat/combat';
 import { isPz } from '../../src/game/world/GameMap';
+import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
 import type { MonsterEntity } from '../../src/game/entities/types';
 
 function nearestMonster(sim: GameSimulation, monsterId: string): MonsterEntity {
@@ -182,7 +183,7 @@ describe('magias', () => {
     const p = sim.world.player;
     const fails: string[] = [];
     sim.events.on('actionFailed', (e) => fails.push(e.message));
-    // sem alvo
+    // sem inimigos ao alcance (no templo), não há alvo automático
     expect(sim.castSpell('arcane_bolt')).toBe(false);
     const boar = nearestMonster(sim, 'boar');
     placeNear(sim, boar, 3);
@@ -303,5 +304,75 @@ describe('inventário, lojas e save', () => {
     expect(sim2.world.player.y).toBe(23);
     expect(sim2.world.player.character.gold).toBe(999);
     expect(sim2.world.player.character.equipment.ammo?.itemId).toBe('arrow');
+  });
+});
+
+describe('ajustes de jogabilidade', () => {
+  it('janela de loot mostra todos os sacos ao redor; o que sobra continua no respectivo saco', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    sim.teleportPlayer(80, 22);
+    const p = w.player;
+    const mk = (id: string, x: number, y: number, itemId: string, count: number, gold: number) =>
+      w.lootBags.set(id, { id, x, y, items: [{ itemId, count }], gold, expiresAt: w.now + 60000, sourceName: 'Teste' });
+    mk('b1', p.x, p.y, 'slime_gel', 2, 3);
+    mk('b2', p.x + 1, p.y, 'boar_tusk', 1, 4);
+    mk('b3', p.x, p.y + 1, 'meat', 1, 0);
+    mk('longe', p.x + 4, p.y, 'goblin_ear', 1, 9);
+    sim.tapLoot('b1');
+    const snap = buildSnapshot(sim, 1);
+    expect(snap.loot?.bags).toBe(3);
+    expect(snap.loot?.gold).toBe(7);
+    expect(snap.loot?.items.map((i) => i.item.itemId).sort()).toEqual(['boar_tusk', 'meat', 'slime_gel']);
+    // pega só um item de um saco específico
+    const tusk = snap.loot!.items.find((i) => i.item.itemId === 'boar_tusk')!;
+    sim.takeLoot({ bagId: tusk.bagId, index: tusk.index });
+    expect(countItem(p.character.inventory, 'boar_tusk')).toBe(1);
+    expect(w.lootBags.get('b2')?.gold).toBe(4); // ouro do saco continua lá
+    expect(w.lootBags.get('b1')?.items.length).toBe(1);
+    // pegar tudo esvazia os sacos ao redor, mas não o distante
+    const gold = p.character.gold;
+    sim.takeLoot('all');
+    expect(p.character.gold).toBe(gold + 7);
+    expect([...w.lootBags.keys()]).toEqual(['longe']);
+    expect(w.ui.lootId).toBeNull();
+  });
+
+  it('com a mochila cheia, o item que não cabe continua no seu saco', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    const p = w.player;
+    sim.teleportPlayer(80, 22);
+    p.character.inventory.fill({ itemId: 'dagger', count: 1 });
+    w.lootBags.set('a', { id: 'a', x: p.x, y: p.y, items: [{ itemId: 'meat', count: 1 }], gold: 2, expiresAt: w.now + 60000, sourceName: 'A' });
+    w.lootBags.set('b', { id: 'b', x: p.x + 1, y: p.y, items: [{ itemId: 'boar_hide', count: 1 }], gold: 0, expiresAt: w.now + 60000, sourceName: 'B' });
+    sim.tapLoot('a');
+    sim.takeLoot('all');
+    expect(w.lootBags.get('a')?.items[0]?.itemId).toBe('meat');
+    expect(w.lootBags.get('a')?.gold).toBe(0);
+    expect(w.lootBags.get('b')?.items[0]?.itemId).toBe('boar_hide');
+  });
+
+  it('magia com alvo mira sozinha o inimigo mais próximo quando não há alvo', () => {
+    const sim = makeSim('sorcerer');
+    const slime = nearestMonster(sim, 'slime');
+    placeNear(sim, slime, 3);
+    expect(sim.world.player.targetId).toBeNull();
+    expect(sim.castSpell('arcane_bolt')).toBe(true);
+    expect(sim.world.player.targetId).not.toBeNull();
+  });
+
+  it('caminhar em frente a uma casa não atravessa a porta nem entra na construção', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    const house = w.map.buildings.find((b) => b.id === 'house_elder')!;
+    const door = w.map.doors.find((d) => d.buildingId === house.id)!;
+    sim.teleportPlayer(house.x - 1, door.y + 1);
+    let entered = false;
+    sim.events.on('buildingChanged', (e) => e.buildingId && (entered = true));
+    expect(sim.walkTo(house.x + house.w, door.y + 1)).toBe(true);
+    expect(w.player.path!.some((s) => s.x === door.x && (s.y === door.y || s.y === door.y - 1))).toBe(false);
+    runUntil(sim, () => !w.player.path?.length && !w.player.move, 15000);
+    expect(entered).toBe(false);
   });
 });

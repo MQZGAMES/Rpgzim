@@ -28,7 +28,7 @@ export function MessageLog({ max = 4 }: { max?: number }) {
         const opacity = age > 7000 ? 0 : age > 5000 ? 1 - (age - 5000) / 2000 : 1;
         if (opacity <= 0) return null;
         return (
-          <div key={m.id} className="text-outline w-fit max-w-[78vw] rounded-sm bg-[#120d18]/45 px-1 text-[12px] leading-snug lg:max-w-[440px] lg:text-[13px]" style={{ color: KIND_COLOR[m.kind], opacity }}>
+          <div key={m.id} className="text-outline w-fit max-w-full rounded-sm bg-[#120d18]/55 px-1 text-[12px] leading-snug lg:text-[13px]" style={{ color: KIND_COLOR[m.kind], opacity }}>
             {m.text}
           </div>
         );

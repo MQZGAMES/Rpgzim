@@ -4,6 +4,7 @@ import { POTION, isReady, startCooldown } from '../../domain/rules/cooldowns';
 import { EQUIP_FAIL_MESSAGE, equipFromInventory, unequip } from '../../domain/rules/equipment';
 import { addItem, removeAt } from '../../domain/rules/inventory';
 import type { World } from '../simulation/World';
+import type { LootContainer } from '../entities/types';
 import { message, warnThrottled } from '../simulation/World';
 import { refreshStats } from '../progression/progression';
 
@@ -119,10 +120,28 @@ export function takeLoot(w: World, containerId: string, which: number | 'all'): 
   if (full) warnThrottled(w, 'invfull', 'Mochila cheia! Venda ou descarte itens.', 1500);
   if (!bag.items.length && bag.gold <= 0) {
     w.lootBags.delete(bag.id);
-    if (w.ui.lootId === bag.id) w.ui.lootId = null;
+    if (w.ui.lootId === bag.id) w.ui.lootId = nearbyLootBags(w)[0]?.id ?? null;
   }
   w.events.emit('lootChanged', { containerId });
   w.events.emit('itemsChanged', {});
+}
+
+/** Sacos de loot sob o jogador e nos 8 tiles ao redor (mais próximos primeiro). */
+export function nearbyLootBags(w: World): LootContainer[] {
+  const p = w.player;
+  return [...w.lootBags.values()]
+    .filter((b) => Math.max(Math.abs(b.x - p.x), Math.abs(b.y - p.y)) <= 1)
+    .sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)));
+}
+
+/** Pega tudo de todos os sacos ao alcance; o que não couber continua no respectivo saco. */
+export function takeAllNearbyLoot(w: World): void {
+  for (const bag of nearbyLootBags(w)) takeLoot(w, bag.id, 'all');
+}
+
+/** Pega só o ouro de todos os sacos ao alcance. */
+export function takeNearbyGold(w: World): void {
+  for (const bag of nearbyLootBags(w)) if (bag.gold > 0) takeLoot(w, bag.id, -1);
 }
 
 /** Descarta itens da mochila (somem — sem itens no chão no MVP). */

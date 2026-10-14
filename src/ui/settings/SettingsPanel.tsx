@@ -12,7 +12,7 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   );
 }
 
-export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShowFps }: { onClose: () => void; zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void }) {
+export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShowFps, showLog, setShowLog }: { onClose: () => void; zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void; showLog: boolean; setShowLog: (v: boolean) => void }) {
   const session = useSession();
   const audio = session.audio;
   const [s, setS] = useState(audio.getSettings());
@@ -48,6 +48,10 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
       <label className="flex items-center gap-2 py-1 text-[13px]">
         <input type="checkbox" checked={showFps} onChange={(e) => setShowFps(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" />
         Mostrar FPS
+      </label>
+      <label className="flex items-center gap-2 py-1 text-[13px]">
+        <input type="checkbox" checked={showLog} onChange={(e) => setShowLog(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" data-testid="toggle-log" />
+        Mostrar mensagens do jogo
       </label>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Progresso</h3>
       <p className="text-[12px] text-muted">

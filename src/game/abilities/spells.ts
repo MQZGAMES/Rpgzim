@@ -9,7 +9,7 @@ import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { warnThrottled } from '../simulation/World';
-import { aggro, currentTarget, damageMonster, hasLineOfSight } from '../combat/combat';
+import { aggro, currentTarget, damageMonster, hasLineOfSight, targetNearest } from '../combat/combat';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function spellCooldownRemaining(w: World, spellId: string): number {
@@ -56,6 +56,10 @@ export function castSpell(w: World, spellId: string): boolean {
   if (!spell) return false;
   const p = w.player;
   const c = p.character;
+  // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo ao alcance
+  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !currentTarget(w) && !p.dead) {
+    targetNearest(w, spell.range);
+  }
   const check = castCheck(w, spell);
   if (!check.ok) {
     warnThrottled(w, `cast:${check.reason}`, castFailMessage(check.reason, check.detail), 600);

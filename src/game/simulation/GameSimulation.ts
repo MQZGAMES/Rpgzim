@@ -28,7 +28,7 @@ import {
   updateRegion,
   updateUiDistance,
 } from '../interaction/interaction';
-import { discardItem, equipItem, takeLoot, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
+import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { message, type World } from './World';
@@ -246,7 +246,7 @@ export class GameSimulation {
     for (const [id, bag] of w.lootBags)
       if (bag.expiresAt <= w.now) {
         w.lootBags.delete(id);
-        if (w.ui.lootId === id) w.ui.lootId = null;
+        if (w.ui.lootId === id) w.ui.lootId = [...w.lootBags.values()].find((b) => Math.max(Math.abs(b.x - p.x), Math.abs(b.y - p.y)) <= 1)?.id ?? null;
         w.events.emit('lootChanged', { containerId: id });
       }
   }
@@ -320,9 +320,12 @@ export class GameSimulation {
   discard(index: number): void {
     discardItem(this.world, index);
   }
-  takeLoot(which: number | 'all'): void {
-    const id = this.world.ui.lootId;
-    if (id) takeLoot(this.world, id, which);
+  /** Coleta da janela de loot: 'all' (todos os sacos ao redor), 'gold' ou um item de um saco específico. */
+  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number }): void {
+    if (!this.world.ui.lootId) return;
+    if (which === 'all') takeAllNearbyLoot(this.world);
+    else if (which === 'gold') takeNearbyGold(this.world);
+    else takeLoot(this.world, which.bagId, which.index);
   }
   closeLoot(): void {
     this.world.ui.lootId = null;

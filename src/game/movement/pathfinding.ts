@@ -67,6 +67,8 @@ export interface PathOptions {
   /** Célula livre de obstáculos estáticos (para a regra das quinas). */
   staticFree: Passable;
   maxNodes?: number;
+  /** Custo adicional para entrar numa célula (ex.: evitar portas quando não é o destino). */
+  costAt?: (x: number, y: number) => number;
   /** Aceita parar a esta distância (Chebyshev) do destino — útil para alvos ocupados. */
   stopWithin?: number;
 }
@@ -119,7 +121,7 @@ export function findPath(from: TilePos, to: TilePos, o: PathOptions): TilePos[] 
       if (!isGoal && !o.passable(nx, ny)) continue;
       if (isGoal && !o.staticFree(nx, ny) && stop === 0) continue;
       if (!canStep(o.staticFree, cx, cy, dx, dy)) continue;
-      const ng = gc + cost;
+      const ng = gc + cost + (o.costAt?.(nx, ny) ?? 0);
       if (ng < (g.get(ni) ?? Infinity)) {
         g.set(ni, ng);
         parent.set(ni, cur);

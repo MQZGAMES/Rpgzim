@@ -39,6 +39,16 @@ export function setTarget(w: World, id: string | null): void {
   w.events.emit('targetChanged', { targetId: id });
 }
 
+/** Seleciona o monstro vivo mais próximo ao alcance (com linha de visão); retorna se encontrou. */
+export function targetNearest(w: World, maxDistance: number): boolean {
+  const p = w.player;
+  const best = [...w.monsters.values()]
+    .filter((m) => m.alive && chebyshev(m, p) <= maxDistance && !isPz(w.map, m.x, m.y) && hasLineOfSight(w, p, m))
+    .sort((a, b) => chebyshev(a, p) - chebyshev(b, p) || Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  if (best) setTarget(w, best.id);
+  return !!best;
+}
+
 /** Seleciona o próximo monstro vivo mais próximo (ciclo). */
 export function cycleTarget(w: World, maxDistance = 9): void {
   const p = w.player;

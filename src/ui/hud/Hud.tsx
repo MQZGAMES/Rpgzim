@@ -21,7 +21,7 @@ function MenuButton({ icon, label, onClick, testId, hotkey }: { icon: string; la
   );
 }
 
-export function Hud({ zoomBias, setZoomBias, showFps, setShowFps }: { zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void }) {
+export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setShowLog }: { zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void; showLog: boolean; setShowLog: (v: boolean) => void }) {
   const session = useSession();
   const panel = useLocal((s) => s.panel);
   const touch = useLocal((s) => s.touch);
@@ -43,9 +43,15 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps }: { zoomBias: 
       <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] -translate-x-1/2 lg:top-3">
         <TargetFrame />
       </div>
-      <div className={`safe-x absolute left-0 ${touch ? 'bottom-[calc(46%+4px)]' : 'bottom-24 lg:bottom-28'}`}>
-        <MessageLog max={touch ? 4 : 6} />
-      </div>
+      {showLog && (
+        <div
+          className={`absolute left-[max(8px,env(safe-area-inset-left))] ${
+            touch ? 'bottom-[calc(136px+env(safe-area-inset-bottom))] max-w-[calc(100vw-196px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
+          }`}
+        >
+          <MessageLog max={touch ? 5 : 7} />
+        </div>
+      )}
       {touch ? <TouchActions /> : <DesktopActionBar />}
       <RegionBanner />
       <LevelUpToast />
@@ -56,7 +62,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps }: { zoomBias: 
       {panel === 'inventory' && <InventoryPanel onClose={close} />}
       {panel === 'character' && <CharacterPanel onClose={close} />}
       {panel === 'spells' && <SpellBookPanel onClose={close} />}
-      {panel === 'settings' && <SettingsPanel onClose={close} zoomBias={zoomBias} setZoomBias={setZoomBias} showFps={showFps} setShowFps={setShowFps} />}
+      {panel === 'settings' && <SettingsPanel onClose={close} zoomBias={zoomBias} setZoomBias={setZoomBias} showFps={showFps} setShowFps={setShowFps} showLog={showLog} setShowLog={setShowLog} />}
       {panel === 'help' && <HelpPanel onClose={close} touch={touch} />}
       <DeathOverlay />
     </div>

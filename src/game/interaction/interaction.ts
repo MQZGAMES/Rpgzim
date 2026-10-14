@@ -110,8 +110,10 @@ export function updateUiDistance(w: World): void {
     }
   }
   if (w.ui.lootId) {
-    const l = w.lootBags.get(w.ui.lootId);
-    if (!l || chebyshev(l, p) > LOOT_RANGE + 1) w.ui.lootId = null;
+    // a janela mostra todos os sacos ao redor; fecha quando não sobra nenhum ao alcance
+    const near = [...w.lootBags.values()].filter((l) => chebyshev(l, p) <= LOOT_RANGE);
+    if (!near.length) w.ui.lootId = null;
+    else if (!near.some((l) => l.id === w.ui.lootId)) w.ui.lootId = near[0]!.id;
   }
 }
 
@@ -155,7 +157,10 @@ export function updateDoors(w: World): void {
   w.nextDoorCheckAt = w.now + 100;
   const movers = [w.player, ...w.npcs.values()];
   for (const d of w.map.doors) {
-    const near = movers.some((m) => Math.abs(m.x - d.x) <= 1 && m.y >= d.y - 2 && m.y <= d.y + 1);
+    const near = movers.some((m) => {
+      if (m.x === d.x) return m.y >= d.y - 2 && m.y <= d.y + 1; // de frente, na soleira ou logo dentro
+      return Math.abs(m.x - d.x) === 1 && m.y === d.y - 2; // dentro, ao lado da porta
+    });
     const was = w.doorsOpen.get(d.id) ?? false;
     if (near !== was) {
       w.doorsOpen.set(d.id, near);

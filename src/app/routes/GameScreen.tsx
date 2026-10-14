@@ -12,11 +12,11 @@ import { installDebugApi } from '../debugApi';
 import { resetViewportZoom } from '../preventZoom';
 
 const PREF_KEY = 'rpgzim:prefs';
-function loadPrefs(): { zoomBias: number; showFps: boolean } {
+function loadPrefs(): { zoomBias: number; showFps: boolean; showLog: boolean } {
   try {
-    return { zoomBias: 0, showFps: false, ...(JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}') as object) };
+    return { zoomBias: 0, showFps: false, showLog: true, ...(JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}') as object) };
   } catch {
-    return { zoomBias: 0, showFps: false };
+    return { zoomBias: 0, showFps: false, showLog: true };
   }
 }
 
@@ -75,6 +75,8 @@ export function GameScreen({ character, onExit }: { character: CharacterState; o
             setZoomBias={(zoomBias) => setPrefs((p) => ({ ...p, zoomBias }))}
             showFps={prefs.showFps}
             setShowFps={(showFps) => setPrefs((p) => ({ ...p, showFps }))}
+            showLog={prefs.showLog}
+            setShowLog={(showLog) => setPrefs((p) => ({ ...p, showLog }))}
           />
         </SessionContext.Provider>
       )}

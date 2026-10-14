@@ -89,8 +89,20 @@ export function pathTo(w: World, m: Mover, goal: TilePos, forMonster: boolean, o
       staticFree: (x, y) => staticFree(w, x, y) && !(forMonster && isPz(w.map, x, y)),
       stopWithin: opts.stopWithin,
       maxNodes: opts.maxNodes,
+      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0),
     },
   );
+}
+
+const doorCache = new WeakMap<object, Set<number>>();
+/** Células de porta (soleira e batente) — evitadas pelo pathfinding quando não são necessárias. */
+function doorCells(w: World): Set<number> {
+  let s = doorCache.get(w.map);
+  if (!s) {
+    s = new Set(w.map.doors.flatMap((d) => [cellIndex(w.map, d.x, d.y), cellIndex(w.map, d.x, d.y - 1)]));
+    doorCache.set(w.map, s);
+  }
+  return s;
 }
 
 /** Passo guloso em direção ao alvo (barato); retorna false se nenhum vizinho aproxima. */

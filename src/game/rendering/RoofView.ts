@@ -44,7 +44,8 @@ export class RoofView {
     for (const r of this.roofs) {
       const { top, bottom } = roofRows(r.b);
       let target = 1;
-      if (insideId === r.b.id) target = 0;
+      // pisar só na soleira (linha de baixo da porta) não revela o interior; é preciso atravessar a parede
+      if (insideId === r.b.id && py <= r.b.y + r.b.h - 1.5) target = 0;
       else if (px > r.b.x - 0.6 && px < r.b.x + r.b.w - 0.4 && py >= top - 1.5 && py <= bottom) target = 0.45;
       r.alpha += (target - r.alpha) * k;
       if (Math.abs(r.alpha - target) < 0.01) r.alpha = target;

@@ -44,6 +44,6 @@ export function resetViewportZoom(): void {
   const meta = document.querySelector<HTMLMetaElement>('meta[name=viewport]');
   if (!meta) return;
   const content = 'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover';
-  meta.setAttribute('content', content + ', x=1');
+  meta.setAttribute('content', content.replace('maximum-scale=1,', 'maximum-scale=1.0,'));
   requestAnimationFrame(() => meta.setAttribute('content', content));
 }

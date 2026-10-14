@@ -11,6 +11,7 @@ import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
 import type { GameSimulation } from '../../game/simulation/GameSimulation';
 import { castCheck, spellCooldownRemaining } from '../../game/abilities/spells';
 import { nearbyInteractables } from '../../game/interaction/interaction';
+import { nearbyLootBags } from '../../game/inventory/inventoryService';
 
 export interface ItemView {
   itemId: string;
@@ -90,7 +91,7 @@ export interface UiSnapshot {
     sells: { item: ItemView; price: number; canAfford: boolean }[];
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
-  loot: { id: string; title: string; gold: number; items: ItemView[] } | null;
+  loot: { title: string; bags: number; gold: number; items: { bagId: string; index: number; item: ItemView }[] } | null;
   region: string | null;
   regionId: string | null;
   building: string | null;
@@ -187,7 +188,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const page = dialogNpc?.def.dialog.find((pg) => pg.id === w.ui.dialog!.pageId);
   const shopDef = w.ui.shop ? w.data.shops[w.ui.shop.shopId] : undefined;
   const shopNpc = w.ui.shop ? w.npcs.get(w.ui.shop.npcId) : undefined;
-  const bag = w.ui.lootId ? w.lootBags.get(w.ui.lootId) : undefined;
+  const bags = w.ui.lootId ? nearbyLootBags(w) : [];
   const region = regionAt(w.map, p.x, p.y);
   const building = buildingAt(w.map, p.x, p.y);
   const ammo = c.equipment.ammo;
@@ -253,7 +254,14 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
             buys: shopDef.buys.map((o) => ({ item: itemView(sim, { itemId: o.itemId, count: 1 }), price: o.price, owned: countItem(c.inventory, o.itemId) })),
           }
         : null,
-    loot: bag ? { id: bag.id, title: `Loot: ${bag.sourceName}`, gold: bag.gold, items: bag.items.map((st) => itemView(sim, st)) } : null,
+    loot: bags.length
+      ? {
+          title: bags.length === 1 ? `Loot: ${bags[0]!.sourceName}` : `Loot ao redor (${bags.length} sacos)`,
+          bags: bags.length,
+          gold: bags.reduce((s, b) => s + b.gold, 0),
+          items: bags.flatMap((b) => b.items.map((st, index) => ({ bagId: b.id, index, item: itemView(sim, st) }))),
+        }
+      : null,
     region: region?.name ?? null,
     regionId: region?.id ?? null,
     building: building?.name ?? null,
