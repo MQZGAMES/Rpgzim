@@ -4,6 +4,8 @@ RPG 2D top-down de fantasia medieval, **mobile-first**, para navegador. Mecânic
 (alvo + ataque automático, skills que evoluem pelo uso, Magic Level, vocações, loot) e apresentação
 inspirada nos RPGs de GBA — com **pixel art 100% própria, gerada por código** (nenhum asset de terceiros).
 
+**Jogar:** https://mqzgames.github.io/Rpgzim/
+
 Stack: Phaser 3.90 · React 19 · TypeScript 5.9 (strict) · Vite 7 · Tailwind 4 · Vitest 4 · Playwright.
 
 ## Rodar
