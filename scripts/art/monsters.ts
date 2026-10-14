@@ -147,3 +147,137 @@ function boarFrame(step: number, dead = false): PixelCanvas {
 export function buildBoarFrames(): PixelCanvas[] {
   return [boarFrame(0), boarFrame(1), boarFrame(2), boarFrame(0, true)];
 }
+
+// ------------------------------------------------------------------ Sapo do Pântano (quadros 24x24, "blob")
+function toadFrame(sq: number, dead = false): PixelCanvas {
+  const c = new PixelCanvas(24, 24);
+  const g = P.forest;
+  const cx = 12;
+  if (dead) {
+    c.ellipse(12, 19, 8, 2.8, (x, y, nx, ny) => (ny < -0.2 ? g[3]! : g[1]!));
+    c.set(8, 18, P.gold[3]!);
+    c.set(15, 18, P.gold[3]!);
+    c.outline(sel);
+    return c;
+  }
+  const rx = 7.5 + sq * 0.6;
+  const ry = 5.2 - sq * 0.5;
+  const cy = 20 - ry;
+  // patas traseiras
+  for (const s of [-1, 1]) c.ellipse(cx + s * 6.5, 19, 3, 1.8, g[2]!);
+  c.ellipse(cx, cy, rx, ry, (x, y, nx, ny) => {
+    const shade = nx * 0.4 + ny * 0.8;
+    if (ny > 0.35) return mix(P.sand[2]!, g[3]!, 0.3);
+    if (hash2(x, y, 41) > 0.9) return g[1]!;
+    return shade < -0.4 ? g[4]! : shade < 0.2 ? g[3]! : g[2]!;
+  });
+  // olhos saltados
+  for (const ex of [cx - 4, cx + 4]) {
+    c.disc(ex, cy - ry + 1, 2.2, P.gold[3]!);
+    c.set(ex, cy - ry + 1, P.outline);
+    c.set(ex - 1, cy - ry, P.white);
+  }
+  c.hline(cx - 4, cx + 4, cy + 1, g[0]!);
+  c.outline(sel);
+  return c;
+}
+export function buildToadFrames(): PixelCanvas[] {
+  return [toadFrame(0), toadFrame(1), toadFrame(-0.5), toadFrame(-1), toadFrame(0, true)];
+}
+
+// ------------------------------------------------------------------ Aranha das Ruínas (quadros 28x24, "blob" com pernas animadas)
+function spiderFrame(step: number, dead = false): PixelCanvas {
+  const c = new PixelCanvas(28, 24);
+  const b = P.purple;
+  const cx = 14;
+  const legs = (phase: number) => {
+    for (let i = 0; i < 4; i++) {
+      const wob = ((i + phase) % 2 === 0 ? 1 : -1) * (dead ? 0 : 1);
+      for (const s of [-1, 1]) {
+        const x0 = cx + s * 3;
+        const y0 = 13 + i;
+        const kx = cx + s * (7 + i * 0.6);
+        const ky = 9 + i * 2 + wob;
+        const fx = cx + s * (11 + (i % 2));
+        const fy = 16 + i * 1.6 - wob;
+        c.line(x0, y0, kx, ky, b[0]!);
+        c.line(kx, ky, fx, fy, b[1]!);
+      }
+    }
+  };
+  if (dead) {
+    c.ellipse(cx, 18, 7, 3, b[1]!);
+    for (const s of [-1, 1]) for (let i = 0; i < 4; i++) c.line(cx + s * 4, 17, cx + s * (8 + i), 12 + i, b[0]!);
+    c.outline(sel);
+    return c;
+  }
+  legs(step);
+  c.ellipse(cx, 15, 6.5, 5, (x, y, nx, ny) => (nx + ny < -0.6 ? b[3]! : nx + ny < 0.4 ? b[2]! : b[1]!));
+  c.ellipse(cx, 9.5, 4, 3.2, (x, y, nx, ny) => (nx + ny < -0.4 ? b[2]! : b[1]!));
+  // marca vermelha nas costas e olhos
+  c.set(cx, 14, P.red[3]!);
+  c.set(cx - 1, 15, P.red[3]!);
+  c.set(cx + 1, 15, P.red[3]!);
+  c.set(cx, 16, P.red[2]!);
+  for (const ex of [cx - 2, cx - 1, cx + 1, cx + 2]) c.set(ex, 9, P.red[4]!);
+  c.set(cx - 1, 11, P.bone[3]!);
+  c.set(cx + 1, 11, P.bone[3]!);
+  c.outline(sel);
+  return c;
+}
+export function buildSpiderFrames(): PixelCanvas[] {
+  return [spiderFrame(0), spiderFrame(1), spiderFrame(0), spiderFrame(1), spiderFrame(0, true)];
+}
+
+// ------------------------------------------------------------------ Lobo Cinzento (quadros 32x24, quadrúpede de perfil)
+function wolfFrame(step: number, dead = false): PixelCanvas {
+  const c = new PixelCanvas(32, 24);
+  const f = P.cloth;
+  const fur = (x: number, y: number, nx: number, ny: number): Color => {
+    const shade = nx * 0.2 + ny * 0.85;
+    if (shade < -0.5) return f[4]!;
+    if (shade < -0.05) return f[3]!;
+    if (shade < 0.45) return f[2]!;
+    return f[1]!;
+  };
+  const bob = step === 0 ? 0 : 1;
+  if (!dead) {
+    const off = step === 0 ? [0, 0, 0, 0] : step === 1 ? [2, -1, -1, 2] : [-1, 2, 2, -1];
+    [7, 10, 18, 21].forEach((x, i) => {
+      for (let y = 14; y <= 19; y++) {
+        const dx = Math.round(((y - 14) / 5) * (off[i]! * 0.5));
+        c.set(x + dx, y, i % 2 ? f[1]! : f[2]!);
+        c.set(x + dx + 1, y, f[1]!);
+      }
+      c.set(x + Math.round(off[i]! * 0.5), 20, P.outline);
+    });
+  }
+  // corpo esguio, cauda e cabeça
+  c.ellipse(13, 11 + bob, 9, 4.5, fur);
+  for (let i = 0; i < 6; i++) c.set(3 - Math.floor(i / 3), 8 + i + bob - (i > 3 ? 1 : 0), i < 3 ? f[3]! : f[2]!);
+  c.ellipse(22.5, 8.5 + bob, 4, 3.6, fur);
+  // focinho
+  c.rect(25, 9 + bob, 4, 2, f[3]!);
+  c.set(28, 9 + bob, P.outline);
+  c.hline(25, 28, 11 + bob, f[1]!);
+  // orelhas pontudas
+  c.set(20, 4 + bob, f[2]!);
+  c.set(20, 5 + bob, f[2]!);
+  c.set(21, 5 + bob, f[3]!);
+  c.set(23, 4 + bob, f[2]!);
+  c.set(23, 5 + bob, f[3]!);
+  // olho âmbar e peito claro
+  c.set(23, 8 + bob, P.gold[4]!);
+  for (let y = 10; y < 14; y++) c.paint(19 + (y - 10), y + bob, P.cloth[4]!);
+  c.outline(sel);
+  if (dead) {
+    const out = new PixelCanvas(32, 24);
+    out.blit(c, 0, 5, { flipY: true });
+    out.map((col) => (col ? mix(col, P.black, 0.2) : 0));
+    return out;
+  }
+  return c;
+}
+export function buildWolfFrames(): PixelCanvas[] {
+  return [wolfFrame(0), wolfFrame(1), wolfFrame(2), wolfFrame(0, true)];
+}

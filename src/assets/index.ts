@@ -21,6 +21,8 @@ export interface SheetInfo {
   frameHeight: number;
   frames: number;
   columns: number;
+  /** humanoid: 4 direções · blob: sem direção, animação contínua · quad: quadrúpede de perfil */
+  kind: 'humanoid' | 'blob' | 'quad';
 }
 
 export const SHEETS: SheetInfo[] = Object.entries(manifest.sheets).map(([key, s]) => ({
@@ -30,6 +32,7 @@ export const SHEETS: SheetInfo[] = Object.entries(manifest.sheets).map(([key, s]
   frameHeight: s.frameHeight,
   frames: s.frames,
   columns: s.columns,
+  kind: s.kind as SheetInfo['kind'],
 }));
 
 export function uiImage(name: string): string {

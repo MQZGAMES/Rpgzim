@@ -424,6 +424,40 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     },
   ],
   [
+    'wolf_pelt',
+    (c) => {
+      c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x + y) % 4 === 0 ? P.cloth[2]! : P.cloth[3]!));
+      for (const [x, y] of [[1, 3], [14, 3], [2, 13], [13, 13]] as const) c.set(x, y, P.cloth[3]!);
+      c.line(4, 6, 12, 6, P.cloth[4]!);
+      c.line(5, 10, 11, 10, P.cloth[1]!);
+    },
+  ],
+  [
+    'spider_silk',
+    (c) => {
+      c.disc(8, 8, 5.5, (x, y, nx, ny) => (Math.floor(Math.hypot(nx, ny) * 5) % 2 ? P.cloth[4]! : P.white));
+      c.line(12, 12, 15, 15, P.cloth[3]!);
+      c.set(6, 6, P.white);
+    },
+  ],
+  [
+    'bone_fragment',
+    (c) => {
+      c.line(4, 12, 11, 5, P.bone[3]!);
+      c.line(5, 12, 12, 5, P.bone[2]!);
+      for (const [x, y] of [[3, 12], [4, 13], [12, 4], [11, 3]] as const) c.disc(x, y, 1.5, P.bone[3]!);
+    },
+  ],
+  [
+    'toad_venom',
+    (c) => {
+      c.rect(6, 2, 4, 3, P.wood[3]!);
+      c.ellipse(8, 10, 4, 4.5, (x, y, nx, ny) => (ny < -0.3 ? P.ice[3]! : nx + ny < 0 ? P.nature[4]! : P.nature[2]!));
+      c.set(6, 9, P.white);
+      c.set(9, 12, P.forest[1]!);
+    },
+  ],
+  [
     'meat',
     (c) => {
       c.ellipse(9, 7, 5, 4.5, (x, y, nx, ny) => (nx + ny < -0.4 ? P.red[4]! : nx + ny < 0.4 ? P.red[3]! : P.red[2]!));

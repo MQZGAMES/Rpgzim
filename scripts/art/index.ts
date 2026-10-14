@@ -7,7 +7,7 @@ import { PixelCanvas } from './lib/canvas.ts';
 import { gridSheet, packAtlas, type AtlasEntry } from './lib/atlas.ts';
 import { buildTileset } from './tiles.ts';
 import { CHARACTERS, FRAME_H, FRAME_W, buildCharacterSheet } from './characters.ts';
-import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBoarFrames, buildSlimeFrames } from './monsters.ts';
+import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBoarFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames } from './monsters.ts';
 import { buildObjects } from './objects.ts';
 import { buildIcons } from './icons.ts';
 import { buildFx } from './fx.ts';
@@ -29,7 +29,7 @@ const onBg = (c: PixelCanvas, bg = 0x6f9a52ff) => {
 };
 
 const started = Date.now();
-const manifest: { sheets: Record<string, { file: string; frameWidth: number; frameHeight: number; frames: number; columns: number }> } = { sheets: {} };
+const manifest: { sheets: Record<string, { file: string; frameWidth: number; frameHeight: number; frames: number; columns: number; kind: 'humanoid' | 'blob' | 'quad' }> } = { sheets: {} };
 
 // tileset
 const tileset = buildTileset();
@@ -42,17 +42,23 @@ for (const spec of CHARACTERS) {
   const frames = buildCharacterSheet(spec);
   const file = `char_${spec.id}.png`;
   writePng(outDir, file, gridSheet(frames, FRAME_W, FRAME_H, 3));
-  manifest.sheets[spec.id] = { file, frameWidth: FRAME_W, frameHeight: FRAME_H, frames: frames.length, columns: 3 };
+  manifest.sheets[spec.id] = { file, frameWidth: FRAME_W, frameHeight: FRAME_H, frames: frames.length, columns: 3, kind: 'humanoid' };
   charRows.push(gridSheet(frames, FRAME_W, FRAME_H, frames.length));
 }
 
-// monstros procedurais
-const slime = buildSlimeFrames();
-writePng(outDir, 'mon_slime.png', gridSheet(slime, SLIME_W, SLIME_H, slime.length));
-manifest.sheets['slime'] = { file: 'mon_slime.png', frameWidth: SLIME_W, frameHeight: SLIME_H, frames: slime.length, columns: slime.length };
-const boar = buildBoarFrames();
-writePng(outDir, 'mon_boar.png', gridSheet(boar, BOAR_W, BOAR_H, boar.length));
-manifest.sheets['boar'] = { file: 'mon_boar.png', frameWidth: BOAR_W, frameHeight: BOAR_H, frames: boar.length, columns: boar.length };
+// monstros procedurais: "blob" (sem direção, animação contínua) e "quad" (quadrúpede de perfil)
+const monsterSheets: [string, PixelCanvas[], number, number, 'blob' | 'quad'][] = [
+  ['slime', buildSlimeFrames(), SLIME_W, SLIME_H, 'blob'],
+  ['toad', buildToadFrames(), 24, 24, 'blob'],
+  ['spider', buildSpiderFrames(), 28, 24, 'blob'],
+  ['boar', buildBoarFrames(), BOAR_W, BOAR_H, 'quad'],
+  ['wolf', buildWolfFrames(), 32, 24, 'quad'],
+];
+for (const [key, frames, fw, fh, kind] of monsterSheets) {
+  const file = `mon_${key}.png`;
+  writePng(outDir, file, gridSheet(frames, fw, fh, frames.length));
+  manifest.sheets[key] = { file, frameWidth: fw, frameHeight: fh, frames: frames.length, columns: frames.length, kind };
+}
 
 // atlases
 const atlases: [string, AtlasEntry[], number][] = [
@@ -100,9 +106,8 @@ writePng(previewDir, 'preview-tiles.png', tileset.image.scaled(2));
 const cp = new PixelCanvas(charRows[0]!.w, charRows.length * FRAME_H);
 charRows.forEach((s, i) => cp.blit(s, 0, i * FRAME_H));
 writePng(previewDir, 'preview-characters.png', onBg(cp).scaled(3));
-const mons = new PixelCanvas(Math.max(slime.length * SLIME_W, boar.length * BOAR_W), SLIME_H + BOAR_H);
-mons.blit(gridSheet(slime, SLIME_W, SLIME_H, slime.length), 0, 0);
-mons.blit(gridSheet(boar, BOAR_W, BOAR_H, boar.length), 0, SLIME_H);
+const mons = new PixelCanvas(5 * 32, monsterSheets.length * 24);
+monsterSheets.forEach(([, frames, fw, fh], i) => mons.blit(gridSheet(frames, fw, fh, frames.length), 0, i * 24));
 writePng(previewDir, 'preview-monsters.png', onBg(mons).scaled(4));
 writePng(previewDir, 'preview-font.png', onBg(font.image, 0x3a4a5aff).scaled(4));
 

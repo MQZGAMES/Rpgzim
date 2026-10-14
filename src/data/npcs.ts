@@ -98,7 +98,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Depois deste portão começa o Bosque Selvagem. Slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul. A vila é segura: os monstros não passam daqui.',
+        text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A vila é segura: os monstros não passam das cercas.',
         options: [close],
       },
     ],
@@ -191,6 +191,8 @@ const list2: ShopDef[] = [
       ...potionSells.filter(([id]) => !id.startsWith('potion')).map(([itemId, price]) => ({ itemId, price: sellPct(price) })),
       { itemId: 'slime_gel', price: 5 },
       { itemId: 'goblin_charm', price: 70 },
+      { itemId: 'toad_venom', price: 14 },
+      { itemId: 'spider_silk', price: 30 },
     ],
   },
   {
@@ -209,6 +211,8 @@ const list2: ShopDef[] = [
       { itemId: 'slime_gel', price: 4 },
       { itemId: 'meat', price: 3 },
       { itemId: 'dagger', price: 9 },
+      { itemId: 'wolf_pelt', price: 22 },
+      { itemId: 'bone_fragment', price: 10 },
     ],
   },
 ];

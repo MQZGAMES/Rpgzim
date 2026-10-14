@@ -6,7 +6,9 @@ import { MapBuilder, Terrain } from '../../game/world/MapBuilder';
 import type { GameMap } from '../../game/world/GameMap';
 
 export const WORLD_W = 104;
-export const WORLD_H = 76;
+export const WORLD_H = 118;
+/** Linha da cerca sul da vila: acima dela fica a área original (vila + bosque). */
+const SOUTH = 77;
 
 export function buildWorld(): GameMap {
   const b = new MapBuilder(WORLD_W, WORLD_H, tiles.names, PROPS, 2024);
@@ -14,9 +16,12 @@ export function buildWorld(): GameMap {
   const WILD_TREES = ['tree_forest', 'tree_oak', 'tree_pine', 'tree_pine_b', 'tree_forest', 'tree_oak_b'];
 
   // ------------------------------------------------------------------ regiões
-  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: WORLD_H, pz: true, music: 'town', priority: 1 });
+  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: SOUTH, pz: true, music: 'town', priority: 1 });
   b.region({ id: 'temple',  name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: true, music: 'temple', priority: 3 });
-  b.region({ id: 'wild', name: 'Bosque Selvagem', x: 72, y: 0, w: 32, h: WORLD_H, pz: false, music: 'wild', priority: 1 });
+  b.region({ id: 'wild', name: 'Bosque Selvagem', x: 72, y: 0, w: 32, h: SOUTH, pz: false, music: 'wild', priority: 1 });
+  b.region({ id: 'swamp', name: 'Pântano Sombrio', x: 0, y: SOUTH, w: 49, h: WORLD_H - SOUTH, pz: false, music: 'wild', priority: 1 });
+  b.region({ id: 'hills', name: 'Colinas dos Lobos', x: 49, y: SOUTH, w: 55, h: 21, pz: false, music: 'wild', priority: 1 });
+  b.region({ id: 'ruins', name: 'Ruínas Antigas', x: 49, y: SOUTH + 21, w: 55, h: WORLD_H - SOUTH - 21, pz: false, music: 'wild', priority: 1 });
   b.region({ id: 'meadow', name: 'Clareira dos Slimes', x: 73, y: 24, w: 18, h: 20, pz: false, music: 'wild', priority: 2 });
   b.region({ id: 'boarwoods', name: 'Mata dos Javalis', x: 73, y: 3, w: 29, h: 18, pz: false, music: 'wild', priority: 2 });
   b.region({ id: 'goblincamp', name: 'Acampamento Goblin', x: 76, y: 47, w: 26, h: 27, pz: false, music: 'wild', priority: 2 });
@@ -119,7 +124,7 @@ export function buildWorld(): GameMap {
   b.sign(14, 66, 'Fazenda do Seu Joaquim');
 
   // ------------------------------------------------------------------ portão leste e cerca da vila
-  for (let y = 3; y < WORLD_H - 3; y++) if (y < 20 || y > 24) b.prop('palisade', 72, y);
+  for (let y = 3; y < SOUTH; y++) if (y < 20 || y > 24) b.prop('palisade', 72, y);
   b.prop('lamp_post', 71, 19).prop('lamp_post', 71, 25);
   b.npc('guard', 70, 19, 'down');
   b.sign(74, 19, 'Bosque Selvagem — perigo! Slimes, javalis e goblins.');
@@ -148,8 +153,54 @@ export function buildWorld(): GameMap {
   b.prop('log', 77, 34).prop('stump', 86, 27).prop('rock_medium', 90, 27).prop('rock_large', 80, 40);
   b.prop('rock_large_b', 92, 22).prop('log', 96, 18).prop('stump', 78, 15);
 
+  // chefe do acampamento (raro, reaparece em 2 minutos)
+  b.spawn('goblin_chief', 'goblin_chief', 91, 62, 1, 1);
+
+  // ------------------------------------------------------------------ expansão sul
+  // cerca sul da vila com portão
+  for (let x = 3; x < 72; x++) if (x < 36 || x > 39) b.prop('palisade', x, SOUTH);
+  b.path([[35, 48], [36, 60], [37, 70], [37, 80], [32, 86], [24, 92], [20, 100]], 2);
+  b.prop('lamp_post', 35, SOUTH - 1).prop('lamp_post', 40, SOUTH - 1);
+  b.sign(41, SOUTH + 1, 'Pântano Sombrio — sapos venenosos. Ao leste: Colinas dos Lobos e Ruínas Antigas.');
+  // trilhas: acampamento goblin -> colinas -> ruínas; pântano -> ruínas
+  b.path([[88, 66], [88, 74], [85, 82], [80, 90], [76, 98], [74, 106]], 2);
+  b.path([[20, 100], [32, 104], [46, 106], [60, 106], [74, 106], [90, 108]], 2);
+  b.path([[37, 80], [50, 84], [62, 86], [70, 86], [85, 82]], 2);
+
+  // Pântano Sombrio: grama escura, poças, juncos e cogumelos
+  b.dark({ x: 3, y: SOUTH + 1, w: 46, h: WORLD_H - SOUTH - 4 });
+  for (const [cx, cy, rx, ry] of [[12, 84, 4, 3], [28, 96, 5, 3.5], [10, 108, 4.5, 3], [40, 112, 4, 2.5], [44, 92, 3.5, 3], [18, 96, 2.5, 2]] as const)
+    b.ellipse(cx, cy, rx, ry, Terrain.Water, 0.35);
+  b.scatterDecor({ x: 3, y: SOUTH + 1, w: 46, h: WORLD_H - SOUTH - 4 }, ['decor_reeds', 'decor_mushrooms', 'decor_tallgrass', 'decor_lilypad'], 0.12, 61);
+  b.spawn('toads_a', 'toad', 18, 88, 4, 4);
+  b.spawn('toads_b', 'toad', 34, 100, 4, 3);
+  b.spawn('toads_c', 'toad', 16, 110, 3, 3);
+  b.prop('log', 24, 84).prop('stump', 8, 98).prop('bones', 38, 96).prop('log', 30, 110);
+
+  // Colinas dos Lobos: rochas e pinheiros
+  b.dark({ x: 49, y: SOUTH + 1, w: 52, h: 20 }, 2);
+  b.prop('rock_large', 58, 80).prop('rock_large_b', 74, 88).prop('rock_large', 92, 84).prop('rock_medium', 66, 92).prop('rock_large_b', 98, 94);
+  b.spawn('wolves_a', 'wolf', 64, 84, 4, 3);
+  b.spawn('wolves_b', 'wolf', 86, 80, 4, 3);
+  b.spawn('wolves_c', 'wolf', 94, 92, 3, 3);
+
+  // Ruínas Antigas: calçamento quebrado, pilares, estátuas e ossos
+  b.ellipse(66, 106, 9, 5, Terrain.Cobble, 0.6);
+  b.ellipse(88, 109, 8, 4.5, Terrain.Cobble, 0.6);
+  b.reserve({ x: 56, y: 100, w: 42, h: 15 });
+  for (const [x, y] of [[59, 102], [63, 102], [69, 102], [73, 102], [59, 110], [73, 110], [82, 105], [94, 105], [82, 113], [94, 113]] as const) b.prop('pillar', x, y);
+  b.prop('statue', 66, 103).prop('statue', 88, 106).prop('bones', 62, 108).prop('bones', 85, 111).prop('bones', 91, 110).prop('rock_medium', 70, 112).prop('totem', 97, 102);
+  b.spawn('spiders_a', 'spider', 60, 106, 3, 3);
+  b.spawn('spiders_b', 'spider', 96, 110, 3, 2);
+  b.spawn('skeletons_a', 'skeleton', 68, 108, 3, 3);
+  b.spawn('skeletons_b', 'skeleton', 88, 109, 3, 3);
+
   // ------------------------------------------------------------------ vegetação e decoração procedural
   b.forestBorder(3, WILD_TREES);
+  b.scatter({ x: 3, y: SOUTH + 1, w: 46, h: WORLD_H - SOUTH - 4 }, { props: ['tree_forest', 'tree_pine', 'bush_dark', 'stump', 'tree_forest'], density: 0.13, salt: 31, spacing: 1 });
+  b.scatter({ x: 49, y: SOUTH + 1, w: 52, h: 20 }, { props: ['tree_pine', 'tree_pine_b', 'rock_small', 'rock_medium', 'tree_forest', 'bush_dark'], density: 0.13, salt: 32, spacing: 1 });
+  b.scatter({ x: 49, y: SOUTH + 21, w: 52, h: WORLD_H - SOUTH - 24 }, { props: ['tree_forest', 'rock_small', 'bush_dark', 'stump'], density: 0.08, salt: 33, spacing: 1 });
+  b.scatterDecor({ x: 49, y: SOUTH + 1, w: 52, h: WORLD_H - SOUTH - 4 }, ['decor_pebbles', 'decor_tallgrass', 'decor_leaves', 'decor_crack'], 0.08, 62);
   // jardins e bordas da vila
   b.scatter({ x: 3, y: 3, w: 36, h: 17 }, { props: [...TOWN_TREES, 'bush', 'bush_flower'], density: 0.2, salt: 11, spacing: 1 });
   b.scatter({ x: 56, y: 3, w: 15, h: 9 }, { props: [...TOWN_TREES, 'bush'], density: 0.22, salt: 12, spacing: 1 });

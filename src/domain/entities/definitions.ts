@@ -211,6 +211,8 @@ export interface MonsterDef {
   gold: { chance: number; min: number; max: number };
   respawnMs: number;
   shadow: 's' | 'm' | 'l';
+  /** Escala visual (chefes maiores). */
+  scale?: number;
   description: string;
 }
 

@@ -5,6 +5,7 @@ import { renderPos, isMoving } from '../movement/movement';
 import type { MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { DEPTH, ySort } from './depth';
+import { SHEETS } from '../../assets';
 
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 
@@ -24,7 +25,7 @@ export class CreatureView {
     scene: Phaser.Scene,
     readonly id: string,
     readonly sheet: string,
-    readonly kind: 'humanoid' | 'slime' | 'boar',
+    readonly kind: 'humanoid' | 'blob' | 'quad',
     shadow: 's' | 'm' | 'l',
     readonly yOffset: number,
     name?: string,
@@ -89,14 +90,14 @@ export class CreatureView {
         this.sprite.anims.stop();
         this.sprite.setFrame(HUMANOID_ROWS[m.facing] * 3);
       }
-    } else if (this.kind === 'slime') {
-      if (!this.sprite.anims.isPlaying) this.sprite.play('slime_idle');
+    } else if (this.kind === 'blob') {
+      if (!this.sprite.anims.isPlaying) this.sprite.play(`${this.sheet}_idle`);
       this.sprite.anims.timeScale = moving ? 1.8 : 1;
     } else {
       if (m.facing === 'left') this.sprite.setFlipX(true);
       else if (m.facing === 'right') this.sprite.setFlipX(false);
       if (moving) {
-        if (!this.sprite.anims.isPlaying) this.sprite.play('boar_walk');
+        if (!this.sprite.anims.isPlaying) this.sprite.play(`${this.sheet}_walk`);
       } else {
         this.sprite.anims.stop();
         this.sprite.setFrame(0);
@@ -142,8 +143,12 @@ export class EntityViews {
   }
 
   addMonster(m: MonsterEntity): CreatureView {
-    const kind = m.def.sprite === 'slime' ? 'slime' : m.def.sprite === 'boar' ? 'boar' : 'humanoid';
-    const v = new CreatureView(this.scene, m.id, m.def.sprite, kind, m.def.shadow, kind === 'boar' ? 3 : kind === 'slime' ? 2 : 1);
+    const kind = SHEETS.find((s) => s.key === m.def.sprite)?.kind ?? 'humanoid';
+    const v = new CreatureView(this.scene, m.id, m.def.sprite, kind, m.def.shadow, kind === 'quad' ? 3 : kind === 'blob' ? 2 : 1);
+    if (m.def.scale) {
+      v.sprite.setScale(m.def.scale);
+      v.shadow.setScale(m.def.scale);
+    }
     this.monsters.set(m.id, v);
     return v;
   }

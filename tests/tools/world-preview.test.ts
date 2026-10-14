@@ -9,6 +9,7 @@ import { MONSTERS } from '../../src/data/monsters';
 import { decodePng } from '../../scripts/art/lib/pngdecode.ts';
 import { PixelCanvas } from '../../scripts/art/lib/canvas.ts';
 import { roofTileName } from '../../src/game/world/roof';
+import manifest from '../../src/assets/generated/manifest.json';
 
 const gen = join(process.cwd(), 'src', 'assets', 'generated');
 const outDir = process.env.ART_PREVIEW_DIR ?? join(process.cwd(), 'docs', 'art');
@@ -66,7 +67,8 @@ test('renderiza o mundo', () => {
     }
     for (const s of map.spawns) {
       const m = MONSTERS[s.monsterId]!;
-      const img = m.sprite === 'slime' ? sheet('mon_slime.png', 24, 24) : m.sprite === 'boar' ? sheet('mon_boar.png', 32, 24) : sheet('char_goblin.png', 24, 32);
+      const info = (manifest as { sheets: Record<string, { file: string; frameWidth: number; frameHeight: number }> }).sheets[m.sprite]!;
+      const img = sheet(info.file, info.frameWidth, info.frameHeight);
       items.push({ depth: (s.y + 1) * T + 1, draw: () => c.blit(img, s.x * T + 8 - img.w / 2, (s.y + 1) * T - img.h) });
     }
     const start = sheet('char_knight.png', 24, 32);

@@ -23,13 +23,15 @@ export class BootScene extends Phaser.Scene {
     const a = this.anims;
     // humanoides: linhas baixo/esquerda/direita/cima com (parado, passo A, passo B)
     for (const s of SHEETS) {
-      if (s.columns !== 3) continue;
+      if (s.kind !== 'humanoid') continue;
       HUMANOID_DIRS.forEach((dir, row) => {
         a.create({ key: `${s.key}_walk_${dir}`, frames: a.generateFrameNumbers(s.key, { frames: [row * 3 + 1, row * 3, row * 3 + 2, row * 3] }), frameRate: 8, repeat: -1 });
       });
     }
-    a.create({ key: 'slime_idle', frames: a.generateFrameNumbers('slime', { frames: [0, 1, 0, 2, 3, 2] }), frameRate: 7, repeat: -1 });
-    a.create({ key: 'boar_walk', frames: a.generateFrameNumbers('boar', { frames: [1, 0, 2, 0] }), frameRate: 9, repeat: -1 });
+    for (const s of SHEETS) {
+      if (s.kind === 'blob') a.create({ key: `${s.key}_idle`, frames: a.generateFrameNumbers(s.key, { frames: [0, 1, 0, 2, 3, 2] }), frameRate: 7, repeat: -1 });
+      if (s.kind === 'quad') a.create({ key: `${s.key}_walk`, frames: a.generateFrameNumbers(s.key, { frames: [1, 0, 2, 0] }), frameRate: 9, repeat: -1 });
+    }
     // efeitos: sequências "<nome>_<i>" do atlas fx
     const fxNames = new Map<string, number>();
     for (const f of Object.keys(ASSETS.fx.frames)) {

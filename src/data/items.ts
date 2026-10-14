@@ -53,6 +53,10 @@ const list: ItemDef[] = [
   { id: 'boar_tusk', name: 'Presa de Javali', description: 'Troféu de caça valorizado por mercadores.', type: 'loot', icon: 'item_boar_tusk', value: 18, stackable: true, maxStack: 100 },
   { id: 'boar_hide', name: 'Couro de Javali', description: 'Couro grosso, ótimo para armaduras.', type: 'loot', icon: 'item_boar_hide', value: 12, stackable: true, maxStack: 100 },
   { id: 'goblin_ear', name: 'Orelha de Goblin', description: 'Prova de bravura aceita pelos mercadores.', type: 'loot', icon: 'item_goblin_ear', value: 20, stackable: true, maxStack: 100 },
+  { id: 'toad_venom', name: 'Veneno de Sapo', description: 'Frasco de veneno esverdeado. Alquimistas pagam bem.', type: 'loot', icon: 'item_toad_venom', value: 14, stackable: true, maxStack: 100 },
+  { id: 'wolf_pelt', name: 'Pele de Lobo', description: 'Pelagem cinzenta e macia, muito procurada no inverno.', type: 'loot', icon: 'item_wolf_pelt', value: 22, stackable: true, maxStack: 100 },
+  { id: 'spider_silk', name: 'Seda de Aranha', description: 'Fio resistente usado em mantos encantados.', type: 'loot', icon: 'item_spider_silk', value: 30, stackable: true, maxStack: 100 },
+  { id: 'bone_fragment', name: 'Fragmento de Osso', description: 'Restos de um guerreiro esquecido nas ruínas.', type: 'loot', icon: 'item_bone_fragment', value: 10, stackable: true, maxStack: 100 },
   { id: 'goblin_charm', name: 'Amuleto Tosco', description: 'Talismã goblin de osso. Raro e cobiçado.', type: 'loot', icon: 'item_goblin_charm', value: 70, stackable: true, maxStack: 100 },
 ];
 
