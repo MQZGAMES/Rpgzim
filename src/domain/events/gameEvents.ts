@@ -1,0 +1,36 @@
+// Catálogo de eventos de jogo. Payloads contêm apenas dados serializáveis (prontos para trafegar em rede no futuro).
+import type { Element } from '../value-objects/element';
+import type { TilePos } from '../value-objects/position';
+import type { SkillId } from '../entities/definitions';
+
+export type MessageKind = 'info' | 'warning' | 'loot' | 'combat' | 'system' | 'levelup';
+
+export interface GameEventMap extends Record<string, unknown> {
+  damage: { targetId: string; sourceId: string | null; amount: number; element: Element; blocked: boolean; position: TilePos };
+  heal: { targetId: string; amount: number; mana: boolean; position: TilePos };
+  attack: { sourceId: string; targetId: string; kind: 'melee' | 'distance' | 'wand'; element: Element; projectile?: string; from: TilePos; to: TilePos };
+  missed: { sourceId: string; targetId: string; position: TilePos };
+  spellCast: { casterId: string; spellId: string; words: string; from: TilePos; targetId: string | null; tiles: TilePos[] };
+  actionFailed: { reason: string; message: string };
+  entityDied: { entityId: string; kind: 'player' | 'monster'; position: TilePos; spriteKey: string };
+  entitySpawned: { entityId: string };
+  xpGained: { amount: number; position: TilePos };
+  levelUp: { level: number };
+  skillUp: { skill: SkillId; level: number };
+  lootDropped: { containerId: string; position: TilePos };
+  lootChanged: { containerId: string };
+  itemsChanged: Record<string, never>;
+  goldChanged: { amount: number; delta: number };
+  message: { text: string; kind: MessageKind };
+  dialogOpened: { npcId: string };
+  shopOpened: { shopId: string; npcId: string };
+  doorChanged: { doorId: string; open: boolean };
+  regionEntered: { regionId: string; name: string };
+  buildingChanged: { buildingId: string | null };
+  playerDied: { xpLost: number };
+  playerRespawned: Record<string, never>;
+  buffApplied: { targetId: string; kind: string; durationMs: number };
+  targetChanged: { targetId: string | null };
+  itemUsed: { itemId: string };
+  saveRequested: { reason: string };
+}

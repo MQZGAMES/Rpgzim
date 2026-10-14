@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "baseUrl": ".."
+  },
+  "include": ["./**/*.ts", "../tests/tools/**/*.ts", "../src/**/*.ts", "../src/**/*.d.ts"],
+  "exclude": []
+}

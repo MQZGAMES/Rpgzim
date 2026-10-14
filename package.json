@@ -1,0 +1,48 @@
+{
+  "name": "rpgzim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Rpgzim - RPG 2D top-down de fantasia medieval, mobile-first, para navegador (Phaser 3 + React + TypeScript, pixel art própria gerada por código)",
+  "scripts": {
+    "dev": "vite --port 5190",
+    "host": "vite --host --port 5190",
+    "art": "node scripts/art/index.ts",
+    "art:world": "node scripts/run-tools.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 4190",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "deploy": "npm run build && node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@fontsource/pixelify-sans": "5.3.0",
+    "phaser": "3.90.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.64.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "fake-indexeddb": "6.2.5",
+    "globals": "16.5.0",
+    "prettier": "3.9.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "7.3.7",
+    "vitest": "4.1.11"
+  }
+}
