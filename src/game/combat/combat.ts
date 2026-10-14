@@ -3,6 +3,8 @@
 import type { Element } from '../../domain/value-objects/element';
 import { chebyshev } from '../../domain/value-objects/position';
 import { applyDeathPenalty } from '../../domain/rules/experience';
+import { applySkillDeathLoss } from '../../domain/rules/skills';
+import { SKILL_IDS, SKILL_LABEL } from '../../domain/entities/definitions';
 import { blockChance, distanceHitChance, mitigate, rollWandDamage, rollWeaponDamage } from '../../domain/rules/damage';
 import { weaponSkillLevel } from '../../domain/rules/stats';
 import { isPz, blocksSight } from '../world/GameMap';
@@ -212,6 +214,16 @@ function killPlayer(w: World, killer: MonsterEntity): void {
   const before = c.experience;
   c.experience = applyDeathPenalty(c.level, c.experience, w.data.balance.player.deathXpPenalty, w.data.balance.experience);
   c.stats.deaths += 1;
+  // skills também perdem treino, sem nunca ficar abaixo de 10 (Magic Level: 0)
+  const voc = w.data.vocations[c.vocation];
+  const lostSkills: string[] = [];
+  for (const id of SKILL_IDS) {
+    const before = c.skills[id].level;
+    c.skills[id] = applySkillDeathLoss(id, c.skills[id], w.data.balance.player.deathSkillPenalty, voc.skillMultipliers[id], w.data.balance);
+    if (c.skills[id].level < before) lostSkills.push(`${SKILL_LABEL[id]} ${before}→${c.skills[id].level}`);
+  }
+  refreshStats(w);
+  if (lostSkills.length) message(w, `Skills perdidas: ${lostSkills.join(', ')}.`, 'warning');
   for (const m of w.monsters.values()) if (m.alive && (m.state === 'chasing' || m.state === 'attacking')) m.state = 'returning';
   w.events.emit('entityDied', { entityId: p.id, kind: 'player', position: { x: p.x, y: p.y }, spriteKey: c.vocation });
   w.events.emit('playerDied', { xpLost: before - c.experience });

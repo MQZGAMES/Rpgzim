@@ -71,7 +71,7 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
   for (const s of SKILL_IDS) {
     const r = skillsRaw[s];
     const base = s === 'magic' ? 0 : data.balance.skills.startLevel;
-    skills[s] = { level: Math.floor(num(isObj(r) ? r.level : undefined, base, 0, 200)), tries: num(isObj(r) ? r.tries : undefined, 0, 0, 1e9) };
+    skills[s] = { level: Math.floor(num(isObj(r) ? r.level : undefined, base, base, 200)), tries: num(isObj(r) ? r.tries : undefined, 0, 0, 1e9) };
   }
   const slots = data.balance.player.inventorySlots;
   const invRaw = Array.isArray(c.inventory) ? c.inventory : [];

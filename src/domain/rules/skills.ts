@@ -44,3 +44,34 @@ export function skillProgress(skill: SkillId, state: SkillState, vocationMultipl
   const need = triesForNextLevel(skill, state.level, vocationMultiplier, balance);
   return need <= 0 ? 1 : Math.min(1, state.tries / need);
 }
+
+/** Piso das skills: combate nunca fica abaixo do nível inicial (10); Magic Level nunca abaixo de 0. */
+export function skillFloor(skill: SkillId, balance: BalanceConfig): number {
+  return skill === 'magic' ? 0 : balance.skills.startLevel;
+}
+
+/**
+ * Penalidade de morte nas skills: perde uma fração do treino exigido para o nível atual.
+ * Se o treino acumulado não bastar, desce um nível (continuando do fim do nível anterior),
+ * mas nunca abaixo do piso (10 para skills de combate).
+ */
+export function applySkillDeathLoss(skill: SkillId, state: SkillState, fraction: number, vocationMultiplier: number, balance: BalanceConfig): SkillState {
+  const floor = skillFloor(skill, balance);
+  if (state.level <= floor && state.tries <= 0) return { level: Math.max(floor, state.level), tries: 0 };
+  let loss = triesForNextLevel(skill, state.level, vocationMultiplier, balance) * fraction;
+  let { level, tries } = state;
+  while (loss > 0) {
+    if (tries >= loss) {
+      tries -= loss;
+      loss = 0;
+    } else if (level > floor) {
+      loss -= tries;
+      level -= 1;
+      tries = triesForNextLevel(skill, level, vocationMultiplier, balance) - 1;
+    } else {
+      tries = 0;
+      loss = 0;
+    }
+  }
+  return { level, tries: Math.floor(tries) };
+}

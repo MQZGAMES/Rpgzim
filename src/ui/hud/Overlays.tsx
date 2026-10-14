@@ -67,7 +67,7 @@ export function DeathOverlay() {
     <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-[#3a0a12]/70">
       <div className="frame-dark anim-pop flex w-[300px] flex-col items-center gap-3 text-center">
         <div className="text-2xl text-hp-light">Você morreu</div>
-        <p className="text-[13px] leading-snug text-muted">Você perdeu parte da experiência deste nível. Seus itens estão seguros.</p>
+        <p className="text-[13px] leading-snug text-muted">Você perdeu parte da experiência e do treino das skills (nunca abaixo de 10). Seus itens estão seguros.</p>
         <PixelButton variant="gold" className="w-full py-1 text-base" onClick={() => session.respawn()}>
           Renascer no templo
         </PixelButton>

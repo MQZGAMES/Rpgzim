@@ -98,3 +98,17 @@ describe('pathfinding e linha de visão', () => {
     expect(lineOfSight({ x: 47, y: 25 }, { x: 47, y: 23 }, (x, y) => map.sight[cellIndex(map, x, y)] === 1)).toBe(true);
   });
 });
+
+describe('espiar o interior', () => {
+  it('em frente à porta ou janela o interior aparece; em frente à parede lisa, não', async () => {
+    const { isPeekingInside } = await import('../../src/game/world/roof');
+    const b = map.buildings.find((x) => x.id === 'house_rosa')!;
+    const front = b.y + b.h;
+    expect(isPeekingInside(b, b.doorX, front)).toBe(true);
+    expect(isPeekingInside(b, b.doorX, front - 1)).toBe(true);
+    expect(isPeekingInside(b, b.windows[0]!, front)).toBe(true);
+    const wall = [...Array(b.w).keys()].map((i) => b.x + i).find((x) => x !== b.doorX && !b.windows.includes(x))!;
+    expect(isPeekingInside(b, wall, front)).toBe(false);
+    expect(isPeekingInside(b, b.doorX, front + 1)).toBe(false);
+  });
+});

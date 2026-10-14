@@ -64,7 +64,7 @@ export class WorldScene extends Phaser.Scene {
     this.views.sync(now, w.player.targetId);
     const pp = renderPos(w.player, now);
     this.cam.update(pp.x * 16 + 8, pp.y * 16 + 4, delta);
-    this.roofs.update(delta, w.ui.buildingId, pp.x, pp.y);
+    this.roofs.update(delta, w.ui.buildingId, pp.x, pp.y, w.player.x, w.player.y);
     this.mapView.update(delta);
     this.props.update(delta, this.cameras.main.worldView);
     this.effects.update(now);

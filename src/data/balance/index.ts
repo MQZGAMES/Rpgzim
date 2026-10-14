@@ -17,6 +17,6 @@ export const BALANCE: BalanceConfig = {
     maxBlockChance: 0.45,
     shieldingTriesPerHit: 1,
   },
-  player: { inventorySlots: 20, regenTickMs: 2000, deathXpPenalty: 0.5, respawnInvulnerableMs: 3000 },
+  player: { inventorySlots: 20, regenTickMs: 2000, deathXpPenalty: 0.5, deathSkillPenalty: 0.5, respawnInvulnerableMs: 3000 },
   world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 24 },
 };

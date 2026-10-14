@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/data/balance';
 import { applyDeathPenalty, applyXp, levelForXp, levelProgress, totalXpForLevel } from '../../src/domain/rules/experience';
-import { skillProgress, trainSkill, triesForNextLevel } from '../../src/domain/rules/skills';
+import { applySkillDeathLoss, skillProgress, trainSkill, triesForNextLevel } from '../../src/domain/rules/skills';
 
 const xp = BALANCE.experience;
 
@@ -77,5 +77,22 @@ describe('skills evoluem pelo uso (não linear)', () => {
     expect(res.state.level).toBe(2);
     expect(res.state.tries).toBe(5);
     expect(skillProgress('magic', res.state, 1, BALANCE)).toBeGreaterThan(0);
+  });
+});
+
+describe('perda de skills na morte', () => {
+  it('perde treino e pode descer de nível, mas nunca abaixo de 10', () => {
+    const need = triesForNextLevel('sword', 14, 1, BALANCE);
+    const a = applySkillDeathLoss('sword', { level: 14, tries: need * 0.8 }, 0.5, 1, BALANCE);
+    expect(a.level).toBe(14);
+    expect(a.tries).toBeLessThan(need * 0.8);
+    const b = applySkillDeathLoss('sword', { level: 14, tries: 0 }, 0.5, 1, BALANCE);
+    expect(b.level).toBe(13);
+    expect(b.tries).toBeLessThan(triesForNextLevel('sword', 13, 1, BALANCE));
+    let s = { level: 11, tries: 0 };
+    for (let i = 0; i < 20; i++) s = applySkillDeathLoss('club', s, 0.5, 1, BALANCE);
+    expect(s).toEqual({ level: 10, tries: 0 });
+    expect(applySkillDeathLoss('shielding', { level: 10, tries: 3 }, 0.5, 1, BALANCE).level).toBe(10);
+    expect(applySkillDeathLoss('magic', { level: 0, tries: 5 }, 0.5, 1, BALANCE)).toEqual({ level: 0, tries: 0 });
   });
 });

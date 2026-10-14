@@ -270,6 +270,6 @@ export interface BalanceConfig {
     maxBlockChance: number;
     shieldingTriesPerHit: number;
   };
-  player: { inventorySlots: number; regenTickMs: number; deathXpPenalty: number; respawnInvulnerableMs: number };
+  player: { inventorySlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };
 }
