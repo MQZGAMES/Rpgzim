@@ -5,6 +5,9 @@ import '@fontsource/pixelify-sans/500.css';
 import '@fontsource/pixelify-sans/700.css';
 import './styles/index.css';
 import { App } from './app/App';
+import { installZoomGuard } from './app/preventZoom';
+
+installZoomGuard();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

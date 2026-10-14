@@ -9,6 +9,7 @@ import { SessionContext } from '../../integration/game-ui-bridge/hooks';
 import { useServices } from '../providers/services';
 import { Hud } from '../../ui/hud/Hud';
 import { installDebugApi } from '../debugApi';
+import { resetViewportZoom } from '../preventZoom';
 
 const PREF_KEY = 'rpgzim:prefs';
 function loadPrefs(): { zoomBias: number; showFps: boolean } {
@@ -30,6 +31,7 @@ export function GameScreen({ character, onExit }: { character: CharacterState; o
 
   useEffect(() => {
     if (!host.current) return;
+    resetViewportZoom();
     const s = new GameSession({
       data: services.data,
       map: buildWorld(),
