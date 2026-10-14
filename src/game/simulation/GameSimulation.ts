@@ -186,6 +186,10 @@ export class GameSimulation {
       p.facing = dir.dx ? (dir.dx < 0 ? 'left' : 'right') : dir.dy < 0 ? 'up' : 'down';
       return;
     }
+    if (p.path && !p.path.length) {
+      p.path = null;
+      p.pathGoal = null;
+    }
     if (p.path && p.path.length) {
       const next = p.path[0]!;
       const dx = next.x - p.x;

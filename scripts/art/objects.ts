@@ -7,7 +7,6 @@ import type { AtlasEntry } from './lib/atlas.ts';
 
 const out: AtlasEntry[] = [];
 const add = (name: string, canvas: PixelCanvas) => out.push({ name, canvas });
-const sel = (n: Color) => mix(n, P.outline, 0.8);
 const darkOutline = () => P.outline;
 
 /** Sombreamento padrão por normal (luz vindo do topo-esquerdo). */

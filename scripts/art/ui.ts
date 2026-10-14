@@ -43,7 +43,7 @@ function frame(name: string, opts: { border: Ramp; fill: Color; fillAlt?: Color;
 }
 
 frame('panel_dark', { border: P.wood, fill: withAlpha(mix(P.purple[0]!, P.black, 0.35), 238), rivets: true });
-frame('panel_parchment', { border: P.wood, fill: P.plaster[4]!, fillAlt: P.plaster[3]!, rivets: true });
+frame('panel_parchment', { border: P.wood, fill: P.plaster[4]!, rivets: true });
 frame('button', { border: P.stone, fill: P.stone[2]! });
 frame('button_pressed', { border: P.stone, fill: P.stone[1]!, inset: true });
 frame('button_gold', { border: P.gold, fill: P.red[2]! });

@@ -1,0 +1,223 @@
+@import 'tailwindcss';
+
+/* Identidade visual da interface: madeira escura, pergaminho, ouro e pedra, com molduras em pixel art. */
+@theme {
+  --font-pixel: 'Pixelify Sans', ui-monospace, monospace;
+  --color-ink: #120d18;
+  --color-night: #1e1630;
+  --color-dusk: #2e2238;
+  --color-panel: #241a33;
+  --color-parchment: #f3ead4;
+  --color-parchment-dark: #ddcdb0;
+  --color-gold: #e0b03a;
+  --color-gold-light: #f8dc6c;
+  --color-gold-dark: #7c5418;
+  --color-hp: #cc4239;
+  --color-hp-light: #ea7454;
+  --color-mana: #3e74c0;
+  --color-mana-light: #69a0e0;
+  --color-xp: #e0b03a;
+  --color-heal: #4fd08a;
+  --color-stone: #7f8699;
+  --color-muted: #a9a3b8;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    background: var(--color-ink);
+    color: #f4eedf;
+    font-family: var(--font-pixel);
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    overflow: hidden;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  input {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-gold-light);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .pixelated {
+    image-rendering: pixelated;
+  }
+  /* molduras 9-slice geradas pelo pipeline de arte (fatia de 8 px exibida em 2x) */
+  .frame-dark {
+    border: 16px solid transparent;
+    border-image: url('../assets/generated/ui_panel_dark.png') 8 fill / 16px / 0 stretch;
+    image-rendering: pixelated;
+  }
+  .frame-parchment {
+    border: 16px solid transparent;
+    border-image: url('../assets/generated/ui_panel_parchment.png') 8 fill / 16px / 0 stretch;
+    image-rendering: pixelated;
+    color: #3a2b22;
+  }
+  .frame-tooltip {
+    border: 10px solid transparent;
+    border-image: url('../assets/generated/ui_tooltip.png') 8 fill / 10px / 0 stretch;
+    image-rendering: pixelated;
+  }
+  .frame-slot {
+    border: 8px solid transparent;
+    border-image: url('../assets/generated/ui_slot.png') 8 fill / 8px / 0 stretch;
+    image-rendering: pixelated;
+  }
+  .frame-slot-light {
+    border: 8px solid transparent;
+    border-image: url('../assets/generated/ui_slot_parchment.png') 8 fill / 8px / 0 stretch;
+    image-rendering: pixelated;
+  }
+  .btn-pixel {
+    border: 10px solid transparent;
+    border-image: url('../assets/generated/ui_button.png') 8 fill / 10px / 0 stretch;
+    image-rendering: pixelated;
+    color: #f4eedf;
+    text-shadow: 0 2px 0 #120d18;
+    transition: transform 60ms ease-out, filter 120ms;
+  }
+  .btn-pixel:active:not(:disabled) {
+    border-image-source: url('../assets/generated/ui_button_pressed.png');
+    transform: translateY(1px);
+  }
+  .btn-gold {
+    border: 10px solid transparent;
+    border-image: url('../assets/generated/ui_button_gold.png') 8 fill / 10px / 0 stretch;
+    image-rendering: pixelated;
+    color: #fff6be;
+    text-shadow: 0 2px 0 #33121f;
+    transition: transform 60ms ease-out, filter 120ms;
+  }
+  .btn-gold:active:not(:disabled) {
+    border-image-source: url('../assets/generated/ui_button_gold_pressed.png');
+    transform: translateY(1px);
+  }
+  .btn-pixel:disabled,
+  .btn-gold:disabled {
+    filter: grayscale(0.8) brightness(0.7);
+  }
+  .text-outline {
+    text-shadow:
+      1px 0 #120d18,
+      -1px 0 #120d18,
+      0 1px #120d18,
+      0 -1px #120d18,
+      0 2px #120d18;
+  }
+  .safe-top {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+  .safe-bottom {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .safe-x {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+}
+
+@keyframes rise-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes sheet-up {
+  0% {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes pulse-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(248, 220, 108, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(248, 220, 108, 0.7));
+  }
+}
+@keyframes sprite-walk {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: calc(var(--frames) * var(--fw) * -1);
+  }
+}
+.anim-rise-fade {
+  animation: rise-fade 2.6s ease-out forwards;
+}
+.anim-pop {
+  animation: pop-in 140ms ease-out;
+}
+.anim-sheet {
+  animation: sheet-up 180ms ease-out;
+}
+.anim-glow {
+  animation: pulse-glow 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-rise-fade,
+  .anim-pop,
+  .anim-sheet,
+  .anim-glow {
+    animation-duration: 1ms;
+  }
+}
+
+/* HUD um pouco maior em monitores grandes (o layout base é desenhado para celulares) */
+@media (min-width: 1280px) and (pointer: fine) {
+  .hud-scale {
+    zoom: 1.2;
+  }
+}
+@media (min-width: 1800px) and (pointer: fine) {
+  .hud-scale {
+    zoom: 1.4;
+  }
+}

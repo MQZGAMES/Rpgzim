@@ -77,6 +77,24 @@ writeFileSync(join(outDir, 'font.xml'), font.xml);
 
 writeJson('manifest.json', manifest);
 
+// ícones do aplicativo (favicon e PWA): cavaleiro sobre fundo noturno com moldura dourada
+{
+  const pub = join(root, 'public');
+  mkdirSync(pub, { recursive: true });
+  const knight = buildCharacterSheet(CHARACTERS.find((c) => c.id === 'knight')!)[0]!;
+  const icon = new PixelCanvas(32, 32);
+  for (let y = 0; y < 32; y++)
+    for (let x = 0; x < 32; x++) {
+      const edge = x === 0 || y === 0 || x === 31 || y === 31;
+      const edge2 = x === 1 || y === 1 || x === 30 || y === 30;
+      icon.set(x, y, edge ? 0x1d1626ff : edge2 ? 0xe0b03aff : y > 24 ? 0x33703cff : 0x33205cff);
+    }
+  icon.blit(knight, 4, -1, { alpha: true });
+  writePng(pub, 'favicon.png', icon);
+  writePng(pub, 'icon-192.png', icon.scaled(6));
+  writePng(pub, 'icon-512.png', icon.scaled(16));
+}
+
 // pré-visualizações para documentação (docs/art)
 writePng(previewDir, 'preview-tiles.png', tileset.image.scaled(2));
 const cp = new PixelCanvas(charRows[0]!.w, charRows.length * FRAME_H);
