@@ -39,6 +39,24 @@ try {
 }
 await page.waitForTimeout(1500);
 await shot('03-temple');
+// diálogo com o sacerdote (botão de ação contextual)
+await page.evaluate(() => window.__RPGZIM__.teleport(48, 10));
+await page.waitForTimeout(400);
+await page.getByTestId('interact-button').click();
+await page.waitForTimeout(400);
+await shot('03b-dialog');
+await page.getByRole('button', { name: 'Até logo' }).click();
+// loja do ferreiro
+await page.evaluate(() => window.__RPGZIM__.teleport(29, 16));
+await page.waitForTimeout(400);
+await page.getByTestId('interact-button').click();
+await page.getByRole('button', { name: 'Ver mercadorias' }).click();
+await page.getByTestId('shop-item-shield_iron').click();
+await page.waitForTimeout(400);
+await shot('03c-shop');
+await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
+await page.evaluate(() => window.__RPGZIM__.teleport(47, 12));
+await page.waitForTimeout(300);
 // passeio: sai do templo
 const walk = async (x, y) => {
   await page.evaluate(([a, b]) => window.__RPGZIM__.walkTo(a, b), [x, y]);

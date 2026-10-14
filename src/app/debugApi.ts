@@ -8,6 +8,7 @@ export function installDebugApi(session: GameSession): () => void {
   const sim = session.sim;
   window.__RPGZIM__ = {
     ready: () => session.local.get().ready,
+    fps: () => session.local.get().fps,
     player: () => {
       const p = sim.world.player;
       return { x: p.x, y: p.y, hp: p.character.health, mana: p.character.mana, level: p.character.level, xp: p.character.experience, gold: p.character.gold, target: p.targetId, dead: p.dead, ml: p.character.skills.magic, inventory: p.character.inventory.filter(Boolean), equipment: p.character.equipment, vocation: p.character.vocation };

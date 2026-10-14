@@ -59,7 +59,7 @@ function Comparison({ item, equipped }: { item: ItemView; equipped: ItemView | n
 
 export function ItemDetails({ item, equipped, actions }: { item: ItemView; equipped?: ItemView | null; actions?: React.ReactNode }) {
   return (
-    <div className="frame-tooltip anim-pop mt-3 text-[13px]" data-testid="item-details">
+    <div className="frame-tooltip anim-pop text-[13px]" data-testid="item-details">
       <div className="flex items-start gap-3">
         <div className="frame-slot !border-[6px]">
           <ItemIcon icon={item.icon} size={40} />
@@ -170,6 +170,9 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
+      {selected && (
+        <div className="mt-3" />
+      )}
       {selected && (
         <ItemDetails
           item={selected}

@@ -62,7 +62,7 @@ export function PixelButton({ children, onClick, variant = 'stone', disabled, cl
 }
 
 /** Painel: no celular vira uma folha inferior; no desktop, uma janela lateral. */
-export function Panel({ title, onClose, children, wide = false, variant = 'dark', icon }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; variant?: 'dark' | 'parchment'; icon?: string }) {
+export function Panel({ title, onClose, children, wide = false, variant = 'dark', icon, scroll = true }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; variant?: 'dark' | 'parchment'; icon?: string; scroll?: boolean }) {
   return (
     <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-black/45 lg:items-start lg:justify-end lg:bg-transparent lg:p-4 lg:pt-20" onClick={onClose}>
       <div
@@ -78,7 +78,7 @@ export function Panel({ title, onClose, children, wide = false, variant = 'dark'
             <ItemIcon icon="ui_close" size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">{children}</div>
+        <div className={`min-h-0 flex-1 ${scroll ? 'overflow-y-auto overscroll-contain pr-1' : 'flex flex-col overflow-hidden'}`}>{children}</div>
       </div>
     </div>
   );

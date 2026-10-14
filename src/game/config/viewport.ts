@@ -10,9 +10,14 @@ export interface ViewportInfo {
   zoom: number;
 }
 
+/**
+ * Resolução interna do canvas. Limitada a 2x: em telas 3x o navegador amplia 1,5x com "pixelated"
+ * e, com zoom de câmera par, cada pixel do jogo continua ocupando um número inteiro de pixels físicos.
+ * Reduz o custo de preenchimento em ~55% nos celulares de alta densidade.
+ */
 export function devicePixelRatioSafe(): number {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  return Math.max(1, Math.min(3, dpr));
+  return Math.max(1, Math.min(2, dpr));
 }
 
 /** Maior zoom inteiro que ainda mostra pelo menos `minTiles` no eixo curto e um pouco mais no longo. */
