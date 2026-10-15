@@ -143,6 +143,7 @@ export class GameSession {
   }
 
   private heroSavedAt = new Map<string, number>();
+  private actorMenuAt = 0;
   /** Salva o progresso de um herói (no máx. a cada 20 s, exceto `force`). */
   saveHero(heroId: string, force = false): Promise<void> {
     const h = [...this.sim.world.heroes.values()].find((x) => x.hero.id === heroId);
@@ -219,7 +220,12 @@ export class GameSession {
   /** Toque numa criatura do mapa: herói abre o menu; monstro/NPC segue o comportamento normal. */
   tapEntity(id: string): void {
     if (this.sim.world.heroes.has(id)) {
-      this.local.update({ actorMenu: this.local.get().actorMenu === id ? null : id });
+      // abre o menu; um segundo toque logo em seguida (evento duplicado) não fecha
+      const now = performance.now();
+      const open = this.local.get().actorMenu === id;
+      if (open && now - this.actorMenuAt < 600) return;
+      this.actorMenuAt = now;
+      this.local.update({ actorMenu: open ? null : id });
       this.audio.play('ui');
       return;
     }

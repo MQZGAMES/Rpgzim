@@ -256,25 +256,42 @@ export class EntityViews {
     this.player.setHealthBar(p.dead ? null : p.character.health / p.stats.maxHealth, this.scene, 0x4fd08a);
   }
 
+  /** Herói cujo desenho está a até `radius` pixels do ponto (tolerância para toques imprecisos). */
+  heroNear(wx: number, wy: number, radius = 18): string | null {
+    let best: string | null = null;
+    let bestD = radius;
+    for (const [id, v] of this.heroes) {
+      if (!v.container.visible || v.dead) continue;
+      const d = Math.hypot(wx - v.container.x, wy - (v.container.y - v.height / 2));
+      if (d <= bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
   /** Entidade sob um ponto do mundo (para toque/clique). */
   pick(wx: number, wy: number): string | null {
     let best: string | null = null;
     let bestD = Infinity;
-    const test = (id: string, v: CreatureView) => {
+    // a área de toque inclui o nome e a barra de vida acima da cabeça (onde o jogador costuma tocar)
+    const test = (id: string, v: CreatureView, pad: number, weight: number) => {
       if (!v.container.visible || v.dead) return;
       const cx = v.container.x;
-      const top = v.container.y - v.height + 6;
-      const bottom = v.container.y + 2;
-      if (wx < cx - 11 || wx > cx + 11 || wy < top || wy > bottom) return;
-      const d = Math.hypot(wx - cx, wy - (top + bottom) / 2);
+      const top = v.container.y - v.height - pad;
+      const bottom = v.container.y + 4;
+      if (wx < cx - 13 || wx > cx + 13 || wy < top || wy > bottom) return;
+      const d = Math.hypot(wx - cx, wy - (v.container.y - v.height / 2)) * weight;
       if (d < bestD) {
         bestD = d;
         best = id;
       }
     };
-    for (const [id, v] of this.monsters) test(id, v);
-    for (const [id, v] of this.npcs) test(id, v);
-    for (const [id, v] of this.heroes) test(id, v);
+    for (const [id, v] of this.monsters) test(id, v, 4, 1);
+    for (const [id, v] of this.npcs) test(id, v, 12, 1);
+    // personagens com vida própria têm prioridade (andam bastante e ficam no meio dos monstros)
+    for (const [id, v] of this.heroes) test(id, v, 14, 0.6);
     return best;
   }
 

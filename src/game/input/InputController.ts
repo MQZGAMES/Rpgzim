@@ -40,6 +40,13 @@ export class InputController {
       this.downAt = { x: p.x, y: p.y, t: p.downTime };
     });
     scene.input.on('pointerup', (p: Phaser.Input.Pointer) => this.pointerUp(p));
+    // mouse: cursor de "mão" sobre personagens, monstros e NPCs (deixa claro que dá para clicar)
+    scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (p.wasTouch) return;
+      const wp = scene.cameras.main.getWorldPoint(p.x, p.y);
+      const hit = this.views.pick(wp.x, wp.y) ?? this.views.heroNear(wp.x, wp.y);
+      scene.game.canvas.style.cursor = hit ? 'pointer' : 'default';
+    });
     session.setScreenTapHandler((cx, cy) => {
       const canvas = this.scene.game.canvas;
       const r = canvas.getBoundingClientRect();
@@ -146,7 +153,7 @@ export class InputController {
     const cam = this.scene.cameras.main;
     const wp = cam.getWorldPoint(x, y);
     const sim = this.session.sim;
-    const hit = this.views.pick(wp.x, wp.y);
+    const hit = this.views.pick(wp.x, wp.y) ?? this.views.heroNear(wp.x, wp.y);
     if (hit) {
       this.session.tapEntity(hit);
       this.session.audio.play('ui');

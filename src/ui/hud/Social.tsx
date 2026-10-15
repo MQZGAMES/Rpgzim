@@ -61,7 +61,13 @@ export function PartyFrame() {
       {party.members.map((m) => (
         <div key={m.id} className={`flex items-center gap-1 text-[11px] ${m.near ? '' : 'opacity-60'}`}>
           {m.isLeader ? <ItemIcon icon="ui_crown" size={12} title="Líder" /> : <span className="w-3" />}
-          <span className={`w-[78px] truncate ${m.isYou ? 'text-gold-light' : 'text-parchment'}`}>{m.isYou ? `${m.name} (você)` : m.name}</span>
+          {m.isYou ? (
+            <span className="w-[78px] truncate text-gold-light">{`${m.name} (você)`}</span>
+          ) : (
+            <button type="button" className="w-[78px] truncate text-left text-[#7fd8ff] underline decoration-dotted" title={`Ações com ${m.name}`} onClick={() => session.tapEntity(m.id)}>
+              {m.name}
+            </button>
+          )}
           <span className="w-[30px] text-muted">nv {m.level}</span>
           <Bar className="flex-1" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
           {party.youAreLeader && !m.isYou && (
