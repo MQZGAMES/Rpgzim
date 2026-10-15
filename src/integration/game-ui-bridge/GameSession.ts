@@ -114,10 +114,11 @@ export class GameSession {
     const onHide = () => {
       if (document.visibilityState === 'hidden') {
         this.sim.setPaused(true);
-        void this.saveNow();
+        // celular: o app pode ser fechado em segundo plano; envia já para a nuvem
+        void this.saveNow().then(() => this.saves.flushRemote(true));
       } else this.sim.setPaused(false);
     };
-    const onPageHide = () => void this.saveNow();
+    const onPageHide = () => void this.saveNow().then(() => this.saves.flushRemote(true));
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
     this.disposers.push(() => document.removeEventListener('visibilitychange', onHide), () => window.removeEventListener('pagehide', onPageHide));
@@ -139,6 +140,7 @@ export class GameSession {
 
   async exitToMenu(): Promise<void> {
     await this.saveNow();
+    await this.saves.flushRemote();
     this.onExit();
   }
 

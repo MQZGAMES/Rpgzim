@@ -3,11 +3,14 @@ import { uiImage } from '../../assets';
 import type { SaveSlotSummary } from '../../domain/repositories/SaveRepository';
 import { useServices } from '../providers/services';
 import { PixelButton, SpriteFrame } from '../../ui/common/primitives';
+import { CloudBadge, CloudPanel, useCloud } from './CloudPanel';
 
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
   const { saves, data, audio } = useServices();
   const [slots, setSlots] = useState<SaveSlotSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const { account } = useCloud();
 
   const refresh = () =>
     saves
@@ -71,15 +74,17 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                 </PixelButton>
               )}
               {error && <p className="mt-2 text-[12px] text-hp-light">{error}</p>}
+              <CloudBadge onOpen={() => setCloudOpen(true)} />
             </>
           )}
         </div>
         <p className="text-outline text-center text-[11px] text-muted">
-          RPG de fantasia em pixel art · progresso salvo neste navegador
+          RPG de fantasia em pixel art · {account ? `progresso sincronizado com o GitHub (${account.repo})` : 'progresso salvo neste navegador'}
           <br />
           Melhor no celular deitado ou em pé · teclado, mouse e toque
         </p>
       </div>
+      {cloudOpen && <CloudPanel onClose={() => setCloudOpen(false)} onChanged={() => void refresh()} />}
     </div>
   );
 }

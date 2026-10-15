@@ -30,7 +30,7 @@ export class SaveService {
     const file = toSaveFile(character);
     // valida o próprio save antes de gravar: nunca persiste um estado inconsistente
     parseSave(this.data, file);
-    const summary: SaveSlotSummary = { slotId: character.id, name: character.name, vocation: character.vocation, level: character.level, updatedAt: Date.now() };
+    const summary: SaveSlotSummary = { slotId: character.id, name: character.name, vocation: character.vocation, level: character.level, updatedAt: file.savedAt };
     this.lastSavedAt = Date.now();
     this.writing = this.writing.then(() => this.repo.save(character.id, file, summary)).catch((e: unknown) => {
       console.error('Falha ao salvar', e);
@@ -54,6 +54,16 @@ export class SaveService {
       this.pending = null;
     }
     await this.save(get());
+  }
+
+  /** Envia já para a nuvem o que estiver pendente (se o repositório sincroniza). Não falha o jogo se der erro. */
+  async flushRemote(keepalive = false): Promise<void> {
+    const r = this.repo as SaveRepository<SaveFile> & { flushRemote?: (k: boolean) => Promise<void> };
+    try {
+      await r.flushRemote?.(keepalive);
+    } catch {
+      /* o status de sincronização mostra o erro */
+    }
   }
 
   remove(slotId: string): Promise<void> {

@@ -42,6 +42,18 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
+## Conta GitHub (sincronizar saves entre aparelhos)
+Opcional, na tela inicial: **Entrar com GitHub**. Cada jogador usa a **própria conta**: os saves ficam em
+`saves/<id>.json` num repositório **privado** dele (padrão `rpgzim-saves`), acessado direto do navegador pela API
+do GitHub com um **token fine-grained** restrito a esse repositório (*Contents: Read and write*).
+- Local primeiro: o jogo sempre grava no navegador; a nuvem recebe no máx. 1 envio por personagem a cada 15 s
+  (cada envio é um commit) e sempre ao sair/fechar a aba. Sem internet, continua local e reenvia depois.
+- Ao listar/carregar, fica a versão mais nova (nuvem ou navegador); em conflito entre aparelhos vence a última gravação.
+- O token fica só no `localStorage` do jogador e só vai para `api.github.com`; o jogo recusa repositório público.
+- Por que não um repositório único do jogo com token embutido: o site é estático, então o token ficaria público
+  (qualquer um poderia apagar/alterar todas as contas e o GitHub revoga tokens expostos). Um modelo central exigiria
+  um pequeno servidor (ex.: função serverless) guardando o token.
+
 ## Arquitetura (resumo)
 `src/domain` regras puras (dano, XP, skills, economia…) · `src/data` dados configuráveis ·
 `src/game` simulação independente de engine (movimento em grade com tempo explícito, A*, combate, IA)
@@ -51,7 +63,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **107 testes passando** (regras, dados, mundo, persistência, banco, simulação integrada).
+- Vitest: **125 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, simulação integrada).
 - Playwright: **6 fluxos passando** (desktop: principal/loja/casa/banco+loot; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar).
 - Desempenho medido (Chrome headless, Intel Iris Xe): **60 FPS** (p95 ≈ 16,9 ms) em templo, praça e combate,

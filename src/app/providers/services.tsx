@@ -6,12 +6,16 @@ import { createBrowserRepository } from '../../game/persistence/repositories';
 import { SaveService } from '../../game/persistence/SaveService';
 import type { SaveFile } from '../../game/persistence/saveSchema';
 import { AudioService } from '../../game/audio/AudioService';
+import { SyncedSaveRepository } from '../../game/persistence/SyncedSaveRepository';
+import { CloudAccount } from '../cloud';
 
 export interface Services {
   data: GameData;
   saves: SaveService;
   audio: AudioService;
   touch: boolean;
+  /** Conta GitHub opcional para sincronizar os saves entre aparelhos. */
+  cloud: CloudAccount;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -33,9 +37,15 @@ export function ServicesProvider({ children, fallback }: { children: ReactNode; 
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const repo = await createBrowserRepository<SaveFile>();
+      const local = await createBrowserRepository<SaveFile>();
       if (!alive) return;
-      setServices({ data: GAME_DATA, saves: new SaveService(repo, GAME_DATA), audio: new AudioService(), touch: detectTouch() });
+      // local primeiro; com conta GitHub conectada, também sincroniza com o repositório privado do jogador
+      const repo = new SyncedSaveRepository<SaveFile>(
+        local,
+        (f) => f.savedAt,
+        (slotId, f) => ({ slotId, name: f.character.name, vocation: f.character.vocation, level: f.character.level, updatedAt: f.savedAt }),
+      );
+      setServices({ data: GAME_DATA, saves: new SaveService(repo, GAME_DATA), audio: new AudioService(), touch: detectTouch(), cloud: new CloudAccount(repo) });
     })();
     return () => {
       alive = false;

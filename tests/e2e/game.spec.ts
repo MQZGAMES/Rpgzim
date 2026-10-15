@@ -211,8 +211,13 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
   const cell = page.getByTestId(`bag-${axe}`);
   await expect(cell).toHaveAttribute('data-better', 'true');
   const box = (await cell.boundingBox())!;
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  // toque duplo rápido (eventos de toque enviados direto, sem a espera que o tap do Playwright adiciona)
+  const cdp = await page.context().newCDPSession(page);
+  const pt = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  for (let i = 0; i < 2; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
   await expect(page.getByTestId('equip-notice')).toContainText('Machadinha');
   expect((await api(page, (a) => a.player())).equipment.mainHand?.itemId).toBe('axe_hand');
 });
