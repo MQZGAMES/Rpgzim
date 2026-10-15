@@ -3,7 +3,7 @@
 import { chebyshev } from '../../domain/value-objects/position';
 import { buildingAt, regionAt } from '../world/GameMap';
 import type { World } from '../simulation/World';
-import { message } from '../simulation/World';
+import { allActors, message } from '../simulation/World';
 import { isMoving, pathTo, settle, tryStep } from '../movement/movement';
 
 export const NPC_RANGE = 2;
@@ -62,7 +62,11 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
 
 function walkThenInteract(w: World, pos: { x: number; y: number }, target: { kind: 'npc' | 'loot' | 'sign'; id: string }): void {
   const p = w.player;
-  const path = pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: target.kind === 'npc' ? 1 : 1 });
+  // NPCs atrás de balcões: basta chegar ao alcance da conversa (2 tiles); tenta antes o tile colado
+  const path =
+    target.kind === 'npc'
+      ? (pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: 1, maxNodes: 1500 }) ?? pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: NPC_RANGE }))
+      : pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: 1 });
   if (!path) {
     message(w, 'Não há caminho até lá.', 'warning');
     return;
@@ -163,7 +167,7 @@ export function chooseDialogOption(w: World, index: number): void {
 export function updateDoors(w: World): void {
   if (w.now < w.nextDoorCheckAt) return;
   w.nextDoorCheckAt = w.now + 100;
-  const movers = [w.player, ...w.npcs.values()];
+  const movers = [...allActors(w), ...w.npcs.values()];
   for (const d of w.map.doors) {
     const near = movers.some((m) => {
       if (m.x === d.x) return m.y >= d.y - 2 && m.y <= d.y + 1; // de frente, na soleira ou logo dentro
@@ -198,7 +202,7 @@ export function updateNpcs(w: World): void {
   for (const n of w.npcs.values()) {
     settle(n, w.now);
     if (n.def.wanderRadius <= 0 || isMoving(n, w.now) || w.now < n.nextWanderAt) continue;
-    if (w.ui.dialog?.npcId === n.id || w.ui.shop?.npcId === n.id) continue;
+    if (allActors(w).some((a) => a.scope.ui.dialog?.npcId === n.id || a.scope.ui.shop?.npcId === n.id || a.scope.ui.depot?.npcId === n.id)) continue;
     n.nextWanderAt = w.now + 2500 + w.rng.next() * 4000;
     const dx = w.rng.int(-1, 1);
     const dy = w.rng.int(-1, 1);

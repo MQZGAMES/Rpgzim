@@ -3,7 +3,7 @@ import type { Element } from '../value-objects/element';
 import type { TilePos } from '../value-objects/position';
 import type { SkillId } from '../entities/definitions';
 
-export type MessageKind = 'info' | 'warning' | 'loot' | 'combat' | 'system' | 'levelup';
+export type MessageKind = 'info' | 'warning' | 'loot' | 'combat' | 'system' | 'levelup' | 'chat';
 
 export interface GameEventMap extends Record<string, unknown> {
   damage: { targetId: string; sourceId: string | null; amount: number; element: Element; blocked: boolean; position: TilePos };
@@ -34,4 +34,12 @@ export interface GameEventMap extends Record<string, unknown> {
   targetChanged: { targetId: string | null };
   itemUsed: { itemId: string };
   saveRequested: { reason: string };
+  // ---- heróis (personagens com vida própria)
+  /** Fala de um personagem (balão acima da cabeça e registro de mensagens quando perto do jogador). */
+  speech: { entityId: string; name: string; text: string; position: TilePos };
+  /** Texto flutuante de um ator que não é o jogador (subiu de nível, skill, XP). */
+  actorFx: { entityId: string; text: string; tone: 'level' | 'skill' | 'xp' };
+  actorRespawned: { entityId: string };
+  /** Um herói pediu para salvar o próprio progresso. */
+  heroSaveRequested: { heroId: string; reason: string };
 }

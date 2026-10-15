@@ -8,6 +8,7 @@ import type { GameMap } from '../../game/world/GameMap';
 import type { SaveService } from '../../game/persistence/SaveService';
 import type { AudioService } from '../../game/audio/AudioService';
 import { buildSnapshot, type UiSnapshot } from './snapshot';
+import { heroSnapshot } from '../../game/ai/heroes';
 import { createLocalStore, createSnapshotStore, type Panel, type Store, type UiLocalState } from './store';
 
 const PUBLISH_MS = 80;
@@ -21,6 +22,8 @@ export interface SessionOptions {
   saves: SaveService;
   audio: AudioService;
   touch: boolean;
+  /** Personagens-heróis com vida própria (os que não estão sendo jogados). */
+  heroes?: CharacterState[];
   /** Callback ao sair para o menu. */
   onExit: () => void;
 }
@@ -48,7 +51,11 @@ export class GameSession {
     let character = opts.character;
     // personagem salvo morto renasce no templo com a vida cheia
     const restore = character.health > 0;
-    this.sim = new GameSimulation({ data: opts.data, map: opts.map, character, restorePosition: restore });
+    const heroes = (opts.heroes ?? []).flatMap((hc) => {
+      const hero = Object.values(opts.data.heroes).find((d) => d.slotId === hc.id);
+      return hero && hc.id !== character.id ? [{ hero, character: hc }] : [];
+    });
+    this.sim = new GameSimulation({ data: opts.data, map: opts.map, character, restorePosition: restore, heroes });
     character = this.sim.world.player.character;
     if (!restore) {
       character.health = this.sim.world.player.stats.maxHealth;
@@ -82,6 +89,12 @@ export class GameSession {
       }),
       ev.on('levelUp', (e) => this.local.update({ levelUp: { id: ++this.msgSeq, level: e.level } })),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
+      ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
+      // falas de heróis próximos aparecem no registro de mensagens
+      ev.on('speech', (e) => {
+        const p = this.sim.world.human;
+        if (Math.max(Math.abs(e.position.x - p.x), Math.abs(e.position.y - p.y)) <= 12) this.pushMessage(`${e.name}: ${e.text}`, 'chat');
+      }),
     );
   }
 
@@ -129,8 +142,23 @@ export class GameSession {
     this.audio.setMusic(this.sim.world.map.regions.find((r) => r.id === this.sim.world.ui.regionId)?.music ?? 'town');
   }
 
+  private heroSavedAt = new Map<string, number>();
+  /** Salva o progresso de um herói (no máx. a cada 20 s, exceto `force`). */
+  saveHero(heroId: string, force = false): Promise<void> {
+    const h = [...this.sim.world.heroes.values()].find((x) => x.hero.id === heroId);
+    if (!h) return Promise.resolve();
+    const now = performance.now();
+    if (!force && now - (this.heroSavedAt.get(heroId) ?? -Infinity) < 20000) return Promise.resolve();
+    this.heroSavedAt.set(heroId, now);
+    return this.saves.save(heroSnapshot(h)).catch(() => undefined);
+  }
+  private saveHeroes(): Promise<void> {
+    return Promise.all([...this.sim.world.heroes.values()].map((h) => this.saveHero(h.hero.id, true))).then(() => undefined);
+  }
+
   async saveNow(): Promise<void> {
     if (this.disposed) return;
+    void this.saveHeroes();
     this.local.update({ saving: true });
     try {
       await this.saves.flush(() => this.sim.snapshotCharacter());

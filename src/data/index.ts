@@ -5,6 +5,7 @@ import { MONSTERS } from './monsters';
 import { NPCS, SHOPS } from './npcs';
 import { SPELLS } from './spells';
 import { VOCATIONS } from './vocations';
+import { HEROES } from './heroes';
 
 export const GAME_DATA: GameData = {
   items: ITEMS,
@@ -13,5 +14,6 @@ export const GAME_DATA: GameData = {
   monsters: MONSTERS,
   npcs: NPCS,
   shops: SHOPS,
+  heroes: HEROES,
   balance: BALANCE,
 };

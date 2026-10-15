@@ -27,7 +27,7 @@ export class EffectsView {
   private readonly bags = new Map<string, Phaser.GameObjects.Sprite>();
   private readonly target: Phaser.GameObjects.Sprite;
   private readonly marker: Phaser.GameObjects.Sprite;
-  private auras: { sprite: Phaser.GameObjects.Sprite; until: number }[] = [];
+  private auras: { sprite: Phaser.GameObjects.Sprite; until: number; targetId: string }[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -45,7 +45,7 @@ export class EffectsView {
     on('heal', (e) => this.onHeal(e));
     on('missed', (e) => {
       this.floatText('ERROU', tileCenter(e.position).x, tileCenter(e.position).y - 14, 0xb6aebd);
-      session.audio.play('miss');
+      if (this.audible(e.sourceId, e.position)) session.audio.play('miss');
     });
     on('spellCast', (e) => this.onSpell(e));
     on('entityDied', (e) => this.onDeath(e));
@@ -66,7 +66,24 @@ export class EffectsView {
       const h = this.views.headOf(this.session.sim.world.player.id);
       if (h) this.floatText(`+${e.amount} XP`, h.x, h.y + 4, 0xfbf8ef, 1000, 350);
     });
-    on('buffApplied', (e) => this.onBuff(e.kind, e.durationMs));
+    on('buffApplied', (e) => this.onBuff(e.targetId, e.kind, e.durationMs));
+    on('actorFx', (e) => {
+      const h = this.views.headOf(e.entityId);
+      if (!h) return;
+      const color = e.tone === 'level' ? 0xf8dc6c : e.tone === 'skill' ? 0x5cbba8 : 0xfbf8ef;
+      this.floatText(e.text, h.x, h.y - (e.tone === 'xp' ? -4 : 18), color, e.tone === 'level' ? 1600 : 1000, e.tone === 'xp' ? 350 : 0);
+      if (e.tone === 'level') {
+        const v = this.views.get(e.entityId);
+        if (v) this.playFx('fx_levelup', v.container.x, v.container.y + 2, v.container.depth + 1, { origin: [0.5, 1] });
+      }
+    });
+    on('actorRespawned', (e) => {
+      const v = this.views.get(e.entityId);
+      if (!v) return;
+      v.revive();
+      this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
+    });
+    on('speech', (e) => this.speech(e.entityId, e.text));
     on('playerRespawned', () => {
       const v = this.views.player;
       v.revive();
@@ -128,7 +145,7 @@ export class EffectsView {
   private onAttack(e: GameEventMap['attack']): void {
     const from = this.posOf(e.sourceId, e.from);
     const to = this.posOf(e.targetId, e.to);
-    const audio = this.session.audio;
+    const audio = this.audible(e.sourceId, e.from) || this.audible(e.targetId, e.to) ? this.session.audio : { play: () => undefined };
     if (e.projectile) {
       this.projectile(e.projectile, from, to);
       audio.play(e.kind === 'wand' ? (e.element === 'fire' ? 'wand' : e.element === 'energy' ? 'energy' : e.element === 'ice' ? 'ice' : 'earth') : 'bow');
@@ -154,13 +171,13 @@ export class EffectsView {
     if (e.blocked || e.amount === 0) {
       this.floatText(e.blocked && isPlayer ? 'BLOQUEOU' : 'ABSORVEU', x, y, 0xa9b0bf, 700, delay);
       this.playFx('hit', x, y + 6, DEPTH.overlay);
-      this.session.audio.play('block');
+      if (this.audible(e.targetId, e.position)) this.session.audio.play('block');
       return;
     }
     this.floatText(String(e.amount), x, y, isPlayer ? 0xff5040 : ELEMENT_COLOR[e.element], 800, delay);
     v?.flash(this.session.sim.now);
     if (e.element === 'physical') this.playFx('blood', x, y + 8, DEPTH.overlay);
-    this.session.audio.play(isPlayer ? 'hurt' : 'hit');
+    if (this.audible(e.targetId, e.position)) this.session.audio.play(isPlayer ? 'hurt' : 'hit');
   }
 
   private onHeal(e: GameEventMap['heal']): void {
@@ -168,7 +185,7 @@ export class EffectsView {
     if (!v) return;
     if (e.amount > 0) this.floatText(`+${e.amount}`, v.container.x, v.container.y - v.height + 4, e.mana ? 0x69a0e0 : 0x4fd08a);
     this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
-    if (!e.mana) this.session.audio.play('heal');
+    if (!e.mana && this.audible(e.targetId)) this.session.audio.play('heal');
   }
 
   private onSpell(e: GameEventMap['spellCast']): void {
@@ -178,7 +195,7 @@ export class EffectsView {
     const caster = this.views.get(e.casterId);
     const color = Phaser.Display.Color.HexStringToColor(spell.vfx.color).color;
     if (caster) this.floatText(e.words, caster.container.x, caster.container.y - caster.height - 6, color, 1100, 0);
-    this.session.audio.play(SPELL_SFX[spell.vfx.sfx] ?? 'energy');
+    if (this.audible(e.casterId, e.from)) this.session.audio.play(SPELL_SFX[spell.vfx.sfx] ?? 'energy');
     const from = caster ? { x: caster.container.x, y: caster.container.y - 10 } : tileCenter(e.from);
     const impactAll = (delay: number) => {
       for (const t of e.tiles) {
@@ -203,13 +220,42 @@ export class EffectsView {
     } else impactAll(0);
   }
 
-  private onBuff(kind: string, durationMs: number): void {
+  private onBuff(targetId: string, kind: string, durationMs: number): void {
     const name = kind === 'defense' ? 'fx_buff_iron' : kind === 'attackSpeed' ? 'fx_buff_focus' : kind === 'regen' ? 'fx_heal' : 'fx_haste';
-    const v = this.views.player;
+    const v = this.views.get(targetId);
+    if (!v) return;
     const s = this.scene.add.sprite(v.container.x, v.container.y, 'fx', `${name}_0`).setOrigin(0.5, 1).setDepth(v.container.depth + 1);
     s.play({ key: `fx:${name}`, repeat: -1, frameRate: 10 });
-    this.auras.push({ sprite: s, until: this.session.sim.now + durationMs });
-    this.session.audio.play('buff');
+    this.auras.push({ sprite: s, until: this.session.sim.now + durationMs, targetId });
+    if (this.audible(targetId)) this.session.audio.play('buff');
+  }
+
+  /** Sons de outros personagens só tocam quando estão perto do jogador. */
+  private audible(entityId: string | null | undefined, pos?: TilePos): boolean {
+    const w = this.session.sim.world;
+    const p = w.human;
+    if (!entityId || entityId === p.id) return true;
+    const e = w.heroes.get(entityId) ?? w.monsters.get(entityId);
+    const at = e ?? pos;
+    return !at || Math.max(Math.abs(at.x - p.x), Math.abs(at.y - p.y)) <= 10;
+  }
+
+  private bubbles = new Map<string, { box: Phaser.GameObjects.Container; until: number; halfWidth: number }>();
+  /** Balão de fala acima da cabeça (some sozinho). */
+  private speech(entityId: string, text: string): void {
+    const v = this.views.get(entityId);
+    if (!v) return;
+    this.bubbles.get(entityId)?.box.destroy();
+    const t = this.scene.add.bitmapText(0, 0, 'pixel', text.toUpperCase(), 8).setMaxWidth(104).setCenterAlign().setTint(0xfbf8ef);
+    const bw = Math.ceil(t.width);
+    const bh = Math.ceil(t.height);
+    // texto claro sobre fundo escuro (a fonte já tem contorno), centralizado acima da cabeça
+    t.setPosition(-Math.round(bw / 2), -bh - 4);
+    const g = this.scene.add.graphics();
+    g.fillStyle(0x120d18, 0.78).fillRoundedRect(-bw / 2 - 4, -bh - 7, bw + 8, bh + 6, 3);
+    g.fillTriangle(-3, -1, 3, -1, 0, 3);
+    const box = this.scene.add.container(0, 0, [g, t]).setDepth(DEPTH.text);
+    this.bubbles.set(entityId, { box, until: this.session.sim.now + 2600 + text.length * 45, halfWidth: bw / 2 + 5 });
   }
 
   private onDeath(e: GameEventMap['entityDied']): void {
@@ -224,11 +270,13 @@ export class EffectsView {
       this.scene.tweens.add({ targets: corpse, alpha: 0, delay: this.session.sim.world.data.balance.world.corpseDecayMs - 1500, duration: 1500, onComplete: () => corpse.destroy() });
       this.playFx('fx_poof', v.container.x, v.container.y - 8, DEPTH.overlay);
       v.container.setVisible(false);
-      this.session.audio.play('monsterDeath');
+      if (this.audible(e.entityId, e.position)) this.session.audio.play('monsterDeath');
     } else {
       v.showDead();
-      this.session.audio.play('death');
-      this.scene.cameras.main.flash(400, 120, 20, 30);
+      if (e.entityId === this.session.sim.world.human.id) {
+        this.session.audio.play('death');
+        this.scene.cameras.main.flash(400, 120, 20, 30);
+      } else if (this.audible(e.entityId)) this.session.audio.play('death');
     }
   }
 
@@ -264,16 +312,29 @@ export class EffectsView {
       this.target.setVisible(true).setPosition(tv.container.x, tv.container.y - 7).setDepth(tv.container.depth - 1);
       this.target.setFrame(Math.floor(now / 300) % 2 ? 'target_1' : 'target_0');
     } else this.target.setVisible(false);
-    // auras de buff acompanham o jogador
-    const pv = this.views.player;
+    // auras de buff acompanham quem recebeu
     this.auras = this.auras.filter((a) => {
-      if (now >= a.until) {
+      const v = this.views.get(a.targetId);
+      if (now >= a.until || !v) {
         a.sprite.destroy();
         return false;
       }
-      a.sprite.setPosition(pv.container.x, pv.container.y + 2).setDepth(pv.container.depth + 1);
+      a.sprite.setPosition(v.container.x, v.container.y + 2).setDepth(v.container.depth + 1);
       return true;
     });
+    // balões de fala seguem a cabeça de quem fala
+    for (const [id, b] of this.bubbles) {
+      const v = this.views.get(id);
+      if (now >= b.until || !v) {
+        b.box.destroy();
+        this.bubbles.delete(id);
+        continue;
+      }
+      // acima do nome e sempre dentro da tela
+      const cam = this.scene.cameras.main.worldView;
+      const x = Phaser.Math.Clamp(v.container.x, cam.x + b.halfWidth, cam.right - b.halfWidth);
+      b.box.setPosition(Math.round(x), v.container.y - v.height - 8);
+    }
   }
 
   destroy(): void {

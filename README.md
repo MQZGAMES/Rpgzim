@@ -42,6 +42,20 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
+## Boladex — personagem com vida própria
+**Boladex** é um Knight que existe desde o primeiro acesso e aparece na tela inicial como personagem jogável.
+Quando você joga com outro personagem, ele vive sozinho no mesmo mundo, **com as mesmas regras do jogador**:
+skills que sobem pelo uso, XP e níveis, dano recebido, morte (com as mesmas penalidades) e renascimento no templo,
+lojas (vende o loot, compra poções e equipamentos melhores e os equipa), banco (guarda o excedente e saca para um
+upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um monstro o ataca por perto.
+- **Temperamento** (`src/data/heroes.ts`): coragem (onde caça e quando recua), ganância (quanto loot/ouro junta),
+  disciplina (treino), sociabilidade (passeios e conversa) e prudência (poções). O humor muda com vitórias, níveis e mortes.
+- **Fala**: balões acima da cabeça e mensagens no registro quando está perto; toque nele para saber o que está fazendo.
+- **Como funciona**: a IA (`src/game/ai/heroBrain.ts`) só usa os mesmos comandos do jogador; os sistemas de
+  combate, magias, mochila, lojas e banco rodam no contexto do herói (`asActor`), e os monstros escolhem o alvo entre
+  todos os personagens. O progresso dele é salvo no próprio slot (e sincronizado com o GitHub, se conectado).
+- Custo: ~2–5 s de CPU a cada 30–90 min de jogo simulado (`tests/tools/hero-life.test.ts` imprime o "diário" dele).
+
 ## Conta GitHub (sincronizar saves entre aparelhos)
 Opcional, na tela inicial: **Entrar com GitHub**. Cada jogador usa a **própria conta**: os saves ficam em
 `saves/<id>.json` num repositório **privado** dele (padrão `rpgzim-saves`), acessado direto do navegador pela API
@@ -64,8 +78,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **125 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, simulação integrada).
-- Playwright: **6 fluxos passando** (desktop: principal/loja/casa/banco+loot; mobile: joystick, HUD na tela,
+- Vitest: **129 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, simulação integrada).
+- Playwright: **7 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar).
 - Desempenho medido (Chrome headless, Intel Iris Xe): **60 FPS** (p95 ≈ 16,9 ms) em templo, praça e combate,
   celular 390×844@3x e desktop 1440×900. Em renderização por software (SwiftShader) ~15–19 FPS.

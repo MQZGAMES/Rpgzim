@@ -8,6 +8,7 @@ import type { SaveFile } from '../../game/persistence/saveSchema';
 import { AudioService } from '../../game/audio/AudioService';
 import { SyncedSaveRepository } from '../../game/persistence/SyncedSaveRepository';
 import { CloudAccount } from '../cloud';
+import { ensureHeroSaves } from '../heroes';
 
 export interface Services {
   data: GameData;
@@ -48,7 +49,11 @@ export function ServicesProvider({ children, fallback }: { children: ReactNode; 
         // ignora carimbos de tempo: parado na cidade não gera commits a cada minuto
         (f) => JSON.stringify({ ...f.character, updatedAt: 0, stats: { ...f.character.stats, playTimeMs: 0 } }),
       );
-      setServices({ data: GAME_DATA, saves: new SaveService(repo, GAME_DATA), audio: new AudioService(), touch: detectTouch(), cloud: new CloudAccount(repo) });
+      const saves = new SaveService(repo, GAME_DATA);
+      const cloud = new CloudAccount(repo);
+      await ensureHeroSaves(saves, GAME_DATA);
+      if (!alive) return;
+      setServices({ data: GAME_DATA, saves, audio: new AudioService(), touch: detectTouch(), cloud });
     })();
     return () => {
       alive = false;

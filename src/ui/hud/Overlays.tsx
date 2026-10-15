@@ -11,6 +11,7 @@ const KIND_COLOR: Record<ChatMessage['kind'], string> = {
   combat: '#c9e4a8',
   system: '#9dd8f2',
   levelup: '#fff09a',
+  chat: '#f6c28a',
 };
 
 export function MessageLog({ max = 4 }: { max?: number }) {

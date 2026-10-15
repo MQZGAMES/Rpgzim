@@ -283,3 +283,50 @@ export interface BalanceConfig {
   player: { inventorySlots: number; depotSlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };
 }
+
+// ------------------------------------------------------------------ heróis (personagens-jogadores com vida própria)
+/** Traços de 0 a 1 que guiam as decisões do herói quando ninguém o controla. */
+export interface Temperament {
+  /** Coragem: caça monstros mais fortes e recua mais tarde. */
+  bravery: number;
+  /** Ganância: enche mais a mochila antes de voltar e guarda mais ouro. */
+  greed: number;
+  /** Disciplina: treina skills com armas de treino com mais frequência. */
+  discipline: number;
+  /** Sociabilidade: conversa e passeia pela praça. */
+  sociability: number;
+  /** Prudência: usa poções mais cedo e compra mais poções. */
+  caution: number;
+}
+
+export type HeroLineKey =
+  | 'hunt'
+  | 'town'
+  | 'sell'
+  | 'buy'
+  | 'upgrade'
+  | 'bank'
+  | 'train'
+  | 'trainDone'
+  | 'retreat'
+  | 'death'
+  | 'levelUp'
+  | 'skillUp'
+  | 'kill'
+  | 'rareLoot'
+  | 'idle'
+  | 'greetPlayer'
+  | 'help'
+  | 'status';
+
+export interface HeroDef {
+  id: string;
+  /** Slot do save (também usado como id do personagem). */
+  slotId: string;
+  name: string;
+  title: string;
+  vocation: VocationId;
+  temperament: Temperament;
+  /** Falas por situação; {player}, {monster}, {level}, {skill}, {area}, {item}, {gold} são substituídos. */
+  lines: Readonly<Record<HeroLineKey, readonly string[]>>;
+}

@@ -1,5 +1,10 @@
 // Entidades em tempo de execução da simulação (independentes de engine).
 import type { ShieldTrainingState } from '../../domain/rules/shielding';
+import type { EventBus } from '../../domain/events/EventBus';
+import type { GameEventMap } from '../../domain/events/gameEvents';
+import type { HeroDef } from '../../domain/entities/definitions';
+import type { UiState } from '../simulation/World';
+import type { HeroBrainState } from '../ai/heroBrain';
 import type { CharacterState, ItemStack } from '../../domain/entities/character';
 import type { MonsterDef, NpcDef } from '../../domain/entities/definitions';
 import type { Facing } from '../../domain/value-objects/direction';
@@ -49,6 +54,19 @@ export interface PlayerEntity extends Mover {
   /** Último ataque do jogador (golpe ou magia ofensiva) — exigido para treinar Shielding. */
   lastAttackAt: number;
   shieldTraining: ShieldTrainingState;
+  /** Contexto próprio do ator: estado de janelas (diálogo/loja/loot) e barramento de eventos. */
+  scope: ActorScope;
+}
+
+export interface ActorScope {
+  ui: UiState;
+  events: EventBus<GameEventMap>;
+}
+
+/** Herói: um personagem-jogador controlado pela IA (mesmas regras e sistemas do jogador). */
+export interface HeroEntity extends PlayerEntity {
+  hero: HeroDef;
+  brain: HeroBrainState;
 }
 
 export interface MonsterEntity extends Mover {
@@ -68,6 +86,8 @@ export interface MonsterEntity extends Mover {
   respawnAt: number;
   path: TilePos[] | null;
   pathAt: number;
+  /** Ator (jogador ou herói) que o monstro está perseguindo/atacando. */
+  targetId: string | null;
 }
 
 export interface NpcEntity extends Mover {

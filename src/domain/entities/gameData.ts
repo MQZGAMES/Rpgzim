@@ -1,4 +1,4 @@
-import type { BalanceConfig, ItemDef, MonsterDef, NpcDef, ShopDef, SpellDef, VocationDef } from './definitions';
+import type { BalanceConfig, HeroDef, ItemDef, MonsterDef, NpcDef, ShopDef, SpellDef, VocationDef } from './definitions';
 import type { VocationId } from '../value-objects/ids';
 
 /** Pacote imutável com todas as definições configuráveis consumidas pelas regras e pela simulação. */
@@ -9,6 +9,7 @@ export interface GameData {
   monsters: Readonly<Record<string, MonsterDef>>;
   npcs: Readonly<Record<string, NpcDef>>;
   shops: Readonly<Record<string, ShopDef>>;
+  heroes: Readonly<Record<string, HeroDef>>;
   balance: BalanceConfig;
 }
 

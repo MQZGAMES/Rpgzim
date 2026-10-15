@@ -20,7 +20,7 @@ function loadPrefs(): { zoomBias: number; showFps: boolean; showLog: boolean } {
   }
 }
 
-export function GameScreen({ character, onExit }: { character: CharacterState; onExit: () => void }) {
+export function GameScreen({ character, heroes = [], onExit }: { character: CharacterState; heroes?: CharacterState[]; onExit: () => void }) {
   const services = useServices();
   const host = useRef<HTMLDivElement>(null);
   const handle = useRef<GameHandle | null>(null);
@@ -36,6 +36,7 @@ export function GameScreen({ character, onExit }: { character: CharacterState; o
       data: services.data,
       map: buildWorld(),
       character: structuredClone(character),
+      heroes: heroes.map((h) => structuredClone(h)),
       saves: services.saves,
       audio: services.audio,
       touch: services.touch,
@@ -54,7 +55,7 @@ export function GameScreen({ character, onExit }: { character: CharacterState; o
       handle.current = null;
       setSession(null);
     };
-  }, [character, services]);
+  }, [character, heroes, services]);
 
   useEffect(() => {
     try {

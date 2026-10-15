@@ -4,6 +4,7 @@ import type { SaveSlotSummary } from '../../domain/repositories/SaveRepository';
 import { useServices } from '../providers/services';
 import { PixelButton, SpriteFrame } from '../../ui/common/primitives';
 import { CloudBadge, CloudPanel, useCloud } from './CloudPanel';
+import { isHeroSlot } from '../heroes';
 
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
   const { saves, data, audio } = useServices();
@@ -51,9 +52,11 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                             <span className="block truncate text-[15px]">{s.name}</span>
                             <span className="block text-[11px] text-parchment">
                               {data.vocations[s.vocation as keyof typeof data.vocations]?.name ?? s.vocation} · Nível {s.level}
+                              {isHeroSlot(data, s.slotId) && <span className="ml-1 text-heal">· tem vida própria</span>}
                             </span>
                           </span>
                         </button>
+                        {!isHeroSlot(data, s.slotId) && (
                         <PixelButton
                           className="h-12 px-1 text-[11px]"
                           ariaLabel={`Apagar ${s.name}`}
@@ -63,6 +66,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                         >
                           Apagar
                         </PixelButton>
+                        )}
                       </div>
                     ))}
                   </div>

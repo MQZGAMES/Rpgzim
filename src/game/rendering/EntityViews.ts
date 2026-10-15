@@ -2,7 +2,7 @@
 // vida) a cada quadro — a renderização nunca é a fonte da verdade.
 import type Phaser from 'phaser';
 import { renderPos, isMoving } from '../movement/movement';
-import type { MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
+import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
@@ -29,12 +29,13 @@ export class CreatureView {
     shadow: 's' | 'm' | 'l',
     readonly yOffset: number,
     name?: string,
+    labelTint = 0xfff09a,
   ) {
     this.shadow = scene.add.image(0, -2, 'objects', `shadow_${shadow}`);
     this.sprite = scene.add.sprite(0, yOffset, sheet, 0).setOrigin(0.5, 1);
     this.container = scene.add.container(0, 0, [this.shadow, this.sprite]);
     if (name) {
-      this.label = scene.add.bitmapText(0, -30 + yOffset, 'pixel', name.toUpperCase(), 8).setOrigin(0.5, 1).setTint(0xfff09a);
+      this.label = scene.add.bitmapText(0, -30 + yOffset, 'pixel', name.toUpperCase(), 8).setOrigin(0.5, 1).setTint(labelTint);
       this.container.add(this.label);
     }
   }
@@ -131,6 +132,8 @@ export class EntityViews {
   readonly player: CreatureView;
   readonly monsters = new Map<string, CreatureView>();
   readonly npcs = new Map<string, CreatureView>();
+  /** Heróis (personagens-jogadores com vida própria): nome em verde para diferenciar dos NPCs. */
+  readonly heroes = new Map<string, CreatureView>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -159,7 +162,13 @@ export class EntityViews {
   }
 
   get(id: string): CreatureView | undefined {
-    return id === this.player.id ? this.player : (this.monsters.get(id) ?? this.npcs.get(id));
+    return id === this.player.id ? this.player : (this.monsters.get(id) ?? this.npcs.get(id) ?? this.heroes.get(id));
+  }
+
+  private addHero(h: HeroEntity): CreatureView {
+    const v = new CreatureView(this.scene, h.id, h.character.vocation, 'humanoid', 's', 1, h.character.name, 0x8ff0b0);
+    this.heroes.set(h.id, v);
+    return v;
   }
 
   /** Posição de tela (pixels do mundo) do topo da cabeça de uma entidade. */
@@ -193,6 +202,14 @@ export class EntityViews {
       v.sync(n, now, true, 1.6);
       v.setLabelVisible(Math.max(Math.abs(n.x - p.x), Math.abs(n.y - p.y)) <= 4);
     }
+    for (const h of w.heroes.values()) {
+      const v = this.heroes.get(h.id) ?? this.addHero(h);
+      v.sync(h, now, true, h.stats.speed);
+      const near = Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)) <= 9;
+      v.setLabelVisible(near && !h.dead);
+      const pct = h.character.health / h.stats.maxHealth;
+      v.setHealthBar(h.dead || pct >= 1 ? null : pct, this.scene, 0x4fd08a);
+    }
     const hpPct = p.character.health / p.stats.maxHealth;
     this.player.setHealthBar(p.dead || (hpPct >= 1 && !targetId) ? null : hpPct, this.scene, 0x4fd08a);
   }
@@ -215,6 +232,7 @@ export class EntityViews {
     };
     for (const [id, v] of this.monsters) test(id, v);
     for (const [id, v] of this.npcs) test(id, v);
+    for (const [id, v] of this.heroes) test(id, v);
     return best;
   }
 
@@ -222,6 +240,7 @@ export class EntityViews {
     this.player.destroy();
     for (const v of this.monsters.values()) v.destroy();
     for (const v of this.npcs.values()) v.destroy();
+    for (const v of this.heroes.values()) v.destroy();
   }
 }
 

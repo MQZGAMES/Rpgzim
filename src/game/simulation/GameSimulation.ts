@@ -14,7 +14,8 @@ import { newShieldTraining } from '../../domain/rules/shielding';
 import { chebyshev } from '../../domain/value-objects/position';
 import { isPz, isSolid } from '../world/GameMap';
 import type { GameMap } from '../world/GameMap';
-import type { NpcEntity, PlayerEntity } from '../entities/types';
+import type { HeroDef } from '../../domain/entities/definitions';
+import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
 import { currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
 import { castSpell } from '../abilities/spells';
@@ -33,7 +34,10 @@ import {
 import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
-import { message, type World } from './World';
+import { planWalk } from '../movement/walk';
+import { addHero } from '../ai/heroes';
+import { heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
+import { allActors, asActor, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
 export const MAX_FRAME_MS = 250;
@@ -46,6 +50,8 @@ export interface SimulationOptions {
   loot?: LootGenerator;
   /** Restaura a posição salva (se válida); caso contrário usa o ponto de nascimento. */
   restorePosition?: boolean;
+  /** Heróis com vida própria presentes no mundo (personagens não controlados pelo jogador). */
+  heroes?: { hero: HeroDef; character: CharacterState }[];
 }
 
 export class GameSimulation {
@@ -55,6 +61,8 @@ export class GameSimulation {
   constructor(opts: SimulationOptions) {
     const rng = opts.rng ?? createRng();
     const c = opts.character;
+    const ui: UiState = { dialog: null, shop: null, depot: null, lootId: null, regionId: null, buildingId: null, pending: null };
+    const events = new EventBus<GameEventMap>();
     const player: PlayerEntity = {
       id: PLAYER_ID,
       kind: 'player',
@@ -80,22 +88,25 @@ export class GameSimulation {
       lastWarningAt: {},
       lastAttackAt: -Infinity,
       shieldTraining: newShieldTraining(),
+      scope: { ui, events },
     };
     this.world = {
       data: opts.data,
       map: opts.map,
       rng,
       loot: opts.loot ?? createLootGenerator(rng),
-      events: new EventBus<GameEventMap>(),
+      events,
       now: 0,
       player,
+      human: player,
+      heroes: new Map(),
       monsters: new Map(),
       npcs: new Map(),
       lootBags: new Map(),
       corpses: new Map(),
       occupancy: new Map(),
       doorsOpen: new Map(),
-      ui: { dialog: null, shop: null, depot: null, lootId: null, regionId: null, buildingId: null, pending: null },
+      ui,
       seq: 0,
       nextDoorCheckAt: 0,
     };
@@ -129,6 +140,18 @@ export class GameSimulation {
     }
     refreshStats(w);
     updateRegion(w);
+    for (const hc of opts.heroes ?? []) this.addHero(hc.hero, hc.character);
+  }
+
+  /** Coloca um herói (personagem com vida própria) no mundo. */
+  addHero(hero: HeroDef, character: CharacterState): HeroEntity {
+    const w = this.world;
+    const h = addHero(w, hero, character);
+    asActor(w, h, () => {
+      refreshStats(w);
+      updateRegion(w);
+    });
+    return h;
   }
 
   get events(): EventBus<GameEventMap> {
@@ -160,15 +183,28 @@ export class GameSimulation {
   private tick(step: number): void {
     const w = this.world;
     w.now += step;
+    this.tickActor(step);
+    // heróis: mesma sequência do jogador, cada um no próprio contexto, guiados pela IA
+    for (const h of w.heroes.values())
+      asActor(w, h, () => {
+        updateHeroBrain(w, h);
+        this.tickActor(step);
+      });
+    for (const m of w.monsters.values()) updateMonster(w, m);
+    updateNpcs(w);
+    this.updateWorldTimers();
+    updateDoors(w);
+  }
+
+  /** Um passo do ator em execução (`w.player`): movimento, combate, regeneração, interações. */
+  private tickActor(step: number): void {
+    const w = this.world;
     const p = w.player;
     p.character.stats.playTimeMs += step;
     settle(p, w.now);
     this.updatePlayerMovement();
     updatePlayerCombat(w);
-    for (const m of w.monsters.values()) updateMonster(w, m);
-    updateNpcs(w);
-    this.updateTimers();
-    updateDoors(w);
+    this.updateActorTimers();
     updatePendingInteraction(w);
     updateUiDistance(w);
     updateRegion(w);
@@ -221,7 +257,7 @@ export class GameSimulation {
     }
   }
 
-  private updateTimers(): void {
+  private updateActorTimers(): void {
     const w = this.world;
     const p = w.player;
     const c = p.character;
@@ -245,12 +281,16 @@ export class GameSimulation {
       p.buffs = p.buffs.filter((b) => b.expiresAt > w.now);
       refreshStats(w);
     }
+  }
+
+  private updateWorldTimers(): void {
+    const w = this.world;
     // decomposição de corpos e loot
     for (const [id, corpse] of w.corpses) if (corpse.expiresAt <= w.now) w.corpses.delete(id);
     for (const [id, bag] of w.lootBags)
       if (bag.expiresAt <= w.now) {
         w.lootBags.delete(id);
-        if (w.ui.lootId === id) w.ui.lootId = [...w.lootBags.values()].find((b) => Math.max(Math.abs(b.x - p.x), Math.abs(b.y - p.y)) <= 1)?.id ?? null;
+        for (const a of allActors(w)) if (a.scope.ui.lootId === id) a.scope.ui.lootId = [...w.lootBags.values()].find((b) => Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) <= 1)?.id ?? null;
         w.events.emit('lootChanged', { containerId: id });
       }
   }
@@ -265,36 +305,7 @@ export class GameSimulation {
   }
   /** Caminha até o tile (clique/toque no chão). */
   walkTo(x: number, y: number): boolean {
-    const w = this.world;
-    const p = w.player;
-    if (p.dead) return false;
-    w.ui.pending = null;
-    const solid = isSolid(w.map, x, y);
-    let path = pathTo(w, p, { x, y }, false, { stopWithin: solid ? 1 : 0, maxNodes: 12000 });
-    // destino bloqueado (água, árvore grande, muro, alguém parado ali): tenta o tile livre mais próximo
-    for (let r = 1, tries = 0; !path && r <= 10 && tries < 8; r++) {
-      const ring: { x: number; y: number; d: number }[] = [];
-      for (let dy = -r; dy <= r; dy++)
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (canEnter(w, nx, ny, false, p.id)) ring.push({ x: nx, y: ny, d: Math.hypot(dx, dy) + Math.hypot(nx - p.x, ny - p.y) * 0.01 });
-        }
-      ring.sort((a, b) => a.d - b.d);
-      for (const n of ring.slice(0, 3)) {
-        tries++;
-        path = pathTo(w, p, n, false, { maxNodes: 12000 });
-        if (path) break;
-      }
-    }
-    if (!path) {
-      message(w, 'Não há caminho até lá.', 'warning');
-      return false;
-    }
-    p.path = path;
-    p.pathGoal = { x, y };
-    return true;
+    return planWalk(this.world, x, y);
   }
   stop(): void {
     const p = this.world.player;
@@ -316,6 +327,8 @@ export class GameSimulation {
       return;
     }
     if (w.npcs.has(id)) interactWith(w, { kind: 'npc', id });
+    const hero = w.heroes.get(id);
+    if (hero) asActor(w, hero, () => heroStatusLine(w, hero));
   }
   tapLoot(id: string): void {
     interactWith(this.world, { kind: 'loot', id });

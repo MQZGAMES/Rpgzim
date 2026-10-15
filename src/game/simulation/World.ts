@@ -6,7 +6,7 @@ import type { GameEventMap, MessageKind } from '../../domain/events/gameEvents';
 import type { Rng } from '../../domain/value-objects/rng';
 import type { LootGenerator } from '../../domain/rules/loot';
 import type { GameMap } from '../world/GameMap';
-import type { Corpse, LootContainer, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
+import type { Corpse, HeroEntity, LootContainer, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 
 export interface UiState {
   dialog: { npcId: string; pageId: string } | null;
@@ -25,9 +25,21 @@ export interface World {
   readonly map: GameMap;
   readonly rng: Rng;
   readonly loot: LootGenerator;
-  readonly events: EventBus<GameEventMap>;
+  /**
+   * Barramento do ator em execução. Fora do turno de um herói é o barramento principal (interface,
+   * renderização, áudio); durante o turno de um herói é o barramento dele (ver `asActor`).
+   */
+  events: EventBus<GameEventMap>;
   now: number;
+  /**
+   * Ator em execução. Os sistemas (combate, magias, mochila, lojas, banco, progressão) agem sobre
+   * `player`; fora do turno de um herói é sempre o jogador humano (`human`).
+   */
   player: PlayerEntity;
+  /** O jogador controlado por pessoa (câmera, interface). */
+  readonly human: PlayerEntity;
+  /** Heróis com vida própria (mesmas regras do jogador). */
+  heroes: Map<string, HeroEntity>;
   monsters: Map<string, MonsterEntity>;
   npcs: Map<string, NpcEntity>;
   lootBags: Map<string, LootContainer>;
@@ -38,6 +50,28 @@ export interface World {
   ui: UiState;
   seq: number;
   nextDoorCheckAt: number;
+}
+
+/** Executa `fn` como se `actor` fosse o jogador: os sistemas existentes passam a agir sobre ele,
+ * com o estado de janelas e o barramento de eventos dele. Sempre restaura o contexto anterior. */
+export function asActor<R>(w: World, actor: PlayerEntity, fn: () => R): R {
+  if (w.player === actor) return fn();
+  const prev = { player: w.player, ui: w.ui, events: w.events };
+  w.player = actor;
+  w.ui = actor.scope.ui;
+  w.events = actor.scope.events;
+  try {
+    return fn();
+  } finally {
+    w.player = prev.player;
+    w.ui = prev.ui;
+    w.events = prev.events;
+  }
+}
+
+/** Todos os personagens-jogadores no mundo (humano + heróis). */
+export function allActors(w: World): PlayerEntity[] {
+  return w.heroes.size ? [w.human, ...w.heroes.values()] : [w.human];
 }
 
 export function nextId(w: World, prefix: string): string {

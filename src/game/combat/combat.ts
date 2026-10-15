@@ -11,6 +11,7 @@ import { shieldingTryCounts } from '../../domain/rules/shielding';
 import { isPz, blocksSight } from '../world/GameMap';
 import { lineOfSight } from '../movement/pathfinding';
 import { removeOccupant, teleport } from '../movement/movement';
+import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { message, nextId, warnThrottled } from '../simulation/World';
@@ -143,12 +144,14 @@ function performBasicAttack(w: World, target: MonsterEntity): void {
   damageMonster(w, target, res.damage, weapon.element, p.id);
 }
 
+/** O monstro passa a perseguir quem o atacou (o ator em execução), se ainda não tiver outro alvo. */
 export function aggro(w: World, m: MonsterEntity): void {
   if (!m.alive || w.player.dead) return;
   if (m.state !== 'chasing' && m.state !== 'attacking') {
     m.state = 'chasing';
     m.nextThinkAt = w.now;
-  }
+    m.targetId = w.player.id;
+  } else if (!m.targetId) m.targetId = w.player.id;
 }
 
 export function damageMonster(w: World, m: MonsterEntity, amount: number, element: Element, sourceId: string | null): void {
@@ -233,7 +236,11 @@ function killPlayer(w: World, killer: MonsterEntity): void {
   }
   refreshStats(w);
   if (lostSkills.length) message(w, `Skills perdidas: ${lostSkills.join(', ')}.`, 'warning');
-  for (const m of w.monsters.values()) if (m.alive && (m.state === 'chasing' || m.state === 'attacking')) m.state = 'returning';
+  for (const m of w.monsters.values())
+    if (m.alive && m.targetId === p.id && (m.state === 'chasing' || m.state === 'attacking')) {
+      m.state = 'returning';
+      m.targetId = null;
+    }
   w.events.emit('entityDied', { entityId: p.id, kind: 'player', position: { x: p.x, y: p.y }, spriteKey: c.vocation });
   w.events.emit('playerDied', { xpLost: before - c.experience });
   message(w, `Você foi derrotado por ${killer.def.name}.`, 'warning');
@@ -247,7 +254,8 @@ export function respawnPlayer(w: World): void {
   p.character.health = p.stats.maxHealth;
   p.character.mana = p.stats.maxMana;
   p.invulnerableUntil = w.now + w.data.balance.player.respawnInvulnerableMs;
-  teleport(w, p, w.map.playerStart.x, w.map.playerStart.y);
+  const spot = freeCellNear(w, w.map.playerStart.x, w.map.playerStart.y, p.id);
+  teleport(w, p, spot.x, spot.y);
   p.facing = 'down';
   w.events.emit('playerRespawned', {});
   message(w, 'Você despertou no Templo da Aurora.', 'system');

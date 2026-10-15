@@ -14,6 +14,7 @@ import { damagePlayer, hasLineOfSight } from '../../src/game/combat/combat';
 import { refreshStats } from '../../src/game/progression/progression';
 import { isPz } from '../../src/game/world/GameMap';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
+import { createCharacter } from '../../src/domain/rules/character';
 import type { MonsterEntity } from '../../src/game/entities/types';
 
 function nearestMonster(sim: GameSimulation, monsterId: string): MonsterEntity {
@@ -498,3 +499,76 @@ describe('Shielding e armas de treino', () => {
     expect(p.character.skills.axe.tries + p.character.skills.axe.level * 1000).toBeGreaterThan(before);
   });
 });
+
+describe('herói com vida própria (Boladex)', () => {
+  function withBoladex(seed = 11) {
+    const sim = makeSim('druid', { seed });
+    const hero = GAME_DATA.heroes.boladex!;
+    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+    const h = sim.addHero(hero, c);
+    return { sim, h };
+  }
+
+  it('é um Knight com as mesmas regras do jogador: caça, sobe de nível, treina skills, vende, compra e guarda no banco', () => {
+    const { sim, h } = withBoladex();
+    const w = sim.world;
+    const speech: string[] = [];
+    const humanMessages: string[] = [];
+    sim.events.on('speech', (e) => speech.push(e.text));
+    sim.events.on('message', (m) => humanMessages.push(m.text));
+    let sold = false;
+    const start = { gold: h.character.gold, sword: h.character.skills.sword.level };
+    for (let s = 0; s < 25 * 60; s++) {
+      advance(sim, 1000, 50);
+      w.human.character.health = w.human.stats.maxHealth;
+      if (h.character.stats.monstersKilled > 0 && h.brain.mode === 'town') sold = true;
+    }
+    const c = h.character;
+    expect(c.vocation).toBe('knight');
+    expect(c.level).toBeGreaterThanOrEqual(6);
+    expect(c.stats.monstersKilled).toBeGreaterThan(30);
+    expect(c.skills.sword.level).toBeGreaterThan(start.sword);
+    expect(c.skills.shielding.level).toBeGreaterThan(10);
+    expect(sold).toBe(true);
+    expect(c.bankGold).toBeGreaterThan(0);
+    expect(potionsCount(c)).toBeGreaterThan(0);
+    expect(speech.length).toBeGreaterThan(5);
+    // as mensagens do herói não vão para o registro do jogador humano
+    expect(humanMessages.some((m) => m.startsWith('Você derrotou'))).toBe(false);
+  });
+
+  it('monstros escolhem o herói como alvo e ele pode morrer e renascer no templo', () => {
+    const { sim, h } = withBoladex(3);
+    const w = sim.world;
+    const skel = nearestMonster(sim, 'skeleton');
+    // leva o herói nível 1 até as ruínas (perigoso) e trava a IA para ele não fugir
+    sim.world.heroes.get(h.id)!.brain.nextThinkAt = Infinity;
+    w.occupancy.delete(h.y * w.map.width + h.x);
+    h.x = skel.x + 1;
+    h.y = skel.y;
+    w.occupancy.set(h.y * w.map.width + h.x, h.id);
+    let died = false;
+    sim.events.on('entityDied', (e) => e.entityId === h.id && (died = true));
+    runUntil(sim, () => died, 120000, 50);
+    expect(died).toBe(true);
+    expect(skel.targetId === h.id || skel.targetId === null).toBe(true);
+    // a IA volta a pensar: renasce no templo sozinho
+    h.brain.nextThinkAt = 0;
+    runUntil(sim, () => !h.dead, 15000, 50);
+    expect(h.dead).toBe(false);
+    expect(isPz(w.map, h.x, h.y)).toBe(true);
+    expect(h.character.stats.deaths).toBe(1);
+  });
+
+  it('tocar no herói faz ele responder com o próprio status', () => {
+    const { sim, h } = withBoladex();
+    const said: string[] = [];
+    sim.events.on('speech', (e) => e.entityId === h.id && said.push(e.text));
+    sim.tapEntity(h.id);
+    expect(said[0]).toMatch(/Nível 1/);
+  });
+});
+
+function potionsCount(c: { inventory: ({ itemId: string; count: number } | null)[] }) {
+  return c.inventory.reduce((s, st) => s + (st && st.itemId.startsWith('potion_health') ? st.count : 0), 0);
+}

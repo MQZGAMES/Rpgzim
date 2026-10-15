@@ -221,3 +221,22 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
   await expect(page.getByTestId('equip-notice')).toContainText('Machadinha');
   expect((await api(page, (a) => a.player())).equipment.mainHand?.itemId).toBe('axe_hand');
 });
+
+test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'um projeto basta');
+  await page.goto('/?debug');
+  await expect(page.getByTestId('slot-boladex')).toContainText('tem vida própria');
+  await createCharacter(page, 'paladin', 'Parceiro');
+  type HeroInfo = { id: string; level: number; mode: string; x: number; y: number };
+  const heroes = () => page.evaluate(() => (window.__RPGZIM__ as { heroes(): HeroInfo[] }).heroes());
+  expect((await heroes()).map((h) => h.id)).toEqual(['hero:boladex']);
+  const start = (await heroes())[0]!;
+  // ele sai andando sozinho (decide caçar/passear sem comando do jogador)
+  await expect.poll(async () => { const h = (await heroes())[0]!; return h.x !== start.x || h.y !== start.y; }, { timeout: 20_000 }).toBe(true);
+  // jogar como o Boladex: volta ao menu e escolhe o slot dele (sem herói duplicado no mundo)
+  await page.goto('/?debug');
+  await page.getByTestId('slot-boladex').click();
+  await page.waitForFunction(() => (window.__RPGZIM__ as { ready?: () => boolean } | undefined)?.ready?.() === true, null, { timeout: 30_000 });
+  expect(await heroes()).toEqual([]);
+  expect((await api(page, (a) => a.player())).inventory.length).toBeGreaterThan(0);
+});
