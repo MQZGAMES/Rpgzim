@@ -47,7 +47,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {showLog && (
         <div
           className={`absolute left-[max(8px,env(safe-area-inset-left))] ${
-            touch ? 'bottom-[calc(136px+env(safe-area-inset-bottom))] max-w-[calc(100vw-196px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
+            touch ? 'bottom-[calc(136px+env(safe-area-inset-bottom))] max-w-[calc(100vw-206px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
           }`}
         >
           <MessageLog max={touch ? 5 : 7} />

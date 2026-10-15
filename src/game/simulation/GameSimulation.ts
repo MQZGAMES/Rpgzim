@@ -10,6 +10,7 @@ import { PLAYER_ID } from '../../domain/value-objects/ids';
 import { createRng, type Rng } from '../../domain/value-objects/rng';
 import { createLootGenerator, type LootGenerator } from '../../domain/rules/loot';
 import { computeStats } from '../../domain/rules/stats';
+import { newShieldTraining } from '../../domain/rules/shielding';
 import { chebyshev } from '../../domain/value-objects/position';
 import { isPz, isSolid } from '../world/GameMap';
 import type { GameMap } from '../world/GameMap';
@@ -30,7 +31,7 @@ import {
   updateUiDistance,
 } from '../interaction/interaction';
 import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
-import { buyItem, sellItem } from '../economy/shopService';
+import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { message, type World } from './World';
 
@@ -77,6 +78,8 @@ export class GameSimulation {
       dead: false,
       invulnerableUntil: 0,
       lastWarningAt: {},
+      lastAttackAt: -Infinity,
+      shieldTraining: newShieldTraining(),
     };
     this.world = {
       data: opts.data,
@@ -377,6 +380,9 @@ export class GameSimulation {
   }
   sell(itemId: string, qty: number): boolean {
     return sellItem(this.world, itemId, qty);
+  }
+  sellAll(): boolean {
+    return sellAllItems(this.world);
   }
   respawn(): void {
     respawnPlayer(this.world);

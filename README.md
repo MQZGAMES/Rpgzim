@@ -34,6 +34,9 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   8 monstros com IA (idle/wandering/chasing/attacking/returning/dead) e um chefe raro, loot, ouro, 3 lojas,
   **Banco de Pedraluz** (depósito de 40 espaços e ouro guardado, seguros na morte), NPC tutorial.
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
+  Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
+  dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
+- Lojas: na venda, o que você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado).
 - Inventário, 9 slots de equipamento, ataque/defesa visíveis em cada item (verde ▲ quando é melhor que o
   equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta), munição.
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
@@ -63,5 +66,5 @@ Resumo e decisões em [`docs/BALANCE.md`](docs/BALANCE.md); tabela gerada com as
 - Documentação detalhada (bíblia de arte, inventário de assets) ainda resumida aqui; prévias em `docs/art/`.
 - Sem multiplayer (fora do escopo do MVP). Sem itens no chão além do loot de monstros.
 
-Assets: toda a arte é gerada por `scripts/art/` (licença do próprio projeto). Fonte de interface:
-Pixelify Sans (SIL Open Font License, via @fontsource).
+Assets: toda a arte é gerada por `scripts/art/` (licença do próprio projeto). Fontes: Nunito (interface) e
+Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.

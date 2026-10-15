@@ -38,3 +38,25 @@ export function sell(c: CharacterState, shop: ShopDef, itemId: string, quantity:
   c.gold += total;
   return { ok: true, total };
 }
+
+/** O que "vender tudo" levaria: itens da mochila (nunca os equipados) que esta loja compra. */
+export function sellAllPreview(c: CharacterState, shop: ShopDef): { itemId: string; count: number; total: number }[] {
+  return shop.buys
+    .map((o) => ({ itemId: o.itemId, count: countItem(c.inventory, o.itemId), price: o.price }))
+    .filter((o) => o.count > 0)
+    .map((o) => ({ itemId: o.itemId, count: o.count, total: o.count * o.price }));
+}
+
+/** Vende de uma vez tudo da mochila que a loja compra. Retorna o ouro recebido e as unidades vendidas. */
+export function sellAll(c: CharacterState, shop: ShopDef): { total: number; units: number } {
+  let total = 0;
+  let units = 0;
+  for (const o of sellAllPreview(c, shop)) {
+    const res = sell(c, shop, o.itemId, o.count);
+    if (res.ok) {
+      total += res.total;
+      units += o.count;
+    }
+  }
+  return { total, units };
+}

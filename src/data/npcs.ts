@@ -163,6 +163,10 @@ export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries(list.ma
 
 const sellPct = (price: number) => Math.max(1, Math.round(price * 0.35));
 const equipmentSells: [string, number][] = [
+  ['training_sword', 40],
+  ['training_axe', 40],
+  ['training_club', 40],
+  ['training_spear', 40],
   ['sword_short', 60],
   ['axe_hand', 95],
   ['club_wood', 25],
@@ -210,6 +214,7 @@ const equipmentSells: [string, number][] = [
   ['armor_royal', 6800],
 ];
 const potionSells: [string, number][] = [
+  ['training_wand', 40],
   ['potion_health', 40],
   ['potion_mana', 45],
   ['potion_health_great', 110],

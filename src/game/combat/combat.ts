@@ -5,8 +5,9 @@ import { chebyshev } from '../../domain/value-objects/position';
 import { applyDeathPenalty } from '../../domain/rules/experience';
 import { applySkillDeathLoss } from '../../domain/rules/skills';
 import { SKILL_IDS, SKILL_LABEL } from '../../domain/entities/definitions';
-import { blockChance, distanceHitChance, mitigate, rollWandDamage, rollWeaponDamage } from '../../domain/rules/damage';
+import { blockChance, distanceHitChance, mitigate, rollRange, rollWandDamage, rollWeaponDamage } from '../../domain/rules/damage';
 import { weaponSkillLevel } from '../../domain/rules/stats';
+import { shieldingTryCounts } from '../../domain/rules/shielding';
 import { isPz, blocksSight } from '../world/GameMap';
 import { lineOfSight } from '../movement/pathfinding';
 import { removeOccupant, teleport } from '../movement/movement';
@@ -116,9 +117,15 @@ function performBasicAttack(w: World, target: MonsterEntity): void {
     c.mana -= cost;
     trainPlayerSkill(w, 'magic', cost);
   }
+  p.lastAttackAt = w.now;
   w.events.emit('attack', { sourceId: p.id, targetId: target.id, kind: weapon.kind, element: weapon.element, projectile: weapon.projectile, from, to });
   // treino: cada ataque válido contra um alvo conta uma tentativa para a skill da arma
   if (weapon.skill !== 'magic') trainPlayerSkill(w, weapon.skill, 1);
+  if (weapon.training && weapon.damage) {
+    // arma de treino: dano fixo baixo, sem armadura nem errar — o foco é treinar a skill
+    damageMonster(w, target, rollRange(weapon.damage as [number, number], w.rng), weapon.element, p.id);
+    return;
+  }
   let raw: number;
   if (weapon.kind === 'wand') {
     raw = rollWandDamage(weapon.damage ?? [4, 8], p.stats.magicLevel, voc.damage.magic, w.rng);
@@ -184,9 +191,10 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Mo
   if (p.dead || w.now < p.invulnerableUntil) return;
   const pos = { x: p.x, y: p.y };
   const hasShield = p.stats.shieldDefense > 0;
+  const cfg = w.data.balance.combat;
+  // treino (qualquer elemento): até 2 atacantes por janela e só se o jogador estiver lutando
+  if (shieldingTryCounts(p.shieldTraining, w.now, source.id, hasShield, p.lastAttackAt, cfg)) trainPlayerSkill(w, 'shielding', cfg.shieldingTriesPerHit);
   if (element === 'physical' && hasShield) {
-    const cfg = w.data.balance.combat;
-    trainPlayerSkill(w, 'shielding', cfg.shieldingTriesPerHit);
     const chance = blockChance(p.stats.skills.shielding, p.stats.shieldDefense, cfg.blockChanceBase, cfg.blockChancePerSkill, cfg.maxBlockChance);
     if (w.rng.chance(chance)) {
       w.events.emit('damage', { targetId: p.id, sourceId: source.id, amount: 0, element, blocked: true, position: pos });

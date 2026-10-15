@@ -13,6 +13,23 @@ reais do jogo em [`BALANCE-REPORT.md`](BALANCE-REPORT.md) por `tests/tools/balan
 - **Magic Level**: mana gasta para subir do ML n = `60 · 1,25^n · multiplicador` (magos 1, Paladin 1,4, Knight 3).
 - **Morte**: perde 50% da XP do nível atual (nunca o nível) e treino de skills, que nunca caem abaixo de 10.
 
+## Shielding (estilo Tibia)
+
+- Treina com escudo **ou livro de magias** na mão secundária (livros agora têm defesa 5/9/13).
+- Cada ataque recebido conta 1 tentativa, de **qualquer elemento** (antes só dano físico contava — por isso não
+  evoluía contra slimes, sapos e aranhas, que causam dano de terra).
+- No máximo **2 atacantes por janela de 2 s** (cada monstro conta uma vez por janela).
+- Só treina se o personagem **atacou nos últimos 5 s** (golpe ou magia ofensiva): ficar parado apanhando não treina.
+- Velocidade por vocação (multiplicador de tentativas): **Knight 1,0 · Paladin 1,3 · Sorcerer/Druid 1,8**.
+  Do 10 ao 25, com 2 monstros batendo: Knight ≈ 14 min, Paladin ≈ 18 min, magos ≈ 25 min de luta.
+
+## Armas de treino
+
+Espada, Machado, Clava e Lança de Treino (ferreiro) e Varinha de Treino (alquimista), 40 de ouro cada. Ataque 1 e
+**dano fixo 1–2 que ignora armadura e nunca erra**: cada golpe conta 1 tentativa para a skill da arma (a varinha
+gasta 3 de mana, treinando Magic Level), mas o monstro demora a morrer. A Lança de Treino não usa flechas e
+permite escudo, então o Paladin treina Distance e Shielding ao mesmo tempo.
+
 ## Fórmulas de combate (resumo)
 
 - Golpe físico: máx = `(ataque · (skill + 10) / 20 + nível / 3) · modificador da vocação`, rolado entre 35% e 100%.

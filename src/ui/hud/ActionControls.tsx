@@ -54,19 +54,20 @@ export function TouchActions() {
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
   const ammo = useSnap((s) => s.ammo);
-  // posições em arco ao redor do botão principal (canto inferior direito)
-  const arc = [
-    { right: 92, bottom: 6 },
-    { right: 86, bottom: 66 },
-    { right: 42, bottom: 106 },
-    { right: -2, bottom: 116 },
-  ];
+  // quarto de círculo regular ao redor do centro do botão principal (canto inferior direito)
+  const SPELL = 52;
+  const R = 108;
+  const CENTER = 2 + 78 / 2;
+  const arc = [0, 30, 60, 90].map((deg) => {
+    const t = (deg * Math.PI) / 180;
+    return { right: Math.round(CENTER + R * Math.cos(t) - SPELL / 2), bottom: Math.round(CENTER + R * Math.sin(t) - SPELL / 2) };
+  });
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pr-[max(10px,env(safe-area-inset-right))]">
-      <div className="pointer-events-auto relative mb-1 h-[176px] w-[164px]">
+      <div className="pointer-events-auto relative mb-1 h-[184px] w-[184px]">
         {hotbar.slice(0, 4).map((sp, i) => (
           <div key={sp.id} className="absolute" style={arc[i]}>
-            <SpellButton spell={sp} size={50} onCast={() => session.cast(sp.id)} />
+            <SpellButton spell={sp} size={SPELL} onCast={() => session.cast(sp.id)} />
           </div>
         ))}
         <button
@@ -89,7 +90,7 @@ export function TouchActions() {
           </span>
         )}
       </div>
-      <div className="pointer-events-auto absolute bottom-[190px] right-[max(10px,env(safe-area-inset-right))] flex flex-col items-end gap-3">
+      <div className="pointer-events-auto absolute bottom-[196px] right-[max(10px,env(safe-area-inset-right))] flex flex-col items-end gap-3">
         <InteractButton />
         <div className="flex gap-2">
           <PotionButton kind="health" />

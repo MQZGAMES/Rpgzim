@@ -10,7 +10,8 @@ import { countItem } from '../../src/domain/rules/inventory';
 import { isMoving } from '../../src/game/movement/movement';
 import { buildingAt } from '../../src/game/world/GameMap';
 import { advance, fixedLoot, makeSim, runUntil, worldMap } from '../helpers';
-import { hasLineOfSight } from '../../src/game/combat/combat';
+import { damagePlayer, hasLineOfSight } from '../../src/game/combat/combat';
+import { refreshStats } from '../../src/game/progression/progression';
 import { isPz } from '../../src/game/world/GameMap';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
 import type { MonsterEntity } from '../../src/game/entities/types';
@@ -429,5 +430,71 @@ describe('banco e melhorias de controle', () => {
     expect(axe.atk).toBe(12);
     expect(axe.better).toBe(true);
     expect(snap.equipment.offHand?.def).toBe(8);
+  });
+});
+
+describe('Shielding e armas de treino', () => {
+  /** Dois slimes batendo enquanto o jogador ataca: mede quanto o Shielding sobe em `ms`. */
+  function shieldingAfter(voc: 'knight' | 'paladin' | 'sorcerer', ms: number, attack = true): { level: number; tries: number } {
+    const sim = makeSim(voc, { seed: 7 });
+    const w = sim.world;
+    const p = w.player;
+    // escudo de madeira na mão secundária e arma de treino (monstros vivem bastante)
+    p.character.equipment.mainHand = { itemId: voc === 'sorcerer' ? 'training_wand' : voc === 'paladin' ? 'training_spear' : 'training_sword', count: 1 };
+    p.character.equipment.offHand = { itemId: 'shield_wood', count: 1 };
+    p.character.mana = 10_000;
+    refreshStats(w);
+    sim.update(16);
+    const slimes = [...w.monsters.values()].filter((m) => m.def.id === 'slime').slice(0, 2);
+    // simula sempre 2 atacantes: força os ataques chamando o dano diretamente a cada 2 s
+    const atk = attack ? slimes[0]!.id : null;
+    let t = 0;
+    while (t < ms) {
+      if (atk) {
+        p.lastAttackAt = w.now;
+      }
+      for (const s of slimes) damagePlayer(w, 0, 'earth', s);
+      p.character.health = 9999;
+      advance(sim, 2000);
+      t += 2000;
+    }
+    return p.character.skills.shielding;
+  }
+
+  it('treina com 2 monstros atacando mesmo com dano de terra; parado sem atacar não treina', () => {
+    const k = shieldingAfter('knight', 120_000);
+    expect(k.level).toBeGreaterThan(12);
+    const idle = shieldingAfter('knight', 60_000, false);
+    expect(idle).toEqual({ level: 10, tries: 0 });
+  });
+
+  it('Knight > Paladin > magos no mesmo tempo de treino', () => {
+    const k = shieldingAfter('knight', 240_000);
+    const p = shieldingAfter('paladin', 240_000);
+    const m = shieldingAfter('sorcerer', 240_000);
+    const score = (s: { level: number; tries: number }) => s.level * 1000 + s.tries;
+    expect(score(k)).toBeGreaterThan(score(p));
+    expect(score(p)).toBeGreaterThan(score(m));
+  });
+
+  it('arma de treino causa 1–2 de dano fixo (ignora armadura) e treina a skill', () => {
+    const sim = makeSim('knight', { seed: 3 });
+    const w = sim.world;
+    const p = w.player;
+    p.character.inventory[5] = { itemId: 'training_axe', count: 1 };
+    expect(sim.equip(5)).toBe(true);
+    const skel = nearestMonster(sim, 'skeleton'); // armadura 8: uma arma normal fraca seria absorvida
+    placeNear(sim, skel, 1);
+    const hits: number[] = [];
+    sim.events.on('damage', (e) => e.targetId === skel.id && hits.push(e.amount));
+    sim.setTarget(skel.id);
+    const before = p.character.skills.axe.tries + p.character.skills.axe.level * 1000;
+    for (let i = 0; i < 18; i++) {
+      advance(sim, 500);
+      p.character.health = p.stats.maxHealth; // o foco aqui é o dano causado, não a sobrevivência
+    }
+    expect(hits.length).toBeGreaterThanOrEqual(4);
+    expect(hits.every((h) => h >= 1 && h <= 2)).toBe(true);
+    expect(p.character.skills.axe.tries + p.character.skills.axe.level * 1000).toBeGreaterThan(before);
   });
 });

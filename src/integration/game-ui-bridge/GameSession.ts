@@ -288,6 +288,10 @@ export class GameSession {
     if (this.sim.sell(itemId, qty)) this.audio.play('coin');
     this.dirty = true;
   }
+  sellAll(): void {
+    if (this.sim.sellAll()) this.audio.play('coin');
+    this.dirty = true;
+  }
   takeLoot(which: 'all' | 'gold' | { bagId: string; index: number }): void {
     this.sim.takeLoot(which);
     this.audio.play('pickup');

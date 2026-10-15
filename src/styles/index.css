@@ -2,6 +2,8 @@
 
 /* Identidade visual da interface: madeira escura, pergaminho, ouro e pedra, com molduras em pixel art. */
 @theme {
+  /* texto da interface: Nunito (moderna e legível); Pixelify Sans só no logotipo */
+  --font-ui: 'Nunito Variable', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-pixel: 'Pixelify Sans', ui-monospace, monospace;
   --color-ink: #120d18;
   --color-night: #1e1630;
@@ -30,7 +32,9 @@
     margin: 0;
     background: var(--color-ink);
     color: #f4eedf;
-    font-family: var(--font-pixel);
+    font-family: var(--font-ui);
+    font-weight: 600;
+    letter-spacing: 0.01em;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
@@ -51,8 +55,14 @@
     user-select: text;
     -webkit-user-select: text;
   }
+  h1,
+  h2,
+  h3 {
+    font-weight: 800;
+  }
   button {
     cursor: pointer;
+    font-weight: 700;
   }
   button:disabled {
     cursor: default;
@@ -126,6 +136,7 @@
     filter: grayscale(0.8) brightness(0.7);
   }
   .text-outline {
+    font-weight: 800;
     text-shadow:
       1px 0 #120d18,
       -1px 0 #120d18,

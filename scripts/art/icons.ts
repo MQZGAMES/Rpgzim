@@ -433,6 +433,12 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   ['boots_swift', shape(BOOTS, P.teal, P.gold)],
   ['ring_vigor', ring(P.red)],
   ['amulet_mana', amulet(P.blue)],
+  // armas de treino (madeira e couro)
+  ['training_sword', sword(P.wood, P.leather, 8)],
+  ['training_axe', axe(P.wood)],
+  ['training_club', mace(P.leather)],
+  ['training_spear', spearOf(P.wood, P.wood, P.cloth)],
+  ['training_wand', wand(P.cloth)],
   // equipamentos avançados
   ['sword_steel', sword(P.steel, P.iron, 10)],
   ['sword_runic', sword(R.runic, P.gold, 11)],

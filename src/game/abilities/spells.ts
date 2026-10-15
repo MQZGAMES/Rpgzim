@@ -97,6 +97,7 @@ export function castSpell(w: World, spellId: string): boolean {
   }
   w.events.emit('spellCast', { casterId: p.id, spellId: spell.id, words: spell.words, from: { x: p.x, y: p.y }, targetId: target?.id ?? null, tiles });
 
+  if (spell.effect === 'damage' && victims.length) p.lastAttackAt = w.now;
   if (spell.effect === 'damage' && spell.formula) {
     const power = spell.formula.kind === 'magic' ? p.stats.magicLevel : spell.formula.kind === 'distance' ? p.stats.skills.distance : p.stats.skills[p.stats.weapon.skill === 'magic' ? 'club' : p.stats.weapon.skill];
     const mod = spell.formula.kind === 'magic' ? voc.damage.magic : spell.formula.kind === 'distance' ? voc.damage.distance : voc.damage.melee;

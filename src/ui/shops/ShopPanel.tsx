@@ -14,7 +14,12 @@ export function ShopPanel() {
   const [selId, setSelId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
   if (!shop) return null;
-  const list = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0 })) : shop.buys.map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned }));
+  const list = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0 })) : shop.buys
+          .map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned }))
+          // o que você tem para vender aparece primeiro (maior valor total no topo)
+          .sort((a, b) => Number(b.owned > 0) - Number(a.owned > 0) || b.owned * b.price - a.owned * a.price);
+  const sellAllTotal = shop.buys.reduce((s, o) => s + o.owned * o.price, 0);
+  const sellAllUnits = shop.buys.reduce((s, o) => s + o.owned, 0);
   const sel = list.find((o) => o.item.itemId === selId) ?? null;
   const maxQty = sel ? (tab === 'buy' ? Math.max(1, Math.min(100, Math.floor(gold / Math.max(1, sel.price)))) : Math.max(1, sel.owned)) : 1;
   const q = Math.min(qty, maxQty);
@@ -27,6 +32,19 @@ export function ShopPanel() {
         <PixelButton variant={tab === 'sell' ? 'gold' : 'stone'} onClick={() => (setTab('sell'), setSelId(null), setQty(1))}>
           Vender
         </PixelButton>
+        {tab === 'sell' && (
+          <PixelButton
+            variant="gold"
+            className="px-1 text-[12px]"
+            disabled={sellAllUnits === 0}
+            title="Vende tudo da mochila que esta loja compra (itens equipados não entram)"
+            onClick={() => {
+              if (window.confirm(`Vender ${sellAllUnits} ${sellAllUnits === 1 ? 'item' : 'itens'} da mochila por ${sellAllTotal} de ouro?`)) session.sellAll();
+            }}
+          >
+            Vender tudo ({sellAllTotal})
+          </PixelButton>
+        )}
         <span className="ml-auto flex items-center gap-1 text-gold-light" data-testid="shop-gold">
           <ItemIcon icon="ui_coin" size={16} /> {gold}
         </span>

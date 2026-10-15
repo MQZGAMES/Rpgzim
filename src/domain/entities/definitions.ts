@@ -65,6 +65,8 @@ export interface WeaponStats {
   projectile?: string;
   /** Intervalo de ataque próprio (ms). */
   attackIntervalMs?: number;
+  /** Arma de treino: dano fixo baixo (`damage`), sem rolagem por skill nem redução por armadura. */
+  training?: boolean;
 }
 
 export interface StatBonuses {
@@ -271,6 +273,12 @@ export interface BalanceConfig {
     blockChancePerSkill: number;
     maxBlockChance: number;
     shieldingTriesPerHit: number;
+    /** Janela (ms) em que cada atacante conta uma vez para o Shielding. */
+    shieldingWindowMs: number;
+    /** Máximo de atacantes que treinam Shielding por janela (Tibia: 2). */
+    shieldingMaxAttackers: number;
+    /** O personagem precisa ter atacado neste intervalo (ms) para o Shielding treinar. */
+    shieldingAttackWindowMs: number;
   };
   player: { inventorySlots: number; depotSlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };

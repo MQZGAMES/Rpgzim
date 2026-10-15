@@ -2,7 +2,7 @@
 import type { VocationDef } from '../domain/entities/definitions';
 import type { VocationId } from '../domain/value-objects/ids';
 
-const mage = { sword: 2, axe: 2, club: 2, distance: 2, shielding: 1.6, magic: 1 };
+const mage = { sword: 2, axe: 2, club: 2, distance: 2, shielding: 1.8, magic: 1 };
 
 export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
   sorcerer: {
@@ -73,7 +73,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     base: { health: 150, mana: 50 },
     perLevel: { health: 10, mana: 15 },
     regen: { health: 2, mana: 2 },
-    skillMultipliers: { sword: 1.5, axe: 1.5, club: 1.5, distance: 1, shielding: 1.2, magic: 1.4 },
+    skillMultipliers: { sword: 1.5, axe: 1.5, club: 1.5, distance: 1, shielding: 1.3, magic: 1.4 },
     damage: { melee: 0.8, distance: 1.15, magic: 0.9, healing: 1 },
     physicalReduction: 0.05,
     baseSpeed: 4.3,

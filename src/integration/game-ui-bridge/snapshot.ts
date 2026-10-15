@@ -112,6 +112,7 @@ function itemLines(def: ItemDef): string[] {
     else l.push(`Ataque: ${w.attack}`);
     l.push(`Alcance: ${w.range} ${w.range === 1 ? 'tile' : 'tiles'}`);
     if (w.skill !== 'magic') l.push(`Skill: ${SKILL_LABEL[w.skill]}`);
+    if (w.training) l.push(`Arma de treino: dano fixo ${w.damage?.[0]}–${w.damage?.[1]}, ignora armadura`);
     if (w.ammo) l.push('Requer flechas');
     if (def.twoHanded) l.push('Duas mãos');
   }
