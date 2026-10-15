@@ -6,6 +6,7 @@ import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '
 import type { World } from '../simulation/World';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
+import { worldText } from './text';
 
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 
@@ -14,7 +15,9 @@ export class CreatureView {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly shadow: Phaser.GameObjects.Image;
   private bar: Phaser.GameObjects.Graphics | null = null;
-  private label: Phaser.GameObjects.BitmapText | null = null;
+  private label: Phaser.GameObjects.Text | null = null;
+  private labelText = '';
+  private labelColor = '';
   private lastHpKey = '';
   private flashUntil = 0;
   /** Deslocamento temporário (investida de ataque), em pixels. */
@@ -29,15 +32,33 @@ export class CreatureView {
     shadow: 's' | 'm' | 'l',
     readonly yOffset: number,
     name?: string,
-    labelTint = 0xfff09a,
+    labelColor = '#fff09a',
   ) {
     this.shadow = scene.add.image(0, -2, 'objects', `shadow_${shadow}`);
     this.sprite = scene.add.sprite(0, yOffset, sheet, 0).setOrigin(0.5, 1);
     this.container = scene.add.container(0, 0, [this.shadow, this.sprite]);
-    if (name) {
-      this.label = scene.add.bitmapText(0, -30 + yOffset, 'pixel', name.toUpperCase(), 8).setOrigin(0.5, 1).setTint(labelTint);
+    this.scene = scene;
+    if (name) this.setName(name, labelColor);
+  }
+
+  private readonly scene: Phaser.Scene;
+
+  /** Topo da "cabeça" (pixels do mundo, relativo ao pé): referência para a barra de vida e o nome. */
+  private get headTop(): number {
+    return -this.sprite.displayHeight + this.yOffset + (this.kind === 'humanoid' ? 8 : 2);
+  }
+
+  /** Nome sempre visível acima da barra de vida (na fonte da interface). */
+  setName(text: string, color: string): void {
+    if (text === this.labelText && color === this.labelColor && this.label) return;
+    this.labelText = text;
+    this.labelColor = color;
+    if (!this.label) {
+      this.label = worldText(this.scene, 0, 0, text, { size: 11, color });
+      this.label.setOrigin(0.5, 1);
       this.container.add(this.label);
-    }
+    } else this.label.setText(text).setColor(color);
+    this.label.setPosition(0, this.headTop - 4);
   }
 
   get height(): number {
@@ -53,7 +74,7 @@ export class CreatureView {
   }
 
   /** Barra de vida compacta acima da cabeça (redesenhada só quando muda). */
-  setHealthBar(pct: number | null, scene: Phaser.Scene, color = 0x4fd08a): void {
+  setHealthBar(pct: number | null, scene: Phaser.Scene = this.scene, color = 0x4fd08a): void {
     const key = pct === null ? 'none' : `${Math.round(pct * 14)}:${color}`;
     if (key === this.lastHpKey) return;
     this.lastHpKey = key;
@@ -67,7 +88,7 @@ export class CreatureView {
     }
     const g = this.bar.setVisible(true).clear();
     const w = 14;
-    const top = -this.sprite.height + this.yOffset - 3 + (this.kind === 'humanoid' ? 8 : 2);
+    const top = this.headTop - 3;
     g.fillStyle(0x120d18, 1).fillRect(-w / 2 - 1, top - 1, w + 2, 4);
     const fill = Math.max(1, Math.round(w * pct));
     const c = pct > 0.6 ? color : pct > 0.3 ? 0xf8dc6c : 0xe04a44;
@@ -152,13 +173,25 @@ export class EntityViews {
       v.sprite.setScale(m.def.scale);
       v.shadow.setScale(m.def.scale);
     }
+    v.setName(m.def.name, '#f3d6c8');
     this.monsters.set(m.id, v);
     return v;
   }
 
   private addNpc(n: NpcEntity): void {
-    const v = new CreatureView(this.scene, n.id, n.def.sprite, 'humanoid', 's', 1, n.def.name);
+    const v = new CreatureView(this.scene, n.id, n.def.sprite, 'humanoid', 's', 1, n.def.name, '#fff09a');
     this.npcs.set(n.id, v);
+  }
+
+  /** Nome do personagem com marcas de grupo (★ líder) e caveira (PK). */
+  private actorPlate(a: PlayerEntity, base: string): { text: string; color: string } {
+    const w = this.world;
+    const party = w.social.party;
+    const inParty = !!party && party.members.includes(a.id) && party.members.includes(w.human.id);
+    const skull = (w.social.skulls.get(a.id) ?? 0) > w.now;
+    const text = `${party?.leaderId === a.id && inParty ? '★ ' : ''}${skull ? '☠ ' : ''}${a.character.name}`;
+    const color = skull ? '#ff7a6a' : inParty && a.id !== w.human.id ? '#7fd8ff' : base;
+    return { text, color };
   }
 
   get(id: string): CreatureView | undefined {
@@ -166,7 +199,7 @@ export class EntityViews {
   }
 
   private addHero(h: HeroEntity): CreatureView {
-    const v = new CreatureView(this.scene, h.id, h.character.vocation, 'humanoid', 's', 1, h.character.name, 0x8ff0b0);
+    const v = new CreatureView(this.scene, h.id, h.character.vocation, 'humanoid', 's', 1, h.character.name, '#8ff0b0');
     this.heroes.set(h.id, v);
     return v;
   }
@@ -178,14 +211,17 @@ export class EntityViews {
     return { x: v.container.x, y: v.container.y - v.height + 8 };
   }
 
-  sync(now: number, targetId: string | null): void {
+  sync(now: number, targetId: string | null, view?: { x: number; y: number; right: number; bottom: number }): void {
     const w = this.world;
     const p: PlayerEntity = w.player;
     this.player.sync(p, now, true, p.stats.speed);
+    // só desenha (sprite, nome e barra) quem está na área visível: poupa muito em aparelhos fracos
+    const M = 40;
+    const visible = (e: { x: number; y: number }) => !view || (e.x * 16 + 8 >= view.x - M && e.x * 16 + 8 <= view.right + M && e.y * 16 >= view.y - M && e.y * 16 <= view.bottom + M);
     for (const m of w.monsters.values()) {
       let v = this.monsters.get(m.id);
       if (!v) v = this.addMonster(m);
-      if (!m.alive) {
+      if (!m.alive || !visible(m)) {
         v.container.setVisible(false);
         continue;
       }
@@ -194,24 +230,30 @@ export class EntityViews {
         v.container.setVisible(true);
       }
       v.sync(m, now, true, m.def.speed);
-      const pct = m.hp / m.def.health;
-      v.setHealthBar(m.id === targetId || pct < 1 ? pct : null, this.scene, 0x4fd08a);
+      v.setLabelVisible(true);
+      v.setHealthBar(m.hp / m.def.health, this.scene, m.id === targetId ? 0xff6a5a : 0x4fd08a);
     }
     for (const n of w.npcs.values()) {
       const v = this.npcs.get(n.id)!;
+      v.container.setVisible(visible(n));
+      if (!v.container.visible) continue;
       v.sync(n, now, true, 1.6);
-      v.setLabelVisible(Math.max(Math.abs(n.x - p.x), Math.abs(n.y - p.y)) <= 4);
+      v.setLabelVisible(true);
     }
     for (const h of w.heroes.values()) {
       const v = this.heroes.get(h.id) ?? this.addHero(h);
+      v.container.setVisible(visible(h));
+      if (!v.container.visible) continue;
       v.sync(h, now, true, h.stats.speed);
-      const near = Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)) <= 9;
-      v.setLabelVisible(near && !h.dead);
-      const pct = h.character.health / h.stats.maxHealth;
-      v.setHealthBar(h.dead || pct >= 1 ? null : pct, this.scene, 0x4fd08a);
+      const plate = this.actorPlate(h, '#8ff0b0');
+      v.setName(plate.text, plate.color);
+      v.setLabelVisible(!h.dead);
+      v.setHealthBar(h.dead ? null : h.character.health / h.stats.maxHealth, this.scene, h.id === targetId ? 0xff6a5a : 0x4fd08a);
     }
-    const hpPct = p.character.health / p.stats.maxHealth;
-    this.player.setHealthBar(p.dead || (hpPct >= 1 && !targetId) ? null : hpPct, this.scene, 0x4fd08a);
+    const plate = this.actorPlate(p, '#fbf8ef');
+    this.player.setName(plate.text, plate.color);
+    this.player.setLabelVisible(!p.dead);
+    this.player.setHealthBar(p.dead ? null : p.character.health / p.stats.maxHealth, this.scene, 0x4fd08a);
   }
 
   /** Entidade sob um ponto do mundo (para toque/clique). */

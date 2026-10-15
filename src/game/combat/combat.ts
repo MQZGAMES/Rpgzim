@@ -12,9 +12,10 @@ import { isPz, blocksSight } from '../world/GameMap';
 import { lineOfSight } from '../movement/pathfinding';
 import { removeOccupant, teleport } from '../movement/movement';
 import { freeCellNear } from '../movement/walk';
-import type { MonsterEntity } from '../entities/types';
+import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { message, nextId, warnThrottled } from '../simulation/World';
+import { asActor, message, nextId, warnThrottled } from '../simulation/World';
+import { PVP_FAIL_MESSAGE, actorById, canAttackActor, registerAggression, registerPlayerKill, xpReceivers } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function hasLineOfSight(w: World, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
@@ -28,11 +29,33 @@ export function currentTarget(w: World): MonsterEntity | null {
   return m && m.alive ? m : null;
 }
 
+/** Personagem (jogador ou herói) mirado pelo ator em execução, se for o caso (PK). */
+export function currentActorTarget(w: World): PlayerEntity | null {
+  const a = actorById(w, w.player.targetId);
+  return a && !a.dead ? a : null;
+}
+
+/** Quem causou o dano (monstro ou personagem), com nome para as mensagens de morte. */
+export interface DamageSource {
+  id: string;
+  name: string;
+  kind: 'monster' | 'player';
+}
+export const monsterSource = (m: MonsterEntity): DamageSource => ({ id: m.id, name: m.def.name, kind: 'monster' });
+export const actorSource = (a: PlayerEntity): DamageSource => ({ id: a.id, name: a.character.name, kind: 'player' });
+
 export function setTarget(w: World, id: string | null): void {
   const p = w.player;
   if (id) {
     const m = w.monsters.get(id);
-    if (!m || !m.alive) return;
+    const a = m ? null : actorById(w, id);
+    if (a) {
+      const fail = canAttackActor(w, p, a);
+      if (fail) {
+        warnThrottled(w, `pvp:${fail}`, PVP_FAIL_MESSAGE[fail], 800);
+        return;
+      }
+    } else if (!m || !m.alive) return;
     if (isPz(w.map, p.x, p.y)) {
       warnThrottled(w, 'pz', 'Você não pode atacar dentro de uma área protegida.');
     }
@@ -79,9 +102,14 @@ export function weaponCanReach(w: World, target: { x: number; y: number }): bool
 export function updatePlayerCombat(w: World): void {
   const p = w.player;
   if (p.dead) return;
-  const target = currentTarget(w);
+  const target: MonsterEntity | PlayerEntity | null = currentTarget(w) ?? currentActorTarget(w);
   if (!target) {
     if (p.targetId) setTarget(w, null);
+    return;
+  }
+  if (target.kind === 'player' && canAttackActor(w, p, target)) {
+    // PK desligado, alvo entrou na área protegida ou virou membro do grupo: para de atacar
+    setTarget(w, null);
     return;
   }
   if (isPz(w.map, p.x, p.y)) return;
@@ -90,7 +118,20 @@ export function updatePlayerCombat(w: World): void {
   p.nextAttackAt = w.now + p.stats.attackIntervalMs;
 }
 
-function performBasicAttack(w: World, target: MonsterEntity): void {
+/** Aplica um golpe já rolado no alvo (monstro: armadura/resistências; personagem: escudo/armadura/buffs). */
+function applyHit(w: World, target: MonsterEntity | PlayerEntity, raw: number, element: Element, fixed: boolean): void {
+  const p = w.player;
+  if (target.kind === 'monster') {
+    const dmg = fixed ? raw : mitigate(raw, element, { armor: target.def.armor, resistances: target.def.resistances }, w.rng).damage;
+    damageMonster(w, target, dmg, element, p.id);
+    return;
+  }
+  registerAggression(w, p.id, target.id);
+  const src = actorSource(p);
+  asActor(w, target, () => damagePlayer(w, raw, element, src, fixed));
+}
+
+function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): void {
   const p = w.player;
   const c = p.character;
   const voc = w.data.vocations[c.vocation];
@@ -124,7 +165,7 @@ function performBasicAttack(w: World, target: MonsterEntity): void {
   if (weapon.skill !== 'magic') trainPlayerSkill(w, weapon.skill, 1);
   if (weapon.training && weapon.damage) {
     // arma de treino: dano fixo baixo, sem armadura nem errar — o foco é treinar a skill
-    damageMonster(w, target, rollRange(weapon.damage as [number, number], w.rng), weapon.element, p.id);
+    applyHit(w, target, rollRange(weapon.damage as [number, number], w.rng), weapon.element, true);
     return;
   }
   let raw: number;
@@ -135,13 +176,13 @@ function performBasicAttack(w: World, target: MonsterEntity): void {
     const skill = weaponSkillLevel(p.stats);
     if (weapon.kind === 'distance' && !w.rng.chance(distanceHitChance(skill))) {
       w.events.emit('missed', { sourceId: p.id, targetId: target.id, position: to });
-      aggro(w, target);
+      if (target.kind === 'monster') aggro(w, target);
+      else registerAggression(w, p.id, target.id);
       return;
     }
     raw = rollWeaponDamage({ level: c.level, skill, weaponAttack: weapon.attack, vocationModifier: mod }, w.rng);
   }
-  const res = mitigate(raw, weapon.element, { armor: target.def.armor, resistances: target.def.resistances }, w.rng);
-  damageMonster(w, target, res.damage, weapon.element, p.id);
+  applyHit(w, target, raw, weapon.element, false);
 }
 
 /** O monstro passa a perseguir quem o atacou (o ator em execução), se ainda não tiver outro alvo. */
@@ -184,12 +225,25 @@ function killMonster(w: World, m: MonsterEntity): void {
   const p = w.player;
   p.character.stats.monstersKilled += 1;
   if (p.targetId === m.id) setTarget(w, null);
-  message(w, `Você derrotou: ${m.def.name} (+${m.def.experience} XP).`, 'combat');
-  gainExperience(w, m.def.experience);
+  // XP: sozinho fica com tudo; em grupo, dividida igualmente entre os membros vivos e próximos
+  const receivers = xpReceivers(w, p.id, pos);
+  if (receivers.length <= 1) {
+    message(w, `Você derrotou: ${m.def.name} (+${m.def.experience} XP).`, 'combat');
+    gainExperience(w, m.def.experience);
+    return;
+  }
+  const share = Math.max(1, Math.floor(m.def.experience / receivers.length));
+  message(w, `Você derrotou: ${m.def.name}.`, 'combat');
+  for (const r of receivers)
+    asActor(w, r, () => {
+      message(w, `+${share} XP (grupo: ${m.def.experience} ÷ ${receivers.length}).`, 'combat');
+      gainExperience(w, share);
+    });
 }
 
-/** Dano recebido pelo jogador (de monstros). Considera bloqueio de escudo, armadura e buffs. */
-export function damagePlayer(w: World, raw: number, element: Element, source: MonsterEntity): void {
+/** Dano recebido pelo personagem em execução (de monstros ou de outro personagem, no PK).
+ * Considera bloqueio de escudo, armadura e buffs; `fixed` ignora a armadura (armas de treino). */
+export function damagePlayer(w: World, raw: number, element: Element, source: DamageSource, fixed = false): void {
   const p = w.player;
   if (p.dead || w.now < p.invulnerableUntil) return;
   const pos = { x: p.x, y: p.y };
@@ -204,13 +258,13 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Mo
       return;
     }
   }
-  const res = mitigate(raw, element, { armor: p.stats.armor, damageReduction: p.stats.damageReduction, physicalReduction: p.stats.physicalReduction }, w.rng);
+  const res = fixed ? { damage: Math.round(raw), absorbed: raw <= 0 } : mitigate(raw, element, { armor: p.stats.armor, damageReduction: p.stats.damageReduction, physicalReduction: p.stats.physicalReduction }, w.rng);
   p.character.health = Math.max(0, p.character.health - res.damage);
   w.events.emit('damage', { targetId: p.id, sourceId: source.id, amount: res.damage, element, blocked: res.absorbed, position: pos });
   if (p.character.health <= 0) killPlayer(w, source);
 }
 
-function killPlayer(w: World, killer: MonsterEntity): void {
+function killPlayer(w: World, killer: DamageSource): void {
   const p = w.player;
   const c = p.character;
   p.dead = true;
@@ -242,8 +296,29 @@ function killPlayer(w: World, killer: MonsterEntity): void {
       m.targetId = null;
     }
   w.events.emit('entityDied', { entityId: p.id, kind: 'player', position: { x: p.x, y: p.y }, spriteKey: c.vocation });
-  w.events.emit('playerDied', { xpLost: before - c.experience });
-  message(w, `Você foi derrotado por ${killer.def.name}.`, 'warning');
+  w.events.emit('playerDied', { xpLost: before - c.experience, killerId: killer.id, killerName: killer.name, byPlayer: killer.kind === 'player' });
+  message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
+  if (killer.kind === 'player') dropPkLoot(w, p, killer);
+}
+
+/** Morte no PK: parte do ouro da bolsa e às vezes um item da mochila ficam no chão (nunca o equipado). */
+function dropPkLoot(w: World, victim: PlayerEntity, killer: DamageSource): void {
+  const c = victim.character;
+  registerPlayerKill(w, killer.id);
+  const gold = Math.floor(c.gold * 0.3);
+  c.gold -= gold;
+  const items: { itemId: string; count: number }[] = [];
+  const stacks = c.inventory.map((st, i) => ({ st, i })).filter((x) => x.st && w.data.items[x.st.itemId]?.type !== 'potion');
+  if (stacks.length && w.rng.chance(0.5)) {
+    const pick = stacks[w.rng.int(0, stacks.length - 1)]!;
+    items.push({ ...pick.st! });
+    c.inventory[pick.i] = null;
+  }
+  if (!gold && !items.length) return;
+  const id = nextId(w, 'loot');
+  w.lootBags.set(id, { id, x: victim.x, y: victim.y, items, gold, expiresAt: w.now + w.data.balance.world.lootDecayMs, sourceName: c.name });
+  w.events.emit('lootDropped', { containerId: id, position: { x: victim.x, y: victim.y } });
+  w.events.emit('itemsChanged', {});
 }
 
 export function respawnPlayer(w: World): void {

@@ -2,6 +2,7 @@
 // (pixel-perfect) recalculado ao redimensionar e limites do mapa.
 import type Phaser from 'phaser';
 import { computeZoom } from '../config/viewport';
+import { setWorldTextZoom } from '../rendering/text';
 
 export class CameraController {
   private x = 0;
@@ -33,6 +34,7 @@ export class CameraController {
     const [short, long] = touch ? [11, 15] : [12, 20];
     this.zoom = Math.max(1, computeZoom(w, h, short + this.zoomBias * 2, long + this.zoomBias * 3));
     cam.setZoom(this.zoom);
+    setWorldTextZoom(this.zoom);
   }
 
   /** `tx`, `ty`: centro do jogador em pixels do mundo. */

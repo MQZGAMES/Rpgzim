@@ -17,7 +17,7 @@ import type { GameMap } from '../world/GameMap';
 import type { HeroDef } from '../../domain/entities/definitions';
 import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
-import { currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
+import { currentActorTarget, currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
 import { castSpell } from '../abilities/spells';
 import { bankGold, depotDeposit, depotDepositAll, depotWithdraw } from '../economy/depotService';
 import { createMonster, findSpawnCell, updateMonster } from '../ai/monsterAi';
@@ -35,9 +35,10 @@ import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, un
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { planWalk } from '../movement/walk';
+import { PARTY_FAIL_MESSAGE, acceptInvite, declineInvite, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial } from '../social/social';
 import { addHero } from '../ai/heroes';
 import { heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
-import { allActors, asActor, type UiState, type World } from './World';
+import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
 export const MAX_FRAME_MS = 250;
@@ -100,6 +101,7 @@ export class GameSimulation {
       player,
       human: player,
       heroes: new Map(),
+      social: newSocialState(c.flags.pvp === true),
       monsters: new Map(),
       npcs: new Map(),
       lootBags: new Map(),
@@ -194,6 +196,7 @@ export class GameSimulation {
     updateNpcs(w);
     this.updateWorldTimers();
     updateDoors(w);
+    updateSocial(w);
   }
 
   /** Um passo do ator em execução (`w.player`): movimento, combate, regeneração, interações. */
@@ -244,9 +247,10 @@ export class GameSimulation {
       if (!p.path) p.pathGoal = null;
       return;
     }
-    // perseguição automática do alvo quando fora de alcance
-    const t = currentTarget(w);
-    if (t && !weaponCanReach(w, t) && !isPz(w.map, p.x, p.y) && w.now >= p.chaseRecalcAt) {
+    // perseguição automática do alvo quando fora de alcance (desligada no modo "atacar parado")
+    const t = currentTarget(w) ?? currentActorTarget(w);
+    const stand = p.character.flags.standAttack === true;
+    if (t && !stand && !weaponCanReach(w, t) && !isPz(w.map, p.x, p.y) && w.now >= p.chaseRecalcAt) {
       p.chaseRecalcAt = w.now + 350;
       const stop = p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
       const path = pathTo(w, p, { x: t.x, y: t.y }, false, { stopWithin: stop, maxNodes: 1500 });
@@ -327,8 +331,6 @@ export class GameSimulation {
       return;
     }
     if (w.npcs.has(id)) interactWith(w, { kind: 'npc', id });
-    const hero = w.heroes.get(id);
-    if (hero) asActor(w, hero, () => heroStatusLine(w, hero));
   }
   tapLoot(id: string): void {
     interactWith(this.world, { kind: 'loot', id });
@@ -399,6 +401,59 @@ export class GameSimulation {
   }
   respawn(): void {
     respawnPlayer(this.world);
+  }
+
+  // ------------------------------------------------------------------ grupo, PK e modo de ataque
+  /** Convida um personagem para o grupo (quem convida vira o líder ao formar o grupo). */
+  partyInvite(toId: string): boolean {
+    const w = this.world;
+    const fail = invite(w, w.player.id, toId);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+    return !fail;
+  }
+  partyAccept(): boolean {
+    const w = this.world;
+    const fail = acceptInvite(w, w.player.id);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+    return !fail;
+  }
+  partyDecline(): void {
+    declineInvite(this.world, this.world.player.id);
+  }
+  partyLeave(): void {
+    leaveParty(this.world, this.world.player.id);
+  }
+  partyKick(id: string): void {
+    const w = this.world;
+    const fail = kickFromParty(w, w.player.id, id);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+  }
+  partyPassLeader(id: string): void {
+    const w = this.world;
+    const fail = passLeadership(w, w.player.id, id);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+  }
+  /** Permissão de PK (ataque entre personagens). Desligar encerra os ataques em andamento. */
+  setPvp(on: boolean): void {
+    const w = this.world;
+    w.social.pvp = on;
+    w.human.character.flags.pvp = on;
+    if (!on) for (const a of allActors(w)) if (a.targetId && !w.monsters.has(a.targetId)) a.targetId = null;
+    message(w, on ? 'PK ativado: personagens podem se atacar fora das áreas protegidas.' : 'PK desativado.', on ? 'warning' : 'system');
+    w.events.emit('socialChanged', {});
+  }
+  /** Modo de ataque: parado (não persegue o alvo) ou seguindo o alvo. */
+  setStandAttack(stand: boolean): void {
+    const c = this.world.player.character;
+    c.flags.standAttack = stand;
+    message(this.world, stand ? 'Modo de ataque: parado (não persegue o alvo).' : 'Modo de ataque: seguir o alvo.', 'system');
+    this.world.events.emit('socialChanged', {});
+  }
+  /** Fala do herói tocado (o que ele está fazendo). */
+  talkTo(id: string): void {
+    const w = this.world;
+    const hero = w.heroes.get(id);
+    if (hero) asActor(w, hero, () => heroStatusLine(w, hero));
   }
   setHotbar(index: number, spellId: string): void {
     const hb = this.world.player.character.hotbar;

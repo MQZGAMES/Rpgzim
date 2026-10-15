@@ -22,6 +22,8 @@ export interface UiLocalState {
   lastSaved: number | null;
   fps: number;
   touch: boolean;
+  /** Personagem (herói) tocado: abre o menu com conversar, grupo e atacar. */
+  actorMenu: string | null;
 }
 
 type Listener = () => void;
@@ -45,7 +47,7 @@ export class Store<T> {
 }
 
 export function createLocalStore(touch: boolean): Store<UiLocalState> {
-  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, ready: false, saving: false, lastSaved: null, fps: 0, touch });
+  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, ready: false, saving: false, lastSaved: null, fps: 0, touch, actorMenu: null });
 }
 
 export function createSnapshotStore(initial: UiSnapshot): Store<UiSnapshot> {

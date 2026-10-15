@@ -317,7 +317,22 @@ export type HeroLineKey =
   | 'idle'
   | 'greetPlayer'
   | 'help'
-  | 'status';
+  | 'status'
+  | 'explore'
+  | 'comment'
+  | 'invite'
+  | 'inviteAccept'
+  | 'inviteDecline'
+  | 'partyLeave'
+  | 'followLeader'
+  | 'gift'
+  | 'pkThreat'
+  | 'pkWin'
+  | 'pkLose'
+  | 'pkSpare'
+  | 'pkEscaped'
+  | 'revenge'
+  | 'flee';
 
 export interface HeroDef {
   id: string;

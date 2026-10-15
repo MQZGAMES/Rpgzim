@@ -148,7 +148,7 @@ export class InputController {
     const sim = this.session.sim;
     const hit = this.views.pick(wp.x, wp.y);
     if (hit) {
-      sim.tapEntity(hit);
+      this.session.tapEntity(hit);
       this.session.audio.play('ui');
       return;
     }

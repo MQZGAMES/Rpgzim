@@ -28,7 +28,7 @@ export interface GameEventMap extends Record<string, unknown> {
   doorChanged: { doorId: string; open: boolean };
   regionEntered: { regionId: string; name: string };
   buildingChanged: { buildingId: string | null };
-  playerDied: { xpLost: number };
+  playerDied: { xpLost: number; killerId?: string; killerName?: string; byPlayer?: boolean };
   playerRespawned: Record<string, never>;
   buffApplied: { targetId: string; kind: string; durationMs: number };
   targetChanged: { targetId: string | null };
@@ -42,4 +42,8 @@ export interface GameEventMap extends Record<string, unknown> {
   actorRespawned: { entityId: string };
   /** Um herói pediu para salvar o próprio progresso. */
   heroSaveRequested: { heroId: string; reason: string };
+  // ---- grupo e PK
+  partyInvite: { fromId: string; toId: string; fromName: string; toName: string };
+  partyChanged: Record<string, never>;
+  socialChanged: Record<string, never>;
 }

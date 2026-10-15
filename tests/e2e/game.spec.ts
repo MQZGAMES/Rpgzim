@@ -210,14 +210,10 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
   const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
   const cell = page.getByTestId(`bag-${axe}`);
   await expect(cell).toHaveAttribute('data-better', 'true');
-  const box = (await cell.boundingBox())!;
-  // toque duplo rápido (eventos de toque enviados direto, sem a espera que o tap do Playwright adiciona)
-  const cdp = await page.context().newCDPSession(page);
-  const pt = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  for (let i = 0; i < 2; i++) {
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  }
+  // toque duplo: dois "pointerup" de toque em sequência rápida (sem depender da velocidade de renderização da máquina de teste)
+  await cell.evaluate((el) => {
+    for (let i = 0; i < 2; i++) el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', button: 0, isPrimary: true }));
+  });
   await expect(page.getByTestId('equip-notice')).toContainText('Machadinha');
   expect((await api(page, (a) => a.player())).equipment.mainHand?.itemId).toBe('axe_hand');
 });
@@ -239,4 +235,20 @@ test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado'
   await page.waitForFunction(() => (window.__RPGZIM__ as { ready?: () => boolean } | undefined)?.ready?.() === true, null, { timeout: 30_000 });
   expect(await heroes()).toEqual([]);
   expect((await api(page, (a) => a.player())).inventory.length).toBeGreaterThan(0);
+});
+
+test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'um projeto basta');
+  await createCharacter(page, 'knight', 'Social');
+  await page.getByTestId('toggle-stand').click();
+  await expect(page.getByTestId('toggle-stand')).toContainText('Parado');
+  await page.getByTestId('toggle-pvp').click();
+  await expect(page.getByTestId('toggle-pvp')).toContainText('PK on');
+  // abre o menu do herói pela simulação do toque (a posição na tela varia com o zoom)
+  type HeroInfo = { id: string };
+  const id = (await page.evaluate(() => (window.__RPGZIM__ as { heroes(): HeroInfo[] }).heroes()))[0]!.id;
+  await page.evaluate((hid) => (window.__RPGZIM__ as { openActorMenu(id: string): void }).openActorMenu(hid), id);
+  await expect(page.getByTestId('actor-menu')).toContainText('Boladex');
+  await expect(page.getByRole('button', { name: 'Convidar p/ grupo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Atacar' })).toBeVisible();
 });

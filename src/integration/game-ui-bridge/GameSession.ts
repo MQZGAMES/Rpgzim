@@ -72,7 +72,7 @@ export class GameSession {
   private wireEvents(): void {
     const ev = this.sim.events;
     const markDirty = () => (this.dirty = true);
-    for (const type of ['damage', 'heal', 'itemsChanged', 'goldChanged', 'targetChanged', 'lootChanged', 'lootDropped', 'dialogOpened', 'shopOpened', 'depotOpened', 'levelUp', 'skillUp', 'playerDied', 'playerRespawned', 'buffApplied', 'spellCast', 'regionEntered', 'buildingChanged', 'xpGained'] as const) {
+    for (const type of ['damage', 'heal', 'itemsChanged', 'goldChanged', 'targetChanged', 'lootChanged', 'lootDropped', 'dialogOpened', 'shopOpened', 'depotOpened', 'partyInvite', 'partyChanged', 'socialChanged', 'levelUp', 'skillUp', 'playerDied', 'playerRespawned', 'buffApplied', 'spellCast', 'regionEntered', 'buildingChanged', 'xpGained'] as const) {
       this.disposers.push(ev.on(type, markDirty));
     }
     this.disposers.push(
@@ -215,6 +215,62 @@ export class GameSession {
   /** Toque repassado pela interface (ex.: zona do joystick sem arrasto) como se fosse no mapa. */
   tapScreen(clientX: number, clientY: number): void {
     this.screenTapHandler?.(clientX, clientY);
+  }
+  /** Toque numa criatura do mapa: herói abre o menu; monstro/NPC segue o comportamento normal. */
+  tapEntity(id: string): void {
+    if (this.sim.world.heroes.has(id)) {
+      this.local.update({ actorMenu: this.local.get().actorMenu === id ? null : id });
+      this.audio.play('ui');
+      return;
+    }
+    this.sim.tapEntity(id);
+  }
+  closeActorMenu(): void {
+    this.local.update({ actorMenu: null });
+  }
+  talkTo(id: string): void {
+    this.sim.talkTo(id);
+  }
+  attackActor(id: string): void {
+    this.sim.setTarget(id);
+    this.local.update({ actorMenu: null });
+    this.dirty = true;
+  }
+  partyInvite(id: string): void {
+    if (this.sim.partyInvite(id)) this.audio.play('ui');
+    this.dirty = true;
+  }
+  partyAccept(): void {
+    this.sim.partyAccept();
+    this.dirty = true;
+  }
+  partyDecline(): void {
+    this.sim.partyDecline();
+    this.dirty = true;
+  }
+  partyLeave(): void {
+    this.sim.partyLeave();
+    this.dirty = true;
+  }
+  partyKick(id: string): void {
+    this.sim.partyKick(id);
+    this.dirty = true;
+  }
+  partyPassLeader(id: string): void {
+    this.sim.partyPassLeader(id);
+    this.dirty = true;
+  }
+  setPvp(on: boolean): void {
+    this.sim.setPvp(on);
+    this.audio.play(on ? 'error' : 'ui');
+    this.dirty = true;
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
+  }
+  setStandAttack(stand: boolean): void {
+    this.sim.setStandAttack(stand);
+    this.audio.play('ui');
+    this.dirty = true;
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
   }
   move(x: number, y: number): void {
     this.sim.setMoveVector(x, y);

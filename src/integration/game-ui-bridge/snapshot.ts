@@ -13,6 +13,8 @@ import type { GameSimulation } from '../../game/simulation/GameSimulation';
 import { castCheck, spellCooldownRemaining } from '../../game/abilities/spells';
 import { nearbyInteractables } from '../../game/interaction/interaction';
 import { nearbyLootBags } from '../../game/inventory/inventoryService';
+import { PARTY_SHARE_RANGE, PVP_FAIL_MESSAGE, actorById, actorName, canAttackActor, hasSkull, partyOf, pendingInviteFor, sameParty } from '../../game/social/social';
+import { heroActivity } from '../../game/ai/heroBrain';
 
 export interface ItemView {
   itemId: string;
@@ -81,7 +83,17 @@ export interface UiSnapshot {
   stats: { armor: number; shieldDefense: number; weaponName: string; weaponAttack: string; range: number; attackInterval: number; magicLevel: number; damageReduction: number };
   skills: { id: SkillId; label: string; level: number; base: number; pct: number }[];
   buffs: { kind: string; remainingMs: number }[];
-  target: { id: string; name: string; hp: number; maxHp: number; distance: number; inRange: boolean } | null;
+  target: { id: string; name: string; hp: number; maxHp: number; distance: number; inRange: boolean; isPlayer: boolean } | null;
+  /** Grupo atual (se o jogador estiver em um). */
+  party: { leaderId: string; youAreLeader: boolean; members: { id: string; name: string; vocation: string; level: number; hp: number; maxHp: number; isYou: boolean; isLeader: boolean; near: boolean; dead: boolean }[] } | null;
+  /** Convite de grupo recebido e ainda válido. */
+  invite: { fromId: string; fromName: string } | null;
+  pvp: boolean;
+  standAttack: boolean;
+  /** Tempo restante da caveira do jogador (ms), 0 sem caveira. */
+  skullMs: number;
+  /** Heróis no mundo (para o menu ao tocar neles). */
+  heroes: { id: string; name: string; title: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: boolean; activity: string; attackBlocked: string | null; distance: number; dead: boolean }[];
   hotbar: SpellView[];
   spellbook: SpellView[];
   inventory: (ItemView | null)[];
@@ -182,6 +194,22 @@ function spellView(sim: GameSimulation, id: string): SpellView {
   };
 }
 
+function partyView(sim: GameSimulation): UiSnapshot['party'] {
+  const w = sim.world;
+  const p = w.player;
+  const party = partyOf(w, p.id);
+  if (!party) return null;
+  return {
+    leaderId: party.leaderId,
+    youAreLeader: party.leaderId === p.id,
+    members: party.members.flatMap((id) => {
+      const a = actorById(w, id);
+      if (!a) return [];
+      return [{ id, name: a.character.name, vocation: w.data.vocations[a.character.vocation].name, level: a.character.level, hp: a.character.health, maxHp: a.stats.maxHealth, isYou: id === p.id, isLeader: id === party.leaderId, near: Math.max(Math.abs(a.x - p.x), Math.abs(a.y - p.y)) <= PARTY_SHARE_RANGE, dead: a.dead }];
+    }),
+  };
+}
+
 export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot {
   const w = sim.world;
   const p = w.player;
@@ -189,6 +217,8 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const voc = w.data.vocations[c.vocation];
   const xpCfg = w.data.balance.experience;
   const t = p.targetId ? w.monsters.get(p.targetId) : undefined;
+  const ta = !t && p.targetId ? actorById(w, p.targetId) : null;
+  const inv = pendingInviteFor(w, p.id);
   const equipment = {} as Record<EquipSlot, ItemView | null>;
   for (const slot of EQUIP_SLOTS) {
     const st = c.equipment[slot];
@@ -247,7 +277,36 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       pct: skillProgress(id, c.skills[id], voc.skillMultipliers[id], w.data.balance),
     })),
     buffs: p.buffs.filter((b) => b.expiresAt > w.now).map((b) => ({ kind: b.kind, remainingMs: b.expiresAt - w.now })),
-    target: t && t.alive ? { id: t.id, name: t.def.name, hp: t.hp, maxHp: t.def.health, distance: Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)), inRange: Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)) <= p.stats.weapon.range } : null,
+    target:
+      t && t.alive
+        ? { id: t.id, name: t.def.name, hp: t.hp, maxHp: t.def.health, distance: Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)), inRange: Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)) <= p.stats.weapon.range, isPlayer: false }
+        : ta
+          ? { id: ta.id, name: ta.character.name, hp: ta.character.health, maxHp: ta.stats.maxHealth, distance: Math.max(Math.abs(ta.x - p.x), Math.abs(ta.y - p.y)), inRange: Math.max(Math.abs(ta.x - p.x), Math.abs(ta.y - p.y)) <= p.stats.weapon.range, isPlayer: true }
+          : null,
+    party: partyView(sim),
+    invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
+    pvp: w.social.pvp,
+    standAttack: c.flags.standAttack === true,
+    skullMs: Math.max(0, (w.social.skulls.get(p.id) ?? 0) - w.now),
+    heroes: [...w.heroes.values()].map((h) => ({
+      id: h.id,
+      name: h.character.name,
+      title: h.hero.title,
+      vocationName: w.data.vocations[h.character.vocation].name,
+      level: h.character.level,
+      hp: h.character.health,
+      maxHp: h.stats.maxHealth,
+      inParty: sameParty(w, p.id, h.id),
+      isLeader: w.social.party?.leaderId === h.id,
+      skull: hasSkull(w, h.id),
+      activity: heroActivity(w, h),
+      attackBlocked: (() => {
+        const f = canAttackActor(w, p, h);
+        return f ? PVP_FAIL_MESSAGE[f] : null;
+      })(),
+      distance: Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)),
+      dead: h.dead,
+    })),
     hotbar: c.hotbar.filter((id) => !!w.data.spells[id]).map((id) => spellView(sim, id)),
     spellbook: voc.spells.map((id) => spellView(sim, id)),
     inventory: c.inventory.map((st) => (st ? itemView(sim, st) : null)),

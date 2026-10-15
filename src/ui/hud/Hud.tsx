@@ -11,6 +11,7 @@ import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { StatusPanel } from './StatusPanel';
 import { TargetFrame } from './TargetFrame';
+import { ActorMenu, InvitePrompt, PartyFrame, QuickToggles } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
 import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, RegionBanner } from './Overlays';
 
@@ -33,16 +34,26 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
     <div className="hud-scale pointer-events-none absolute inset-0 z-10 select-none" data-testid="hud">
       {touch && <Joystick />}
       <div className="safe-top safe-x absolute left-0 right-0 top-0 flex items-start justify-between gap-2">
-        <StatusPanel />
+        <div className="flex flex-col">
+          <StatusPanel />
+          <PartyFrame />
+        </div>
+        <div className="flex flex-col items-end gap-1">
         <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
           <MenuButton icon="ui_bag" label="Mochila" hotkey="I" onClick={() => session.setPanel('inventory')} testId="btn-inventory" />
           <MenuButton icon="ui_char" label="Personagem" hotkey="C" onClick={() => session.setPanel('character')} testId="btn-character" />
           <MenuButton icon="ui_book" label="Grimório" hotkey="K" onClick={() => session.setPanel('spells')} testId="btn-spells" />
           <MenuButton icon="ui_gear" label="Menu" hotkey="Esc" onClick={() => session.setPanel('settings')} testId="btn-settings" />
         </div>
+        <QuickToggles />
+        </div>
       </div>
       <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] -translate-x-1/2 lg:top-3">
-        <TargetFrame />
+        <div className="flex flex-col items-center gap-1">
+          <TargetFrame />
+          <InvitePrompt />
+          <ActorMenu />
+        </div>
       </div>
       {showLog && (
         <div

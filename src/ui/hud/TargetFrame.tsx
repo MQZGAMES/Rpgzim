@@ -10,7 +10,10 @@ export function TargetFrame() {
       <ItemIcon icon="ui_target" size={20} className="anim-glow" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between text-[12px] leading-none">
-          <span className="truncate text-[#ffb3a3]">{t.name}</span>
+          <span className={`truncate ${t.isPlayer ? 'text-[#ff8a8a]' : 'text-[#ffb3a3]'}`}>
+            {t.isPlayer && <ItemIcon icon="ui_skull" size={11} className="mr-1 inline-block align-[-1px]" />}
+            {t.name}
+          </span>
           <span className={`text-[9px] ${t.inRange ? 'text-heal' : 'text-muted'}`}>{t.inRange ? 'ao alcance' : `${t.distance} tiles`}</span>
         </div>
         <Bar className="mt-1" value={t.hp} max={t.maxHp} color="var(--color-hp)" height={6} />

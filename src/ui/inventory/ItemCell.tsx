@@ -54,7 +54,7 @@ export function ItemCell({
       type="button"
       onPointerUp={(e) => {
         if (e.button !== 0) return;
-        const now = performance.now();
+        const now = e.timeStamp || performance.now();
         if (onDoubleTap && item && now - lastUp.current < DOUBLE_TAP_MS) {
           lastUp.current = 0;
           onDoubleTap();

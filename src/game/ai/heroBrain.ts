@@ -3,9 +3,12 @@
 // Roda dentro de `asActor`, então `w.player` é o próprio herói. As decisões seguem o temperamento:
 // coragem (onde caça e quando recua), ganância (quanto loot/ouro acumula), disciplina (treino),
 // sociabilidade (conversa/praça) e prudência (poções).
+// Além disso tem memória (quanto cada área rendeu de XP por minuto, onde morreu), uma relação com cada
+// personagem (amizade/rivalidade), decide com um pouco de acaso (improvisa), joga em grupo e, com o PK
+// ligado, pesa se vale atacar alguém (ganho, força relativa, vingança, caveira) — sem motivo, não ataca.
 import type { HeroLineKey, ItemDef } from '../../domain/entities/definitions';
 import { chebyshev } from '../../domain/value-objects/position';
-import { countItem, freeSlots } from '../../domain/rules/inventory';
+import { addItem, countItem, freeSlots, removeAt } from '../../domain/rules/inventory';
 import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
 import type { HeroEntity, NpcEntity } from '../entities/types';
@@ -18,8 +21,9 @@ import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/int
 import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
+import { acceptInvite, actorById, attackedRecently, declineInvite, hasSkull, invite, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
-export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead';
+export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk';
 
 type TownStep = { kind: 'shop'; npcId: string; buyPotions?: boolean; upgrades?: boolean; trainingWeapon?: boolean } | { kind: 'bank'; op: 'withdraw' | 'deposit' } | { kind: 'heal' };
 
@@ -47,6 +51,27 @@ export interface HeroBrainState {
   after: HeroMode;
   failures: number;
   nextUpgradeTripAt: number;
+  // ---- memória e personalidade em ação
+  /** XP e tempo de caça por monstro (aprende onde rende mais) e mortes recentes por área. */
+  areaStats: Record<string, { xp: number; ms: number; deaths: number; lastDeathAt: number }>;
+  huntXp: number;
+  huntStartedAt: number;
+  /** Relação com cada personagem: -1 (inimigo) .. 1 (amigo). */
+  affinity: Record<string, number>;
+  /** Vingança: até quando quer revidar contra quem o matou. */
+  grudge: { id: string; until: number } | null;
+  /** Alvo do PK (quando decidiu atacar alguém). */
+  pkTargetId: string | null;
+  nextPkThinkAt: number;
+  nextWhimAt: number;
+  nextInviteAt: number;
+  inviteSeenAt: number;
+  nextGiftAt: number;
+  /** Nome de quem o matou no PK (fala ao renascer). */
+  pkLostTo: string | null;
+  /** Desde quando o líder (humano) está parado — para não seguir alguém AFK para sempre. */
+  leaderIdleSince: number;
+  leaderLastPos: { x: number; y: number };
 }
 
 export function newHeroBrain(): HeroBrainState {
@@ -69,7 +94,50 @@ export function newHeroBrain(): HeroBrainState {
     after: 'decide',
     failures: 0,
     nextUpgradeTripAt: 0,
+    areaStats: {},
+    huntXp: 0,
+    huntStartedAt: 0,
+    affinity: {},
+    grudge: null,
+    pkTargetId: null,
+    nextPkThinkAt: 0,
+    nextWhimAt: 0,
+    nextInviteAt: 30000,
+    inviteSeenAt: 0,
+    nextGiftAt: 0,
+    pkLostTo: null,
+    leaderIdleSince: 0,
+    leaderLastPos: { x: 0, y: 0 },
   };
+}
+
+/** Texto curto do que o herói está fazendo (menu do personagem e fala de status). */
+export function heroActivity(w: World, h: HeroEntity): string {
+  const b = h.brain;
+  if (h.dead) return 'morto (renascendo)';
+  switch (b.mode) {
+    case 'hunt':
+      return `caçando ${w.data.monsters[b.quarry ?? '']?.name ?? 'monstros'}`;
+    case 'town':
+      return 'resolvendo coisas na vila';
+    case 'train':
+      return 'treinando skills';
+    case 'social':
+      return 'passeando pela vila';
+    case 'retreat':
+      return 'recuando para se curar';
+    case 'follow':
+      return 'acompanhando o grupo';
+    case 'pk':
+      return b.pkTargetId === w.human.id ? 'caçando VOCÊ' : 'em combate com um jogador';
+    default:
+      return 'pensando no que fazer';
+  }
+}
+
+const affinityOf = (h: HeroEntity, id: string) => h.brain.affinity[id] ?? 0.15;
+export function changeAffinity(h: HeroEntity, id: string, delta: number): void {
+  h.brain.affinity[id] = Math.max(-1, Math.min(1, affinityOf(h, id) + delta));
 }
 
 const THINK_MS = 300;
@@ -93,8 +161,7 @@ export function heroSay(w: World, h: HeroEntity, key: HeroLineKey, vars: Record<
 /** Resposta quando o jogador toca no herói. */
 export function heroStatusLine(w: World, h: HeroEntity): void {
   const c = h.character;
-  const area = h.brain.quarry ? `caçando ${w.data.monsters[h.brain.quarry]?.name ?? h.brain.quarry}` : h.brain.mode === 'town' ? 'resolvendo coisas na vila' : h.brain.mode === 'train' ? 'treinando' : 'de boa';
-  heroSay(w, h, 'status', { level: c.level, area, gold: c.gold, potions: potionsOf(w, h) }, 0);
+  heroSay(w, h, 'status', { level: c.level, area: heroActivity(w, h), gold: c.gold, potions: potionsOf(w, h) }, 0);
 }
 
 // ------------------------------------------------------------------ utilidades
@@ -170,6 +237,17 @@ function goTo(w: World, h: HeroEntity, x: number, y: number): void {
 }
 
 function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void {
+  const b = h.brain;
+  if (b.mode === 'hunt' && mode !== 'hunt' && b.quarry) {
+    const st = (b.areaStats[b.quarry] ??= { xp: 0, ms: 0, deaths: 0, lastDeathAt: -Infinity });
+    st.xp += b.huntXp;
+    st.ms += w.now - b.huntStartedAt;
+  }
+  if (mode === 'hunt') {
+    b.huntXp = 0;
+    b.huntStartedAt = w.now;
+  }
+  if (mode !== 'pk') b.pkTargetId = null;
   h.brain.mode = mode;
   h.brain.modeUntil = durationMs ? w.now + durationMs : 0;
   h.brain.stepStartedAt = w.now;
@@ -187,9 +265,16 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
       b.deadAt = w.now;
       b.mood = Math.max(-1, b.mood - 0.6);
     } else if (w.now - b.deadAt > 5000) {
+      if (b.quarry) {
+        const st = (b.areaStats[b.quarry] ??= { xp: 0, ms: 0, deaths: 0, lastDeathAt: -Infinity });
+        st.deaths++;
+        st.lastDeathAt = w.now;
+      }
       respawnPlayer(w);
       // quem morre volta para a vila com o orgulho ferido
-      heroSay(w, h, 'death', { monster: b.lastHitBy ?? 'aquele monstro' }, 0);
+      if (b.pkLostTo) heroSay(w, h, 'pkLose', { player: b.pkLostTo }, 0);
+      else heroSay(w, h, 'death', { monster: b.lastHitBy ?? 'aquele monstro' }, 0);
+      b.pkLostTo = null;
       restoreMainWeapon(w, h);
       setMode(w, h, 'decide');
     }
@@ -204,6 +289,10 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     b.lastPos.at = w.now;
   }
   survive(w, h);
+  handleInvites(w, h);
+  if (b.mode !== 'retreat' && thinkPvp(w, h)) return;
+  if (b.mode !== 'pk' && b.mode !== 'retreat' && b.mode !== 'town' && followingHuman(w, h) && b.mode !== 'follow') setMode(w, h, 'follow');
+  whims(w, h);
   switch (b.mode) {
     case 'decide':
       decide(w, h);
@@ -225,6 +314,12 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
       break;
     case 'dead':
       setMode(w, h, 'decide');
+      break;
+    case 'follow':
+      follow(w, h);
+      break;
+    case 'pk':
+      pk(w, h);
       break;
   }
 }
@@ -292,24 +387,81 @@ function decide(w: World, h: HeroEntity): void {
     return setMode(w, h, 'social', 8000);
   }
   if (needsTown(w, h)) return planTown(w, h);
+  if (followingHuman(w, h)) return setMode(w, h, 'follow');
+  const human = w.human;
+  const humanNear = !human.dead && chebyshev(human, h) <= 10;
   const skillLag = c.skills.sword.level < 10 + c.level * 1.4 || c.skills.shielding.level < 10 + c.level * 1.1;
-  if (skillLag && w.rng.chance(t.discipline * 0.35) && (countItem(c.inventory, TRAINING_WEAPON) > 0 || c.gold >= 60)) {
-    if (countItem(c.inventory, TRAINING_WEAPON) === 0) return planTown(w, h, [{ kind: 'shop', npcId: npcByShop(w, 'equipment')?.id ?? '', trainingWeapon: true }], 'train');
-    return startTraining(w, h);
+  const canTrain = countItem(c.inventory, TRAINING_WEAPON) > 0 || c.gold >= 60;
+  const untried = Object.keys(HUNT_LEVEL).some((id) => !h.brain.areaStats[id] && HUNT_LEVEL[id]! <= c.level + 1);
+  // cada opção recebe uma nota; a escolha é sorteada com peso (quase sempre a melhor, às vezes improvisa)
+  const options: [string, number][] = [
+    ['hunt', 0.62 + h.brain.mood * 0.1],
+    ['explore', untried ? 0.12 + t.bravery * 0.15 : 0],
+    ['train', skillLag && canTrain ? t.discipline * 0.45 : 0],
+    ['social', t.sociability * 0.18 + (humanNear ? 0.12 : 0)],
+    ['invite', canInviteHuman(w, h) ? t.sociability * 0.5 + affinityOf(h, human.id) * 0.4 : 0],
+  ];
+  const total = options.reduce((s2, [, v]) => s2 + Math.max(0, v) ** 2, 0);
+  let roll = w.rng.next() * total;
+  let pick = 'hunt';
+  for (const [k, v] of options) {
+    roll -= Math.max(0, v) ** 2;
+    if (roll <= 0) {
+      pick = k;
+      break;
+    }
   }
-  if (w.rng.chance(t.sociability * 0.12)) return setMode(w, h, 'social', 20000 + w.rng.next() * 25000);
-  startHunt(w, h);
+  switch (pick) {
+    case 'train':
+      if (countItem(c.inventory, TRAINING_WEAPON) === 0) return planTown(w, h, [{ kind: 'shop', npcId: npcByShop(w, 'equipment')?.id ?? '', trainingWeapon: true }], 'train');
+      return startTraining(w, h);
+    case 'social':
+      return setMode(w, h, 'social', 20000 + w.rng.next() * 25000);
+    case 'invite':
+      inviteHuman(w, h);
+      return startHunt(w, h);
+    case 'explore': {
+      const q = chooseQuarry(w, h, true);
+      heroSay(w, h, 'explore', { monster: w.data.monsters[q]?.name ?? q }, 60000);
+      return startHunt(w, h, q);
+    }
+    default:
+      startHunt(w, h);
+  }
 }
 
 // ------------------------------------------------------------------ caça
-function chooseQuarry(w: World, h: HeroEntity): string {
+/** XP por minuto esperada numa caça: o que aprendeu (se já caçou lá) ou uma estimativa pelo monstro. */
+function expectedRate(w: World, h: HeroEntity, id: string): number {
+  const st = h.brain.areaStats[id];
+  const def = w.data.monsters[id];
+  const prior = (def?.experience ?? 10) * 2.2;
+  if (!st || st.ms < 90000) return prior;
+  const learned = (st.xp / st.ms) * 60000;
+  return learned * 0.8 + prior * 0.2;
+}
+
+function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
   const t = h.hero.temperament;
   const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood;
-  const options = Object.entries(HUNT_LEVEL).filter(([id, min]) => min <= lvl && w.map.spawns.some((s) => s.monsterId === id));
-  options.sort((a, b) => b[1] - a[1]);
-  // às vezes varia entre as duas melhores opções, como um jogador faria
-  const pick = options.length > 1 && w.rng.chance(0.3) ? options[1]! : options[0];
-  return pick?.[0] ?? 'slime';
+  const options = Object.entries(HUNT_LEVEL).filter(([id, min]) => min <= lvl + 1 && w.map.spawns.some((s) => s.monsterId === id));
+  if (!options.length) return 'slime';
+  const scored = options.map(([id, min]) => {
+    const st = h.brain.areaStats[id];
+    let score = expectedRate(w, h, id);
+    if (min > lvl) score *= 0.5; // um pouco acima do nível: arriscado
+    if (st && w.now - st.lastDeathAt < 15 * 60000) score *= 0.25; // morreu lá há pouco
+    if (explore && !st) score *= 3; // vontade de conhecer uma área nova
+    return { id, score: Math.max(0.1, score) };
+  });
+  // escolha ponderada: geralmente a melhor, mas às vezes improvisa
+  const total = scored.reduce((s2, o) => s2 + o.score * o.score, 0);
+  let roll = w.rng.next() * total;
+  for (const o of scored) {
+    roll -= o.score * o.score;
+    if (roll <= 0) return o.id;
+  }
+  return scored[0]!.id;
 }
 
 function startHunt(w: World, h: HeroEntity, quarry = chooseQuarry(w, h)): void {
@@ -323,9 +475,9 @@ function startHunt(w: World, h: HeroEntity, quarry = chooseQuarry(w, h)): void {
   heroSay(w, h, 'hunt', { monster: def?.name ?? quarry, area: region?.name ?? 'a caça' }, 60000);
 }
 
-function hunt(w: World, h: HeroEntity, training: boolean): void {
+function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): void {
   const b = h.brain;
-  if (!training && (needsTown(w, h) || (b.modeUntil && w.now > b.modeUntil))) {
+  if (!training && b.mode === 'hunt' && (needsTown(w, h) || (b.modeUntil && w.now > b.modeUntil))) {
     heroSay(w, h, 'town', {}, 30000);
     return planTown(w, h);
   }
@@ -334,7 +486,7 @@ function hunt(w: World, h: HeroEntity, training: boolean): void {
   if (target) {
     // golpes especiais quando vale a pena
     const adjacent = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
-    if (!training) {
+    if (!training || assisting) {
       if (adjacent.length >= 2) tryCast(w, h, 'steel_whirlwind');
       if (chebyshev(target, h) <= 1 && hpPct(h) > 0.5) tryCast(w, h, 'brutal_strike');
     }
@@ -359,6 +511,7 @@ function hunt(w: World, h: HeroEntity, training: boolean): void {
     } else if (!isMoving(h, w.now) && !h.path?.length) goTo(w, h, bag.x, bag.y);
     return;
   }
+  if (assisting) return;
   // próximo alvo: quem está batendo nele primeiro, depois a presa da área
   const quarry = training ? 'slime' : b.quarry;
   const near = [...w.monsters.values()]
@@ -385,12 +538,13 @@ function hunt(w: World, h: HeroEntity, training: boolean): void {
 /** Ajuda o jogador humano quando um monstro o ataca por perto (comportamento de bom companheiro). */
 function helpHuman(w: World, h: HeroEntity): void {
   const human = w.human;
-  if (human.dead || chebyshev(human, h) > 8) return;
+  if (human.dead || chebyshev(human, h) > 8 || affinityOf(h, human.id) < -0.2) return;
   const threat = [...w.monsters.values()].find((m) => m.alive && m.targetId === human.id && chebyshev(m, h) <= 7);
   if (!threat || h.targetId === threat.id) return;
   if (!currentTarget(w) || w.rng.chance(h.hero.temperament.bravery * 0.5)) {
     setTarget(w, threat.id);
     heroSay(w, h, 'help', { player: human.character.name }, 30000);
+    changeAffinity(h, human.id, 0.02);
   }
 }
 
@@ -591,8 +745,31 @@ function social(w: World, h: HeroEntity): void {
 }
 
 // ------------------------------------------------------------------ reações a eventos do próprio herói
-export function heroOnEvent(w: World, h: HeroEntity, type: 'levelUp' | 'skillUp' | 'damage' | 'kill', payload: { level?: number; skill?: string; sourceName?: string }): void {
+export function heroOnEvent(
+  w: World,
+  h: HeroEntity,
+  type: 'levelUp' | 'skillUp' | 'damage' | 'kill' | 'xp' | 'killedBy',
+  payload: { level?: number; skill?: string; sourceName?: string; sourceId?: string; amount?: number; byPlayer?: boolean },
+): void {
   const b = h.brain;
+  if (type === 'xp') {
+    b.huntXp += payload.amount ?? 0;
+    return;
+  }
+  if (type === 'killedBy') {
+    if (payload.byPlayer && payload.sourceId) {
+      // morto por um jogador: vira rival e quer revanche
+      changeAffinity(h, payload.sourceId, -0.6);
+      b.grudge = { id: payload.sourceId, until: w.now + 10 * 60000 };
+      b.lastHitBy = payload.sourceName ?? b.lastHitBy;
+      b.pkLostTo = payload.sourceName ?? null;
+    }
+    return;
+  }
+  if (type === 'damage' && payload.sourceId && actorById(w, payload.sourceId)) {
+    // apanhou de um jogador: a relação piora (e ele reage em thinkPvp)
+    changeAffinity(h, payload.sourceId, -0.08);
+  }
   if (type === 'levelUp') {
     b.mood = Math.min(1, b.mood + 0.5);
     heroSay(w, h, 'levelUp', { level: payload.level ?? h.character.level }, 0);
@@ -604,3 +781,222 @@ export function heroOnEvent(w: World, h: HeroEntity, type: 'levelUp' | 'skillUp'
   }
 }
 
+
+// ------------------------------------------------------------------ grupo
+function partyMembers(w: World, h: HeroEntity): string[] {
+  return partyOf(w, h.id)?.members ?? [];
+}
+
+/** Está num grupo em que o humano é o líder: acompanha o líder em vez de seguir os próprios planos. */
+function followingHuman(w: World, h: HeroEntity): boolean {
+  const p = partyOf(w, h.id);
+  return !!p && p.leaderId === w.human.id && !w.human.dead;
+}
+
+function canInviteHuman(w: World, h: HeroEntity): boolean {
+  const human = w.human;
+  return (
+    !human.dead &&
+    w.now >= h.brain.nextInviteAt &&
+    chebyshev(human, h) <= 10 &&
+    !partyOf(w, human.id) &&
+    !partyOf(w, h.id) &&
+    affinityOf(h, human.id) > 0.05 &&
+    Math.abs(human.character.level - h.character.level) <= 8 &&
+    !pendingInviteFor(w, human.id)
+  );
+}
+
+function inviteHuman(w: World, h: HeroEntity): void {
+  h.brain.nextInviteAt = w.now + 5 * 60000;
+  if (invite(w, h.id, w.human.id)) return;
+  heroSay(w, h, 'invite', { player: w.human.character.name }, 0);
+}
+
+/** Responde a convites de grupo depois de "pensar" um pouco, conforme a relação e o temperamento. */
+function handleInvites(w: World, h: HeroEntity): void {
+  const inv = pendingInviteFor(w, h.id);
+  if (!inv) {
+    h.brain.inviteSeenAt = 0;
+    return;
+  }
+  if (!h.brain.inviteSeenAt) {
+    h.brain.inviteSeenAt = w.now;
+    return;
+  }
+  if (w.now - h.brain.inviteSeenAt < 1500 + w.rng.next() * 1500) return;
+  h.brain.inviteSeenAt = 0;
+  const t = h.hero.temperament;
+  const from = actorById(w, inv.fromId);
+  const aff = affinityOf(h, inv.fromId);
+  const grudge = h.brain.grudge?.id === inv.fromId && w.now < h.brain.grudge.until;
+  const levelGap = from ? Math.abs(from.character.level - h.character.level) : 99;
+  const chance = grudge || h.brain.pkTargetId === inv.fromId ? 0 : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
+  if (w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
+    acceptInvite(w, h.id, inv.fromId);
+    changeAffinity(h, inv.fromId, 0.1);
+    heroSay(w, h, 'inviteAccept', { player: from?.character.name ?? '' }, 0);
+    setMode(w, h, followingHuman(w, h) ? 'follow' : 'decide');
+  } else {
+    declineInvite(w, h.id);
+    heroSay(w, h, 'inviteDecline', { player: from?.character.name ?? '' }, 0);
+  }
+}
+
+/** Membro do grupo com o humano como líder: anda junto, ajuda nas lutas, pega loot e dá poção se ele precisar. */
+function follow(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const leader = w.human;
+  if (!followingHuman(w, h)) return setMode(w, h, 'decide');
+  if (needsTown(w, h) && isPz(w.map, leader.x, leader.y)) return planTown(w, h, undefined, 'follow');
+  // líder parado há muito tempo (fora da vila): segue a vida, mas avisa
+  if (leader.x !== b.leaderLastPos.x || leader.y !== b.leaderLastPos.y) {
+    b.leaderLastPos = { x: leader.x, y: leader.y };
+    b.leaderIdleSince = w.now;
+  } else if (w.now - b.leaderIdleSince > 4 * 60000 && !isPz(w.map, leader.x, leader.y)) {
+    heroSay(w, h, 'partyLeave', { player: leader.character.name }, 0);
+    leaveParty(w, h.id);
+    return setMode(w, h, 'decide');
+  }
+  giftPotion(w, h);
+  heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
+  // luta: o alvo do líder, quem ataca alguém do grupo, ou o monstro mais perto do líder
+  if (currentTarget(w)) return hunt(w, h, true, true);
+  const members = partyMembers(w, h);
+  const leaderTarget = leader.targetId ? w.monsters.get(leader.targetId) : undefined;
+  const threat =
+    (leaderTarget?.alive ? leaderTarget : undefined) ??
+    [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8) ??
+    [...w.monsters.values()].filter((m) => m.alive && !isPz(w.map, m.x, m.y) && chebyshev(m, leader) <= 5 && hasLineOfSight(w, h, m)).sort((a, c) => chebyshev(a, leader) - chebyshev(c, leader))[0];
+  if (threat && !isPz(w.map, h.x, h.y) && chebyshev(threat, leader) <= 8) {
+    setTarget(w, threat.id);
+    return;
+  }
+  // loot por perto (sem se afastar do líder)
+  const bag = [...w.lootBags.values()].find((l) => chebyshev(l, h) <= 4 && chebyshev(l, leader) <= 6);
+  if (bag && freeSlots(h.character.inventory) > 0) return hunt(w, h, true, true);
+  if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1));
+}
+
+/** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */
+function giftPotion(w: World, h: HeroEntity): void {
+  const human = w.human;
+  if (w.now < h.brain.nextGiftAt || human.dead || chebyshev(human, h) > 3 || !sameParty(w, h.id, human.id)) return;
+  if (human.character.health / human.stats.maxHealth > 0.35 || potionsOf(w, h) < 3) return;
+  const idx = h.character.inventory.findIndex((st) => st?.itemId === 'potion_health');
+  if (idx < 0) return;
+  if (addItem(w.data, human.character.inventory, 'potion_health', 1) !== 1) return;
+  removeAt(h.character.inventory, idx, 1);
+  h.brain.nextGiftAt = w.now + 45000;
+  changeAffinity(h, human.id, 0.05);
+  heroSay(w, h, 'gift', { player: human.character.name }, 0);
+  human.scope.events.emit('message', { text: `${h.character.name} te deu uma Poção de Vida.`, kind: 'loot' });
+  human.scope.events.emit('itemsChanged', {});
+}
+
+// ------------------------------------------------------------------ PK: defesa, vingança e oportunidade
+function power(a: { character: { level: number; health: number }; stats: { maxHealth: number; armor: number; weapon: { attack: number; damage?: readonly [number, number] } } }): number {
+  const hp = a.character.health / Math.max(1, a.stats.maxHealth);
+  const atk = a.stats.weapon.damage ? (a.stats.weapon.damage[0] + a.stats.weapon.damage[1]) / 2 : a.stats.weapon.attack;
+  return a.character.level * 12 + a.stats.maxHealth * 0.25 * (0.4 + hp * 0.6) + a.stats.armor * 2 + atk * 3;
+}
+
+/** Reage a ataques e, com o PK ligado, decide se vale atacar alguém. Retorna true se tomou conta do turno. */
+function thinkPvp(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  const human = w.human;
+  if (b.mode === 'pk') return false;
+  if (!w.social.pvp || human.dead || h.dead) return false;
+  if (sameParty(w, h.id, human.id) || isPz(w.map, h.x, h.y) || isPz(w.map, human.x, human.y)) return false;
+  const dist = chebyshev(human, h);
+  if (dist > 9) return false;
+  const ratio = power(h) / Math.max(1, power(human));
+  // 1) legítima defesa: quem bate leva o troco (ou ele foge se estiver perdendo feio)
+  if (attackedRecently(w, human.id, h.id, 8000)) {
+    if (hpPct(h) > 0.35 && ratio > 0.7) return startPk(w, h, human.id, 'revenge');
+    heroSay(w, h, 'flee', { player: human.character.name }, 20000);
+    setMode(w, h, 'retreat');
+    return true;
+  }
+  if (w.now < b.nextPkThinkAt) return false;
+  b.nextPkThinkAt = w.now + 6000 + w.rng.next() * 6000;
+  if (!hasLineOfSight(w, h, human)) return false;
+  const t = h.hero.temperament;
+  // 2) vingança de quem o matou
+  if (b.grudge && b.grudge.id === human.id && w.now < b.grudge.until && ratio > 0.85 && hpPct(h) > 0.6) return startPk(w, h, human.id, 'revenge');
+  // 3) oportunidade: só vale se houver o que ganhar ou um motivo (caveira, rivalidade)
+  const gold = human.character.gold;
+  const skull = hasSkull(w, human.id);
+  const aff = affinityOf(h, human.id);
+  if (gold < 25 && !skull && aff > -0.3) {
+    if (w.rng.chance(0.15)) heroSay(w, h, 'pkSpare', { player: human.character.name }, 300000);
+    return false;
+  }
+  const lootScore = Math.min(1, gold / (150 + h.character.level * 40));
+  const humanHp = human.character.health / Math.max(1, human.stats.maxHealth);
+  const desire =
+    t.greed * lootScore * 1.2 +
+    t.bravery * Math.max(0, Math.min(1, ratio - 1)) +
+    (humanHp < 0.4 ? 0.3 : 0) +
+    (skull ? 0.45 : 0) -
+    aff * 0.9 +
+    (b.mood < 0 ? 0.15 : 0) -
+    t.caution * 0.3;
+  if (desire > 0.75 && ratio > 0.9 && w.rng.chance(0.55)) return startPk(w, h, human.id, 'greed');
+  return false;
+}
+
+function startPk(w: World, h: HeroEntity, targetId: string, why: 'greed' | 'revenge'): boolean {
+  const victim = actorById(w, targetId);
+  if (!victim) return false;
+  setMode(w, h, 'pk');
+  h.brain.pkTargetId = targetId;
+  setTarget(w, targetId);
+  if (h.targetId !== targetId) {
+    setMode(w, h, 'decide');
+    return false;
+  }
+  changeAffinity(h, targetId, -0.2);
+  heroSay(w, h, why === 'revenge' ? 'revenge' : 'pkThreat', { player: victim.character.name, gold: victim.character.gold }, 0);
+  return true;
+}
+
+function pk(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const victim = actorById(w, b.pkTargetId);
+  if (!victim || !w.social.pvp || sameParty(w, h.id, victim.id)) return setMode(w, h, 'decide');
+  if (victim.dead) {
+    heroSay(w, h, 'pkWin', { player: victim.character.name }, 0);
+    h.brain.mood = Math.min(1, h.brain.mood + 0.3);
+    if (b.grudge?.id === victim.id) b.grudge = null;
+    // volta a caçar (e pega o que caiu, se estiver perto)
+    return startHunt(w, h, b.quarry ?? chooseQuarry(w, h));
+  }
+  if (isPz(w.map, victim.x, victim.y) || chebyshev(victim, h) > 14) {
+    heroSay(w, h, 'pkEscaped', { player: victim.character.name }, 60000);
+    return setMode(w, h, 'decide');
+  }
+  if (hpPct(h) < 0.3 && potionsOf(w, h) === 0) {
+    heroSay(w, h, 'flee', { player: victim.character.name }, 0);
+    return setMode(w, h, 'retreat');
+  }
+  if (h.targetId !== victim.id) setTarget(w, victim.id);
+  if (chebyshev(victim, h) <= 1 && hpPct(h) > 0.4) tryCast(w, h, 'brutal_strike');
+}
+
+// ------------------------------------------------------------------ improviso: comentários e pequenas vontades
+function whims(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  if (w.now < b.nextWhimAt) return;
+  b.nextWhimAt = w.now + 20000 + w.rng.next() * 40000;
+  const human = w.human;
+  if (!human.dead && chebyshev(human, h) <= 6 && b.mode !== 'pk') {
+    const c = human.character;
+    heroSay(w, h, 'comment', { player: c.name, plevel: c.level, weapon: w.data.items[c.equipment.mainHand?.itemId ?? '']?.name ?? 'as mãos' }, 90000);
+  }
+  // às vezes muda de ideia no meio da caça (outra área com mais monstros)
+  if (b.mode === 'hunt' && w.rng.chance(0.08)) {
+    const q = chooseQuarry(w, h, w.rng.chance(0.4));
+    if (q !== b.quarry) startHunt(w, h, q);
+  }
+}

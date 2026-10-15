@@ -8,6 +8,7 @@ import type { GameSession } from '../../integration/game-ui-bridge/GameSession';
 import type { SfxName } from '../audio/AudioService';
 import type { EntityViews } from './EntityViews';
 import { DEPTH, ySort } from './depth';
+import { worldText } from './text';
 
 const ELEMENT_COLOR: Record<Element, number> = {
   physical: 0xe04a44,
@@ -99,7 +100,8 @@ export class EffectsView {
 
   // ------------------------------------------------------------------ utilidades
   floatText(text: string, x: number, y: number, color: number, duration = 800, delay = 0, size = 8): void {
-    const t = this.scene.add.bitmapText(Math.round(x), Math.round(y), 'pixel', text.toUpperCase(), size).setOrigin(0.5, 1).setTint(color).setDepth(DEPTH.text);
+    const t = worldText(this.scene, Math.round(x), Math.round(y), text, { size: Math.round(size * 1.6), color: `#${color.toString(16).padStart(6, '0')}` });
+    t.setOrigin(0.5, 1).setDepth(DEPTH.text);
     t.setAlpha(delay ? 0 : 1);
     this.scene.tweens.add({ targets: t, y: y - 14, delay, duration, ease: 'Cubic.Out', onStart: () => t.setAlpha(1) });
     this.scene.tweens.add({ targets: t, alpha: 0, delay: delay + duration * 0.6, duration: duration * 0.4, onComplete: () => t.destroy() });
@@ -246,14 +248,15 @@ export class EffectsView {
     const v = this.views.get(entityId);
     if (!v) return;
     this.bubbles.get(entityId)?.box.destroy();
-    const t = this.scene.add.bitmapText(0, 0, 'pixel', text.toUpperCase(), 8).setMaxWidth(104).setCenterAlign().setTint(0xfbf8ef);
-    const bw = Math.ceil(t.width);
-    const bh = Math.ceil(t.height);
-    // texto claro sobre fundo escuro (a fonte já tem contorno), centralizado acima da cabeça
-    t.setPosition(-Math.round(bw / 2), -bh - 4);
+    const t = worldText(this.scene, 0, 0, text, { size: 12, color: '#fbf8ef', wrap: 170, weight: 700, stroke: null });
+    t.setOrigin(0.5, 1);
+    const bw = Math.ceil(t.displayWidth);
+    const bh = Math.ceil(t.displayHeight);
+    // texto claro sobre fundo escuro, centralizado acima da cabeça
+    t.setPosition(0, -4);
     const g = this.scene.add.graphics();
-    g.fillStyle(0x120d18, 0.78).fillRoundedRect(-bw / 2 - 4, -bh - 7, bw + 8, bh + 6, 3);
-    g.fillTriangle(-3, -1, 3, -1, 0, 3);
+    g.fillStyle(0x120d18, 0.82).fillRoundedRect(-bw / 2 - 3, -bh - 6, bw + 6, bh + 4, 2);
+    g.fillTriangle(-2, -2, 2, -2, 0, 1);
     const box = this.scene.add.container(0, 0, [g, t]).setDepth(DEPTH.text);
     this.bubbles.set(entityId, { box, until: this.session.sim.now + 2600 + text.length * 45, halfWidth: bw / 2 + 5 });
   }
@@ -333,7 +336,7 @@ export class EffectsView {
       // acima do nome e sempre dentro da tela
       const cam = this.scene.cameras.main.worldView;
       const x = Phaser.Math.Clamp(v.container.x, cam.x + b.halfWidth, cam.right - b.halfWidth);
-      b.box.setPosition(Math.round(x), v.container.y - v.height - 8);
+      b.box.setPosition(Math.round(x), v.container.y - v.height - 2);
     }
   }
 

@@ -949,6 +949,66 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       for (const x of [5, 8, 11]) c.set(x, 7, P.cloth[2]!);
     },
   ],
+  [
+    'skull',
+    (c) => {
+      c.disc(8, 7, 5.6, (x, y, nx, ny) => (ny < -0.3 ? P.bone[3]! : P.bone[2]!));
+      c.rect(5, 11, 6, 3, P.bone[2]!);
+      c.rect(5, 6, 2, 3, P.black);
+      c.rect(9, 6, 2, 3, P.black);
+      c.set(8, 9, P.black);
+      for (const x of [6, 8, 10]) c.set(x, 13, P.black);
+      c.set(6, 3, P.white);
+    },
+  ],
+  [
+    'follow',
+    (c) => {
+      // pegadas indo para a direita
+      for (const [x, y] of [[2, 10], [6, 6], [10, 10], [13, 5]] as const) {
+        c.ellipse(x + 1, y + 1, 1.6, 2.2, P.cloth[4]!);
+        c.set(x + 1, y - 2, P.cloth[3]!);
+      }
+      c.hline(9, 14, 2, P.gold[4]!);
+      c.set(13, 1, P.gold[4]!);
+      c.set(13, 3, P.gold[4]!);
+    },
+  ],
+  [
+    'stand',
+    (c) => {
+      // duas botas paradas lado a lado + linha do chão
+      c.rect(3, 4, 4, 8, P.leather[3]!);
+      c.rect(9, 4, 4, 8, P.leather[3]!);
+      c.rect(1, 10, 6, 3, P.leather[2]!);
+      c.rect(9, 10, 6, 3, P.leather[2]!);
+      c.hline(0, 15, 14, P.gold[3]!);
+      c.vline(4, 5, 9, P.leather[4]!);
+      c.vline(10, 5, 9, P.leather[4]!);
+    },
+  ],
+  [
+    'party',
+    (c) => {
+      c.disc(5, 5, 2.6, P.skin[3]!);
+      c.disc(11, 5, 2.6, P.skin[3]!);
+      c.ellipse(5, 12, 4, 3.2, P.blue[3]!);
+      c.ellipse(11, 12, 4, 3.2, P.green[3]!);
+      c.set(4, 4, P.white);
+      c.set(10, 4, P.white);
+    },
+  ],
+  [
+    'crown',
+    (c) => {
+      c.rect(2, 8, 12, 5, P.gold[3]!);
+      for (const [x, h] of [[2, 4], [8, 6], [13, 4]] as const) for (let i = 0; i < h; i++) c.set(x + (x === 13 ? 0 : 0), 8 - i, P.gold[4]!);
+      c.hline(3, 13, 12, P.gold[2]!);
+      c.set(5, 10, P.red[3]!);
+      c.set(8, 10, P.blue[4]!);
+      c.set(11, 10, P.red[3]!);
+    },
+  ],
 ];
 for (const [name, draw] of UI) icon(`ui_${name}`, draw);
 

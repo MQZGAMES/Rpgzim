@@ -56,6 +56,23 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   todos os personagens. O progresso dele é salvo no próprio slot (e sincronizado com o GitHub, se conectado).
 - Custo: ~2–5 s de CPU a cada 30–90 min de jogo simulado (`tests/tools/hero-life.test.ts` imprime o "diário" dele).
 
+## Grupo, PK e modo de ataque
+- **Modo de ataque** (botão discreto abaixo do menu): *Seguir* persegue o alvo até alcançá-lo; *Parado* ataca só o
+  que estiver ao alcance, sem sair do lugar (salvo no personagem).
+- **Grupo**: toque num personagem (ex.: Boladex) → *Convidar p/ grupo*. Quem convida vira líder; o líder pode passar a
+  liderança ou remover membros; qualquer um pode sair. A **XP é dividida igualmente** entre os membros vivos a até 20
+  tiles. O painel do grupo mostra vida, nível e o líder (coroa); no mapa, o nome do colega fica azul e o líder tem ★.
+- **PK** (botão de caveira): ligado, personagens podem se atacar fora das áreas protegidas (nunca membros do grupo).
+  Quem ataca alguém sem caveira fica com caveira (5 min; 15 min se matar). Quem morre no PK deixa parte do ouro
+  e às vezes um item da mochila no chão.
+- **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
+  oportunidade, pesa ouro carregado, força relativa, vida do alvo, caveira, relação e temperamento. Sem nada a
+  ganhar e sem motivo, não ataca (e às vezes comenta isso).
+- **Mais esperto**: aprende quais caças rendem mais XP por minuto, evita onde morreu há pouco, explora áreas novas,
+  escolhe atividades com um pouco de acaso (improvisa), comenta o que vê, convida você para o grupo, aceita ou recusa
+  convites conforme a relação, acompanha você quando você é o líder e te dá poção quando você está mal.
+- Nomes e barras de vida ficam sempre visíveis (na mesma fonte da interface, nítida em qualquer zoom).
+
 ## Conta GitHub (sincronizar saves entre aparelhos)
 Opcional, na tela inicial: **Entrar com GitHub**. Cada jogador usa a **própria conta**: os saves ficam em
 `saves/<id>.json` num repositório **privado** dele (padrão `rpgzim-saves`), acessado direto do navegador pela API
@@ -78,8 +95,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **129 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, simulação integrada).
-- Playwright: **7 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex; mobile: joystick, HUD na tela,
+- Vitest: **135 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, simulação integrada).
+- Playwright: **8 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar).
 - Desempenho medido (Chrome headless, Intel Iris Xe): **60 FPS** (p95 ≈ 16,9 ms) em templo, praça e combate,
   celular 390×844@3x e desktop 1440×900. Em renderização por software (SwiftShader) ~15–19 FPS.

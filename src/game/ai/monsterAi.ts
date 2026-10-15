@@ -8,7 +8,7 @@ import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, asActor, nextId } from '../simulation/World';
 import { canEnter, greedyStepToward, isMoving, pathTo, placeOccupant, settle, stepAway, tryStep } from '../movement/movement';
-import { damagePlayer, hasLineOfSight } from '../combat/combat';
+import { damagePlayer, hasLineOfSight, monsterSource } from '../combat/combat';
 
 export function createMonster(w: World, monsterId: string, spawnId: string, x: number, y: number): MonsterEntity {
   const def = w.data.monsters[monsterId]!;
@@ -153,7 +153,7 @@ export function updateMonster(w: World, m: MonsterEntity): void {
           w.events.emit('attack', { sourceId: m.id, targetId: p.id, kind: a.kind === 'ranged' ? 'distance' : 'melee', element: a.element, projectile: a.projectile, from: { x: m.x, y: m.y }, to: { x: p.x, y: p.y } });
           const target = p;
           // o dano é resolvido no contexto do alvo (mensagens/janelas dele, não do jogador humano)
-          asActor(w, target, () => damagePlayer(w, w.rng.int(a.min, a.max), a.element, m));
+          asActor(w, target, () => damagePlayer(w, w.rng.int(a.min, a.max), a.element, monsterSource(m)));
         }
         // atiradores recuam se o jogador encostar
         if (m.def.behavior === 'skirmisher' && dist <= 1 && !isMoving(m, w.now)) stepAway(w, m, p.x, p.y, speedOf(w, m), true);

@@ -1,4 +1,5 @@
 // Carrega spritesheets, atlases e a fonte bitmap; cria as animações compartilhadas.
+import { loadWorldFont } from '../rendering/text';
 import Phaser from 'phaser';
 import { ASSETS, SHEETS } from '../../assets';
 import { PROPS } from '../../data/props';
@@ -45,6 +46,7 @@ export class BootScene extends Phaser.Scene {
     for (const p of Object.values(PROPS)) {
       if (p.frames.length > 1) a.create({ key: `prop:${p.id}`, frames: p.frames.map((f) => ({ key: 'objects', frame: f })), frameRate: 1000 / (p.frameMs ?? 200), repeat: -1 });
     }
-    this.scene.start('world');
+    // a fonte dos textos do mundo precisa estar carregada antes do primeiro nome/dano
+    void loadWorldFont().then(() => this.scene.start('world'));
   }
 }

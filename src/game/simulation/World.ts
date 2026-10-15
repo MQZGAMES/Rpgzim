@@ -6,6 +6,7 @@ import type { GameEventMap, MessageKind } from '../../domain/events/gameEvents';
 import type { Rng } from '../../domain/value-objects/rng';
 import type { LootGenerator } from '../../domain/rules/loot';
 import type { GameMap } from '../world/GameMap';
+import type { SocialState } from '../social/social';
 import type { Corpse, HeroEntity, LootContainer, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 
 export interface UiState {
@@ -40,6 +41,8 @@ export interface World {
   readonly human: PlayerEntity;
   /** Heróis com vida própria (mesmas regras do jogador). */
   heroes: Map<string, HeroEntity>;
+  /** Grupo, convites, permissão de PK e caveiras. */
+  social: SocialState;
   monsters: Map<string, MonsterEntity>;
   npcs: Map<string, NpcEntity>;
   lootBags: Map<string, LootContainer>;

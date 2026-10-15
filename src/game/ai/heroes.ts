@@ -22,7 +22,11 @@ const FORWARD = ['damage', 'heal', 'attack', 'missed', 'spellCast', 'entityDied'
 function heroBus(w: World, h: HeroEntity, main: EventBus<GameEventMap>): EventBus<GameEventMap> {
   const bus = new EventBus<GameEventMap>();
   for (const type of FORWARD) bus.on(type, (e) => main.emit(type, e as never));
-  bus.on('xpGained', (e) => main.emit('actorFx', { entityId: h.id, text: `+${e.amount} XP`, tone: 'xp' }));
+  bus.on('xpGained', (e) => {
+    main.emit('actorFx', { entityId: h.id, text: `+${e.amount} XP`, tone: 'xp' });
+    heroOnEvent(w, h, 'xp', { amount: e.amount });
+  });
+  bus.on('playerDied', (e) => heroOnEvent(w, h, 'killedBy', { sourceId: e.killerId, sourceName: e.killerName, byPlayer: e.byPlayer }));
   bus.on('levelUp', (e) => {
     main.emit('actorFx', { entityId: h.id, text: `NIVEL ${e.level}!`, tone: 'level' });
     asActor(w, h, () => heroOnEvent(w, h, 'levelUp', { level: e.level }));
@@ -32,7 +36,7 @@ function heroBus(w: World, h: HeroEntity, main: EventBus<GameEventMap>): EventBu
     asActor(w, h, () => heroOnEvent(w, h, 'skillUp', { skill: SKILL_LABEL[e.skill] }));
   });
   bus.on('damage', (e) => {
-    if (e.targetId === h.id && e.sourceId) heroOnEvent(w, h, 'damage', { sourceName: w.monsters.get(e.sourceId)?.def.name });
+    if (e.targetId === h.id && e.sourceId) heroOnEvent(w, h, 'damage', { sourceId: e.sourceId, sourceName: w.monsters.get(e.sourceId)?.def.name ?? w.heroes.get(e.sourceId)?.character.name ?? (e.sourceId === w.human.id ? w.human.character.name : undefined) });
   });
   bus.on('entityDied', (e) => e.kind === 'monster' && heroOnEvent(w, h, 'kill', {}));
   bus.on('playerRespawned', () => main.emit('actorRespawned', { entityId: h.id }));

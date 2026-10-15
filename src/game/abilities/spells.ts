@@ -8,8 +8,9 @@ import { castFailMessage, validateCast } from '../../domain/rules/spells';
 import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { warnThrottled } from '../simulation/World';
-import { aggro, currentTarget, damageMonster, hasLineOfSight, targetNearest } from '../combat/combat';
+import { asActor, warnThrottled } from '../simulation/World';
+import { actorSource, aggro, currentActorTarget, currentTarget, damageMonster, damagePlayer, hasLineOfSight, targetNearest } from '../combat/combat';
+import { canAttackActor, registerAggression } from '../social/social';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function spellCooldownRemaining(w: World, spellId: string): number {
@@ -20,7 +21,7 @@ export function spellCooldownRemaining(w: World, spellId: string): number {
 export function castCheck(w: World, spell: SpellDef) {
   const p = w.player;
   const c = p.character;
-  const t = currentTarget(w);
+  const t = currentTarget(w) ?? currentActorTarget(w);
   const ammo = c.equipment.ammo;
   return validateCast(spell, {
     vocation: c.vocation,
@@ -31,7 +32,7 @@ export function castCheck(w: World, spell: SpellDef) {
     cooldownRemaining: remaining(p.cooldowns, `spell:${spell.id}`, w.now),
     globalCooldownRemaining: remaining(p.cooldowns, GLOBAL_SPELL, w.now),
     inProtectionZone: isPz(w.map, p.x, p.y),
-    target: t ? { exists: true, alive: t.alive, hostile: true, distance: chebyshev(p, t), lineOfSight: hasLineOfSight(w, p, t) } : null,
+    target: t ? { exists: true, alive: t.kind === 'monster' ? t.alive : !t.dead, hostile: t.kind === 'monster' || !canAttackActor(w, p, t), distance: chebyshev(p, t), lineOfSight: hasLineOfSight(w, p, t) } : null,
     ammoCount: ammo && w.data.items[ammo.itemId]?.ammoType === 'arrow' ? ammo.count : 0,
     weaponKind: p.stats.weapon.kind,
   });
@@ -57,7 +58,7 @@ export function castSpell(w: World, spellId: string): boolean {
   const p = w.player;
   const c = p.character;
   // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo ao alcance
-  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !currentTarget(w) && !p.dead) {
+  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !currentTarget(w) && !currentActorTarget(w) && !p.dead) {
     targetNearest(w, spell.range);
   }
   const check = castCheck(w, spell);
@@ -78,24 +79,28 @@ export function castSpell(w: World, spellId: string): boolean {
   }
 
   const target = currentTarget(w);
+  const actorTarget = target ? null : currentActorTarget(w);
   let tiles: TilePos[] = [];
   let victims: MonsterEntity[] = [];
   if (spell.target === 'target' && target) {
     tiles = [{ x: target.x, y: target.y }];
     victims = [target];
-  } else if (spell.target === 'areaTarget' && target) {
-    tiles = areaTiles(w, target, spell.radius ?? 1);
+  } else if (spell.target === 'areaTarget' && (target || actorTarget)) {
+    tiles = areaTiles(w, (target ?? actorTarget)!, spell.radius ?? 1);
     victims = monstersOn(w, tiles);
+  } else if (spell.target === 'target' && actorTarget) {
+    tiles = [{ x: actorTarget.x, y: actorTarget.y }];
   } else if (spell.target === 'areaSelf') {
     tiles = areaTiles(w, p, spell.radius ?? 1).filter((t) => t.x !== p.x || t.y !== p.y);
     victims = monstersOn(w, tiles);
   } else {
     tiles = [{ x: p.x, y: p.y }];
   }
-  if (target && (spell.target === 'target' || spell.target === 'areaTarget')) {
-    p.facing = Math.abs(target.x - p.x) >= Math.abs(target.y - p.y) ? (target.x < p.x ? 'left' : 'right') : target.y < p.y ? 'up' : 'down';
+  const aim = target ?? actorTarget;
+  if (aim && (spell.target === 'target' || spell.target === 'areaTarget')) {
+    p.facing = Math.abs(aim.x - p.x) >= Math.abs(aim.y - p.y) ? (aim.x < p.x ? 'left' : 'right') : aim.y < p.y ? 'up' : 'down';
   }
-  w.events.emit('spellCast', { casterId: p.id, spellId: spell.id, words: spell.words, from: { x: p.x, y: p.y }, targetId: target?.id ?? null, tiles });
+  w.events.emit('spellCast', { casterId: p.id, spellId: spell.id, words: spell.words, from: { x: p.x, y: p.y }, targetId: aim?.id ?? null, tiles });
 
   if (spell.effect === 'damage' && victims.length) p.lastAttackAt = w.now;
   if (spell.effect === 'damage' && spell.formula) {
@@ -111,6 +116,13 @@ export function castSpell(w: World, spellId: string): boolean {
       }
       damageMonster(w, m, res.damage, spell.element, p.id);
       aggro(w, m);
+    }
+    // PK: o personagem mirado também é atingido (se estiver na área do efeito)
+    if (actorTarget && tiles.some((t) => t.x === actorTarget.x && t.y === actorTarget.y) && !canAttackActor(w, p, actorTarget)) {
+      registerAggression(w, p.id, actorTarget.id);
+      const raw = rollRange(range, w.rng);
+      const src = actorSource(p);
+      asActor(w, actorTarget, () => damagePlayer(w, raw, spell.element, src));
     }
   } else if (spell.effect === 'heal' && spell.formula) {
     const range = spellRange(spell.formula, { level: c.level, power: p.stats.magicLevel, weaponAttack: 0 }, voc.damage.healing);
