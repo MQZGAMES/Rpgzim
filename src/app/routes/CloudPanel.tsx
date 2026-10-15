@@ -77,8 +77,8 @@ export function CloudPanel({ onClose, onChanged }: { onClose: () => void; onChan
               {status.message} <span className="text-muted">· {timeAgo(status.lastSyncAt)}</span>
             </p>
             <p className="text-[12px] text-muted">
-              O jogo salva primeiro neste navegador e envia para o GitHub em seguida (no máximo a cada 15 s durante o jogo e
-              sempre ao sair). Em outro aparelho, entre com um token do mesmo repositório para continuar de onde parou.
+              O jogo salva primeiro neste navegador e envia para o GitHub em seguida (a cada 1 minuto durante o jogo, só se algo
+              mudou, e sempre ao sair ou trocar de app). Em outro aparelho, entre com um token do mesmo repositório para continuar de onde parou.
             </p>
             <div className="flex flex-wrap gap-2">
               <PixelButton variant="gold" disabled={busy} onClick={() => void run(() => cloud.syncNow())}>

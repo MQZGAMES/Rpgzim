@@ -46,8 +46,9 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 Opcional, na tela inicial: **Entrar com GitHub**. Cada jogador usa a **própria conta**: os saves ficam em
 `saves/<id>.json` num repositório **privado** dele (padrão `rpgzim-saves`), acessado direto do navegador pela API
 do GitHub com um **token fine-grained** restrito a esse repositório (*Contents: Read and write*).
-- Local primeiro: o jogo sempre grava no navegador; a nuvem recebe no máx. 1 envio por personagem a cada 15 s
-  (cada envio é um commit) e sempre ao sair/fechar a aba. Sem internet, continua local e reenvia depois.
+- Local primeiro: o jogo sempre grava no navegador; a nuvem recebe no máx. 1 envio por personagem por minuto
+  (cada envio é um commit; pulado se nada mudou) e sempre ao sair/fechar a aba ou trocar de app. Preparar um save
+  custa ~0,5 ms e o envio é assíncrono: não trava o jogo. Sem internet, continua local e reenvia depois.
 - Ao listar/carregar, fica a versão mais nova (nuvem ou navegador); em conflito entre aparelhos vence a última gravação.
 - O token fica só no `localStorage` do jogador e só vai para `api.github.com`; o jogo recusa repositório público.
 - Por que não um repositório único do jogo com token embutido: o site é estático, então o token ficaria público

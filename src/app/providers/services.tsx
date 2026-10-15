@@ -44,6 +44,9 @@ export function ServicesProvider({ children, fallback }: { children: ReactNode; 
         local,
         (f) => f.savedAt,
         (slotId, f) => ({ slotId, name: f.character.name, vocation: f.character.vocation, level: f.character.level, updatedAt: f.savedAt }),
+        60_000,
+        // ignora carimbos de tempo: parado na cidade não gera commits a cada minuto
+        (f) => JSON.stringify({ ...f.character, updatedAt: 0, stats: { ...f.character.stats, playTimeMs: 0 } }),
       );
       setServices({ data: GAME_DATA, saves: new SaveService(repo, GAME_DATA), audio: new AudioService(), touch: detectTouch(), cloud: new CloudAccount(repo) });
     })();

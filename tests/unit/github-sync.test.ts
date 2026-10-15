@@ -187,3 +187,36 @@ describe('sincronização local + nuvem', () => {
     expect([...gh.files.keys()]).toEqual(['ana/rpgzim-saves:saves/old.json']);
   });
 });
+
+describe('sincronização a cada minuto', () => {
+  it('envia no máximo 1 vez por minuto, pula conteúdo igual e tenta de novo sozinho após falha', async () => {
+    vi.useFakeTimers();
+    const gh = fakeGitHub();
+    const local = new MemorySaveRepository<Data>();
+    // impressão digital ignora o carimbo de tempo, como no jogo
+    const sync = new SyncedSaveRepository<Data>(local, (d) => d.savedAt, (id, d) => summary(id, d), 60_000, (d) => d.name);
+    sync.setRemote(new GitHubSaveRepository<Data>(new GitHubClient('tok', gh.fetchFn), 'ana/rpgzim-saves'));
+    const save = (t: number, name: string) => sync.save('c1', { savedAt: t, name }, summary('c1', { savedAt: t, name }));
+    const puts = () => gh.calls.filter((c) => c.startsWith('PUT')).length;
+    await save(1, 'A');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(puts()).toBe(1);
+    for (let i = 2; i < 10; i++) await save(i, 'B'); // vários saves no mesmo minuto
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(puts()).toBe(1);
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(puts()).toBe(2); // o mais recente sai após 1 minuto
+    await save(20, 'B'); // só o carimbo mudou
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(puts()).toBe(2);
+    // falha de rede: tenta de novo sem precisar de outro save
+    gh.state.down = true;
+    await save(30, 'C');
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(sync.getStatus().state).toBe('error');
+    gh.state.down = false;
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(sync.getStatus().state).toBe('synced');
+    expect(puts()).toBe(3);
+  });
+});

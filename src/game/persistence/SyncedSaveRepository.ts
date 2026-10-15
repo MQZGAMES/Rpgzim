@@ -1,6 +1,7 @@
 // Armazenamento "local primeiro" com sincronização opcional na nuvem (repositório GitHub do jogador).
-// - Gravar: sempre no navegador na hora; o envio para a nuvem é agrupado (no máx. 1 por slot a cada N s)
-//   para não criar um commit a cada evento.
+// - Gravar: sempre no navegador na hora; o envio para a nuvem é agrupado (no máx. 1 por slot por minuto)
+//   para não criar um commit a cada evento, e é pulado quando nada relevante mudou desde o último envio.
+// - Nada disso bloqueia o jogo: preparar um save custa ~0,5 ms e o envio é uma requisição assíncrona.
 // - Ler/listar: junta local + nuvem e fica com a versão mais recente (e a copia para o navegador).
 // - Sem conta ou sem internet: funciona só com o local; o status informa o erro.
 import type { SaveRepository, SaveSlotSummary } from '../../domain/repositories/SaveRepository';
@@ -26,6 +27,9 @@ export class SyncedSaveRepository<T> implements SaveRepository<T> {
   private readonly pending = new Map<string, Pending<T>>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly lastPush = new Map<string, number>();
+  /** Impressão digital do último conteúdo enviado por slot (evita commits iguais). */
+  private readonly lastPrint = new Map<string, string>();
+  private readonly inFlight = new Set<string>();
   private listeners = new Set<(s: SyncStatus) => void>();
   private status: SyncStatus = { state: 'local', message: 'Salvando só neste navegador.', lastSyncAt: null };
 
@@ -35,7 +39,9 @@ export class SyncedSaveRepository<T> implements SaveRepository<T> {
     private readonly stamp: (data: T) => number,
     /** Resumo exibido na lista de personagens, derivado do próprio save. */
     private readonly summarize: (slotId: string, data: T) => SaveSlotSummary,
-    private readonly pushIntervalMs = 15000,
+    private readonly pushIntervalMs = 60000,
+    /** Conteúdo relevante do save (sem carimbos de tempo); iguais = não precisa enviar de novo. */
+    private readonly fingerprint: (data: T) => string = (d) => JSON.stringify(d),
   ) {}
 
   // ------------------------------------------------------------------ conta/estado
@@ -43,6 +49,7 @@ export class SyncedSaveRepository<T> implements SaveRepository<T> {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
     this.pending.clear();
+    this.lastPrint.clear();
     this.remote = remote;
     this.setStatus(remote ? { state: 'synced', message: 'Conectado.', lastSyncAt: this.status.lastSyncAt } : { state: 'local', message: 'Salvando só neste navegador.', lastSyncAt: null });
   }
@@ -146,16 +153,34 @@ export class SyncedSaveRepository<T> implements SaveRepository<T> {
   private async push(slotId: string, keepalive = false): Promise<void> {
     const p = this.pending.get(slotId);
     if (!p || !this.remote) return;
+    // um envio por vez por personagem; o mais novo sai em seguida
+    if (this.inFlight.has(slotId) && !keepalive) return this.queue(slotId, p.data, p.summary, false);
     this.pending.delete(slotId);
+    const print = this.fingerprint(p.data);
+    if (this.lastPrint.get(slotId) === print) return; // nada mudou: não cria commit
     this.lastPush.set(slotId, Date.now());
+    this.inFlight.add(slotId);
     this.setStatus({ ...this.status, state: 'syncing', message: 'Enviando para o GitHub…' });
     try {
       await this.remote.save(slotId, p.data, p.summary, keepalive);
+      this.lastPrint.set(slotId, print);
       this.ok();
     } catch (e) {
       // mantém para a próxima tentativa (sem sobrescrever uma versão mais nova que chegou nesse meio-tempo)
       if (!this.pending.has(slotId)) this.pending.set(slotId, p);
       this.fail(e);
+      // tenta de novo no próximo intervalo, mesmo se o jogador não salvar mais nada
+      if (!keepalive && !this.timers.has(slotId)) {
+        this.timers.set(
+          slotId,
+          setTimeout(() => {
+            this.timers.delete(slotId);
+            void this.push(slotId);
+          }, Math.max(this.pushIntervalMs, 10_000)),
+        );
+      }
+    } finally {
+      this.inFlight.delete(slotId);
     }
   }
 

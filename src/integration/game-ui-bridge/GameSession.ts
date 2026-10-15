@@ -11,7 +11,8 @@ import { buildSnapshot, type UiSnapshot } from './snapshot';
 import { createLocalStore, createSnapshotStore, type Panel, type Store, type UiLocalState } from './store';
 
 const PUBLISH_MS = 80;
-const AUTOSAVE_MS = 45000;
+/** Save automático (navegador) e, com conta conectada, envio ao GitHub: a cada 1 minuto. */
+const AUTOSAVE_MS = 60000;
 
 export interface SessionOptions {
   data: GameData;
@@ -110,7 +111,9 @@ export class GameSession {
   }
 
   start(): void {
-    this.autosaveTimer = setInterval(() => void this.saveNow(), AUTOSAVE_MS);
+    // roda no tempo ocioso do navegador (entre quadros) para nunca competir com a renderização
+    const idle = (fn: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 0));
+    this.autosaveTimer = setInterval(() => idle(() => void this.saveNow()), AUTOSAVE_MS);
     const onHide = () => {
       if (document.visibilityState === 'hidden') {
         this.sim.setPaused(true);
