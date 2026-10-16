@@ -520,11 +520,15 @@ describe('herói com vida própria (Boladex)', () => {
     sim.events.on('message', (m) => humanMessages.push(m.text));
     let sold = false;
     const start = { gold: h.character.gold, sword: h.character.skills.sword.level };
-    for (let s = 0; s < 25 * 60; s++) {
+    let huntTicks = 0;
+    for (let s = 0; s < 40 * 60; s++) {
       advance(sim, 1000, 50);
       w.human.character.health = w.human.stats.maxHealth;
       if (h.character.stats.monstersKilled > 0 && h.brain.mode === 'town') sold = true;
+      if (h.brain.mode === 'hunt') huntTicks++;
     }
+    // passa a maior parte do tempo caçando (viagens à vila só quando valem a pena)
+    expect(huntTicks / (40 * 60)).toBeGreaterThan(0.7);
     const c = h.character;
     expect(c.vocation).toBe('knight');
     expect(c.level).toBeGreaterThanOrEqual(6);
@@ -704,5 +708,23 @@ describe('grupo, PK e modo de ataque', () => {
     h.brain.modeUntil = w.now + 600000;
     runUntil(sim, () => (h.brain.mode as string) === 'pk', 90000, 50);
     expect(h.brain.pkTargetId).toBe(w.human.id);
+  });
+});
+
+describe('Boladex não trava no jogador', () => {
+  it('jogador parado na porta do templo não bloqueia o herói (na vila os personagens se atravessam)', () => {
+    const sim = makeSim('knight', { seed: 4 });
+    const w = sim.world;
+    const hero = GAME_DATA.heroes.boladex!;
+    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const h = sim.addHero(hero, c);
+    const door = w.map.doors.find((d) => d.buildingId === 'temple')!;
+    sim.teleportPlayer(door.x, door.y); // em pé na porta
+    expect([w.human.x, w.human.y]).toEqual([door.x, door.y]);
+    // o herói sai do templo para caçar: precisa passar pela porta
+    runUntil(sim, () => h.y > door.y + 2, 30000, 50);
+    expect(h.y).toBeGreaterThan(door.y + 2);
+    // e o jogador continua registrado no tile dele (ninguém "some" da ocupação)
+    expect(w.occupancy.get(door.y * w.map.width + door.x)).toBe(w.human.id);
   });
 });

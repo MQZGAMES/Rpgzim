@@ -5,6 +5,7 @@ import { useServices } from '../providers/services';
 import { PixelButton, SpriteFrame } from '../../ui/common/primitives';
 import { CloudBadge, CloudPanel, useCloud } from './CloudPanel';
 import { isHeroSlot } from '../heroes';
+import { InstallHint } from './InstallHint';
 
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
   const { saves, data, audio } = useServices();
@@ -79,6 +80,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
               )}
               {error && <p className="mt-2 text-[12px] text-hp-light">{error}</p>}
               <CloudBadge onOpen={() => setCloudOpen(true)} />
+              <InstallHint />
             </>
           )}
         </div>

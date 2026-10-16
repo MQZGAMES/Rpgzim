@@ -99,6 +99,18 @@ writeJson('manifest.json', manifest);
   writePng(pub, 'favicon.png', icon);
   writePng(pub, 'icon-192.png', icon.scaled(6));
   writePng(pub, 'icon-512.png', icon.scaled(16));
+  // iPhone/iPad (tela de início): sem transparência e sem moldura — o iOS arredonda os cantos sozinho.
+  // Android "maskable": o personagem fica dentro da área segura central (o sistema recorta em círculo/gota).
+  const fullBleed = (size: number, kx: number, ky: number) => {
+    const c = new PixelCanvas(size, size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) c.set(x, y, y > size * 0.74 ? 0x33703cff : y > size * 0.7 ? 0x4e9440ff : 0x33205cff);
+    // estrelinhas no céu
+    for (const [sx, sy] of [[4, 4], [size - 6, 6], [size - 10, 2], [7, 11]] as const) c.set(sx, sy, 0xe2dce6ff);
+    c.blit(knight, kx, ky, { alpha: true });
+    return c;
+  };
+  writePng(pub, 'apple-touch-icon.png', fullBleed(36, 6, 2).scaled(5)); // 180x180
+  writePng(pub, 'icon-maskable-480.png', fullBleed(40, 8, 5).scaled(12)); // 480x480
 }
 
 // pré-visualizações para documentação (docs/art)

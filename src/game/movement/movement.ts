@@ -26,11 +26,15 @@ export function occupant(w: World, x: number, y: number): string | undefined {
   return w.occupancy.get(cellIndex(w.map, x, y));
 }
 
+const isActorId = (id: string | undefined) => !!id && (id === 'player' || id.startsWith('hero:'));
+
 export function canEnter(w: World, x: number, y: number, forMonster: boolean, selfId?: string): boolean {
   if (!inBounds(w.map, x, y) || isSolid(w.map, x, y)) return false;
   if (forMonster && isPz(w.map, x, y)) return false;
   const occ = occupant(w, x, y);
-  return occ === undefined || occ === selfId;
+  if (occ === undefined || occ === selfId) return true;
+  // na vila (área protegida) personagens passam uns pelos outros — ninguém trava porta nem corredor
+  return !forMonster && isPz(w.map, x, y) && isActorId(occ) && isActorId(selfId);
 }
 
 export function placeOccupant(w: World, m: Mover): void {
@@ -39,7 +43,11 @@ export function placeOccupant(w: World, m: Mover): void {
 
 export function removeOccupant(w: World, m: Mover): void {
   const i = cellIndex(w.map, m.x, m.y);
-  if (w.occupancy.get(i) === m.id) w.occupancy.delete(i);
+  if (w.occupancy.get(i) !== m.id) return;
+  w.occupancy.delete(i);
+  // outro personagem dividindo o tile (área protegida) volta a ser o ocupante
+  const other = [w.human, ...w.heroes.values()].find((a) => a.id !== m.id && a.x === m.x && a.y === m.y);
+  if (other) w.occupancy.set(i, other.id);
 }
 
 /** Tenta iniciar um passo. `speed` em tiles por segundo. */

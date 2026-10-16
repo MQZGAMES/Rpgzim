@@ -13,7 +13,7 @@ import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
 import type { HeroEntity, NpcEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { isMoving } from '../movement/movement';
+import { isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
 import { castCheck, castSpell } from '../abilities/spells';
 import { currentTarget, hasLineOfSight, respawnPlayer, setTarget } from '../combat/combat';
@@ -72,6 +72,8 @@ export interface HeroBrainState {
   /** Desde quando o líder (humano) está parado — para não seguir alguém AFK para sempre. */
   leaderIdleSince: number;
   leaderLastPos: { x: number; y: number };
+  /** Desde quando procura monstro sem achar (para trocar de ponto). */
+  noTargetSince: number;
 }
 
 export function newHeroBrain(): HeroBrainState {
@@ -108,6 +110,7 @@ export function newHeroBrain(): HeroBrainState {
     pkLostTo: null,
     leaderIdleSince: 0,
     leaderLastPos: { x: 0, y: 0 },
+    noTargetSince: 0,
   };
 }
 
@@ -233,7 +236,7 @@ function potionPrice(w: World): number {
 
 function goTo(w: World, h: HeroEntity, x: number, y: number): void {
   if (h.pathGoal && h.pathGoal.x === x && h.pathGoal.y === y && h.path?.length) return;
-  planWalk(w, x, y, { quiet: true, maxNodes: 9000 });
+  if (!planWalk(w, x, y, { quiet: true, maxNodes: 20000 })) h.brain.lastPos.at = w.now - 3000;
 }
 
 function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void {
@@ -282,11 +285,14 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   }
   // anda preso? replaneja
   if (h.x !== b.lastPos.x || h.y !== b.lastPos.y) b.lastPos = { x: h.x, y: h.y, at: w.now };
-  const stuck = w.now - b.lastPos.at > 9000 && !!h.path;
+  // parado com caminho por mais de 2,5 s (alguém no corredor, porta, ponte): desvia e tenta de novo
+  const stuck = w.now - b.lastPos.at > 2500 && !!h.path?.length && !isMoving(h, w.now);
   if (stuck) {
-    h.path = null;
-    h.pathGoal = null;
     b.lastPos.at = w.now;
+    const goal = h.pathGoal;
+    sidestep(w, h);
+    h.path = null;
+    if (goal) goTo(w, h, goal.x, goal.y);
   }
   survive(w, h);
   handleInvites(w, h);
@@ -359,29 +365,37 @@ function tryCast(w: World, h: HeroEntity, spellId: string): boolean {
 }
 
 // ------------------------------------------------------------------ decisões
+/** Vale a viagem à vila? Só com motivo de verdade (mochila cheia, loot que compensa, poções acabando
+ * com ouro para repor de uma vez, upgrade ao alcance) — viagens curtas e frequentes matam a caça. */
 function needsTown(w: World, h: HeroEntity): boolean {
   const t = h.hero.temperament;
   const c = h.character;
-  if (freeSlots(c.inventory) < 3) return true;
-  if (lootValue(w, h) >= 150 + t.greed * 450 + c.level * 40) return true;
-  const minPotions = 2 + Math.round(t.caution * 6);
-  if (potionsOf(w, h) < minPotions && c.gold >= potionPrice(w) * 2) return true;
+  if (freeSlots(c.inventory) < 2) return true;
+  if (lootValue(w, h) >= 250 + t.greed * 600 + c.level * 60) return true;
+  const potions = potionsOf(w, h);
+  const price = potionPrice(w);
+  const spendable = c.gold + lootValue(w, h);
+  const minPotions = 1 + Math.round(t.caution * 4);
+  // repõe só quando dá para comprar um bom estoque (senão volta à vila a cada 2 minutos)
+  if (potions === 0 && spendable >= price * 4) return true;
+  if (potions < minPotions && spendable >= price * minPotions * 3) return true;
   if (w.now < h.brain.nextUpgradeTripAt) return false;
-  const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(h) - 40);
+  const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40);
   return !!up;
 }
 
 /** Ouro que o herói gosta de manter na bolsa (o resto vai para o banco). */
-function keepGold(h: HeroEntity): number {
-  return 80 + h.character.level * 25 + Math.round((1 - h.hero.temperament.greed) * 100);
+function keepGold(w: World, h: HeroEntity): number {
+  if (w.social.pvp) return 40 + h.character.level * 5;
+  return 60 + h.character.level * 15 + Math.round((1 - h.hero.temperament.greed) * 60);
 }
 
 function decide(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const c = h.character;
   equipBagUpgrades(w, h);
-  if (hpPct(h) < 0.5) {
-    // descansa na área protegida até recuperar (regeneração dobrada)
+  if (hpPct(h) < 0.5 && potionsOf(w, h) === 0) {
+    // sem poções: descansa na área protegida até recuperar (regeneração dobrada) ou pede a bênção
     if (!isPz(w.map, h.x, h.y)) return setMode(w, h, 'retreat');
     if (hpPct(h) < 0.3) return planTown(w, h, [{ kind: 'heal' }]);
     return setMode(w, h, 'social', 8000);
@@ -395,10 +409,10 @@ function decide(w: World, h: HeroEntity): void {
   const untried = Object.keys(HUNT_LEVEL).some((id) => !h.brain.areaStats[id] && HUNT_LEVEL[id]! <= c.level + 1);
   // cada opção recebe uma nota; a escolha é sorteada com peso (quase sempre a melhor, às vezes improvisa)
   const options: [string, number][] = [
-    ['hunt', 0.62 + h.brain.mood * 0.1],
+    ['hunt', 0.75 + h.brain.mood * 0.1],
     ['explore', untried ? 0.12 + t.bravery * 0.15 : 0],
     ['train', skillLag && canTrain ? t.discipline * 0.45 : 0],
-    ['social', t.sociability * 0.18 + (humanNear ? 0.12 : 0)],
+    ['social', t.sociability * 0.08 + (humanNear ? 0.06 : 0)],
     ['invite', canInviteHuman(w, h) ? t.sociability * 0.5 + affinityOf(h, human.id) * 0.4 : 0],
   ];
   const total = options.reduce((s2, [, v]) => s2 + Math.max(0, v) ** 2, 0);
@@ -416,7 +430,7 @@ function decide(w: World, h: HeroEntity): void {
       if (countItem(c.inventory, TRAINING_WEAPON) === 0) return planTown(w, h, [{ kind: 'shop', npcId: npcByShop(w, 'equipment')?.id ?? '', trainingWeapon: true }], 'train');
       return startTraining(w, h);
     case 'social':
-      return setMode(w, h, 'social', 20000 + w.rng.next() * 25000);
+      return setMode(w, h, 'social', 10000 + w.rng.next() * 12000);
     case 'invite':
       inviteHuman(w, h);
       return startHunt(w, h);
@@ -466,10 +480,11 @@ function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
 
 function startHunt(w: World, h: HeroEntity, quarry = chooseQuarry(w, h)): void {
   const spawns = w.map.spawns.filter((s) => s.monsterId === quarry);
-  const spawn = spawns[w.rng.int(0, spawns.length - 1)];
+  const spawn = bestSpawn(w, h, quarry) ?? spawns[w.rng.int(0, spawns.length - 1)];
   h.brain.quarry = quarry;
+  h.brain.noTargetSince = 0;
   h.brain.spot = spawn ? { x: spawn.x, y: spawn.y } : null;
-  setMode(w, h, 'hunt', (6 + w.rng.next() * 6) * 60000);
+  setMode(w, h, 'hunt', (10 + w.rng.next() * 8) * 60000);
   const def = w.data.monsters[quarry];
   const region = spawn ? w.map.regions.filter((r) => spawn.x >= r.x && spawn.x < r.x + r.w && spawn.y >= r.y && spawn.y < r.y + r.h).sort((a, b) => b.priority - a.priority)[0] : undefined;
   heroSay(w, h, 'hunt', { monster: def?.name ?? quarry, area: region?.name ?? 'a caça' }, 60000);
@@ -519,20 +534,53 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     .sort((a, c) => Number(c.targetId === h.id) - Number(a.targetId === h.id) || chebyshev(a, h) - chebyshev(c, h));
   const next = near[0];
   if (next) {
+    b.noTargetSince = 0;
     setTarget(w, next.id);
     return;
   }
-  // nada por perto: vai até a área (ou passeia por ela procurando)
+  // nada por perto: vai até a área (ou procura onde ainda tem monstro vivo)
   const spot = b.spot;
   if (!spot) return startHunt(w, h);
-  if (isMoving(h, w.now) || h.path?.length) return;
-  if (chebyshev(spot, h) > 4) goTo(w, h, spot.x, spot.y);
-  else if (w.rng.chance(0.25)) {
-    const spawns = w.map.spawns.filter((s) => s.monsterId === quarry);
-    const other = spawns[w.rng.int(0, spawns.length - 1)];
-    if (other && w.rng.chance(0.4)) b.spot = { x: other.x, y: other.y };
-    goTo(w, h, (b.spot?.x ?? spot.x) + w.rng.int(-3, 3), (b.spot?.y ?? spot.y) + w.rng.int(-3, 3));
+  if (!b.noTargetSince) b.noTargetSince = w.now;
+  if (w.now - b.noTargetSince > 20000 && quarry) {
+    // a área esvaziou (outro caçador, respawn lento): vai para o ponto com mais monstros vivos
+    b.noTargetSince = w.now;
+    const best = bestSpawn(w, h, quarry);
+    if (best) b.spot = best;
+    else if (!training) return startHunt(w, h, chooseQuarry(w, h));
   }
+  if (isMoving(h, w.now) || h.path?.length) return;
+  if (chebyshev(b.spot ?? spot, h) > 4) goTo(w, h, (b.spot ?? spot).x, (b.spot ?? spot).y);
+  else if (w.rng.chance(0.3)) goTo(w, h, (b.spot ?? spot).x + w.rng.int(-3, 3), (b.spot ?? spot).y + w.rng.int(-3, 3));
+}
+
+/** Ponto de surgimento da presa com mais monstros vivos (empate: o mais perto). */
+function bestSpawn(w: World, h: HeroEntity, quarry: string): { x: number; y: number } | null {
+  let best: { x: number; y: number; score: number } | null = null;
+  for (const sp of w.map.spawns) {
+    if (sp.monsterId !== quarry) continue;
+    const alive = [...w.monsters.values()].filter((m) => m.alive && m.spawnId === sp.id && !m.targetId).length;
+    if (!alive) continue;
+    const score = alive * 10 - chebyshev(sp, h) * 0.2;
+    if (!best || score > best.score) best = { x: sp.x, y: sp.y, score };
+  }
+  return best ? { x: best.x, y: best.y } : null;
+}
+
+/** Pode vender este item? Nunca poções, arma de treino nem equipamento melhor/que vai usar em breve. */
+function sellable(w: World, h: HeroEntity, itemId: string): boolean {
+  const c = h.character;
+  if (!countItem(c.inventory, itemId) || itemId.startsWith('training_')) return false;
+  const def = w.data.items[itemId];
+  if (!def || def.type === 'potion' || def.type === 'ammo') return false;
+  if (def.slot && (def.minLevel ?? 1) > c.level && (def.minLevel ?? 1) <= c.level + 3 && isUsableLater(w, h, itemId)) return false;
+  if (def.slot && isUpgrade(w.data, c, def)) return false;
+  return true;
+}
+
+function distOf(w: World, step: TownStep, from: { x: number; y: number }): number {
+  const n = step.kind === 'shop' ? w.npcs.get(step.npcId) : step.kind === 'bank' ? npcByAction(w, 'openDepot') : npcByAction(w, 'heal');
+  return n ? chebyshev(n, from) : 0;
 }
 
 /** Ajuda o jogador humano quando um monstro o ataca por perto (comportamento de bom companheiro). */
@@ -594,21 +642,44 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
   const steps: TownStep[] = [];
   if (only) steps.push(...only);
   else {
+    const earn = lootValue(w, h);
+    const budget = c.gold + earn + c.bankGold - keepGold(w, h) - 40;
+    const up = bestUpgrade(w, h, budget);
+    const wantPotions = potionsOf(w, h) < 4 + Math.round(h.hero.temperament.caution * 8);
     for (const shop of Object.values(w.data.shops)) {
       const npc = npcByShop(w, shop.id);
       if (!npc) continue;
-      const sells = shop.buys.some((o) => countItem(c.inventory, o.itemId) > 0 && !o.itemId.startsWith('training_'));
-      const potions = shop.sells.some((o) => o.itemId === 'potion_health') && shop.id === 'potions';
-      const upgrades = shop.id === 'equipment' || shop.id === 'potions';
+      const sells = shop.buys.some((o) => sellable(w, h, o.itemId));
+      const potions = wantPotions && shop.sells.some((o) => o.itemId === 'potion_health') && shop.id === 'potions';
+      const upgrades = !!up && up.shopId === shop.id;
       if (sells || potions || upgrades) steps.push({ kind: 'shop', npcId: npc.id, buyPotions: potions, upgrades });
     }
+    // caminho mais curto entre as paradas (a partir de onde está)
+    let from = { x: h.x, y: h.y };
+    const ordered: TownStep[] = [];
+    const pending = [...steps];
+    while (pending.length) {
+      pending.sort((a, b2) => distOf(w, a, from) - distOf(w, b2, from));
+      const next = pending.shift()!;
+      ordered.push(next);
+      const n = next.kind === 'shop' ? w.npcs.get(next.npcId) : undefined;
+      if (n) from = { x: n.x, y: n.y };
+    }
+    steps.length = 0;
+    steps.push(...ordered);
     // saque antes das compras se a economia já dá para um upgrade
-    const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(h) - 40);
-    if (up && c.gold - 30 < up.price) steps.unshift({ kind: 'bank', op: 'withdraw' });
+    if (up && c.gold + earn - 30 < up.price) steps.unshift({ kind: 'bank', op: 'withdraw' });
     // não volta à vila só por causa de upgrade nos próximos minutos
     h.brain.nextUpgradeTripAt = w.now + 4 * 60000;
-    steps.push({ kind: 'bank', op: 'deposit' });
-    if (hpPct(h) < 0.7) steps.push({ kind: 'heal' });
+    // banco só quando sobra bastante ouro; bênção do sacerdote só se estiver bem ferido
+    // com PK ligado guarda quase tudo (quem morre no PK deixa parte do ouro da bolsa no chão)
+    const bankAbove = w.social.pvp ? 30 : 100 + h.hero.temperament.greed * 100;
+    if (c.gold + earn - keepGold(w, h) > bankAbove || c.gold + earn > potionPrice(w) * 8) steps.push({ kind: 'bank', op: 'deposit' });
+    if (hpPct(h) < 0.45 && potionsOf(w, h) === 0) steps.push({ kind: 'heal' });
+    if (!steps.length) {
+      startHunt(w, h);
+      return;
+    }
   }
   h.brain.town = steps;
   h.brain.quarry = null;
@@ -627,6 +698,7 @@ function town(w: World, h: HeroEntity): void {
     const after = b.after;
     b.after = 'decide';
     if (after === 'train') return startTraining(w, h);
+    if (after === 'decide' && w.rng.chance(0.8)) return startHunt(w, h);
     return setMode(w, h, 'decide');
   }
   const done = () => {
@@ -673,21 +745,21 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
   let earned = 0;
   for (const o of shop.buys) {
     const n = countItem(c.inventory, o.itemId);
-    const def = w.data.items[o.itemId];
-    if (!n || o.itemId.startsWith('training_') || def?.type === 'potion') continue;
-    // equipamento útil que ainda não usa (ex.: upgrade guardado para o próximo nível) fica
-    if (def?.slot && (def.minLevel ?? 1) > c.level && isUsableLater(w, h, o.itemId)) continue;
-    if (def?.slot && def.slot !== 'ammo' && isUpgrade(w.data, c, def)) continue;
+    if (!n || !sellable(w, h, o.itemId)) continue;
     const before = c.gold;
     if (sellItem(w, o.itemId, n)) earned += c.gold - before;
   }
   if (earned > 0) heroSay(w, h, 'sell', { gold: earned }, 20000);
   if (step.trainingWeapon && countItem(c.inventory, TRAINING_WEAPON) === 0) buyItem(w, TRAINING_WEAPON, 1);
   if (step.buyPotions) {
-    const want = 4 + Math.round(h.hero.temperament.caution * 10) - potionsOf(w, h);
+    const want = 6 + Math.round(h.hero.temperament.caution * 10) - potionsOf(w, h);
     const offer = shop.sells.find((o) => o.itemId === 'potion_health');
     if (offer && want > 0) {
-      const qty = Math.min(want, Math.floor((c.gold - 20) / offer.price));
+      // guarda um pouco para um upgrade já planejado
+      const reserve = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40) ? Math.min(c.gold * 0.4, 300) : 10;
+      // no máximo ~60% da bolsa em poções (mínimo 3, se der): o resto vira poupança/upgrade
+      const cap = Math.max(Math.min(3, Math.floor(c.gold / offer.price)), Math.floor((c.gold * 0.6) / offer.price));
+      const qty = Math.min(want, cap, Math.floor((c.gold - reserve) / offer.price));
       if (qty > 0 && buyItem(w, offer.itemId, qty)) heroSay(w, h, 'buy', {}, 60000);
     }
   }
@@ -713,13 +785,16 @@ function isUsableLater(w: World, h: HeroEntity, itemId: string): boolean {
 function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit'): void {
   const c = h.character;
   if (op === 'withdraw') {
-    const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(h) - 40);
+    const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40);
     const need = up ? up.price + 40 - c.gold : 0;
     if (need > 0) bankGold(w, 'withdraw', Math.min(need, c.bankGold));
     return;
   }
-  const surplus = c.gold - keepGold(h);
-  if (surplus > 0 && bankGold(w, 'deposit', surplus)) heroSay(w, h, 'bank', {}, 120000);
+  // guarda o excedente; e mesmo sem excedente, poupa uma parte (vai sacar depois para um upgrade)
+  const surplus = c.gold - keepGold(w, h);
+  const savings = Math.floor((c.gold - potionPrice(w) * 3) * (0.2 + h.hero.temperament.greed * 0.2));
+  const amount = Math.max(surplus, savings);
+  if (amount >= 20 && bankGold(w, 'deposit', amount)) heroSay(w, h, 'bank', {}, 120000);
 }
 
 // ------------------------------------------------------------------ recuo, praça
@@ -998,5 +1073,15 @@ function whims(w: World, h: HeroEntity): void {
   if (b.mode === 'hunt' && w.rng.chance(0.08)) {
     const q = chooseQuarry(w, h, w.rng.chance(0.4));
     if (q !== b.quarry) startHunt(w, h, q);
+  }
+}
+
+/** Um passo para um tile livre ao lado (sai da frente de quem está bloqueando). */
+function sidestep(w: World, h: HeroEntity): void {
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const;
+  const start = w.rng.int(0, dirs.length - 1);
+  for (let i = 0; i < dirs.length; i++) {
+    const [dx, dy] = dirs[(start + i) % dirs.length]!;
+    if (tryStep(w, h, dx, dy, h.stats.speed, false)) return;
   }
 }
