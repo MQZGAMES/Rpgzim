@@ -69,6 +69,7 @@ export class EffectsView {
     });
     on('buffApplied', (e) => this.onBuff(e.targetId, e.kind, e.durationMs));
     on('actorFx', (e) => {
+      if (!this.vis(e.entityId)) return;
       const h = this.views.headOf(e.entityId);
       if (!h) return;
       const color = e.tone === 'level' ? 0xf8dc6c : e.tone === 'skill' ? 0x5cbba8 : 0xfbf8ef;
@@ -82,7 +83,7 @@ export class EffectsView {
       const v = this.views.get(e.entityId);
       if (!v) return;
       v.revive();
-      this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
+      if (v.container.visible) this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
     });
     on('speech', (e) => this.speech(e.entityId, e.text));
     on('playerRespawned', () => {
@@ -138,13 +139,32 @@ export class EffectsView {
     return dur;
   }
 
-  private posOf(id: string, fallback: TilePos): { x: number; y: number } {
+  /**
+   * Figura de uma criatura SÓ se ela estiver sendo desenhada agora. Quem está fora da tela não é
+   * atualizado (economia de desempenho), então a figura guardada fica na última posição em que foi
+   * vista — usá-la faria falas, números e golpes aparecerem no lugar errado.
+   */
+  private vis(id: string) {
     const v = this.views.get(id);
+    return v && v.container.visible ? v : undefined;
+  }
+
+  /** O tile está na área visível (com uma pequena margem)? */
+  private onScreen(pos: TilePos): boolean {
+    const cam = this.scene.cameras.main.worldView;
+    const x = pos.x * 16 + 8;
+    const y = pos.y * 16 + 8;
+    return x >= cam.x - 24 && x <= cam.right + 24 && y >= cam.y - 24 && y <= cam.bottom + 24;
+  }
+
+  private posOf(id: string, fallback: TilePos): { x: number; y: number } {
+    const v = this.vis(id);
     return v ? { x: v.container.x, y: v.container.y - 10 } : tileCenter(fallback);
   }
 
   // ------------------------------------------------------------------ eventos
   private onAttack(e: GameEventMap['attack']): void {
+    if (!this.onScreen(e.from) && !this.onScreen(e.to)) return;
     const from = this.posOf(e.sourceId, e.from);
     const to = this.posOf(e.targetId, e.to);
     const audio = this.audible(e.sourceId, e.from) || this.audible(e.targetId, e.to) ? this.session.audio : { play: () => undefined };
@@ -153,7 +173,7 @@ export class EffectsView {
       audio.play(e.kind === 'wand' ? (e.element === 'fire' ? 'wand' : e.element === 'energy' ? 'energy' : e.element === 'ice' ? 'ice' : 'earth') : 'bow');
     } else {
       // investida curta do atacante e corte no alvo
-      const v = this.views.get(e.sourceId);
+      const v = this.vis(e.sourceId);
       if (v) {
         const dx = Math.sign(to.x - from.x) * 3;
         const dy = Math.sign(to.y - from.y) * 3;
@@ -165,8 +185,9 @@ export class EffectsView {
   }
 
   private onDamage(e: GameEventMap['damage']): void {
+    if (!this.onScreen(e.position)) return;
     const isPlayer = e.targetId === this.session.sim.world.player.id;
-    const v = this.views.get(e.targetId);
+    const v = this.vis(e.targetId);
     const x = v ? v.container.x : tileCenter(e.position).x;
     const y = v ? v.container.y - v.height + 6 : tileCenter(e.position).y - 12;
     const delay = e.sourceId && e.sourceId !== e.targetId ? 0 : 0;
@@ -183,7 +204,7 @@ export class EffectsView {
   }
 
   private onHeal(e: GameEventMap['heal']): void {
-    const v = this.views.get(e.targetId);
+    const v = this.vis(e.targetId);
     if (!v) return;
     if (e.amount > 0) this.floatText(`+${e.amount}`, v.container.x, v.container.y - v.height + 4, e.mana ? 0x69a0e0 : 0x4fd08a);
     this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
@@ -194,7 +215,8 @@ export class EffectsView {
     const w = this.session.sim.world;
     const spell = w.data.spells[e.spellId];
     if (!spell) return;
-    const caster = this.views.get(e.casterId);
+    if (!this.onScreen(e.from) && !e.tiles.some((t) => this.onScreen(t))) return;
+    const caster = this.vis(e.casterId);
     const color = Phaser.Display.Color.HexStringToColor(spell.vfx.color).color;
     if (caster) this.floatText(e.words, caster.container.x, caster.container.y - caster.height - 6, color, 1100, 0);
     if (this.audible(e.casterId, e.from)) this.session.audio.play(SPELL_SFX[spell.vfx.sfx] ?? 'energy');
@@ -224,7 +246,7 @@ export class EffectsView {
 
   private onBuff(targetId: string, kind: string, durationMs: number): void {
     const name = kind === 'defense' ? 'fx_buff_iron' : kind === 'attackSpeed' ? 'fx_buff_focus' : kind === 'regen' ? 'fx_heal' : 'fx_haste';
-    const v = this.views.get(targetId);
+    const v = this.vis(targetId);
     if (!v) return;
     const s = this.scene.add.sprite(v.container.x, v.container.y, 'fx', `${name}_0`).setOrigin(0.5, 1).setDepth(v.container.depth + 1);
     s.play({ key: `fx:${name}`, repeat: -1, frameRate: 10 });
@@ -245,7 +267,8 @@ export class EffectsView {
   private bubbles = new Map<string, { box: Phaser.GameObjects.Container; until: number; halfWidth: number }>();
   /** Balão de fala acima da cabeça (some sozinho). */
   private speech(entityId: string, text: string): void {
-    const v = this.views.get(entityId);
+    // fala de quem está fora da tela não vira balão (só aparece no registro, se estiver perto)
+    const v = this.vis(entityId);
     if (!v) return;
     this.bubbles.get(entityId)?.box.destroy();
     const t = worldText(this.scene, 0, 0, text, { size: 12, color: '#fbf8ef', wrap: 170, weight: 700, stroke: null });
@@ -265,6 +288,10 @@ export class EffectsView {
     const v = this.views.get(e.entityId);
     if (!v) return;
     if (e.kind === 'monster') {
+      if (!v.container.visible || !this.onScreen(e.position)) {
+        v.container.setVisible(false);
+        return;
+      }
       // corpo no chão que se desfaz, fumaça e som
       const sheet = v.sheet;
       const frameCount = this.scene.textures.get(sheet).frameTotal - 1;
@@ -310,7 +337,7 @@ export class EffectsView {
     const w = this.session.sim.world;
     // mira segue o alvo
     const tid = w.player.targetId;
-    const tv = tid ? this.views.monsters.get(tid) : undefined;
+    const tv = tid ? this.vis(tid) : undefined;
     if (tv && tv.container.visible) {
       this.target.setVisible(true).setPosition(tv.container.x, tv.container.y - 7).setDepth(tv.container.depth - 1);
       this.target.setFrame(Math.floor(now / 300) % 2 ? 'target_1' : 'target_0');
@@ -322,20 +349,22 @@ export class EffectsView {
         a.sprite.destroy();
         return false;
       }
+      a.sprite.setVisible(v.container.visible);
       a.sprite.setPosition(v.container.x, v.container.y + 2).setDepth(v.container.depth + 1);
       return true;
     });
     // balões de fala seguem a cabeça de quem fala
     for (const [id, b] of this.bubbles) {
-      const v = this.views.get(id);
+      const v = this.vis(id);
       if (now >= b.until || !v) {
         b.box.destroy();
         this.bubbles.delete(id);
         continue;
       }
-      // acima do nome e sempre dentro da tela
+      // acima do nome de quem fala; só desliza um pouco para não cortar na borda da tela
       const cam = this.scene.cameras.main.worldView;
-      const x = Phaser.Math.Clamp(v.container.x, cam.x + b.halfWidth, cam.right - b.halfWidth);
+      const fitted = Phaser.Math.Clamp(v.container.x, cam.x + b.halfWidth, cam.right - b.halfWidth);
+      const x = Math.abs(fitted - v.container.x) <= 24 ? fitted : v.container.x;
       b.box.setPosition(Math.round(x), v.container.y - v.height - 2);
     }
   }
