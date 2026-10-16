@@ -357,9 +357,7 @@ export type HeroLineKey =
   | 'pkEscaped'
   | 'revenge'
   | 'flee'
-  | 'pkWish'
-  | 'duel'
-  | 'duelEnd';
+  | 'pkWish';
 
 export interface HeroDef {
   id: string;

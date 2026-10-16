@@ -1035,6 +1035,38 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.set(7, 9, P.gold[1]!);
     },
   ],
+  [
+    'map',
+    (c) => {
+      // pergaminho de mapa dobrado com trilha e marcador
+      c.rect(1, 3, 14, 11, P.sand[2]!);
+      c.vline(5, 3, 13, P.sand[1]!);
+      c.vline(10, 3, 13, P.sand[1]!);
+      c.rect(1, 3, 4, 11, P.sand[3]!);
+      c.rect(11, 3, 4, 11, P.sand[3]!);
+      c.ellipse(4, 10, 2, 1.4, P.green[3]!);
+      c.ellipse(12, 6, 1.6, 1.2, P.water[4]!);
+      for (const [x, y] of [[3, 6], [5, 7], [7, 8], [9, 9], [11, 10]] as const) c.set(x, y, P.dirt[1]!);
+      c.disc(12, 10, 1.6, P.red[3]!);
+      c.set(12, 12, P.red[2]!);
+      c.hline(1, 14, 3, P.sand[1]!);
+      c.hline(1, 14, 13, P.dirt[2]!);
+    },
+  ],
+  [
+    'players',
+    (c) => {
+      // três cabeças (lista de personagens) com um "ponto online" verde
+      c.disc(8, 4, 2.6, P.skin[3]!);
+      c.ellipse(8, 11, 4, 3.4, P.purple[3]!);
+      c.disc(3, 6, 2, P.skin[2]!);
+      c.ellipse(3, 12, 2.6, 2.6, P.blue[2]!);
+      c.disc(13, 6, 2, P.skin[2]!);
+      c.ellipse(13, 12, 2.6, 2.6, P.teal[3]!);
+      c.disc(13, 2, 1.6, P.green[4]!);
+      c.set(7, 3, P.white);
+    },
+  ],
 ];
 for (const [name, draw] of UI) icon(`ui_${name}`, draw);
 

@@ -8,6 +8,7 @@ import { GameSession } from '../../integration/game-ui-bridge/GameSession';
 import { SessionContext } from '../../integration/game-ui-bridge/hooks';
 import { useServices } from '../providers/services';
 import { Hud } from '../../ui/hud/Hud';
+import { MapInputLayer } from '../../ui/controls/MapInput';
 import { installDebugApi } from '../debugApi';
 import { resetViewportZoom } from '../preventZoom';
 
@@ -71,6 +72,7 @@ export function GameScreen({ character, heroes = [], onExit }: { character: Char
       <div ref={host} className="absolute inset-0" data-testid="game-canvas-host" />
       {session && (
         <SessionContext.Provider value={session}>
+          <MapInputLayer />
           <Hud
             zoomBias={prefs.zoomBias}
             setZoomBias={(zoomBias) => setPrefs((p) => ({ ...p, zoomBias }))}

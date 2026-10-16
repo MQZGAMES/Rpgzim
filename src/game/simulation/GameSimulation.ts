@@ -249,7 +249,9 @@ export class GameSimulation {
       }
       // bloqueado (ex.: monstro no caminho): recalcula até o destino
       const goal = p.pathGoal;
-      p.path = goal ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: 2500 }) : null;
+      // viagem longa (mini mapa) replaneja com mais fôlego; caminho curto, barato
+      const far = goal ? Math.max(Math.abs(goal.x - p.x), Math.abs(goal.y - p.y)) > 30 : false;
+      p.path = goal ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: far ? 120000 : 2500 }) : null;
       if (!p.path) p.pathGoal = null;
       return;
     }
@@ -328,6 +330,12 @@ export class GameSimulation {
   /** Caminha até o tile (clique/toque no chão). Andar por conta própria pausa a perseguição do alvo. */
   walkTo(x: number, y: number): boolean {
     const ok = planWalk(this.world, x, y);
+    if (ok) this.manualMove();
+    return ok;
+  }
+  /** Viagem longa (toque no mini mapa): caminho pelo mapa todo, contornando monstros quando dá. */
+  travelTo(x: number, y: number): boolean {
+    const ok = planWalk(this.world, x, y, { maxNodes: 120000, avoidMonsters: true });
     if (ok) this.manualMove();
     return ok;
   }

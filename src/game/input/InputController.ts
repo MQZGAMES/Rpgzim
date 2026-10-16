@@ -21,7 +21,6 @@ export class InputController {
   private readonly onKeyDown: (e: KeyboardEvent) => void;
   private readonly onKeyUp: (e: KeyboardEvent) => void;
   private readonly onBlur: () => void;
-  private downAt: { x: number; y: number; t: number } | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -35,24 +34,34 @@ export class InputController {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
-    scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.session.audio.unlock();
-      this.downAt = { x: p.x, y: p.y, t: p.downTime };
-    });
-    scene.input.on('pointerup', (p: Phaser.Input.Pointer) => this.pointerUp(p));
-    // mouse: cursor de "mão" sobre personagens, monstros e NPCs (deixa claro que dá para clicar)
-    scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (p.wasTouch) return;
-      const wp = scene.cameras.main.getWorldPoint(p.x, p.y);
-      const hit = this.views.pick(wp.x, wp.y);
-      scene.game.canvas.style.cursor = hit ? 'pointer' : 'default';
-    });
+    // toques e cliques chegam pela camada de entrada da interface (MapInputLayer), com a posição do canvas
+    // medida na hora — o cache de posição do Phaser fica velho no celular e deslocava os toques
     session.setScreenTapHandler((cx, cy) => {
-      const canvas = this.scene.game.canvas;
-      const r = canvas.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      this.tapAt(((cx - r.left) * this.scene.scale.width) / r.width, ((cy - r.top) * this.scene.scale.height) / r.height);
+      const pt = this.toCanvas(cx, cy);
+      if (pt) this.tapAt(pt.x, pt.y);
     });
+    session.setScreenLocator((id) => {
+      const c = this.views.centerOf(id);
+      if (!c) return null;
+      const cam = this.scene.cameras.main;
+      const canvas = this.scene.game.canvas.getBoundingClientRect();
+      // mundo -> canvas (câmera com zoom e rolagem) -> janela
+      const sx = (c.x - cam.worldView.x) * cam.zoom + cam.x;
+      const sy = (c.y - cam.worldView.y) * cam.zoom + cam.y;
+      return { x: canvas.left + (sx * canvas.width) / this.scene.scale.width, y: canvas.top + (sy * canvas.height) / this.scene.scale.height };
+    });
+    session.setScreenHoverHandler((cx, cy) => {
+      const pt = this.toCanvas(cx, cy);
+      if (!pt) return false;
+      const wp = this.scene.cameras.main.getWorldPoint(pt.x, pt.y);
+      return !!this.views.pick(wp.x, wp.y);
+    });
+  }
+
+  private toCanvas(cx: number, cy: number): { x: number; y: number } | null {
+    const r = this.scene.game.canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return { x: ((cx - r.left) * this.scene.scale.width) / r.width, y: ((cy - r.top) * this.scene.scale.height) / r.height };
   }
 
   private isTyping(e: KeyboardEvent): boolean {
@@ -108,6 +117,12 @@ export class InputController {
       case 'KeyH':
         s.setPanel('help');
         break;
+      case 'KeyM':
+        s.setPanel('minimap');
+        break;
+      case 'KeyO':
+        s.setPanel('players');
+        break;
       case 'KeyP':
         if (s.sim.world.social.party) s.setPartyPanel(!s.local.get().partyPanel);
         break;
@@ -143,14 +158,6 @@ export class InputController {
     this.session.move(0, 0);
   }
 
-  private pointerUp(p: Phaser.Input.Pointer): void {
-    const d = this.downAt;
-    this.downAt = null;
-    if (!d || Math.hypot(p.x - d.x, p.y - d.y) > 14 * (window.devicePixelRatio || 1)) return;
-    if (p.button === 2) return;
-    this.tapAt(p.x, p.y);
-  }
-
   /** Toque/clique em coordenadas do canvas: seleciona entidade, abre loot ou caminha até o tile. */
   tapAt(x: number, y: number): void {
     const cam = this.scene.cameras.main;
@@ -180,6 +187,8 @@ export class InputController {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     this.session.setScreenTapHandler(null);
+    this.session.setScreenHoverHandler(null);
+    this.session.setScreenLocator(null);
     this.scene.input.removeAllListeners();
   }
 }

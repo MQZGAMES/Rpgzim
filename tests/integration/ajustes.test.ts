@@ -292,3 +292,72 @@ describe('Boladex resolve a vila rápido', () => {
     expect(h.brain.nextTownAt).toBeGreaterThan(w.now + 2 * 60000);
   });
 });
+
+describe('clique no mapa, mini mapa e lista de personagens', () => {
+  it('tocar num tile bloqueado guarda um destino alcançável (o replanejamento não trava)', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    sim.teleportPlayer(30, 23);
+    // procura um tile sólido (árvore, muro, água) perto
+    let solid: { x: number; y: number } | null = null;
+    for (let r = 2; r < 12 && !solid; r++)
+      for (let dx = -r; dx <= r && !solid; dx++) if (w.map.solid[(23 + r) * w.map.width + 30 + dx]) solid = { x: 30 + dx, y: 23 + r };
+    expect(solid).not.toBeNull();
+    expect(sim.walkTo(solid!.x, solid!.y)).toBe(true);
+    const goal = w.player.pathGoal!;
+    expect(w.map.solid[goal.y * w.map.width + goal.x]).toBe(0);
+    expect(canEnter(w, goal.x, goal.y, false, w.player.id)).toBe(true);
+  });
+
+  it('viagem pelo mini mapa atravessa o mundo até a área escolhida', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    const lair = w.map.regions.find((r) => r.id === 'canyon')!;
+    expect(sim.travelTo(lair.x + Math.floor(lair.w / 2), lair.y + Math.floor(lair.h / 2))).toBe(true);
+    const goal = w.player.pathGoal!;
+    runUntil(
+      sim,
+      () => {
+        w.player.character.health = w.player.stats.maxHealth; // o teste é do caminho, não do combate
+        return chebyshev(w.player, goal) <= 1;
+      },
+      240000,
+      50,
+    );
+    expect(chebyshev(w.player, goal)).toBeLessThanOrEqual(1);
+  });
+
+  it('chamado pela lista de online, o Boladex entra no grupo e vem até você mesmo de longe', () => {
+    const { sim, h, w } = withHero();
+    const spot = openField(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    expect(chebyshev(h, w.human)).toBeGreaterThan(15);
+    expect(sim.partyInvite(h.id)).toBe(true);
+    runUntil(sim, () => chebyshev(h, w.human) <= 4, 90000, 50);
+    expect(chebyshev(h, w.human)).toBeLessThanOrEqual(4);
+  });
+
+  it('no grupo (mesmo com treino liberado) o Boladex nunca ataca nem desafia você por conta própria', () => {
+    const { sim, h, w } = withHero();
+    party(sim, w.human.id, [w.human.id, h.id]);
+    w.social.party!.friendlyFire = true;
+    sim.setPvp(true);
+    const spot = openField(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    let attacked = false;
+    sim.events.on('damage', (e) => e.targetId === w.human.id && e.sourceId === h.id && (attacked = true));
+    advance(sim, 5 * 60000, 100);
+    expect(attacked).toBe(false);
+  });
+
+  it('o mercador compra flechas; "vender tudo" não vende a munição do arco equipado', () => {
+    const shop = GAME_DATA.shops.general!;
+    expect(shop.buys.some((o) => o.itemId === 'arrow')).toBe(true);
+    const knight = makeSim('knight').world.player.character;
+    knight.inventory[7] = { itemId: 'arrow', count: 20 };
+    expect(sellAllPreview(knight, shop, GAME_DATA).some((r) => r.itemId === 'arrow')).toBe(true);
+    const paladin = makeSim('paladin').world.player.character;
+    paladin.inventory[7] = { itemId: 'arrow', count: 20 };
+    expect(sellAllPreview(paladin, shop, GAME_DATA).some((r) => r.itemId === 'arrow')).toBe(false);
+  });
+});

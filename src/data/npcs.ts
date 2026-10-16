@@ -284,6 +284,7 @@ const list2: ShopDef[] = [
       { itemId: 'slime_gel', price: 4 },
       { itemId: 'meat', price: 3 },
       { itemId: 'dagger', price: 9 },
+      { itemId: 'arrow', price: 1 },
       { itemId: 'wolf_pelt', price: 22 },
       { itemId: 'bone_fragment', price: 10 },
       { itemId: 'bandit_mask', price: 40 },

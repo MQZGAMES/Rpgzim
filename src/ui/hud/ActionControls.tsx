@@ -80,7 +80,7 @@ export function TouchActions() {
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-2 pr-[max(10px,env(safe-area-inset-right))]">
       <div
-        className="pointer-events-auto grid items-center justify-items-center gap-[8px]"
+        className="pointer-events-none grid items-center justify-items-center gap-[8px]"
         style={{ gridTemplateColumns: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px`, gridTemplateRows: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px` }}
         data-testid="touch-actions"
       >
@@ -88,7 +88,7 @@ export function TouchActions() {
           <InteractButton />
         </div>
         {hotbar.map((slot) => (
-          <div key={slot.index} style={{ gridArea: TOUCH_SLOT_CELLS[slot.index] }}>
+          <div key={slot.index} className="pointer-events-auto" style={{ gridArea: TOUCH_SLOT_CELLS[slot.index] }}>
             <HotbarSlot slot={slot} size={TOUCH_SLOT} />
           </div>
         ))}
@@ -100,7 +100,7 @@ export function TouchActions() {
             session.audio.unlock();
             session.cycleTarget();
           }}
-          className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
+          className={`btn-gold pointer-events-auto relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
           style={{ gridArea: '3 / 3', width: ATTACK, height: ATTACK }}
           data-testid="attack-button"
         >

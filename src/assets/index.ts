@@ -3,6 +3,7 @@ import tilesUrl from './generated/tiles.png?url';
 import objectsUrl from './generated/objects.png?url';
 import iconsUrl from './generated/icons.png?url';
 import fxUrl from './generated/fx.png?url';
+import minimapUrl from './generated/minimap.png?url';
 import fontUrl from './generated/font.png?url';
 import fontXmlUrl from './generated/font.xml?url';
 import objectsJson from './generated/objects.json';
@@ -47,4 +48,6 @@ export const ASSETS = {
   icons: { url: iconsUrl, json: iconsJson, frames: iconsJson.frames as Record<string, { frame: { x: number; y: number; w: number; h: number } }> },
   fx: { url: fxUrl, json: fxJson, frames: fxJson.frames as Record<string, unknown> },
   font: { url: fontUrl, xmlUrl: fontXmlUrl },
+  /** Mundo inteiro reduzido a 4 px por tile (gerado por `npm run art:world`). */
+  minimap: { url: minimapUrl, pxPerTile: 4 },
 };

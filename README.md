@@ -28,13 +28,23 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **6 atalhos**
   em grade ao redor do botão de ataque; botão de ação contextual. Na mochila, toque duplo equipa/usa.
   Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
+- **Entrada do mapa unificada** (`src/ui/controls/MapInput.tsx`): uma camada única trata toque e mouse (andar,
+  selecionar, joystick, cursor), medindo a posição do canvas a cada toque. O input do Phaser usava uma posição em
+  cache que ficava velha no celular (barra de endereço, área segura, app instalado) e deslocava os toques — perto
+  do topo eles caíam "fora do jogo". Tocar num telhado/árvore/água guarda um destino alcançável (não trava se
+  alguém cruzar o caminho).
+- **Mini mapa** (botão de mapa ou tecla M): imagem do mundo gerada dos próprios tiles (`npm run art:world`), você,
+  o grupo e o destino; toque num lugar para ir até lá (caminho pelo mapa todo, contornando árvores, muros, água e,
+  quando dá, monstros). *Mundo inteiro* / *Aproximar*.
+- **Personagens online** (botão de pessoas ou tecla O): quem está no mundo, onde e fazendo o quê; **+ Grupo** chama
+  para o grupo na hora e a pessoa vem andando até você (aparece no mini mapa).
 - **Atalhos personalizáveis** (*Menu → Configurar atalhos*, botão *Atalhos* no Grimório, ou tocar num atalho
   vazio): cada posição numerada (a mesma da tela) recebe uma magia, uma **poção automática** (vida/mana, usa a
   menor que cobre o que falta) ou um item usável da mochila. Saves antigos são convertidos sozinhos.
 - **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–6 atalhos,
-  Q vida, R mana, E interagir, I mochila, C personagem, K grimório, P grupo, Esc menu.
-- **HUD enxuto:** vida/mana compactas à esquerda; à direita, grade de 3 colunas (mochila, personagem, grimório,
-  menu, modo de ataque, PK e grupo). O alvo aparece só no mapa (anel e barra vermelha), sem caixa extra.
+  Q vida, R mana, E interagir, I mochila, C personagem, K grimório, M mini mapa, O online, P grupo, Esc menu.
+- **HUD enxuto:** vida/mana compactas à esquerda; à direita, grade de 4 colunas (mochila, personagem, grimório,
+  menu / mini mapa, online, modo de ataque, PK / grupo). O alvo aparece só no mapa (anel e barra vermelha), sem caixa extra.
 - **Ritmo de celular:** ~3 tiles/s andando (referência: Pokémon 3,75; Tibia 1,5–2,5) e criaturas a 70% da
   velocidade anterior, um pouco mais lentas que o jogador (dá para se posicionar e fugir).
 
@@ -51,7 +61,8 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
-- Lojas: na venda, o que você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado nem o
+- Lojas: o mercador também compra **flechas** (o Knight do Boladex vende as que caem dos goblins). Na venda, o que
+  você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado, a munição da arma equipada nem o
   **travado**: na mochila/equipamento, *Travar venda* põe um cadeado no item). Janela responsiva (lista com rolagem
   própria e barra de ações sempre visível, em retrato, paisagem e desktop).
 - **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres (mas lá os personagens se atravessam).
@@ -94,8 +105,8 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 - **Vila rápida**: cada visita tem limite (75 s no total, 30 s por parada) e, depois dela, só volta antes de
   3 min com a mochila cheia; sem poção e ferido pede a bênção do sacerdote (grátis) em vez de esperar a vida voltar;
   sem poções escolhe uma caça mais tranquila; compra estoques maiores e só guarda no banco o excedente.
-- **Atitudes raras**: às vezes diz que quer PK (com o PK desligado) e, no grupo com treino liberado, desafia
-  você para um duelo amistoso de 20 s (para quando alguém fica com pouca vida).
+- **Atitudes raras**: às vezes diz que quer PK (com o PK desligado). Ataque ou PK só por decisão própria **fora do
+  grupo**: em grupo nunca ataca nem desafia ninguém (no treino liberado, só revida se você atacar).
 - **Caça mais, perde menos tempo**: só volta à vila quando a viagem compensa (mochila cheia, loot que vale, poções acabando com ouro para um bom estoque, upgrade ao alcance), visita só as lojas onde tem o que fazer (na ordem mais curta), troca de ponto quando os monstros acabam e, preso, dá um passo para o lado e replaneja. Na vila os personagens se atravessam (ninguém trava porta). Em simulação de 40 min: ~83% do tempo caçando.
 - **Mais esperto**: aprende quais caças rendem mais XP por minuto, evita onde morreu há pouco, explora áreas novas,
   escolhe atividades com um pouco de acaso (improvisa), comenta o que vê, convida você para o grupo, aceita ou recusa
@@ -124,10 +135,11 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **155 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, simulação integrada).
-- Playwright: **8 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **160 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Playwright: **9 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
-  painel do grupo (formação e treino).
+  painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
+  na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.
 - Desempenho medido (Chrome headless, Intel Iris Xe): **60 FPS** (p95 ≈ 16,9 ms) em templo, praça e combate,
   celular 390×844@3x e desktop 1440×900. Em renderização por software (SwiftShader) ~15–19 FPS.
 

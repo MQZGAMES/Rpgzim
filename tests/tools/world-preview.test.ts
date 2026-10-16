@@ -8,7 +8,7 @@ import { PROPS } from '../../src/data/props';
 import { MONSTERS } from '../../src/data/monsters';
 import { NPCS } from '../../src/data/npcs';
 import { decodePng } from '../../scripts/art/lib/pngdecode.ts';
-import { PixelCanvas } from '../../scripts/art/lib/canvas.ts';
+import { PixelCanvas, channels, pack } from '../../scripts/art/lib/canvas.ts';
 import { roofTileName } from '../../src/game/world/roof';
 import manifest from '../../src/assets/generated/manifest.json';
 
@@ -39,7 +39,7 @@ test('renderiza o mundo', () => {
   };
   const sheet = (id: string, fw: number, fh: number, col = 0) => decodePng(readFileSync(join(gen, id))).crop(col * fw, 0, fw, fh);
 
-  const render = (withRoofs: boolean) => {
+  const render = (withRoofs: boolean, withActors = true) => {
     const c = new PixelCanvas(map.width * T, map.height * T);
     for (const layer of ['ground', 'dirt', 'cobble', 'water', 'decor', 'floor', 'walls'] as const) {
       const data = map.layers[layer];
@@ -62,18 +62,18 @@ test('renderiza o mundo', () => {
       const img = frame(`door_${d.style}_closed`);
       items.push({ depth: -2, draw: () => c.blit(img, d.x * T, (d.y + 1) * T - img.h) });
     }
-    for (const n of map.npcs) {
+    if (withActors) for (const n of map.npcs) {
       const img = sheet(`char_${NPCS[n.npcId]!.sprite}.png`, 24, 32);
       items.push({ depth: (n.y + 1) * T + 1, draw: () => c.blit(img, n.x * T - 4, (n.y + 1) * T - 32) });
     }
-    for (const s of map.spawns) {
+    if (withActors) for (const s of map.spawns) {
       const m = MONSTERS[s.monsterId]!;
       const info = (manifest as { sheets: Record<string, { file: string; frameWidth: number; frameHeight: number }> }).sheets[m.sprite]!;
       const img = sheet(info.file, info.frameWidth, info.frameHeight);
       items.push({ depth: (s.y + 1) * T + 1, draw: () => c.blit(img, s.x * T + 8 - img.w / 2, (s.y + 1) * T - img.h) });
     }
     const start = sheet('char_knight.png', 24, 32);
-    items.push({ depth: (map.playerStart.y + 1) * T + 1, draw: () => c.blit(start, map.playerStart.x * T - 4, (map.playerStart.y + 1) * T - 32) });
+    if (withActors) items.push({ depth: (map.playerStart.y + 1) * T + 1, draw: () => c.blit(start, map.playerStart.x * T - 4, (map.playerStart.y + 1) * T - 32) });
     items.sort((a, b) => a.depth - b.depth).forEach((d) => d.draw());
     if (withRoofs) {
       for (const bld of map.buildings) {
@@ -87,6 +87,24 @@ test('renderiza o mundo', () => {
     }
     return c;
   };
-  writeFileSync(join(outDir, 'world-roofs.png'), render(true).toPng());
-  writeFileSync(join(outDir, 'world-interiors.png'), render(false).toPng());
+  writeFileSync(join(outDir, 'world-map.png'), render(true).toPng());
+  // mini mapa do jogo: mundo com telhados, sem criaturas, reduzido para 4 px por tile (média de cada bloco)
+  const full = render(true, false);
+  const F = 4;
+  const mini = new PixelCanvas(full.w / F, full.h / F);
+  for (let y = 0; y < mini.h; y++)
+    for (let x = 0; x < mini.w; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let dy = 0; dy < F; dy++)
+        for (let dx = 0; dx < F; dx++) {
+          const [cr, cg, cb] = channels(full.get(x * F + dx, y * F + dy));
+          r += cr;
+          g += cg;
+          b += cb;
+        }
+      mini.set(x, y, pack(Math.round(r / (F * F)), Math.round(g / (F * F)), Math.round(b / (F * F))));
+    }
+  writeFileSync(join(gen, 'minimap.png'), mini.toPng());
 });

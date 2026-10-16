@@ -86,7 +86,14 @@ export function renderPos(m: Mover, now: number): { x: number; y: number } {
   return { x: m.move.fromX + (m.x - m.move.fromX) * t, y: m.move.fromY + (m.y - m.move.fromY) * t };
 }
 
-export function pathTo(w: World, m: Mover, goal: TilePos, forMonster: boolean, opts: { stopWithin?: number; maxNodes?: number } = {}): TilePos[] | null {
+export function pathTo(
+  w: World,
+  m: Mover,
+  goal: TilePos,
+  forMonster: boolean,
+  opts: { stopWithin?: number; maxNodes?: number; extraCost?: (x: number, y: number) => number } = {},
+): TilePos[] | null {
+  const extra = opts.extraCost;
   return findPath(
     { x: m.x, y: m.y },
     goal,
@@ -97,7 +104,7 @@ export function pathTo(w: World, m: Mover, goal: TilePos, forMonster: boolean, o
       staticFree: (x, y) => staticFree(w, x, y) && !(forMonster && isPz(w.map, x, y)),
       stopWithin: opts.stopWithin,
       maxNodes: opts.maxNodes,
-      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0),
+      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0) + (extra ? extra(x, y) : 0),
     },
   );
 }

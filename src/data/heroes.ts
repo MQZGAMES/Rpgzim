@@ -45,8 +45,6 @@ const boladex: HeroDef = {
     revenge: ['Você vai pagar, {player}!', 'Achou que eu ia deixar barato, {player}?'],
     flee: ['Opa, {player} tá forte demais. Tô fora!', 'Melhor eu sair daqui...'],
     pkWish: ['Liga o PK aí, {player}... quero ver se você aguenta.', 'Às vezes dá vontade de testar a espada em gente, {player}.', 'Se o PK estivesse ligado, {player}... hehe.'],
-    duel: ['{player}, vale treino? Defende essa!', 'Duelo amistoso, {player}! Em guarda!'],
-    duelEnd: ['Chega de treino, {player}. Bom duelo!', 'Ok, ok, você venceu essa, {player}.'],
   },
 };
 

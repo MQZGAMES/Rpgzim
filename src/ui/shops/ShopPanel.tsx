@@ -19,8 +19,8 @@ export function ShopPanel() {
           // o que você tem para vender aparece primeiro (maior valor total no topo)
           .sort((a, b) => Number(b.owned > 0) - Number(a.owned > 0) || b.owned * b.price - a.owned * a.price);
   // itens travados (cadeado) não entram no "vender tudo"
-  const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.locked ? 0 : o.owned * o.price), 0);
-  const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.locked ? 0 : o.owned), 0);
+  const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned * o.price), 0);
+  const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned), 0);
   const sel = list.find((o) => o.item.itemId === selId) ?? null;
   const maxQty = sel ? (tab === 'buy' ? Math.max(1, Math.min(100, Math.floor(gold / Math.max(1, sel.price)))) : Math.max(1, sel.owned)) : 1;
   const q = Math.min(qty, maxQty);
@@ -64,7 +64,7 @@ export function ShopPanel() {
               <ItemIcon icon={o.item.icon} size={32} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  {o.item.locked && <ItemIcon icon="ui_lock" size={12} title="Venda travada" />}
+                  {o.item.kept && <ItemIcon icon="ui_lock" size={12} title="Venda travada" />}
                   <span className="min-w-0 truncate text-[13px]">{o.item.name}</span>
                   <ItemStats item={o.item} size="md" />
                 </span>

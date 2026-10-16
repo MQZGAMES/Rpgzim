@@ -256,6 +256,13 @@ export class EntityViews {
     this.player.setHealthBar(p.dead ? null : p.character.health / p.stats.maxHealth, this.scene, 0x4fd08a);
   }
 
+  /** Centro do desenho de uma entidade no mundo (para testes e para apontar coisas na tela). */
+  centerOf(id: string): { x: number; y: number } | null {
+    const v = this.monsters.get(id) ?? this.npcs.get(id) ?? this.heroes.get(id);
+    if (!v || !v.container.visible) return null;
+    return { x: v.container.x, y: v.container.y - v.height / 2 };
+  }
+
   /** Entidade sob um ponto do mundo (para toque/clique). */
   pick(wx: number, wy: number): string | null {
     let best: string | null = null;

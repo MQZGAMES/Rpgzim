@@ -6,7 +6,7 @@ import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
 import { skillProgress } from '../../domain/rules/skills';
 import { castFailMessage } from '../../domain/rules/spells';
 import { countItem } from '../../domain/rules/inventory';
-import { isSellLocked } from '../../domain/rules/economy';
+import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
@@ -39,6 +39,8 @@ export interface ItemView {
   better: boolean;
   /** Venda travada pelo jogador (fica fora do "vender tudo"). */
   locked: boolean;
+  /** Fora do "vender tudo" (travado ou munição da arma equipada). */
+  kept: boolean;
 }
 
 /** Um atalho da barra de ações (magia, item da mochila, poção automática ou vazio). */
@@ -111,7 +113,7 @@ export interface UiSnapshot {
   /** Tempo restante da caveira do jogador (ms), 0 sem caveira. */
   skullMs: number;
   /** Heróis no mundo (para o menu ao tocar neles). */
-  heroes: { id: string; name: string; title: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: boolean; activity: string; attackBlocked: string | null; distance: number; dead: boolean }[];
+  heroes: { id: string; name: string; title: string; vocation: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: boolean; activity: string; attackBlocked: string | null; distance: number; dead: boolean; region: string }[];
   hotbar: HotbarSlotView[];
   spellbook: SpellView[];
   inventory: (ItemView | null)[];
@@ -185,6 +187,7 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     def: itemDefense(def),
     better: isUpgrade(w.data, c, def),
     locked: isSellLocked(c, def.id),
+    kept: keptFromSellAll(c, def.id, w.data),
   };
 }
 
@@ -349,6 +352,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       id: h.id,
       name: h.character.name,
       title: h.hero.title,
+      vocation: h.character.vocation,
       vocationName: w.data.vocations[h.character.vocation].name,
       level: h.character.level,
       hp: h.character.health,
@@ -363,6 +367,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       })(),
       distance: Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)),
       dead: h.dead,
+      region: regionAt(w.map, h.x, h.y)?.name ?? 'Terras desconhecidas',
     })),
     hotbar: hotbarView(sim),
     spellbook: voc.spells.map((id) => spellView(sim, id)),

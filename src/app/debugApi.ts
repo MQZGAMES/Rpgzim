@@ -37,6 +37,11 @@ export function installDebugApi(session: GameSession): () => void {
     ui: () => ({ ...sim.world.ui }),
     save: () => session.saveNow(),
     openActorMenu: (id: string) => session.tapEntity(id),
+    /** Destino do último "andar até" (toque/clique no mapa) e menu de personagem aberto. */
+    walkGoal: () => sim.world.player.pathGoal,
+    actorMenu: () => session.local.get().actorMenu,
+    screenOf: (id: string) => session.screenOf(id),
+    stop: () => sim.stop(),
     befriendHeroes: () => {
       for (const h of sim.world.heroes.values()) h.brain.affinity[sim.world.human.id] = 1;
     },

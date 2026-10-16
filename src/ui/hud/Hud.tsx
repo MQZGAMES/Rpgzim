@@ -1,10 +1,11 @@
 // Composição do HUD sobre o canvas. Layout próprio para toque (celular) e para desktop.
 import { useLocal, useSession } from '../../integration/game-ui-bridge/hooks';
-import { Joystick } from '../controls/Joystick';
 import { InventoryPanel } from '../inventory/InventoryPanel';
 import { CharacterPanel } from '../character/CharacterPanel';
 import { SpellBookPanel } from '../spells/SpellBookPanel';
 import { HotbarPanel } from '../spells/HotbarPanel';
+import { MinimapPanel } from '../map/MinimapPanel';
+import { PlayersPanel } from '../map/PlayersPanel';
 import { NpcDialog, LootWindow } from '../dialogs/NpcDialog';
 import { ShopPanel } from '../shops/ShopPanel';
 import { DepotPanel } from '../shops/DepotPanel';
@@ -23,16 +24,17 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
   if (!ready) return null;
   return (
     <div className="hud-scale pointer-events-none absolute inset-0 z-10 select-none" data-testid="hud">
-      {touch && <Joystick />}
       <div className="safe-top safe-x absolute left-0 right-0 top-0 flex items-start justify-between gap-2">
         <StatusPanel />
         <div className="flex flex-col items-end gap-1">
-          {/* celular em pé: grade de 3 colunas; telas largas: uma linha só */}
-          <div className="pointer-events-auto grid grid-cols-3 gap-1 sm:flex" data-testid="hud-menu">
+          {/* celular em pé: grade de 4 colunas; telas largas: uma linha só */}
+          <div className="pointer-events-auto grid grid-cols-4 gap-1 sm:flex" data-testid="hud-menu">
             <MenuButton icon="ui_bag" label="Mochila" hotkey="I" onClick={() => session.setPanel('inventory')} testId="btn-inventory" />
             <MenuButton icon="ui_char" label="Personagem" hotkey="C" onClick={() => session.setPanel('character')} testId="btn-character" />
             <MenuButton icon="ui_book" label="Grimório" hotkey="K" onClick={() => session.setPanel('spells')} testId="btn-spells" />
             <MenuButton icon="ui_gear" label="Menu" hotkey="Esc" onClick={() => session.setPanel('settings')} testId="btn-settings" />
+            <MenuButton icon="ui_map" label="Mini mapa" hotkey="M" onClick={() => session.setPanel('minimap')} testId="btn-minimap" />
+            <MenuButton icon="ui_players" label="Personagens online" hotkey="O" onClick={() => session.setPanel('players')} testId="btn-players" />
             <QuickToggles />
           </div>
           <SkullTimer />
@@ -65,6 +67,8 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {panel === 'character' && <CharacterPanel onClose={close} />}
       {panel === 'spells' && <SpellBookPanel onClose={close} />}
       {panel === 'hotbar' && <HotbarPanel onClose={close} />}
+      {panel === 'minimap' && <MinimapPanel onClose={close} />}
+      {panel === 'players' && <PlayersPanel onClose={close} />}
       {panel === 'settings' && <SettingsPanel onClose={close} zoomBias={zoomBias} setZoomBias={setZoomBias} showFps={showFps} setShowFps={setShowFps} showLog={showLog} setShowLog={setShowLog} />}
       {panel === 'help' && <HelpPanel onClose={close} touch={touch} />}
       <PartyPanel />

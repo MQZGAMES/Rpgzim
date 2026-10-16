@@ -95,7 +95,8 @@ export class GameSession {
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
       ev.on('partyChanged', () => {
         const has = !!this.sim.world.social.party;
-        if (has && !this.hadParty) this.local.update({ partyPanel: true, actorMenu: null });
+        // grupo formado pelo menu do personagem: abre os controles (pela lista de online, só avisa)
+        if (has && !this.hadParty && !this.local.get().panel) this.local.update({ partyPanel: true, actorMenu: null });
         if (!has) this.local.update({ partyPanel: false });
         this.hadParty = has;
       }),
@@ -227,9 +228,55 @@ export class GameSession {
   setScreenTapHandler(fn: ((clientX: number, clientY: number) => void) | null): void {
     this.screenTapHandler = fn;
   }
-  /** Toque repassado pela interface (ex.: zona do joystick sem arrasto) como se fosse no mapa. */
+  /** Toque no mini mapa: caminha até o ponto (fecha o painel para ver a viagem). */
+  travelTo(x: number, y: number): boolean {
+    const ok = this.sim.travelTo(x, y);
+    if (ok) {
+      this.travelGoal = this.sim.world.player.pathGoal;
+      this.audio.play('ui');
+    } else this.audio.play('error');
+    this.dirty = true;
+    return ok;
+  }
+  private travelGoal: { x: number; y: number } | null = null;
+  /** Posições para o mini mapa (lidas a cada poucos décimos de segundo, fora do snapshot). */
+  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[] } {
+    const w = this.sim.world;
+    const p = w.human;
+    const party = w.social.party;
+    const goal = p.path?.length ? this.travelGoal ?? p.pathGoal : null;
+    if (!p.path?.length) this.travelGoal = null;
+    return {
+      width: w.map.width,
+      height: w.map.height,
+      you: { x: p.x, y: p.y },
+      party: (party?.members ?? []).filter((id) => id !== p.id).flatMap((id) => {
+        const a = w.heroes.get(id);
+        return a ? [{ id, name: a.character.name, x: a.x, y: a.y, leader: party!.leaderId === id }] : [];
+      }),
+      goal,
+      regions: w.map.regions.filter((r) => r.priority >= 1 && r.w * r.h < w.map.width * w.map.height * 0.5).map((r) => ({ name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 })),
+    };
+  }
+  /** Toque/clique no mapa (camada de entrada da interface), em coordenadas da janela. */
   tapScreen(clientX: number, clientY: number): void {
     this.screenTapHandler?.(clientX, clientY);
+  }
+  private screenLocator: ((id: string) => { x: number; y: number } | null) | null = null;
+  setScreenLocator(fn: ((id: string) => { x: number; y: number } | null) | null): void {
+    this.screenLocator = fn;
+  }
+  /** Onde uma entidade aparece na janela (coordenadas de cliente), ou null se fora da tela. */
+  screenOf(id: string): { x: number; y: number } | null {
+    return this.screenLocator?.(id) ?? null;
+  }
+  private screenHoverHandler: ((clientX: number, clientY: number) => boolean) | null = null;
+  setScreenHoverHandler(fn: ((clientX: number, clientY: number) => boolean) | null): void {
+    this.screenHoverHandler = fn;
+  }
+  /** Há algo clicável (monstro, NPC, personagem) sob o ponteiro? */
+  hoverScreen(clientX: number, clientY: number): boolean {
+    return this.screenHoverHandler?.(clientX, clientY) ?? false;
   }
   /** Toque numa criatura do mapa: herói abre o menu; monstro/NPC segue o comportamento normal. */
   tapEntity(id: string): void {
@@ -270,6 +317,12 @@ export class GameSession {
   }
   partyInvite(id: string): void {
     if (this.sim.partyInvite(id)) this.audio.play('ui');
+    const w = this.sim.world;
+    const hero = w.heroes.get(id);
+    if (hero && w.social.party?.members.includes(id)) {
+      const far = Math.max(Math.abs(hero.x - w.human.x), Math.abs(hero.y - w.human.y)) > 4;
+      if (far) this.pushMessage(`${hero.character.name} está vindo até você (veja no mini mapa).`, 'system');
+    }
     this.dirty = true;
   }
   partyAccept(): void {

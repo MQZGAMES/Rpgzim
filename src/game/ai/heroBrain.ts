@@ -54,8 +54,8 @@ export interface HeroBrainState {
   /** Início da visita à vila (limite total de tempo) e quando pode voltar por motivo não urgente. */
   townStartedAt: number;
   nextTownAt: number;
-  /** Duelo amistoso (treino no grupo) em andamento até este instante. */
-  duelUntil: number;
+  /** Último destino pedido ao andar (evita replanejar o mesmo caminho a cada decisão). */
+  walkReq: { x: number; y: number } | null;
   // ---- memória e personalidade em ação
   /** XP e tempo de caça por monstro (aprende onde rende mais) e mortes recentes por área. */
   areaStats: Record<string, { xp: number; ms: number; deaths: number; lastDeathAt: number }>;
@@ -103,7 +103,7 @@ export function newHeroBrain(): HeroBrainState {
     nextUpgradeTripAt: 0,
     townStartedAt: 0,
     nextTownAt: 0,
-    duelUntil: 0,
+    walkReq: null,
     areaStats: {},
     huntXp: 0,
     huntStartedAt: 0,
@@ -243,9 +243,11 @@ function potionPrice(w: World): number {
   return Math.min(...Object.values(w.data.shops).flatMap((s) => s.sells.filter((o) => o.itemId === 'potion_health').map((o) => o.price)), 999);
 }
 
-function goTo(w: World, h: HeroEntity, x: number, y: number): void {
-  if (h.pathGoal && h.pathGoal.x === x && h.pathGoal.y === y && h.path?.length) return;
-  if (!planWalk(w, x, y, { quiet: true, maxNodes: 20000 })) h.brain.lastPos.at = w.now - 3000;
+function goTo(w: World, h: HeroEntity, x: number, y: number, maxNodes = 20000): void {
+  const b = h.brain;
+  if (b.walkReq && b.walkReq.x === x && b.walkReq.y === y && h.path?.length) return;
+  b.walkReq = { x, y };
+  if (!planWalk(w, x, y, { quiet: true, maxNodes })) b.lastPos.at = w.now - 3000;
 }
 
 function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void {
@@ -584,7 +586,8 @@ function sellable(w: World, h: HeroEntity, itemId: string): boolean {
   const c = h.character;
   if (!countItem(c.inventory, itemId) || itemId.startsWith('training_')) return false;
   const def = w.data.items[itemId];
-  if (!def || def.type === 'potion' || def.type === 'ammo') return false;
+  // munição só é guardada por quem a usa (o Knight vende as flechas que caem dos goblins)
+  if (!def || def.type === 'potion' || (def.type === 'ammo' && h.stats.weapon.ammo === def.ammoType)) return false;
   if (def.slot && (def.minLevel ?? 1) > c.level && (def.minLevel ?? 1) <= c.level + 3 && isUsableLater(w, h, itemId)) return false;
   if (def.slot && isUpgrade(w.data, c, def)) return false;
   return true;
@@ -987,9 +990,15 @@ function follow(w: World, h: HeroEntity): void {
   if (bag && freeSlots(h.character.inventory) > 0) return hunt(w, h, true, true);
   // formação: em fila pisa nos passos do líder; "seguir" anda por perto
   const spot = formationSpot(w, h.id);
-  if (spot && party.formation === 'line') {
+  if (spot && party.formation === 'line' && chebyshev(leader, h) <= 15) {
     if (chebyshev(spot, h) > 1 && !isMoving(h, w.now)) goTo(w, h, spot.x, spot.y);
-  } else if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1));
+  } else if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) {
+    // longe (ex.: chamado pela lista de personagens): atravessa o mapa até o líder, replanejando se ele andar muito
+    const far = chebyshev(leader, h) > 15;
+    const req = h.brain.walkReq;
+    if (far && req && h.path?.length && chebyshev(req, leader) <= 6) return;
+    goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1), far ? 120000 : 20000);
+  }
 }
 
 /** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */
@@ -1020,14 +1029,6 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   const b = h.brain;
   const human = w.human;
   if (b.mode === 'pk') return false;
-  // duelo amistoso que ele mesmo começou: para quando alguém fica com pouca vida ou passa o tempo
-  if (h.targetId === human.id && b.duelUntil && (!isSparring(w, h.id, human.id) || w.now > b.duelUntil || hpPct(h) < 0.45 || human.character.health / human.stats.maxHealth < 0.45)) {
-    b.duelUntil = 0;
-    h.targetId = null;
-    heroSay(w, h, 'duelEnd', { player: human.character.name }, 0);
-    return false;
-  }
-  if (b.duelUntil && h.targetId === human.id) return true;
   // treino no grupo: revida quem o atacou, mas para antes de se machucar demais
   if (isSparring(w, h.id, human.id) && !human.dead && !h.dead && attackedRecently(w, human.id, h.id, 6000)) {
     if (hpPct(h) > 0.3) {
@@ -1125,17 +1126,10 @@ function whims(w: World, h: HeroEntity): void {
     const c = human.character;
     heroSay(w, h, 'comment', { player: c.name, plevel: c.level, weapon: w.data.items[c.equipment.mainHand?.itemId ?? '']?.name ?? 'as mãos' }, 90000);
   }
-  // atitudes raras: vontade de PK (com o PK desligado) ou um duelo amistoso no grupo com treino liberado
+  // atitude rara: vontade de PK (só fora do grupo; nunca ataca nem desafia quem está no grupo dele)
   const t = h.hero.temperament;
-  if (!human.dead && chebyshev(human, h) <= 6 && b.mode !== 'pk') {
-    if (!w.social.pvp && !sameParty(w, h.id, human.id) && (t.bravery > 0.6 || b.mood < -0.2) && w.rng.chance(0.04)) heroSay(w, h, 'pkWish', { player: human.character.name }, 600000);
-    else if (isSparring(w, h.id, human.id) && !h.targetId && hpPct(h) > 0.8 && human.character.health / human.stats.maxHealth > 0.8 && !isPz(w.map, h.x, h.y) && !isPz(w.map, human.x, human.y) && w.rng.chance(0.06)) {
-      setTarget(w, human.id);
-      if (h.targetId === human.id) {
-        b.duelUntil = w.now + 20000;
-        heroSay(w, h, 'duel', { player: human.character.name }, 0);
-      }
-    }
+  if (!human.dead && chebyshev(human, h) <= 6 && b.mode !== 'pk' && !w.social.pvp && !sameParty(w, h.id, human.id) && (t.bravery > 0.6 || b.mood < -0.2) && w.rng.chance(0.04)) {
+    heroSay(w, h, 'pkWish', { player: human.character.name }, 600000);
   }
   // às vezes muda de ideia no meio da caça (outra área com mais monstros)
   if (b.mode === 'hunt' && w.rng.chance(0.08)) {

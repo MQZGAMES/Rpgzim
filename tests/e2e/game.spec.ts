@@ -15,6 +15,11 @@ type Api = {
   walkTo(x: number, y: number): boolean;
   idle(): boolean;
   buildings(): { id: string; x: number; y: number; w: number; h: number; doorX: number }[];
+  heroes(): { id: string; x: number; y: number }[];
+  screenOf(id: string): { x: number; y: number } | null;
+  walkGoal(): { x: number; y: number } | null;
+  actorMenu(): string | null;
+  stop(): void;
 };
 
 const api = <T>(page: Page, fn: (a: Api) => T): Promise<T> => page.evaluate((src) => new Function('a', `return (${src})(a)`)(window.__RPGZIM__), fn.toString()) as Promise<T>;
@@ -264,4 +269,43 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   // o resumo do grupo fica no botão "grupo" do HUD (sem quadro ocupando a tela)
   await page.getByTestId('btn-party').click();
   await expect(page.getByTestId('party-formation-line')).toHaveClass(/btn-gold/);
+});
+
+test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tela), mini mapa e lista de online', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
+  await createCharacter(page, 'knight', 'Mapa');
+  await api(page, (a) => a.teleport(30, 23));
+  await page.waitForTimeout(500);
+  const vp = page.viewportSize()!;
+  // toque na parte de cima e na de baixo do mapa (longe dos botões): o personagem sai andando
+  for (const [x, y] of [[vp.width * 0.4, vp.height * 0.24], [vp.width * 0.3, vp.height * 0.62]] as const) {
+    await api(page, (a) => a.stop());
+    await page.touchscreen.tap(x, y);
+    await expect.poll(async () => (await api(page, (a) => a.walkGoal())) !== null || !(await api(page, (a) => a.idle()))).toBe(true);
+    await api(page, (a) => { a.stop(); a.teleport(30, 23); });
+  }
+  // toque no Boladex onde ele aparece na tela: abre o menu dele
+  const hero = (await api(page, (a) => a.heroes()))[0]!;
+  await page.evaluate((p) => (window.__RPGZIM__ as { teleport(x: number, y: number): void }).teleport(p.x, p.y), { x: hero.x, y: hero.y + 3 });
+  await page.waitForTimeout(400);
+  // ele anda sozinho: lê a posição na tela e toca na hora (repete se ele saiu do lugar entre a leitura e o toque)
+  await expect(async () => {
+    const pos = await page.evaluate((id) => (window.__RPGZIM__ as { screenOf(id: string): { x: number; y: number } | null }).screenOf(id), hero.id);
+    expect(pos).not.toBeNull();
+    await page.touchscreen.tap(pos!.x, pos!.y);
+    await expect(page.getByTestId('actor-menu')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
+  // mini mapa: toque num lugar distante -> fecha o painel e caminha até lá
+  await page.getByTestId('btn-minimap').tap();
+  await expect(page.getByTestId('minimap-panel')).toBeVisible();
+  await page.getByTestId('minimap-zoom').tap();
+  const img = (await page.getByTestId('minimap-image').boundingBox())!;
+  await page.touchscreen.tap(img.x + img.width * 0.6, img.y + img.height * 0.3);
+  await expect(page.getByTestId('minimap-panel')).toHaveCount(0);
+  await expect.poll(async () => (await api(page, (a) => a.walkGoal())) !== null).toBe(true);
+  // personagens online: chama o Boladex para o grupo
+  await page.getByTestId('btn-players').tap();
+  await expect(page.getByTestId('players-panel')).toContainText('Boladex');
+  await page.getByTestId(`player-invite-${hero.id}`).tap();
+  await expect(page.getByTestId(`player-party-${hero.id}`)).toBeVisible();
 });

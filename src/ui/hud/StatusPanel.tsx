@@ -16,7 +16,7 @@ export function StatusPanel() {
     inPz: s.player.inPz,
   }));
   return (
-    <div className="frame-dark pointer-events-auto flex w-[min(196px,calc(100vw-160px))] items-center gap-[6px] !border-[9px] sm:w-[250px] sm:!border-[11px]" data-testid="status-panel">
+    <div className="frame-dark pointer-events-none flex w-[min(196px,calc(100vw-200px))] items-center gap-[6px] !border-[9px] sm:w-[250px] sm:!border-[11px]" data-testid="status-panel">
       <div className="frame-slot relative flex h-[44px] w-[36px] shrink-0 items-end justify-center overflow-hidden !border-[5px] sm:h-[52px] sm:w-[44px]">
         <SpriteFrame sheet={p.vocation} scale={1.25} className="-mb-[2px]" />
         <span className="text-outline absolute -top-[2px] left-0 right-0 text-center text-[10px] text-gold-light">{p.level}</span>
