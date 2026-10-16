@@ -39,12 +39,12 @@ function InteractButton({ size = 56 }: { size?: number }) {
         e.preventDefault();
         session.interact();
       }}
-      className="btn-gold anim-pop pointer-events-auto flex items-center gap-1 px-1 text-[12px]"
+      className="btn-gold anim-pop pointer-events-auto flex max-w-full items-center gap-1 px-1 text-[12px]"
       style={{ minHeight: size - 12 }}
       data-testid="interact-button"
     >
       <ItemIcon icon={it.kind === 'loot' ? 'ui_bag' : it.kind === 'npc' ? 'ui_chat' : 'ui_hand'} size={18} />
-      <span className="max-w-[120px] truncate">{it.label}</span>
+      <span className="min-w-0 max-w-[120px] truncate">{it.label}</span>
     </button>
   );
 }
@@ -54,22 +54,31 @@ export function TouchActions() {
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
   const ammo = useSnap((s) => s.ammo);
-  // quarto de círculo regular ao redor do centro do botão principal (canto inferior direito)
+  // grade 3x3 alinhada ao canto: ataque no canto, magias em "L" ao redor (a 1ª mais perto do polegar),
+  // poções na diagonal e o botão de interação no canto livre de cima
   const SPELL = 52;
-  const R = 108;
-  const CENTER = 2 + 78 / 2;
-  const arc = [0, 30, 60, 90].map((deg) => {
-    const t = (deg * Math.PI) / 180;
-    return { right: Math.round(CENTER + R * Math.cos(t) - SPELL / 2), bottom: Math.round(CENTER + R * Math.sin(t) - SPELL / 2) };
-  });
+  const cells: Record<number, string> = { 0: '3 / 2', 1: '2 / 3', 2: '3 / 1', 3: '1 / 3' };
   return (
-    <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pr-[max(10px,env(safe-area-inset-right))]">
-      <div className="pointer-events-auto relative mb-1 h-[184px] w-[184px]">
+    <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-2 pr-[max(10px,env(safe-area-inset-right))]">
+      <div
+        className="pointer-events-auto grid items-center justify-items-center gap-[10px]"
+        style={{ gridTemplateColumns: `${SPELL}px ${SPELL}px 78px`, gridTemplateRows: `${SPELL}px ${SPELL}px 78px` }}
+        data-testid="touch-actions"
+      >
+        <div className="flex w-full justify-end self-end" style={{ gridArea: '1 / 1 / 2 / 3' }}>
+          <InteractButton />
+        </div>
         {hotbar.slice(0, 4).map((sp, i) => (
-          <div key={sp.id} className="absolute" style={arc[i]}>
+          <div key={sp.id} style={{ gridArea: cells[i] }}>
             <SpellButton spell={sp} size={SPELL} onCast={() => session.cast(sp.id)} />
           </div>
         ))}
+        <div style={{ gridArea: '2 / 1' }}>
+          <PotionButton kind="health" size={46} />
+        </div>
+        <div style={{ gridArea: '2 / 2' }}>
+          <PotionButton kind="mana" size={46} />
+        </div>
         <button
           type="button"
           aria-label={hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
@@ -78,24 +87,19 @@ export function TouchActions() {
             session.audio.unlock();
             session.cycleTarget();
           }}
-          className={`btn-gold absolute bottom-[2px] right-[2px] flex h-[78px] w-[78px] flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
+          className={`btn-gold relative flex h-[78px] w-[78px] flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
+          style={{ gridArea: '3 / 3' }}
           data-testid="attack-button"
         >
           <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={30} />
           <span className="text-[10px] leading-none">{hasTarget ? 'Trocar' : 'Atacar'}</span>
+          {ammo !== null && (
+            <span className={`text-outline absolute -left-[6px] -top-[8px] text-[10px] leading-none ${ammo === 0 ? 'text-hp-light' : 'text-parchment'}`}>
+              <ItemIcon icon="item_arrow" size={12} className="inline-block align-middle" />
+              {ammo}
+            </span>
+          )}
         </button>
-        {ammo !== null && (
-          <span className={`text-outline absolute bottom-[84px] right-[2px] text-[10px] ${ammo === 0 ? 'text-hp-light' : 'text-parchment'}`}>
-            <ItemIcon icon="item_arrow" size={12} className="inline-block align-middle" /> {ammo}
-          </span>
-        )}
-      </div>
-      <div className="pointer-events-auto absolute bottom-[196px] right-[max(10px,env(safe-area-inset-right))] flex flex-col items-end gap-3">
-        <InteractButton />
-        <div className="flex gap-2">
-          <PotionButton kind="health" />
-          <PotionButton kind="mana" />
-        </div>
       </div>
     </div>
   );

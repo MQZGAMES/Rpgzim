@@ -108,6 +108,9 @@ export class InputController {
       case 'KeyH':
         s.setPanel('help');
         break;
+      case 'KeyP':
+        if (s.sim.world.social.party) s.setPartyPanel(!s.local.get().partyPanel);
+        break;
       case 'Escape':
         if (!s.closeOverlays()) {
           if (s.sim.world.player.targetId) s.clearTarget();

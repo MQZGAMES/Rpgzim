@@ -31,16 +31,22 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   5/Q vida, 6/R mana, E interagir, I mochila, C personagem, K grimório, Esc menu.
 
 ## O que existe
-- Mundo contínuo (104×118 tiles): Templo da Aurora → Vila de Pedraluz → Bosque Selvagem → Pântano Sombrio,
-  Colinas dos Lobos e Ruínas Antigas, com autotile, água animada, iluminação aditiva e **casas exploráveis no
+- Mundo contínuo (170×118 tiles): Templo da Aurora → Vila de Pedraluz → Bosque Selvagem → Pântano Sombrio,
+  Colinas dos Lobos e Ruínas Antigas e, a leste, as **Terras Altas** (Floresta dos Bandidos, Cânion dos Escorpiões,
+  Fortaleza Orc, Bosque Gélido, Cidadela Sombria e Covil do Dragão), com autotile, água animada, iluminação aditiva e **casas exploráveis no
   mesmo mapa** (telhado some ao entrar; o interior aparece em frente a portas e janelas).
-- 4 vocações (Sorcerer, Druid, Paladin, Knight), **13 magias**, 84 itens com equipamentos até o nível 18,
-  8 monstros com IA (idle/wandering/chasing/attacking/returning/dead) e um chefe raro, loot, ouro, 3 lojas,
+- 4 vocações (Sorcerer, Druid, Paladin, Knight), **13 magias**, 99 itens com equipamentos até o nível 18,
+  **18 criaturas em 6 patamares** (cada patamar tem o dobro de vida e ataque do anterior; ver `docs/BALANCE.md`),
+  com IA que contorna obstáculos (A*) e, ao se afastar demais do ponto de nascimento (3× a distância antiga),
+  volta por teleporte com a vida cheia; loot, ouro, 3 lojas,
   **Banco de Pedraluz** (depósito de 40 espaços e ouro guardado, seguros na morte), NPC tutorial.
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
-- Lojas: na venda, o que você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado).
+- Lojas: na venda, o que você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado nem o
+  **travado**: na mochila/equipamento, *Travar venda* põe um cadeado no item). Janela responsiva (lista com rolagem
+  própria e barra de ações sempre visível, em retrato, paisagem e desktop).
+- **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres (mas lá os personagens se atravessam).
 - Inventário, 9 slots de equipamento, ataque/defesa visíveis em cada item (verde ▲ quando é melhor que o
   equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta), munição.
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
@@ -61,12 +67,17 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 - Custo: ~2–5 s de CPU a cada 30–90 min de jogo simulado (`tests/tools/hero-life.test.ts` imprime o "diário" dele).
 
 ## Grupo, PK e modo de ataque
-- **Modo de ataque** (botão discreto abaixo do menu): *Seguir* persegue o alvo até alcançá-lo; *Parado* ataca só o
-  que estiver ao alcance, sem sair do lugar (salvo no personagem).
-- **Grupo**: toque num personagem (ex.: Boladex) → *Convidar p/ grupo*. Quem convida vira líder; o líder pode passar a
-  liderança ou remover membros; qualquer um pode sair. A **XP é dividida igualmente** entre os membros vivos a até 20
-  tiles. O painel do grupo mostra vida, nível e o líder (coroa); no mapa, o nome do colega fica azul e o líder tem ★.
-- **PK** (botão de caveira): ligado, personagens podem se atacar fora das áreas protegidas (nunca membros do grupo).
+- **Modo de ataque** e **PK**: botões quadrados ao lado do menu (mesmo visual), com o estado escrito embaixo.
+  *Seguir* persegue o alvo; *Parado* ataca só o que estiver ao alcance (salvo no personagem).
+- **Toque num personagem** (ex.: Boladex): menu discreto com nome, vida e ícones — convidar para o grupo,
+  controles do grupo e atacar (só quando permitido). **Toque duplo** no personagem ataca direto (com PK ligado
+  ou treino liberado no grupo).
+- **Grupo**: quando o convite é aceito, abre o **painel do grupo** (botão *grupo* no HUD, tecla P, ou toque no
+  quadro do grupo): passar a liderança (coroa), remover membro, **formação** (livre / todos seguem o líder / fila
+  pisando nos passos do líder), **alvo** (o mesmo do líder / cada um o mais próximo), **treino entre membros**
+  (podem se atacar sem caveira e sem perder ouro), sair e desfazer o grupo. Só o líder muda as regras. Com o
+  Boladex de líder, você (sem alvo) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
+- **PK** (caveira): ligado, personagens podem se atacar fora das áreas protegidas (membros do grupo só no treino).
   Quem ataca alguém sem caveira fica com caveira (5 min; 15 min se matar). Quem morre no PK deixa parte do ouro
   e às vezes um item da mochila no chão.
 - **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
@@ -100,9 +111,10 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **136 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, simulação integrada).
+- Vitest: **146 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, simulação integrada).
 - Playwright: **8 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
-  magia por toque, toque duplo para equipar, toque na área do joystick para andar).
+  magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
+  painel do grupo (formação e treino).
 - Desempenho medido (Chrome headless, Intel Iris Xe): **60 FPS** (p95 ≈ 16,9 ms) em templo, praça e combate,
   celular 390×844@3x e desktop 1440×900. Em renderização por software (SwiftShader) ~15–19 FPS.
 

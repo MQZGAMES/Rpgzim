@@ -109,6 +109,16 @@ const list: ItemDef[] = [
   { id: 'wolf_pelt', name: 'Pele de Lobo', description: 'Pelagem cinzenta e macia, muito procurada no inverno.', type: 'loot', icon: 'item_wolf_pelt', value: 22, stackable: true, maxStack: 100 },
   { id: 'spider_silk', name: 'Seda de Aranha', description: 'Fio resistente usado em mantos encantados.', type: 'loot', icon: 'item_spider_silk', value: 30, stackable: true, maxStack: 100 },
   { id: 'bone_fragment', name: 'Fragmento de Osso', description: 'Restos de um guerreiro esquecido nas ruínas.', type: 'loot', icon: 'item_bone_fragment', value: 10, stackable: true, maxStack: 100 },
+  { id: 'bandit_mask', name: 'Máscara de Bandido', description: 'Pano escuro usado nas emboscadas da estrada.', type: 'loot', icon: 'item_bandit_mask', value: 40, stackable: true, maxStack: 100 },
+  { id: 'bear_claw', name: 'Garra de Urso', description: 'Troféu de caça disputado pelos mercadores.', type: 'loot', icon: 'item_bear_claw', value: 60, stackable: true, maxStack: 100 },
+  { id: 'orc_tooth', name: 'Dente de Orc', description: 'Prova de vitória contra os guerreiros da fortaleza.', type: 'loot', icon: 'item_orc_tooth', value: 90, stackable: true, maxStack: 100 },
+  { id: 'scorpion_stinger', name: 'Ferrão de Escorpião', description: 'Ainda pinga veneno. Alquimistas pagam bem.', type: 'loot', icon: 'item_scorpion_stinger', value: 120, stackable: true, maxStack: 100 },
+  { id: 'shaman_totem', name: 'Totem Xamânico', description: 'Pequeno ídolo de madeira que vibra com magia.', type: 'loot', icon: 'item_shaman_totem', value: 160, stackable: true, maxStack: 100 },
+  { id: 'ice_fang', name: 'Presa de Gelo', description: 'Nunca derrete. Usada em amuletos raros.', type: 'loot', icon: 'item_ice_fang', value: 220, stackable: true, maxStack: 100 },
+  { id: 'dark_emblem', name: 'Emblema Sombrio', description: 'Insígnia da ordem amaldiçoada da cidadela.', type: 'loot', icon: 'item_dark_emblem', value: 300, stackable: true, maxStack: 100 },
+  { id: 'troll_hide', name: 'Couro de Troll', description: 'Grosso como pedra. Armaduristas cobiçam.', type: 'loot', icon: 'item_troll_hide', value: 380, stackable: true, maxStack: 100 },
+  { id: 'lich_dust', name: 'Pó de Lich', description: 'Restos arcanos de um feiticeiro morto-vivo.', type: 'loot', icon: 'item_lich_dust', value: 500, stackable: true, maxStack: 100 },
+  { id: 'dragon_scale', name: 'Escama de Dragão', description: 'Quente ao toque. O loot mais valioso de Pedraluz.', type: 'loot', icon: 'item_dragon_scale', value: 700, stackable: true, maxStack: 100 },
   { id: 'goblin_charm', name: 'Amuleto Tosco', description: 'Talismã goblin de osso. Raro e cobiçado.', type: 'loot', icon: 'item_goblin_charm', value: 70, stackable: true, maxStack: 100 },
 ];
 

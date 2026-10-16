@@ -9,6 +9,7 @@ import type { SaveService } from '../../game/persistence/SaveService';
 import type { AudioService } from '../../game/audio/AudioService';
 import { buildSnapshot, type UiSnapshot } from './snapshot';
 import { heroSnapshot } from '../../game/ai/heroes';
+import { canAttackActor, type PartySetting } from '../../game/social/social';
 import { createLocalStore, createSnapshotStore, type Panel, type Store, type UiLocalState } from './store';
 
 const PUBLISH_MS = 80;
@@ -82,7 +83,8 @@ export class GameSession {
         this.audio.play('error');
       }),
       ev.on('regionEntered', (r) => {
-        const sub = this.sim.world.map.regions.find((x) => x.id === r.regionId)?.pz ? 'Área protegida' : 'Área de caça — cuidado!';
+        const reg0 = this.sim.world.map.regions.find((x) => x.id === r.regionId);
+        const sub = reg0?.pz ? 'Área protegida' : reg0?.city ? 'Cidade — protegido só dentro das construções' : 'Área de caça — cuidado!';
         this.local.update({ banner: { id: ++this.msgSeq, title: r.name, subtitle: sub } });
         const reg = this.sim.world.map.regions.find((x) => x.id === r.regionId);
         if (reg) this.audio.setMusic(reg.music);
@@ -90,6 +92,12 @@ export class GameSession {
       ev.on('levelUp', (e) => this.local.update({ levelUp: { id: ++this.msgSeq, level: e.level } })),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
+      ev.on('partyChanged', () => {
+        const has = !!this.sim.world.social.party;
+        if (has && !this.hadParty) this.local.update({ partyPanel: true, actorMenu: null });
+        if (!has) this.local.update({ partyPanel: false });
+        this.hadParty = has;
+      }),
       // falas de heróis próximos aparecem no registro de mensagens
       ev.on('speech', (e) => {
         const p = this.sim.world.human;
@@ -144,6 +152,8 @@ export class GameSession {
 
   private heroSavedAt = new Map<string, number>();
   private actorMenuAt = 0;
+  private hadParty = false;
+  private lastHeroTap: { id: string; at: number } | null = null;
   /** Salva o progresso de um herói (no máx. a cada 20 s, exceto `force`). */
   saveHero(heroId: string, force = false): Promise<void> {
     const h = [...this.sim.world.heroes.values()].find((x) => x.hero.id === heroId);
@@ -200,6 +210,10 @@ export class GameSession {
       this.local.update({ panel: null });
       return true;
     }
+    if (this.local.get().partyPanel || this.local.get().actorMenu) {
+      this.local.update({ partyPanel: false, actorMenu: null });
+      return true;
+    }
     if (w.ui.dialog || w.ui.shop || w.ui.depot || w.ui.lootId) {
       w.ui.dialog = null;
       w.ui.shop = null;
@@ -220,8 +234,20 @@ export class GameSession {
   /** Toque numa criatura do mapa: herói abre o menu; monstro/NPC segue o comportamento normal. */
   tapEntity(id: string): void {
     if (this.sim.world.heroes.has(id)) {
-      // abre o menu; um segundo toque logo em seguida (evento duplicado) não fecha
       const now = performance.now();
+      const w = this.sim.world;
+      const hero = w.heroes.get(id)!;
+      // toque duplo: ataca (com PK ligado, ou treino liberado no grupo); toque simples: menu discreto
+      if (this.lastHeroTap?.id === id && now - this.lastHeroTap.at < 420) {
+        this.lastHeroTap = null;
+        if (!canAttackActor(w, w.human, hero)) {
+          this.sim.setTarget(id);
+          this.local.update({ actorMenu: null });
+          this.dirty = true;
+          return;
+        }
+      }
+      this.lastHeroTap = { id, at: now };
       const open = this.local.get().actorMenu === id;
       if (open && now - this.actorMenuAt < 600) return;
       this.actorMenuAt = now;
@@ -265,6 +291,19 @@ export class GameSession {
   partyPassLeader(id: string): void {
     this.sim.partyPassLeader(id);
     this.dirty = true;
+  }
+  configureParty(patch: PartySetting): void {
+    this.sim.configureParty(patch);
+    this.audio.play('ui');
+    this.dirty = true;
+  }
+  disbandParty(): void {
+    this.sim.disbandParty();
+    this.local.update({ partyPanel: false });
+    this.dirty = true;
+  }
+  setPartyPanel(open: boolean): void {
+    this.local.update({ partyPanel: open, actorMenu: null });
   }
   setPvp(on: boolean): void {
     this.sim.setPvp(on);
@@ -381,6 +420,11 @@ export class GameSession {
   }
   sell(itemId: string, qty: number): void {
     if (this.sim.sell(itemId, qty)) this.audio.play('coin');
+    this.dirty = true;
+  }
+  setSellLock(itemId: string, locked: boolean): void {
+    this.sim.setSellLock(itemId, locked);
+    this.audio.play('ui');
     this.dirty = true;
   }
   sellAll(): void {

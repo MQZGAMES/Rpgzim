@@ -241,7 +241,7 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await createCharacter(page, 'knight', 'Social');
   await page.getByTestId('toggle-stand').click();
-  await expect(page.getByTestId('toggle-stand')).toContainText('Parado');
+  await expect(page.getByTestId('toggle-stand')).toContainText('parado');
   await page.getByTestId('toggle-pvp').click();
   await expect(page.getByTestId('toggle-pvp')).toContainText('PK on');
   // abre o menu do herói pela simulação do toque (a posição na tela varia com o zoom)
@@ -249,6 +249,16 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   const id = (await page.evaluate(() => (window.__RPGZIM__ as { heroes(): HeroInfo[] }).heroes()))[0]!.id;
   await page.evaluate((hid) => (window.__RPGZIM__ as { openActorMenu(id: string): void }).openActorMenu(hid), id);
   await expect(page.getByTestId('actor-menu')).toContainText('Boladex');
-  await expect(page.getByRole('button', { name: 'Convidar p/ grupo' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Atacar' })).toBeVisible();
+  // menu discreto: sem "Conversar"; atacar só aparece onde é permitido (no templo, área protegida, não)
+  await expect(page.getByTestId('actor-menu')).not.toContainText('Conversar');
+  await expect(page.getByTestId('actor-attack')).toHaveCount(0);
+  // convidar: quando ele aceita, o painel do grupo abre com os controles
+  await page.evaluate(() => (window.__RPGZIM__ as { befriendHeroes(): void }).befriendHeroes());
+  await page.getByTestId('actor-invite').click();
+  await expect(page.getByTestId('party-panel')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('party-formation-line').click();
+  await page.getByTestId('party-ff-on').click();
+  await page.getByRole('button', { name: 'Fechar' }).first().click();
+  await expect(page.getByTestId('party-frame')).toContainText('em fila');
+  await expect(page.getByTestId('btn-party')).toBeVisible();
 });

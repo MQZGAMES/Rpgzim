@@ -10,7 +10,7 @@ import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { asActor, warnThrottled } from '../simulation/World';
 import { actorSource, aggro, currentActorTarget, currentTarget, damageMonster, damagePlayer, hasLineOfSight, targetNearest } from '../combat/combat';
-import { canAttackActor, registerAggression } from '../social/social';
+import { actorById, canAttackActor, partyOf, registerAggression } from '../social/social';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function spellCooldownRemaining(w: World, spellId: string): number {
@@ -57,16 +57,24 @@ export function castSpell(w: World, spellId: string): boolean {
   if (!spell) return false;
   const p = w.player;
   const c = p.character;
-  // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo ao alcance
+  // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo
+  // (golpes corpo a corpo também: mira o mais próximo por perto e o golpe sai ao chegar nele)
   if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !currentTarget(w) && !currentActorTarget(w) && !p.dead) {
-    targetNearest(w, spell.range);
+    targetNearest(w, Math.max(spell.range, 7));
   }
   const check = castCheck(w, spell);
+  if (!check.ok && check.reason === 'outOfRange') {
+    // fica na fila: é lançada assim que o alvo entrar no alcance (seguindo o alvo)
+    p.queuedSpell = { id: spell.id, until: w.now + 4000 };
+    warnThrottled(w, `queue:${spell.id}`, `${spell.name}: assim que o alvo estiver ao alcance.`, 2000);
+    return false;
+  }
   if (!check.ok) {
     warnThrottled(w, `cast:${check.reason}`, castFailMessage(check.reason, check.detail), 600);
     return false;
   }
   const voc = w.data.vocations[c.vocation];
+  p.queuedSpell = null;
   // custo, cooldowns e treino de Magic Level (mana gasta)
   c.mana -= spell.manaCost;
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
@@ -130,6 +138,26 @@ export function castSpell(w: World, spellId: string): boolean {
     const before = c.health;
     c.health = Math.min(p.stats.maxHealth, c.health + amount);
     w.events.emit('heal', { targetId: p.id, amount: c.health - before, mana: false, position: { x: p.x, y: p.y } });
+    // em grupo: cura (e abençoa) os membros por perto
+    if (spell.partyRadius) {
+      for (const id of partyOf(w, p.id)?.members ?? []) {
+        if (id === p.id) continue;
+        const m = actorById(w, id);
+        if (!m || m.dead || chebyshev(m, p) > spell.partyRadius) continue;
+        const healed = rollRange(range, w.rng);
+        asActor(w, m, () => {
+          const b0 = m.character.health;
+          m.character.health = Math.min(m.stats.maxHealth, m.character.health + healed);
+          w.events.emit('heal', { targetId: m.id, amount: m.character.health - b0, mana: false, position: { x: m.x, y: m.y } });
+          if (spell.buff) {
+            m.buffs = m.buffs.filter((b) => b.kind !== spell.buff!.kind);
+            m.buffs.push({ kind: spell.buff.kind, value: spell.buff.value, expiresAt: w.now + spell.buff.durationMs, sourceSpell: spell.id });
+            refreshStats(w);
+            w.events.emit('buffApplied', { targetId: m.id, kind: spell.buff.kind, durationMs: spell.buff.durationMs });
+          }
+        });
+      }
+    }
   }
   if (spell.buff) {
     p.buffs = p.buffs.filter((b) => b.kind !== spell.buff!.kind);
@@ -143,4 +171,17 @@ export function castSpell(w: World, spellId: string): boolean {
 function monstersOn(w: World, tiles: TilePos[]): MonsterEntity[] {
   const set = new Set(tiles.map((t) => t.y * w.map.width + t.x));
   return [...w.monsters.values()].filter((m) => m.alive && set.has(m.y * w.map.width + m.x));
+}
+
+/** Magia na fila (alvo fora do alcance): lança quando der, ou desiste depois de alguns segundos. */
+export function updateQueuedSpell(w: World): void {
+  const p = w.player;
+  const q = p.queuedSpell;
+  if (!q) return;
+  const spell = w.data.spells[q.id];
+  if (!spell || w.now > q.until || p.dead || (!currentTarget(w) && !currentActorTarget(w))) {
+    p.queuedSpell = null;
+    return;
+  }
+  if (castCheck(w, spell).ok) castSpell(w, q.id);
 }

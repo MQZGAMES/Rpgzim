@@ -86,6 +86,11 @@ export class EffectsView {
       if (v.container.visible) this.playFx('fx_heal', v.container.x, v.container.y - 14, v.container.depth + 1);
     });
     on('speech', (e) => this.speech(e.entityId, e.text));
+    on('monsterReturned', (e) => {
+      // fumaça onde sumiu e onde reapareceu (se estiver na tela)
+      if (this.onScreen(e.from)) this.playFx('fx_poof', tileCenter(e.from).x, tileCenter(e.from).y - 6, DEPTH.overlay);
+      if (this.onScreen(e.to)) this.playFx('fx_poof', tileCenter(e.to).x, tileCenter(e.to).y - 6, DEPTH.overlay);
+    });
     on('playerRespawned', () => {
       const v = this.views.player;
       v.revive();

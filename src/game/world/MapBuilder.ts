@@ -26,6 +26,7 @@ export class MapBuilder {
   readonly solid: Uint8Array;
   readonly sight: Uint8Array;
   readonly pz: Uint8Array;
+  readonly city: Uint8Array;
   /** Células reservadas: a decoração procedural não coloca objetos aqui. */
   readonly reserved: Uint8Array;
   readonly bridge: Uint8Array;
@@ -61,6 +62,7 @@ export class MapBuilder {
     this.solid = new Uint8Array(n);
     this.sight = new Uint8Array(n);
     this.pz = new Uint8Array(n);
+    this.city = new Uint8Array(n);
     this.reserved = new Uint8Array(n);
     this.bridge = new Uint8Array(n);
     this.buildingAt = new Int16Array(n).fill(-1);
@@ -187,6 +189,8 @@ export class MapBuilder {
         const i = this.idx(xx, yy);
         this.buildingAt[i] = index;
         this.reserved[i] = 1;
+        // dentro de casas, lojas, banco e templo ninguém pode lutar
+        this.pz[i] = 1;
       }
     // paredes internas do fundo (2 linhas)
     for (let xx = x + 1; xx < x + w - 1; xx++) {
@@ -331,6 +335,7 @@ export class MapBuilder {
   region(def: RegionDef): this {
     this.regions.push(def);
     if (def.pz) this.forRect(def, (x, y) => (this.pz[this.idx(x, y)] = 1));
+    if (def.city) this.forRect(def, (x, y) => (this.city[this.idx(x, y)] = 1));
     return this;
   }
   sign(x: number, y: number, text: string): this {
@@ -408,6 +413,7 @@ export class MapBuilder {
       solid: this.solid,
       sight: this.sight,
       pz: this.pz,
+      city: this.city,
       buildingAt: this.buildingAt,
       props: this.props,
       buildings: this.buildings,

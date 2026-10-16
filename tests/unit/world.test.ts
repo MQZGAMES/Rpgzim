@@ -63,8 +63,10 @@ describe('mundo inicial', () => {
       expect(isSolid(map, b.x, b.y + b.h - 1)).toBe(true);
     }
   });
-  it('monstros não entram na vila: toda a cidade é zona protegida', () => {
-    expect(isPz(map, 47, 27)).toBe(true);
+  it('área protegida só dentro das construções; as ruas da cidade são livres', () => {
+    expect(isPz(map, 47, 27)).toBe(false); // praça
+    expect(isPz(map, map.playerStart.x, map.playerStart.y)).toBe(true); // dentro do templo
+    for (const b of map.buildings) expect(isPz(map, b.doorX, b.y + b.h - 1), b.id).toBe(true); // porta
     expect(isPz(map, 80, 30)).toBe(false);
   });
   it('três casas exploráveis sem troca de cena', () => {

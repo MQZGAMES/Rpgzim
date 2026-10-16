@@ -4,7 +4,7 @@
 // - A ocupação reserva o tile de destino no início do passo (colisão entre criaturas confiável).
 import { facingFrom } from '../../domain/value-objects/direction';
 import type { TilePos } from '../../domain/value-objects/position';
-import { cellIndex, inBounds, isPz, isSolid } from '../world/GameMap';
+import { cellIndex, inBounds, isCrowdSafe, isPz, isSolid } from '../world/GameMap';
 import type { Mover } from '../entities/types';
 import type { World } from '../simulation/World';
 import { canStep, findPath } from './pathfinding';
@@ -33,8 +33,8 @@ export function canEnter(w: World, x: number, y: number, forMonster: boolean, se
   if (forMonster && isPz(w.map, x, y)) return false;
   const occ = occupant(w, x, y);
   if (occ === undefined || occ === selfId) return true;
-  // na vila (área protegida) personagens passam uns pelos outros — ninguém trava porta nem corredor
-  return !forMonster && isPz(w.map, x, y) && isActorId(occ) && isActorId(selfId);
+  // na cidade e nas construções personagens passam uns pelos outros — ninguém trava porta nem rua
+  return !forMonster && isCrowdSafe(w.map, x, y) && isActorId(occ) && isActorId(selfId);
 }
 
 export function placeOccupant(w: World, m: Mover): void {

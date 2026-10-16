@@ -69,6 +69,8 @@ export interface RegionDef {
   w: number;
   h: number;
   pz: boolean;
+  /** Cidade: ruas livres (sem área protegida), mas personagens passam uns pelos outros. */
+  city?: boolean;
   music: 'temple' | 'town' | 'wild';
   /** Prioridade: regiões mais específicas têm valor maior. */
   priority: number;
@@ -103,6 +105,8 @@ export interface GameMap {
   sight: Uint8Array;
   /** 1 = zona protegida (sem combate; monstros não entram). */
   pz: Uint8Array;
+  /** 1 = tile de cidade (personagens não se bloqueiam). */
+  city: Uint8Array;
   /** Índice da construção na célula (-1 = fora). */
   buildingAt: Int16Array;
   props: PropInstance[];
@@ -124,6 +128,13 @@ export function isSolid(m: GameMap, x: number, y: number): boolean {
 
 export function isPz(m: GameMap, x: number, y: number): boolean {
   return inBounds(m, x, y) && m.pz[cellIndex(m, x, y)] === 1;
+}
+
+/** Tile de cidade ou área protegida: personagens passam uns pelos outros (ninguém trava porta/rua). */
+export function isCrowdSafe(m: GameMap, x: number, y: number): boolean {
+  if (!inBounds(m, x, y)) return false;
+  const i = cellIndex(m, x, y);
+  return m.pz[i] === 1 || m.city[i] === 1;
 }
 
 export function blocksSight(m: GameMap, x: number, y: number): boolean {

@@ -37,6 +37,9 @@ export function installDebugApi(session: GameSession): () => void {
     ui: () => ({ ...sim.world.ui }),
     save: () => session.saveNow(),
     openActorMenu: (id: string) => session.tapEntity(id),
+    befriendHeroes: () => {
+      for (const h of sim.world.heroes.values()) h.brain.affinity[sim.world.human.id] = 1;
+    },
     heroes: () =>
       [...sim.world.heroes.values()].map((h) => ({ id: h.id, name: h.character.name, x: h.x, y: h.y, level: h.character.level, hp: h.character.health, gold: h.character.gold, bankGold: h.character.bankGold, mode: h.brain.mode, quarry: h.brain.quarry, dead: h.dead })),
     buildings: () => sim.world.map.buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, doorX: b.doorX })),

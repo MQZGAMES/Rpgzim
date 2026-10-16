@@ -149,6 +149,8 @@ export interface SpellDef {
   buff?: { kind: BuffKind; value: number; durationMs: number };
   /** Efeito adicional aplicado aos alvos atingidos. */
   slow?: { factor: number; durationMs: number };
+  /** Cura/bênção também alcança os membros do grupo neste raio (tiles). */
+  partyRadius?: number;
   /** Munição consumida (flechas). */
   ammoCost?: number;
   /** Exige uma categoria de arma empunhada. */
@@ -215,6 +217,10 @@ export interface MonsterDef {
   shadow: 's' | 'm' | 'l';
   /** Escala visual (chefes maiores). */
   scale?: number;
+  /** Nível recomendado para caçar a espécie (derivado da faixa de força). */
+  level?: number;
+  /** Chefe/elite (aparece raramente; heróis não o escolhem como caça). */
+  elite?: boolean;
   description: string;
 }
 
@@ -273,6 +279,9 @@ export interface BalanceConfig {
     blockChancePerSkill: number;
     maxBlockChance: number;
     shieldingTriesPerHit: number;
+    /** Arma de distância com o alvo colado (1 tile): multiplicadores de acerto e de dano. */
+    pointBlankHitMultiplier: number;
+    pointBlankDamageMultiplier: number;
     /** Janela (ms) em que cada atacante conta uma vez para o Shielding. */
     shieldingWindowMs: number;
     /** Máximo de atacantes que treinam Shielding por janela (Tibia: 2). */
@@ -282,6 +291,19 @@ export interface BalanceConfig {
   };
   player: { inventorySlots: number; depotSlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };
+  /** Escada de força das criaturas (ver data/monsters.ts). */
+  creatures: {
+    baseHealth: number;
+    baseAttack: number;
+    baseExperience: number;
+    baseGold: number;
+    /** Multiplicador de vida e ataque de uma faixa para a seguinte (2 = dobro). */
+    tierRatio: number;
+    xpRatio: number;
+    goldRatio: number;
+    /** Distância de perseguição = base da espécie × este valor. */
+    leashMultiplier: number;
+  };
 }
 
 // ------------------------------------------------------------------ heróis (personagens-jogadores com vida própria)

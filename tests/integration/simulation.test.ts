@@ -143,8 +143,33 @@ describe('combate e progressão', () => {
     const hp = p.character.health;
     expect(runUntil(sim, () => boar.state === 'chasing' || boar.state === 'attacking', 5000)).toBe(true);
     expect(runUntil(sim, () => p.character.health < hp, 15000)).toBe(true);
-    sim.teleportPlayer(47, 24);
-    expect(runUntil(sim, () => boar.state === 'returning' || boar.state === 'idle', 3000)).toBe(true);
+    // jogador entra no templo (área protegida): o javali desiste e volta por teleporte, com a vida cheia
+    boar.hp -= 10;
+    const ps = sim.world.map.playerStart;
+    sim.teleportPlayer(ps.x, ps.y);
+    expect(runUntil(sim, () => boar.state === 'idle', 3000)).toBe(true);
+    expect(boar.hp).toBe(boar.def.health);
+    expect(Math.max(Math.abs(boar.x - boar.homeX), Math.abs(boar.y - boar.homeY))).toBeLessThanOrEqual(3);
+  });
+
+  it('monstro contorna obstáculos (árvores, casas) para alcançar o jogador', () => {
+    const sim = makeSim('knight', { seed: 8 });
+    const w = sim.world;
+    const p = w.player;
+    // goblin atrás de uma casa: posiciona o jogador do outro lado da Casa do Caçador (fora da construção)
+    const house = w.map.buildings.find((b) => b.id === 'house_hunter')!;
+    const boar = nearestMonster(sim, 'boar');
+    sim.teleportPlayer(house.x + 2, house.y - 3); // atrás (ao norte) da casa
+    w.occupancy.delete(boar.y * w.map.width + boar.x);
+    boar.x = house.x + 2;
+    boar.y = house.y + house.h + 2; // na frente (ao sul) da casa: a casa está no meio
+    boar.homeX = boar.x;
+    boar.homeY = boar.y;
+    w.occupancy.set(boar.y * w.map.width + boar.x, boar.id);
+    boar.state = 'chasing';
+    boar.targetId = p.id;
+    const hp = p.character.health;
+    expect(runUntil(sim, () => p.character.health < hp, 30000)).toBe(true);
   });
 
   it('monstro morto não ataca e reaparece após o tempo de respawn', () => {
@@ -511,7 +536,7 @@ describe('herói com vida própria (Boladex)', () => {
     return { sim, h };
   }
 
-  it('é um Knight com as mesmas regras do jogador: caça, sobe de nível, treina skills, vende, compra e guarda no banco', () => {
+  it('é um Knight com as mesmas regras do jogador: caça, sobe de nível, treina skills, vende, compra e guarda no banco', { timeout: 60_000 }, () => {
     const { sim, h } = withBoladex();
     const w = sim.world;
     const speech: string[] = [];

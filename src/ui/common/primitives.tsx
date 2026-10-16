@@ -53,22 +53,66 @@ export function Bar({ value, max, color, track = '#2a1d33', height = 10, label, 
   );
 }
 
-export function PixelButton({ children, onClick, variant = 'stone', disabled, className = '', title, ariaLabel, type = 'button' }: { children: ReactNode; onClick?: () => void; variant?: 'stone' | 'gold'; disabled?: boolean; className?: string; title?: string; ariaLabel?: string; type?: 'button' | 'submit' }) {
+export function PixelButton({
+  children,
+  onClick,
+  variant = 'stone',
+  disabled,
+  className = '',
+  title,
+  ariaLabel,
+  type = 'button',
+  'data-testid': testId,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  variant?: 'stone' | 'gold';
+  disabled?: boolean;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+  type?: 'button' | 'submit';
+  'data-testid'?: string;
+}) {
   return (
-    <button type={type} title={title} aria-label={ariaLabel} disabled={disabled} onClick={onClick} className={`${variant === 'gold' ? 'btn-gold' : 'btn-pixel'} text-sm leading-tight ${className}`}>
+    <button type={type} title={title} aria-label={ariaLabel} disabled={disabled} onClick={onClick} data-testid={testId} className={`${variant === 'gold' ? 'btn-gold' : 'btn-pixel'} text-sm leading-tight ${className}`}>
       {children}
     </button>
   );
 }
 
 /** Painel: no celular vira uma folha inferior; no desktop, uma janela lateral. */
-export function Panel({ title, onClose, children, wide = false, variant = 'dark', icon, scroll = true }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; variant?: 'dark' | 'parchment'; icon?: string; scroll?: boolean }) {
+export function Panel({
+  title,
+  onClose,
+  children,
+  wide = false,
+  variant = 'dark',
+  icon,
+  scroll = true,
+  fill = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+  variant?: 'dark' | 'parchment';
+  icon?: string;
+  scroll?: boolean;
+  /** Altura fixa (ocupa o espaço disponível): permite colunas internas com rolagem própria. */
+  fill?: boolean;
+}) {
   return (
-    <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-black/45 lg:items-start lg:justify-end lg:bg-transparent lg:p-4 lg:pt-20" onClick={onClose}>
+    <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-black/45 lg:items-start lg:justify-end lg:bg-transparent lg:p-4 lg:pt-16" onClick={onClose}>
       <div
         role="dialog"
         aria-label={title}
-        className={`${variant === 'dark' ? 'frame-dark' : 'frame-parchment'} anim-sheet safe-bottom flex max-h-[82dvh] w-full flex-col lg:max-h-[78vh] ${wide ? 'lg:w-[560px]' : 'lg:w-[440px]'}`}
+        className={`${variant === 'dark' ? 'frame-dark' : 'frame-parchment'} anim-sheet safe-bottom flex w-full flex-col ${
+          // a interface é ampliada em monitores grandes (--hud-zoom): a altura compensa para caber na tela
+          fill
+            ? 'h-[88dvh] max-lg:landscape:h-[94dvh] lg:h-[min(760px,calc((100dvh-5.5rem)/var(--hud-zoom,1)))]'
+            : 'max-h-[88dvh] max-lg:landscape:max-h-[94dvh] lg:max-h-[calc((100dvh-5.5rem)/var(--hud-zoom,1))]'
+        } ${wide ? 'lg:w-[600px]' : 'lg:w-[440px]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-2 flex items-center gap-2">

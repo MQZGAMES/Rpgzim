@@ -234,10 +234,12 @@
 @media (min-width: 1280px) and (pointer: fine) {
   .hud-scale {
     zoom: 1.2;
+    --hud-zoom: 1.2;
   }
 }
 @media (min-width: 1800px) and (pointer: fine) {
   .hud-scale {
     zoom: 1.4;
+    --hud-zoom: 1.4;
   }
 }

@@ -1,6 +1,5 @@
 // Composição do HUD sobre o canvas. Layout próprio para toque (celular) e para desktop.
 import { useLocal, useSession } from '../../integration/game-ui-bridge/hooks';
-import { ItemIcon } from '../common/primitives';
 import { Joystick } from '../controls/Joystick';
 import { InventoryPanel } from '../inventory/InventoryPanel';
 import { CharacterPanel } from '../character/CharacterPanel';
@@ -11,17 +10,9 @@ import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { StatusPanel } from './StatusPanel';
 import { TargetFrame } from './TargetFrame';
-import { ActorMenu, InvitePrompt, PartyFrame, QuickToggles } from './Social';
+import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyFrame, PartyPanel, QuickToggles } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
 import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, RegionBanner } from './Overlays';
-
-function MenuButton({ icon, label, onClick, testId, hotkey }: { icon: string; label: string; onClick: () => void; testId: string; hotkey?: string }) {
-  return (
-    <button type="button" aria-label={label} title={hotkey ? `${label} (${hotkey})` : label} onClick={onClick} className="btn-pixel flex h-11 w-11 items-center justify-center !border-[8px]" data-testid={testId}>
-      <ItemIcon icon={icon} size={22} />
-    </button>
-  );
-}
 
 export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setShowLog }: { zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void; showLog: boolean; setShowLog: (v: boolean) => void }) {
   const session = useSession();
@@ -39,7 +30,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
           <PartyFrame />
         </div>
         <div className="flex flex-col items-end gap-1">
-        <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
+        <div className="pointer-events-auto flex max-w-[92px] flex-wrap justify-end gap-1 sm:max-w-none">
           <MenuButton icon="ui_bag" label="Mochila" hotkey="I" onClick={() => session.setPanel('inventory')} testId="btn-inventory" />
           <MenuButton icon="ui_char" label="Personagem" hotkey="C" onClick={() => session.setPanel('character')} testId="btn-character" />
           <MenuButton icon="ui_book" label="Grimório" hotkey="K" onClick={() => session.setPanel('spells')} testId="btn-spells" />
@@ -48,7 +39,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
         <QuickToggles />
         </div>
       </div>
-      <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] -translate-x-1/2 lg:top-3">
+      <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] max-sm:portrait:top-[calc(env(safe-area-inset-top)+206px)] -translate-x-1/2 lg:top-3">
         <div className="flex flex-col items-center gap-1">
           <TargetFrame />
           <InvitePrompt />
@@ -58,7 +49,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {showLog && (
         <div
           className={`absolute left-[max(8px,env(safe-area-inset-left))] ${
-            touch ? 'bottom-[calc(136px+env(safe-area-inset-bottom))] max-w-[calc(100vw-206px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
+            touch ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] max-w-[calc(100vw-232px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
           }`}
         >
           <MessageLog max={touch ? 5 : 7} />
@@ -77,6 +68,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {panel === 'spells' && <SpellBookPanel onClose={close} />}
       {panel === 'settings' && <SettingsPanel onClose={close} zoomBias={zoomBias} setZoomBias={setZoomBias} showFps={showFps} setShowFps={setShowFps} showLog={showLog} setShowLog={setShowLog} />}
       {panel === 'help' && <HelpPanel onClose={close} touch={touch} />}
+      <PartyPanel />
       <DeathOverlay />
     </div>
   );

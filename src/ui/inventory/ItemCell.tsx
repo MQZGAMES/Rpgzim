@@ -82,6 +82,7 @@ export function ItemCell({
         </span>
       )}
       {item?.better && <span className="text-outline pointer-events-none absolute bottom-[-5px] left-[-3px] text-[10px] leading-none text-heal">▲</span>}
+      {item?.locked && <ItemIcon icon="ui_lock" size={11} className="pointer-events-none absolute right-[-3px] top-[-4px]" title="Venda travada" />}
     </button>
   );
 }

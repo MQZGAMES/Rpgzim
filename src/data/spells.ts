@@ -51,7 +51,7 @@ const list: SpellDef[] = [
   },
   {
     id: 'sap_blessing', name: 'Bênção da Seiva', words: 'silva vita', icon: 'spell_sap_blessing',
-    description: 'Cura intensa e regeneração contínua por 10 segundos.', vocations: ['druid'], minLevel: 4, minMagicLevel: 2,
+    description: 'Cura intensa e regeneração contínua por 10 segundos. Em grupo, cura também os membros a até 4 tiles.', vocations: ['druid'], minLevel: 4, minMagicLevel: 2, partyRadius: 4,
     manaCost: 40, cooldownMs: 6000, range: 0, target: 'self', effect: 'heal', element: 'earth',
     formula: { kind: 'magic', levelFactor: 0.8, powerFactor: 3.2, base: 40, min: 0.9, max: 1.1 },
     buff: { kind: 'regen', value: 6, durationMs: 10000 },

@@ -14,6 +14,8 @@ export interface GameEventMap extends Record<string, unknown> {
   actionFailed: { reason: string; message: string };
   entityDied: { entityId: string; kind: 'player' | 'monster'; position: TilePos; spriteKey: string };
   entitySpawned: { entityId: string };
+  /** Monstro desistiu da perseguição e voltou por teleporte ao ponto de origem. */
+  monsterReturned: { entityId: string; from: TilePos; to: TilePos };
   xpGained: { amount: number; position: TilePos };
   levelUp: { level: number };
   skillUp: { skill: SkillId; level: number };

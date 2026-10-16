@@ -15,7 +15,7 @@ import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { asActor, message, nextId, warnThrottled } from '../simulation/World';
-import { PVP_FAIL_MESSAGE, actorById, canAttackActor, registerAggression, registerPlayerKill, xpReceivers } from '../social/social';
+import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, registerAggression, registerPlayerKill, xpReceivers } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function hasLineOfSight(w: World, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
@@ -172,9 +172,12 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
   if (weapon.kind === 'wand') {
     raw = rollWandDamage(weapon.damage ?? [4, 8], p.stats.magicLevel, voc.damage.magic, w.rng);
   } else {
-    const mod = weapon.kind === 'distance' ? voc.damage.distance * (1 + p.stats.distanceDamageBonus) : voc.damage.melee;
+    const cfg = w.data.balance.combat;
+    const pointBlank = weapon.kind === 'distance' && chebyshev(p, target) <= 1;
+    if (pointBlank) warnThrottled(w, 'pointblank', 'Muito perto para atirar bem: afaste-se pelo menos 2 tiles.', 6000);
+    const mod = (weapon.kind === 'distance' ? voc.damage.distance * (1 + p.stats.distanceDamageBonus) : voc.damage.melee) * (pointBlank ? cfg.pointBlankDamageMultiplier : 1);
     const skill = weaponSkillLevel(p.stats);
-    if (weapon.kind === 'distance' && !w.rng.chance(distanceHitChance(skill))) {
+    if (weapon.kind === 'distance' && !w.rng.chance(distanceHitChance(skill) * (pointBlank ? cfg.pointBlankHitMultiplier : 1))) {
       w.events.emit('missed', { sourceId: p.id, targetId: target.id, position: to });
       if (target.kind === 'monster') aggro(w, target);
       else registerAggression(w, p.id, target.id);
@@ -298,7 +301,7 @@ function killPlayer(w: World, killer: DamageSource): void {
   w.events.emit('entityDied', { entityId: p.id, kind: 'player', position: { x: p.x, y: p.y }, spriteKey: c.vocation });
   w.events.emit('playerDied', { xpLost: before - c.experience, killerId: killer.id, killerName: killer.name, byPlayer: killer.kind === 'player' });
   message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
-  if (killer.kind === 'player') dropPkLoot(w, p, killer);
+  if (killer.kind === 'player' && !isSparring(w, killer.id, p.id)) dropPkLoot(w, p, killer);
 }
 
 /** Morte no PK: parte do ouro da bolsa e às vezes um item da mochila ficam no chão (nunca o equipado). */

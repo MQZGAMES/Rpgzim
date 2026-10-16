@@ -89,6 +89,20 @@ export function ItemDetails({ item, equipped, actions }: { item: ItemView; equip
   );
 }
 
+/** Trava/destrava a venda do item (o cadeado o deixa fora do "Vender tudo"). */
+function LockButton({ item }: { item: ItemView }) {
+  const session = useSession();
+  if (item.value <= 0) return null;
+  return (
+    <PixelButton onClick={() => session.setSellLock(item.itemId, !item.locked)} title={item.locked ? 'Volta a entrar no "Vender tudo"' : 'Não entra no "Vender tudo" das lojas'}>
+      <span className="inline-flex items-center gap-1">
+        <ItemIcon icon="ui_lock" size={14} className={item.locked ? '' : 'opacity-60 grayscale'} />
+        {item.locked ? 'Destravar venda' : 'Travar venda'}
+      </span>
+    </PixelButton>
+  );
+}
+
 export function InventoryPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const inv = useSnap((s) => s.inventory);
@@ -203,6 +217,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
                     Usar
                   </PixelButton>
                 )}
+                <LockButton item={selected} />
                 <PixelButton
                   onClick={() => {
                     if (window.confirm(`Descartar ${selected.name}${selected.count > 1 ? ` x${selected.count}` : ''}?`)) {
@@ -215,14 +230,17 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
                 </PixelButton>
               </>
             ) : sel?.from === 'slot' ? (
-              <PixelButton
-                onClick={() => {
-                  session.unequip(sel.slot);
-                  setSel(null);
-                }}
-              >
-                Desequipar
-              </PixelButton>
+              <>
+                <PixelButton
+                  onClick={() => {
+                    session.unequip(sel.slot);
+                    setSel(null);
+                  }}
+                >
+                  Desequipar
+                </PixelButton>
+                <LockButton item={selected} />
+              </>
             ) : null
           }
         />

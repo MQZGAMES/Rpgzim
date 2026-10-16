@@ -76,10 +76,32 @@ Papéis resultantes:
 6. **Varinhas avançadas gastavam mais mana do que os magos regeneravam** (o ataque básico parava sem poções):
    custo 5/7 → 4/5 de mana por disparo.
 
+## Escada de criaturas
+
+Configurável em `BALANCE.creatures` (`src/data/balance`) e gerada em `src/data/monsters.ts`. São 6 patamares de
+3 espécies; **cada patamar tem o dobro de vida e de ataque do anterior** (`tierRatio: 2`), e dentro do patamar as
+espécies sobem ×1 / ×1,25 / ×1,55. XP ×3 e ouro ×2,2 por patamar. Dobrar a cada espécie (2^17 entre a primeira e a
+última) tornaria o jogo impossível, por isso o dobro é por patamar.
+
+| Patamar | Nível | Espécies | Área |
+|---|---|---|---|
+| 1 | 1 | Slime, Sapo, Javali | Clareira, pântano, mata |
+| 2 | 6 | Goblin, Lobo, Aranha | Acampamento, colinas, bosque |
+| 3 | 12 | Esqueleto, Bandido, Urso | Ruínas, Floresta dos Bandidos |
+| 4 | 20 | Orc, Escorpião, Chefe Goblin (elite) | Fortaleza Orc, Cânion |
+| 5 | 30 | Xamã Orc, Lobo do Gelo, Cavaleiro Sombrio | Fortaleza, Bosque Gélido, Cidadela |
+| 6 | 40 | Troll, Lich, Dragão Jovem (elite) | Covil do Dragão |
+
+- **Distância de perseguição** (`leashMultiplier: 3`): 3× maior que antes; ao passar dela, a criatura volta por
+  teleporte com a vida cheia (evita "puxar e curar").
+- **Paladin colado no alvo** (`pointBlankHitMultiplier`/`pointBlankDamageMultiplier` = 0,5): arco/lança a 1 tile
+  acerta metade das vezes e causa metade do dano; o ideal é ficar a 2+ tiles.
+- **Bênção da Seiva** (Druid): em grupo, cura e dá regeneração aos membros a até 4 tiles.
+- **Magias de alvo** (inclusive o Golpe Brutal do Knight): sem alvo, miram o inimigo mais próximo (até 7 tiles) e
+  ficam na fila por 4 s, saindo assim que o alvo entra no alcance.
+
 ## Pendências conhecidas
 
-- **Faltam monstros para os níveis 12+**: o mais forte (Chefe Goblin) bate até 34; com o equipamento de nível
-  15+ o Knight praticamente não recebe dano físico. Próximo passo: uma área de nível alto (ex.: caverna/masmorra)
-  com monstros de 60–120 de dano, dano elemental e um chefe.
+- Os equipamentos vão até o nível 18; os patamares 4–6 pedem novos equipamentos (próximo passo).
 - Monstros que causam dano de terra (aranha, sapo) ignoram armadura, o que é proposital (contra-ataque aos tanques).
 - Valores de skill/ML por nível são estimativas; uma telemetria de sessões reais refinaria a tabela.

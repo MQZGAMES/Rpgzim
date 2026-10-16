@@ -39,9 +39,20 @@ export function sell(c: CharacterState, shop: ShopDef, itemId: string, quantity:
   return { ok: true, total };
 }
 
-/** O que "vender tudo" levaria: itens da mochila (nunca os equipados) que esta loja compra. */
+/** Itens travados pelo jogador não entram no "vender tudo" (guardado em `flags`, sem mudar o save). */
+export const sellLockKey = (itemId: string) => `lock:${itemId}`;
+export function isSellLocked(c: CharacterState, itemId: string): boolean {
+  return c.flags[sellLockKey(itemId)] === true;
+}
+export function setSellLock(c: CharacterState, itemId: string, locked: boolean): void {
+  if (locked) c.flags[sellLockKey(itemId)] = true;
+  else delete c.flags[sellLockKey(itemId)];
+}
+
+/** O que "vender tudo" levaria: itens da mochila (nunca os equipados nem os travados) que esta loja compra. */
 export function sellAllPreview(c: CharacterState, shop: ShopDef): { itemId: string; count: number; total: number }[] {
   return shop.buys
+    .filter((o) => !isSellLocked(c, o.itemId))
     .map((o) => ({ itemId: o.itemId, count: countItem(c.inventory, o.itemId), price: o.price }))
     .filter((o) => o.count > 0)
     .map((o) => ({ itemId: o.itemId, count: o.count, total: o.count * o.price }));

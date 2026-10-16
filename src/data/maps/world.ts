@@ -5,7 +5,9 @@ import { PROPS } from '../props';
 import { MapBuilder, Terrain } from '../../game/world/MapBuilder';
 import type { GameMap } from '../../game/world/GameMap';
 
-export const WORLD_W = 104;
+export const WORLD_W = 170;
+/** Início das Terras Altas (expansão leste, faixas 3 a 6). */
+const EAST = 104;
 export const WORLD_H = 118;
 /** Linha da cerca sul da vila: acima dela fica a área original (vila + bosque). */
 const SOUTH = 77;
@@ -16,8 +18,9 @@ export function buildWorld(): GameMap {
   const WILD_TREES = ['tree_forest', 'tree_oak', 'tree_pine', 'tree_pine_b', 'tree_forest', 'tree_oak_b'];
 
   // ------------------------------------------------------------------ regiões
-  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: SOUTH, pz: true, music: 'town', priority: 1 });
-  b.region({ id: 'temple',  name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: true, music: 'temple', priority: 3 });
+  // área protegida só dentro das construções (casas, lojas, banco, templo): as ruas são livres
+  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: SOUTH, pz: false, city: true, music: 'town', priority: 1 });
+  b.region({ id: 'temple', name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: false, city: true, music: 'temple', priority: 3 });
   b.region({ id: 'wild', name: 'Bosque Selvagem', x: 72, y: 0, w: 32, h: SOUTH, pz: false, music: 'wild', priority: 1 });
   b.region({ id: 'swamp', name: 'Pântano Sombrio', x: 0, y: SOUTH, w: 49, h: WORLD_H - SOUTH, pz: false, music: 'wild', priority: 1 });
   b.region({ id: 'hills', name: 'Colinas dos Lobos', x: 49, y: SOUTH, w: 55, h: 21, pz: false, music: 'wild', priority: 1 });
@@ -25,6 +28,14 @@ export function buildWorld(): GameMap {
   b.region({ id: 'meadow', name: 'Clareira dos Slimes', x: 73, y: 24, w: 18, h: 20, pz: false, music: 'wild', priority: 2 });
   b.region({ id: 'boarwoods', name: 'Mata dos Javalis', x: 73, y: 3, w: 29, h: 18, pz: false, music: 'wild', priority: 2 });
   b.region({ id: 'goblincamp', name: 'Acampamento Goblin', x: 76, y: 47, w: 26, h: 27, pz: false, music: 'wild', priority: 2 });
+  // Terras Altas (leste): uma área por faixa de força das criaturas
+  b.region({ id: 'highlands', name: 'Terras Altas', x: EAST, y: 0, w: WORLD_W - EAST, h: WORLD_H, pz: false, music: 'wild', priority: 1 });
+  b.region({ id: 'banditwood', name: 'Floresta dos Bandidos', x: EAST + 1, y: 3, w: 32, h: 38, pz: false, music: 'wild', priority: 2 });
+  b.region({ id: 'canyon', name: 'Cânion dos Escorpiões', x: 137, y: 3, w: 30, h: 22, pz: false, music: 'wild', priority: 2 });
+  b.region({ id: 'orcfort', name: 'Fortaleza Orc', x: 137, y: 25, w: 30, h: 22, pz: false, music: 'wild', priority: 2 });
+  b.region({ id: 'frost', name: 'Bosque Gélido', x: EAST + 1, y: 41, w: 32, h: 39, pz: false, music: 'wild', priority: 2 });
+  b.region({ id: 'citadel', name: 'Cidadela Sombria', x: 137, y: 47, w: 30, h: 33, pz: false, music: 'wild', priority: 2 });
+  b.region({ id: 'lair', name: 'Covil do Dragão', x: EAST + 1, y: 80, w: 62, h: 35, pz: false, music: 'wild', priority: 2 });
 
   // ------------------------------------------------------------------ terreno base
   b.dark({ x: 72, y: 0, w: 32, h: 22 });
@@ -204,8 +215,84 @@ export function buildWorld(): GameMap {
   b.spawn('skeletons_a', 'skeleton', 68, 108, 3, 3);
   b.spawn('skeletons_b', 'skeleton', 88, 109, 3, 3);
 
+  // ------------------------------------------------------------------ Terras Altas (expansão leste)
+  // trilhas de acesso: Mata dos Javalis -> Floresta dos Bandidos; acampamento goblin -> Bosque Gélido;
+  // colinas/ruínas -> Covil do Dragão; espinha norte-sul ligando todas as áreas
+  b.path([[94, 10], [104, 10], [116, 14], [128, 12], [136, 12], [150, 14]], 2);
+  b.path([[98, 60], [106, 58], [118, 56], [130, 58], [136, 56], [148, 60]], 2);
+  b.path([[98, 92], [106, 92], [116, 96], [128, 98], [140, 98], [154, 98]], 2);
+  b.path([[136, 8], [136, 30], [136, 46], [136, 66], [136, 84], [136, 104]], 2);
+  b.sign(105, 12, 'Terras Altas — perigo extremo. Bandidos e ursos ao leste; mais além, orcs, gelo, a cidadela e o dragão.');
+
+  // Floresta dos Bandidos (faixa 3): mata fechada, acampamento com barracas
+  b.dark({ x: EAST + 1, y: 3, w: 32, h: 38 }, 3);
+  b.ellipse(122, 24, 6, 4, Terrain.Dirt, 0.4);
+  b.reserve({ x: 115, y: 19, w: 15, h: 10 });
+  b.prop('campfire', 122, 24).prop('tent', 117, 21).prop('tent', 126, 21).prop('crate', 119, 27).prop('barrel', 125, 27).prop('log', 115, 25);
+  b.spawn('bandits_a', 'bandit', 120, 24, 4, 4);
+  b.spawn('bandits_b', 'bandit', 112, 8, 4, 3);
+  b.spawn('bears_a', 'bear', 116, 34, 4, 3);
+  b.spawn('bears_b', 'bear', 130, 6, 3, 2);
+
+  // Cânion dos Escorpiões (faixa 4): terra batida e rochas
+  b.ellipse(150, 12, 12, 7, Terrain.Dirt, 0.5);
+  b.ellipse(160, 20, 6, 4, Terrain.Dirt, 0.5);
+  b.prop('rock_large', 142, 8).prop('rock_large_b', 156, 6).prop('rock_large', 162, 14).prop('rock_medium', 146, 17).prop('rock_large_b', 154, 21).prop('bones', 150, 11).prop('bones', 158, 18);
+  b.spawn('scorpions_a', 'scorpion', 148, 11, 4, 4);
+  b.spawn('scorpions_b', 'scorpion', 160, 18, 3, 3);
+
+  // Fortaleza Orc (faixas 4 e 5): pátio de pedra cercado por paliçada; xamãs no centro
+  b.ellipse(152, 36, 10, 7, Terrain.Cobble, 0.25);
+  b.reserve({ x: 140, y: 27, w: 25, h: 18 });
+  for (let x = 141; x <= 163; x++) if (x < 150 || x > 153) b.prop('palisade', x, 28);
+  for (let y = 29; y <= 44; y++) {
+    b.prop('palisade', 141, y);
+    b.prop('palisade', 163, y);
+  }
+  b.prop('brazier', 148, 33).prop('brazier', 156, 33).prop('tent', 144, 40).prop('tent', 159, 40).prop('totem', 152, 31).prop('banner', 150, 30, { force: true }).prop('banner', 154, 30, { force: true });
+  b.prop('crate', 145, 31).prop('barrel', 160, 31).prop('bones', 152, 42);
+  b.spawn('orcs_a', 'orc', 147, 36, 4, 4);
+  b.spawn('orcs_b', 'orc', 158, 38, 3, 3);
+  b.spawn('shamans_a', 'orc_shaman', 152, 35, 2, 2);
+
+  // Bosque Gélido (faixa 5): lagos, pinheiros e pedras
+  b.dark({ x: EAST + 1, y: 41, w: 32, h: 39 }, 2);
+  for (const [cx, cy, rx, ry] of [[114, 52, 4, 3], [128, 66, 5, 3.5], [112, 74, 3.5, 2.5]] as const) b.ellipse(cx, cy, rx, ry, Terrain.Water, 0.3);
+  b.prop('rock_large', 120, 46).prop('rock_large_b', 130, 54).prop('rock_medium', 108, 62).prop('rock_large', 124, 76).prop('log', 116, 68);
+  b.spawn('icewolves_a', 'ice_wolf', 120, 52, 4, 3);
+  b.spawn('icewolves_b', 'ice_wolf', 122, 64, 4, 3);
+  b.spawn('icewolves_c', 'ice_wolf', 118, 74, 3, 2);
+
+  // Cidadela Sombria (faixa 5): ruína de pedra com pilares e estátuas
+  b.ellipse(152, 62, 11, 9, Terrain.Cobble, 0.35);
+  b.reserve({ x: 140, y: 52, w: 25, h: 21 });
+  for (const [x, y] of [[143, 56], [149, 55], [155, 55], [161, 56], [143, 68], [161, 68], [149, 70], [155, 70]] as const) b.prop('pillar', x, y);
+  b.prop('statue', 152, 58).prop('brazier', 147, 60).prop('brazier', 157, 60).prop('bones', 145, 64).prop('bones', 159, 65).prop('banner', 150, 57, { force: true }).prop('banner', 154, 57, { force: true });
+  b.spawn('darkknights_a', 'dark_knight', 148, 63, 3, 3);
+  b.spawn('darkknights_b', 'dark_knight', 157, 66, 3, 3);
+
+  // Covil do Dragão (faixa 6): trolls na entrada, lichs na cripta, dragões no fundo
+  b.ellipse(116, 96, 9, 6, Terrain.Dirt, 0.45);
+  b.ellipse(134, 104, 7, 5, Terrain.Cobble, 0.4);
+  b.ellipse(154, 100, 11, 9, Terrain.Dirt, 0.4);
+  b.reserve({ x: 144, y: 92, w: 20, h: 18 });
+  b.prop('rock_large', 110, 88).prop('rock_large_b', 122, 102).prop('rock_large', 146, 92).prop('rock_large_b', 162, 96).prop('rock_large', 150, 108);
+  b.prop('bones', 112, 98).prop('bones', 152, 98).prop('bones', 158, 104).prop('bones', 148, 102).prop('statue', 134, 100).prop('pillar', 130, 101).prop('pillar', 138, 101).prop('brazier', 134, 107);
+  b.spawn('trolls_a', 'troll', 116, 96, 4, 3);
+  b.spawn('trolls_b', 'troll', 120, 108, 3, 2);
+  b.spawn('liches_a', 'lich', 134, 104, 3, 3);
+  b.spawn('dragons_a', 'young_dragon', 154, 98, 3, 2);
+  b.spawn('dragons_b', 'young_dragon', 158, 106, 2, 1);
+
   // ------------------------------------------------------------------ vegetação e decoração procedural
   b.forestBorder(3, WILD_TREES);
+  // Terras Altas
+  b.scatter({ x: EAST, y: 3, w: 33, h: 38 }, { props: ['tree_forest', 'tree_oak_b', 'tree_pine', 'bush_dark', 'stump', 'tree_forest'], density: 0.18, salt: 71, spacing: 1 });
+  b.scatter({ x: 137, y: 3, w: 30, h: 22 }, { props: ['rock_small', 'rock_medium', 'stump', 'bush_dark'], density: 0.07, salt: 72, spacing: 1 });
+  b.scatter({ x: EAST, y: 41, w: 33, h: 39 }, { props: ['tree_pine', 'tree_pine_b', 'rock_small', 'rock_medium', 'tree_pine'], density: 0.15, salt: 73, spacing: 1 });
+  b.scatter({ x: 137, y: 45, w: 30, h: 35 }, { props: ['tree_forest', 'rock_small', 'bush_dark', 'stump'], density: 0.07, salt: 74, spacing: 1 });
+  b.scatter({ x: EAST, y: 80, w: 63, h: 35 }, { props: ['rock_small', 'rock_medium', 'tree_forest', 'bush_dark', 'stump'], density: 0.08, salt: 75, spacing: 1 });
+  b.scatterDecor({ x: EAST, y: 3, w: 63, h: 112 }, ['decor_pebbles', 'decor_tallgrass', 'decor_leaves', 'decor_crack', 'decor_mushrooms'], 0.07, 76);
   b.scatter({ x: 3, y: SOUTH + 1, w: 46, h: WORLD_H - SOUTH - 4 }, { props: ['tree_forest', 'tree_pine', 'bush_dark', 'stump', 'tree_forest'], density: 0.13, salt: 31, spacing: 1 });
   b.scatter({ x: 49, y: SOUTH + 1, w: 52, h: 20 }, { props: ['tree_pine', 'tree_pine_b', 'rock_small', 'rock_medium', 'tree_forest', 'bush_dark'], density: 0.13, salt: 32, spacing: 1 });
   b.scatter({ x: 49, y: SOUTH + 21, w: 52, h: WORLD_H - SOUTH - 24 }, { props: ['tree_forest', 'rock_small', 'bush_dark', 'stump'], density: 0.08, salt: 33, spacing: 1 });

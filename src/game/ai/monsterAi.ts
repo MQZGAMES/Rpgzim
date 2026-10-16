@@ -7,7 +7,7 @@ import { isPz } from '../world/GameMap';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, asActor, nextId } from '../simulation/World';
-import { canEnter, greedyStepToward, isMoving, pathTo, placeOccupant, settle, stepAway, tryStep } from '../movement/movement';
+import { canEnter, greedyStepToward, isMoving, pathTo, placeOccupant, removeOccupant, settle, stepAway, tryStep } from '../movement/movement';
 import { damagePlayer, hasLineOfSight, monsterSource } from '../combat/combat';
 
 export function createMonster(w: World, monsterId: string, spawnId: string, x: number, y: number): MonsterEntity {
@@ -35,6 +35,7 @@ export function createMonster(w: World, monsterId: string, spawnId: string, x: n
     respawnAt: 0,
     path: null,
     pathAt: 0,
+    pathGoal: null,
     targetId: null,
   };
   return m;
@@ -161,45 +162,29 @@ export function updateMonster(w: World, m: MonsterEntity): void {
       }
       m.state = 'chasing';
       if (isMoving(m, w.now)) break;
-      if (!greedyStepToward(w, m, p.x, p.y, speedOf(w, m), true)) {
-        if (!m.path || w.now - m.pathAt > 800) {
-          m.path = pathTo(w, m, { x: p.x, y: p.y }, true, { stopWithin: 1, maxNodes: 400 });
-          m.pathAt = w.now;
-        }
-        followPath(w, m);
+      // caminho livre e perto: passo direto; com obstáculo no meio (árvore, pedra, casa, cerca), contorna pelo A*
+      if (los && dist <= 4 && greedyStepToward(w, m, p.x, p.y, speedOf(w, m), true)) {
+        m.path = null;
+        break;
+      }
+      const stop = range <= 1 ? 1 : Math.max(1, range - 1);
+      const goalMoved = !m.pathGoal || chebyshev(m.pathGoal, p) > 1;
+      if (!m.path?.length || goalMoved || w.now - m.pathAt > 1500) {
+        m.path = pathTo(w, m, { x: p.x, y: p.y }, true, { stopWithin: stop, maxNodes: 3000 });
+        m.pathGoal = { x: p.x, y: p.y };
+        m.pathAt = w.now;
+      }
+      if (!followPath(w, m)) {
+        // bloqueado (outro monstro no caminho): tenta um passo direto e replaneja logo
+        greedyStepToward(w, m, p.x, p.y, speedOf(w, m), true);
+        m.pathAt = 0;
       }
       break;
     }
     case 'returning': {
-      if (homeDist <= 1) {
-        m.state = 'idle';
-        m.hp = m.def.health;
-        m.path = null;
-        break;
-      }
-      if (p && playerTargetable && dist <= 2 && homeDist <= m.def.leashRadius - 2) {
-        m.state = 'chasing';
-        m.targetId = p.id;
-        break;
-      }
-      if (isMoving(m, w.now)) break;
-      if (!greedyStepToward(w, m, m.homeX, m.homeY, speedOf(w, m), true)) {
-        if (!m.path || w.now - m.pathAt > 1500) {
-          m.path = pathTo(w, m, { x: m.homeX, y: m.homeY }, true, { stopWithin: 1, maxNodes: 800 });
-          m.pathAt = w.now;
-          if (!m.path) {
-            // preso: teletransporta de volta para a área (evita monstros travados para sempre)
-            const cell = findSpawnCell(w, m.homeX, m.homeY, 2);
-            if (cell) {
-              w.occupancy.delete(m.y * w.map.width + m.x);
-              m.x = cell.x;
-              m.y = cell.y;
-              placeOccupant(w, m);
-            }
-          }
-        }
-        followPath(w, m);
-      }
+      // desistiu (alvo fugiu além do limite, entrou numa construção ou morreu): volta por teleporte
+      // para o ponto de origem e com a vida cheia — puxar o monstro para longe não dá vantagem
+      sendHome(w, m);
       break;
     }
     case 'dead':
@@ -217,11 +202,36 @@ function wander(w: World, m: MonsterEntity): void {
   }
 }
 
-function followPath(w: World, m: MonsterEntity): void {
+function followPath(w: World, m: MonsterEntity): boolean {
   const next = m.path?.[0];
-  if (!next) return;
-  if (tryStep(w, m, next.x - m.x, next.y - m.y, speedOf(w, m), true)) m.path!.shift();
-  else m.path = null;
+  if (!next) return false;
+  if (tryStep(w, m, next.x - m.x, next.y - m.y, speedOf(w, m), true)) {
+    m.path!.shift();
+    return true;
+  }
+  m.path = null;
+  return false;
+}
+
+/** Teleporta o monstro de volta ao ponto de origem, com a vida cheia e sem alvo. */
+export function sendHome(w: World, m: MonsterEntity): void {
+  const from = { x: m.x, y: m.y };
+  const cell = findSpawnCell(w, m.homeX, m.homeY, 2, 3) ?? (canEnter(w, m.homeX, m.homeY, true) ? { x: m.homeX, y: m.homeY } : null);
+  if (cell && (cell.x !== m.x || cell.y !== m.y)) {
+    removeOccupant(w, m);
+    m.x = cell.x;
+    m.y = cell.y;
+    placeOccupant(w, m);
+  }
+  m.move = null;
+  m.hp = m.def.health;
+  m.state = 'idle';
+  m.targetId = null;
+  m.path = null;
+  m.pathGoal = null;
+  m.slowUntil = 0;
+  m.nextWanderAt = w.now + 1500;
+  w.events.emit('monsterReturned', { entityId: m.id, from, to: { x: m.x, y: m.y } });
 }
 
 function respawn(w: World, m: MonsterEntity): void {

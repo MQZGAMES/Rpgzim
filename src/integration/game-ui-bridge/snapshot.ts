@@ -6,6 +6,7 @@ import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
 import { skillProgress } from '../../domain/rules/skills';
 import { castFailMessage } from '../../domain/rules/spells';
 import { countItem } from '../../domain/rules/inventory';
+import { isSellLocked } from '../../domain/rules/economy';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -35,6 +36,8 @@ export interface ItemView {
   def: number | null;
   /** Equipável agora e melhor que o item do mesmo slot. */
   better: boolean;
+  /** Venda travada pelo jogador (fica fora do "vender tudo"). */
+  locked: boolean;
 }
 
 export interface SpellView {
@@ -85,7 +88,7 @@ export interface UiSnapshot {
   buffs: { kind: string; remainingMs: number }[];
   target: { id: string; name: string; hp: number; maxHp: number; distance: number; inRange: boolean; isPlayer: boolean } | null;
   /** Grupo atual (se o jogador estiver em um). */
-  party: { leaderId: string; youAreLeader: boolean; members: { id: string; name: string; vocation: string; level: number; hp: number; maxHp: number; isYou: boolean; isLeader: boolean; near: boolean; dead: boolean }[] } | null;
+  party: { leaderId: string; youAreLeader: boolean; formation: 'free' | 'follow' | 'line'; targeting: 'nearest' | 'leader'; friendlyFire: boolean; members: { id: string; name: string; vocation: string; level: number; hp: number; maxHp: number; isYou: boolean; isLeader: boolean; near: boolean; dead: boolean }[] } | null;
   /** Convite de grupo recebido e ainda válido. */
   invite: { fromId: string; fromName: string } | null;
   pvp: boolean;
@@ -166,6 +169,7 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     atk: itemAttack(def),
     def: itemDefense(def),
     better: isUpgrade(w.data, c, def),
+    locked: isSellLocked(c, def.id),
   };
 }
 
@@ -202,6 +206,9 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
   return {
     leaderId: party.leaderId,
     youAreLeader: party.leaderId === p.id,
+    formation: party.formation,
+    targeting: party.targeting,
+    friendlyFire: party.friendlyFire,
     members: party.members.flatMap((id) => {
       const a = actorById(w, id);
       if (!a) return [];

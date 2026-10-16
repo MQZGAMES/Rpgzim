@@ -1,42 +1,81 @@
-// Interação com outros personagens: modo de ataque, permissão de PK, grupo (painel, convite) e o menu
-// que abre ao tocar num personagem (conversar, convidar/remover do grupo, passar liderança, atacar).
+// Interação com outros personagens: modo de ataque, permissão de PK, grupo (quadro, painel de controle,
+// convite) e o menu discreto que abre ao tocar num personagem (convidar, grupo, atacar).
+import type { ReactNode } from 'react';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
-import { Bar, ItemIcon, PixelButton } from '../common/primitives';
+import { Bar, ItemIcon, Panel, PixelButton } from '../common/primitives';
 
-/** Botões discretos: modo de ataque (parado/seguir) e permissão de PK. */
+/** Botão quadrado do HUD (mesmo visual dos menus), com selo opcional de estado. */
+export function HudButton({
+  icon,
+  label,
+  onClick,
+  testId,
+  hotkey,
+  badge,
+  badgeClass = 'text-parchment',
+  pressed,
+  dim = false,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  testId: string;
+  hotkey?: string;
+  badge?: string;
+  badgeClass?: string;
+  pressed?: boolean;
+  dim?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      title={hotkey ? `${label} (${hotkey})` : label}
+      onClick={onClick}
+      className="btn-pixel relative flex h-11 w-11 items-center justify-center !border-[8px]"
+      data-testid={testId}
+    >
+      <ItemIcon icon={icon} size={22} className={dim ? 'opacity-45 grayscale' : ''} />
+      {badge && (
+        <span className={`text-outline pointer-events-none absolute -bottom-[9px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] leading-none ${badgeClass}`}>{badge}</span>
+      )}
+    </button>
+  );
+}
+
+/** Modo de ataque (seguir/parado), PK e atalho do grupo — no mesmo padrão dos botões de menu. */
 export function QuickToggles() {
   const session = useSession();
   const stand = useSnap((s) => s.standAttack);
   const pvp = useSnap((s) => s.pvp);
   const skullMs = useSnap((s) => s.skullMs);
+  const inParty = useSnap((s) => s.party !== null);
   return (
     <div className="pointer-events-auto flex flex-col items-end gap-1" data-testid="quick-toggles">
-      <button
-        type="button"
-        onClick={() => session.setStandAttack(!stand)}
-        className="btn-pixel flex h-9 items-center gap-1 !border-[6px] px-1 text-[11px] opacity-90"
-        title={stand ? 'Atacar parado: não persegue o alvo (toque para seguir o alvo)' : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'}
-        aria-label={stand ? 'Modo de ataque: parado' : 'Modo de ataque: seguir o alvo'}
-        aria-pressed={stand}
-        data-testid="toggle-stand"
-      >
-        <ItemIcon icon={stand ? 'ui_stand' : 'ui_follow'} size={16} />
-        <span>{stand ? 'Parado' : 'Seguir'}</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => session.setPvp(!pvp)}
-        className={`btn-pixel flex h-9 items-center gap-1 !border-[6px] px-1 text-[11px] ${pvp ? 'text-hp-light' : 'opacity-75'}`}
-        title={pvp ? 'PK ativado: personagens podem se atacar fora das áreas protegidas' : 'PK desativado: ninguém ataca jogadores'}
-        aria-label={pvp ? 'PK ativado' : 'PK desativado'}
-        aria-pressed={pvp}
-        data-testid="toggle-pvp"
-      >
-        <ItemIcon icon="ui_skull" size={16} className={pvp ? '' : 'opacity-50 grayscale'} />
-        <span>PK {pvp ? 'on' : 'off'}</span>
-      </button>
+      <div className="flex max-w-[92px] flex-wrap justify-end gap-x-1 gap-y-3 sm:max-w-none">
+        <HudButton
+          icon={stand ? 'ui_stand' : 'ui_follow'}
+          label={stand ? 'Atacar parado: não persegue o alvo (toque para seguir)' : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'}
+          onClick={() => session.setStandAttack(!stand)}
+          testId="toggle-stand"
+          pressed={stand}
+          badge={stand ? 'parado' : 'seguir'}
+        />
+        <HudButton
+          icon="ui_skull"
+          label={pvp ? 'PK ligado: personagens podem se atacar fora das áreas protegidas' : 'PK desligado: ninguém ataca jogadores'}
+          onClick={() => session.setPvp(!pvp)}
+          testId="toggle-pvp"
+          pressed={pvp}
+          dim={!pvp}
+          badge={pvp ? 'PK on' : 'PK off'}
+          badgeClass={pvp ? 'text-hp-light' : 'text-muted'}
+        />
+        {inParty && <HudButton icon="ui_party" label="Controles do grupo" hotkey="P" onClick={() => session.setPartyPanel(true)} testId="btn-party" badge="grupo" badgeClass="text-[#7fd8ff]" />}
+      </div>
       {skullMs > 0 && (
-        <span className="text-outline text-[10px] text-hp-light" title="Você atacou ou matou um jogador">
+        <span className="text-outline mt-1 text-[10px] text-hp-light" title="Você atacou ou matou um jogador">
           caveira {Math.ceil(skullMs / 60000)} min
         </span>
       )}
@@ -44,45 +83,173 @@ export function QuickToggles() {
   );
 }
 
-/** Painel do grupo: membros, vida, líder e ações. */
+const FORMATION_LABEL = { free: 'livre', follow: 'seguindo o líder', line: 'em fila' } as const;
+
+/** Quadro compacto do grupo: membros e vida. Tocar abre o painel de controle. */
 export function PartyFrame() {
   const session = useSession();
   const party = useSnap((s) => s.party);
   if (!party) return null;
   return (
-    <div className="frame-dark pointer-events-auto mt-1 w-[220px] !border-[10px] sm:w-[260px]" data-testid="party-frame">
-      <div className="mb-1 flex items-center gap-1 text-[11px] text-gold-light">
+    <div className="frame-dark pointer-events-auto mt-1 w-[200px] !border-[10px] sm:w-[240px]" data-testid="party-frame">
+      <button type="button" className="mb-1 flex w-full items-center gap-1 text-left text-[11px] text-gold-light" onClick={() => session.setPartyPanel(true)} title="Controles do grupo">
         <ItemIcon icon="ui_party" size={14} />
-        <span className="flex-1">Grupo · XP dividida</span>
-        <button type="button" className="text-[11px] text-hp-light underline" onClick={() => session.partyLeave()} data-testid="party-leave">
-          sair
-        </button>
-      </div>
+        <span className="flex-1 truncate">Grupo · {FORMATION_LABEL[party.formation]}</span>
+        {party.friendlyFire && <ItemIcon icon="ui_attack" size={12} title="Treino entre membros liberado" />}
+        <ItemIcon icon="ui_gear" size={14} />
+      </button>
       {party.members.map((m) => (
         <div key={m.id} className={`flex items-center gap-1 text-[11px] ${m.near ? '' : 'opacity-60'}`}>
           {m.isLeader ? <ItemIcon icon="ui_crown" size={12} title="Líder" /> : <span className="w-3" />}
-          {m.isYou ? (
-            <span className="w-[78px] truncate text-gold-light">{`${m.name} (você)`}</span>
-          ) : (
-            <button type="button" className="w-[78px] truncate text-left text-[#7fd8ff] underline decoration-dotted" title={`Ações com ${m.name}`} onClick={() => session.tapEntity(m.id)}>
-              {m.name}
-            </button>
-          )}
+          <span className={`w-[78px] truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}>{m.isYou ? `${m.name} (você)` : m.name}</span>
           <span className="w-[30px] text-muted">nv {m.level}</span>
           <Bar className="flex-1" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
-          {party.youAreLeader && !m.isYou && (
-            <span className="flex gap-1">
-              <button type="button" className="text-[10px] text-gold-light underline" title="Passar liderança" onClick={() => session.partyPassLeader(m.id)}>
-                líder
-              </button>
-              <button type="button" className="text-[10px] text-hp-light underline" title="Remover do grupo" onClick={() => session.partyKick(m.id)}>
-                remover
-              </button>
-            </span>
-          )}
         </div>
       ))}
     </div>
+  );
+}
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+  testId,
+}: {
+  value: T;
+  options: { v: T; label: string; hint: string }[];
+  onChange: (v: T) => void;
+  disabled: boolean;
+  testId: string;
+}) {
+  return (
+    <div className="flex gap-1" role="radiogroup" data-testid={testId}>
+      {options.map((o) => (
+        <PixelButton
+          key={o.v}
+          variant={o.v === value ? 'gold' : undefined}
+          className="flex-1 !border-[6px] px-1 text-[12px]"
+          disabled={disabled && o.v !== value}
+          title={o.hint}
+          onClick={() => o.v !== value && onChange(o.v)}
+          data-testid={`${testId}-${o.v}`}
+        >
+          {o.label}
+        </PixelButton>
+      ))}
+    </div>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="mt-3">
+      <div className="text-[13px] text-gold-light">{title}</div>
+      <div className="mb-1 text-[11px] text-muted">{hint}</div>
+      {children}
+    </section>
+  );
+}
+
+/** Painel de controle do grupo: líder, formação, alvo, treino entre membros, sair/desfazer. */
+export function PartyPanel() {
+  const session = useSession();
+  const open = useLocal((s) => s.partyPanel);
+  const party = useSnap((s) => s.party);
+  if (!open || !party) return null;
+  const lead = party.youAreLeader;
+  return (
+    <Panel title="Grupo" icon="ui_party" onClose={() => session.setPartyPanel(false)}>
+      <div data-testid="party-panel">
+        <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.{lead ? '' : ' Só o líder altera as regras.'}</div>
+        <Section title="Membros" hint={lead ? 'Coroa: passar a liderança · X: remover do grupo.' : 'O líder decide a formação e o alvo.'}>
+          <div className="flex flex-col gap-1">
+            {party.members.map((m) => (
+              <div key={m.id} className={`frame-slot flex items-center gap-2 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}>
+                {m.isLeader ? <ItemIcon icon="ui_crown" size={14} title="Líder" /> : <span className="w-[14px]" />}
+                <span className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}>
+                  {m.name}
+                  {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
+                </span>
+                <Bar className="w-[60px]" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
+                {lead && !m.isYou && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
+                      title={`Tornar ${m.name} o líder`}
+                      aria-label={`Tornar ${m.name} o líder`}
+                      onClick={() => session.partyPassLeader(m.id)}
+                      data-testid={`party-lead-${m.id}`}
+                    >
+                      <ItemIcon icon="ui_crown" size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
+                      title={`Remover ${m.name}`}
+                      aria-label={`Remover ${m.name}`}
+                      onClick={() => session.partyKick(m.id)}
+                      data-testid={`party-kick-${m.id}`}
+                    >
+                      <ItemIcon icon="ui_close" size={12} />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+        <Section title="Formação" hint="Como os membros andam fora de combate.">
+          <Segmented
+            value={party.formation}
+            disabled={!lead}
+            testId="party-formation"
+            onChange={(formation) => session.configureParty({ formation })}
+            options={[
+              { v: 'free', label: 'Livre', hint: 'Cada um segue o próprio caminho' },
+              { v: 'follow', label: 'Seguir', hint: 'Todos andam perto do líder' },
+              { v: 'line', label: 'Fila', hint: 'Em fila, pisando nos passos do líder' },
+            ]}
+          />
+        </Section>
+        <Section title="Alvo" hint="Quem cada membro ataca em combate.">
+          <Segmented
+            value={party.targeting}
+            disabled={!lead}
+            testId="party-targeting"
+            onChange={(targeting) => session.configureParty({ targeting })}
+            options={[
+              { v: 'leader', label: 'Alvo do líder', hint: 'Todos focam o mesmo inimigo do líder' },
+              { v: 'nearest', label: 'Mais próximo', hint: 'Cada um ataca o inimigo mais perto de si' },
+            ]}
+          />
+        </Section>
+        <Section title="Treino entre membros" hint="Membros podem se atacar fora das áreas protegidas, sem caveira e sem perder ouro.">
+          <Segmented
+            value={party.friendlyFire ? 'on' : 'off'}
+            disabled={!lead}
+            testId="party-ff"
+            onChange={(v) => session.configureParty({ friendlyFire: v === 'on' })}
+            options={[
+              { v: 'off', label: 'Bloqueado', hint: 'Membros não se atacam' },
+              { v: 'on', label: 'Liberado', hint: 'Toque 2x num membro para treinar' },
+            ]}
+          />
+        </Section>
+        <div className="mt-4 flex gap-2">
+          <PixelButton className="flex-1" onClick={() => session.partyLeave()} data-testid="party-leave">
+            Sair do grupo
+          </PixelButton>
+          {lead && (
+            <PixelButton className="flex-1" onClick={() => session.disbandParty()} data-testid="party-disband">
+              Desfazer grupo
+            </PixelButton>
+          )}
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -110,67 +277,48 @@ export function InvitePrompt() {
   );
 }
 
-/** Menu ao tocar num personagem (herói). */
+function MiniAction({ icon, label, onClick, testId, gold = false }: { icon: string; label: string; onClick: () => void; testId: string; gold?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`${gold ? 'btn-gold' : 'btn-pixel'} flex h-9 w-9 shrink-0 items-center justify-center !border-[6px]`}
+      data-testid={testId}
+    >
+      <ItemIcon icon={icon} size={18} />
+    </button>
+  );
+}
+
+/** Menu discreto ao tocar num personagem: nome, vida e ações por ícone. Toque 2x ataca (se permitido). */
 export function ActorMenu() {
   const session = useSession();
   const id = useLocal((s) => s.actorMenu);
   const hero = useSnap((s) => s.heroes.find((h) => h.id === id) ?? null);
   const party = useSnap((s) => s.party);
-  const pvp = useSnap((s) => s.pvp);
   if (!id || !hero) return null;
   const inParty = hero.inParty;
   const canInvite = !inParty && (!party || party.youAreLeader);
+  const canAttack = !hero.attackBlocked;
   return (
-    <div className="frame-dark anim-pop pointer-events-auto w-[236px] !border-[10px] text-[12px] sm:w-[260px]" role="dialog" aria-label={hero.name} data-testid="actor-menu">
-      <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-[14px]">
-            {hero.isLeader && <ItemIcon icon="ui_crown" size={12} />}
-            {hero.skull && <ItemIcon icon="ui_skull" size={12} title="Tem caveira" />}
-            <b className={inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{hero.name}</b>
-            <span className="text-muted">· {hero.vocationName} nv {hero.level}</span>
-          </div>
-          <div className="text-[11px] text-muted">
-            {hero.dead ? 'morto' : hero.activity} · {hero.distance} tiles
-          </div>
+    <div className="frame-dark anim-pop pointer-events-auto flex items-center gap-2 !border-[8px] text-[12px]" role="dialog" aria-label={hero.name} data-testid="actor-menu">
+      <div className="w-[118px] min-w-0">
+        <div className="flex items-center gap-1 truncate">
+          {hero.isLeader && <ItemIcon icon="ui_crown" size={11} />}
+          {hero.skull && <ItemIcon icon="ui_skull" size={11} title="Tem caveira" />}
+          <b className={inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{hero.name}</b>
         </div>
-        <button type="button" aria-label="Fechar" className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]" onClick={() => session.closeActorMenu()}>
-          <ItemIcon icon="ui_close" size={12} />
-        </button>
+        <div className="truncate text-[10px] text-muted">
+          {hero.vocationName} nv {hero.level} · {hero.dead ? 'morto' : hero.activity}
+        </div>
+        <Bar className="mt-[2px]" value={hero.hp} max={hero.maxHp} color="var(--color-heal)" height={3} />
       </div>
-      <Bar className="mt-1" value={hero.hp} max={hero.maxHp} color="var(--color-heal)" height={5} />
-      <div className="mt-2 flex flex-wrap gap-1">
-        <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.talkTo(hero.id)}>
-          Conversar
-        </PixelButton>
-        {canInvite && (
-          <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.partyInvite(hero.id)}>
-            Convidar p/ grupo
-          </PixelButton>
-        )}
-        {inParty && party?.youAreLeader && (
-          <>
-            <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.partyPassLeader(hero.id)}>
-              Passar liderança
-            </PixelButton>
-            <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.partyKick(hero.id)}>
-              Remover do grupo
-            </PixelButton>
-          </>
-        )}
-        {pvp && (
-          <PixelButton
-            variant="gold"
-            className="!border-[6px] px-1 text-[11px]"
-            disabled={!!hero.attackBlocked}
-            title={hero.attackBlocked ?? `Atacar ${hero.name} (você ganha caveira)`}
-            onClick={() => session.attackActor(hero.id)}
-          >
-            Atacar
-          </PixelButton>
-        )}
-      </div>
-      {pvp && hero.attackBlocked && <div className="mt-1 text-[10px] text-muted">{hero.attackBlocked}</div>}
+      {canInvite && <MiniAction icon="ui_party" label={`Convidar ${hero.name} para o grupo`} onClick={() => session.partyInvite(hero.id)} testId="actor-invite" />}
+      {inParty && <MiniAction icon="ui_gear" label="Controles do grupo" onClick={() => session.setPartyPanel(true)} testId="actor-party" />}
+      {canAttack && <MiniAction icon="ui_attack" gold label={`Atacar ${hero.name} (ou toque 2x no personagem)`} onClick={() => session.attackActor(hero.id)} testId="actor-attack" />}
+      <MiniAction icon="ui_close" label="Fechar" onClick={() => session.closeActorMenu()} testId="actor-close" />
     </div>
   );
 }

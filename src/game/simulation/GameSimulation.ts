@@ -18,7 +18,7 @@ import type { HeroDef } from '../../domain/entities/definitions';
 import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
 import { currentActorTarget, currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
-import { castSpell } from '../abilities/spells';
+import { castSpell, updateQueuedSpell } from '../abilities/spells';
 import { bankGold, depotDeposit, depotDepositAll, depotWithdraw } from '../economy/depotService';
 import { createMonster, findSpawnCell, updateMonster } from '../ai/monsterAi';
 import {
@@ -35,7 +35,8 @@ import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, un
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { planWalk } from '../movement/walk';
-import { PARTY_FAIL_MESSAGE, acceptInvite, declineInvite, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial } from '../social/social';
+import { setSellLock } from '../../domain/rules/economy';
+import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
 import { heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
@@ -89,6 +90,7 @@ export class GameSimulation {
       lastWarningAt: {},
       lastAttackAt: -Infinity,
       shieldTraining: newShieldTraining(),
+      queuedSpell: null,
       scope: { ui, events },
     };
     this.world = {
@@ -207,6 +209,7 @@ export class GameSimulation {
     settle(p, w.now);
     this.updatePlayerMovement();
     updatePlayerCombat(w);
+    updateQueuedSpell(w);
     this.updateActorTimers();
     updatePendingInteraction(w);
     updateUiDistance(w);
@@ -246,6 +249,16 @@ export class GameSimulation {
       p.path = goal ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: 2500 }) : null;
       if (!p.path) p.pathGoal = null;
       return;
+    }
+    // em grupo com outro líder (formação seguir/fila): sem comando do jogador, anda junto do líder
+    if (p === w.human && !p.targetId) {
+      const spot = formationSpot(w, p.id);
+      if (spot && Math.max(Math.abs(spot.x - p.x), Math.abs(spot.y - p.y)) > spot.tolerance + 1 && w.now >= p.chaseRecalcAt) {
+        p.chaseRecalcAt = w.now + 500;
+        const path = pathTo(w, p, spot, false, { stopWithin: Math.max(1, spot.tolerance), maxNodes: 2500 });
+        if (path?.length) tryStep(w, p, path[0]!.x - p.x, path[0]!.y - p.y, speed, false);
+        return;
+      }
     }
     // perseguição automática do alvo quando fora de alcance (desligada no modo "atacar parado")
     const t = currentTarget(w) ?? currentActorTarget(w);
@@ -399,6 +412,16 @@ export class GameSimulation {
   sellAll(): boolean {
     return sellAllItems(this.world);
   }
+  /** Trava/destrava a venda de um item (fica fora do "vender tudo"). */
+  setSellLock(itemId: string, locked: boolean): void {
+    const w = this.world;
+    const def = w.data.items[itemId];
+    if (!def) return;
+    setSellLock(w.player.character, itemId, locked);
+    message(w, locked ? `${def.name}: venda travada (não entra no "Vender tudo").` : `${def.name}: venda destravada.`, 'system');
+    w.events.emit('itemsChanged', {});
+    w.events.emit('saveRequested', { reason: 'lock' });
+  }
   respawn(): void {
     respawnPlayer(this.world);
   }
@@ -431,6 +454,16 @@ export class GameSimulation {
   partyPassLeader(id: string): void {
     const w = this.world;
     const fail = passLeadership(w, w.player.id, id);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+  }
+  configureParty(patch: PartySetting): void {
+    const w = this.world;
+    const fail = configureParty(w, w.player.id, patch);
+    if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+  }
+  disbandParty(): void {
+    const w = this.world;
+    const fail = disbandParty(w, w.player.id);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
   }
   /** Permissão de PK (ataque entre personagens). Desligar encerra os ataques em andamento. */

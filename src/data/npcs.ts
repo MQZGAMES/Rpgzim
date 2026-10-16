@@ -14,7 +14,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Que a Aurora o guie! Você despertou no Templo de Pedraluz. Aqui ninguém pode atacá-lo. Posso ensinar o básico?',
+        text: 'Que a Aurora o guie! Você despertou no Templo de Pedraluz. Dentro do templo, das casas e das lojas ninguém pode atacá-lo. Posso ensinar o básico?',
         options: [
           { label: 'Como me movo?', action: 'next', goto: 'move' },
           { label: 'Como lutar?', action: 'next', goto: 'combat' },
@@ -122,7 +122,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A vila é segura: os monstros não passam das cercas.',
+        text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A leste do bosque ficam as Terras Altas: bandidos, ursos, escorpiões, a Fortaleza Orc, o Bosque Gélido, a Cidadela Sombria e o Covil do Dragão — só para os mais fortes. Atenção: só dentro das casas, lojas, banco e templo ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
         options: [close],
       },
     ],
@@ -263,6 +263,9 @@ const list2: ShopDef[] = [
       { itemId: 'goblin_charm', price: 70 },
       { itemId: 'toad_venom', price: 14 },
       { itemId: 'spider_silk', price: 30 },
+      { itemId: 'scorpion_stinger', price: 120 },
+      { itemId: 'shaman_totem', price: 160 },
+      { itemId: 'lich_dust', price: 500 },
     ],
   },
   {
@@ -283,6 +286,13 @@ const list2: ShopDef[] = [
       { itemId: 'dagger', price: 9 },
       { itemId: 'wolf_pelt', price: 22 },
       { itemId: 'bone_fragment', price: 10 },
+      { itemId: 'bandit_mask', price: 40 },
+      { itemId: 'bear_claw', price: 60 },
+      { itemId: 'orc_tooth', price: 90 },
+      { itemId: 'ice_fang', price: 220 },
+      { itemId: 'dark_emblem', price: 300 },
+      { itemId: 'troll_hide', price: 380 },
+      { itemId: 'dragon_scale', price: 700 },
     ],
   },
 ];

@@ -54,6 +54,8 @@ export interface PlayerEntity extends Mover {
   /** Último ataque do jogador (golpe ou magia ofensiva) — exigido para treinar Shielding. */
   lastAttackAt: number;
   shieldTraining: ShieldTrainingState;
+  /** Magia esperando o alvo entrar no alcance. */
+  queuedSpell: { id: string; until: number } | null;
   /** Contexto próprio do ator: estado de janelas (diálogo/loja/loot) e barramento de eventos. */
   scope: ActorScope;
 }
@@ -86,6 +88,8 @@ export interface MonsterEntity extends Mover {
   respawnAt: number;
   path: TilePos[] | null;
   pathAt: number;
+  /** Onde estava o alvo quando o caminho foi calculado (replaneja se ele se mover). */
+  pathGoal: TilePos | null;
   /** Ator (jogador ou herói) que o monstro está perseguindo/atacando. */
   targetId: string | null;
 }

@@ -72,6 +72,7 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
     lastWarningAt: {},
     lastAttackAt: -Infinity,
     shieldTraining: newShieldTraining(),
+    queuedSpell: null,
     scope: { ui, events: new EventBus<GameEventMap>() },
     hero,
     brain: newHeroBrain(),

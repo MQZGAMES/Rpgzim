@@ -7,7 +7,7 @@ import { PixelCanvas } from './lib/canvas.ts';
 import { gridSheet, packAtlas, type AtlasEntry } from './lib/atlas.ts';
 import { buildTileset } from './tiles.ts';
 import { CHARACTERS, FRAME_H, FRAME_W, buildCharacterSheet } from './characters.ts';
-import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBoarFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames } from './monsters.ts';
+import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBearFrames, buildBoarFrames, buildDragonFrames, buildIceWolfFrames, buildScorpionFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames } from './monsters.ts';
 import { buildObjects } from './objects.ts';
 import { buildIcons } from './icons.ts';
 import { buildFx } from './fx.ts';
@@ -53,6 +53,10 @@ const monsterSheets: [string, PixelCanvas[], number, number, 'blob' | 'quad'][] 
   ['spider', buildSpiderFrames(), 28, 24, 'blob'],
   ['boar', buildBoarFrames(), BOAR_W, BOAR_H, 'quad'],
   ['wolf', buildWolfFrames(), 32, 24, 'quad'],
+  ['ice_wolf', buildIceWolfFrames(), 32, 24, 'quad'],
+  ['bear', buildBearFrames(), 36, 28, 'quad'],
+  ['scorpion', buildScorpionFrames(), 32, 26, 'blob'],
+  ['young_dragon', buildDragonFrames(), 44, 34, 'quad'],
 ];
 for (const [key, frames, fw, fh, kind] of monsterSheets) {
   const file = `mon_${key}.png`;

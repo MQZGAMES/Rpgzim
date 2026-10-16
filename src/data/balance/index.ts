@@ -16,10 +16,15 @@ export const BALANCE: BalanceConfig = {
     blockChancePerSkill: 0.008,
     maxBlockChance: 0.45,
     shieldingTriesPerHit: 1,
+    // arco/lança com o alvo encostado: erra bastante e bate fraco (o ideal é manter 2+ tiles)
+    pointBlankHitMultiplier: 0.5,
+    pointBlankDamageMultiplier: 0.5,
     shieldingWindowMs: 2000,
     shieldingMaxAttackers: 2,
     shieldingAttackWindowMs: 5000,
   },
   player: { inventorySlots: 20, depotSlots: 40, regenTickMs: 2000, deathXpPenalty: 0.5, deathSkillPenalty: 0.5, respawnInvulnerableMs: 3000 },
-  world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 24 },
+  world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 40 },
+  // 6 faixas x 3 espécies; cada faixa com o dobro de vida e ataque da anterior (32x da primeira à última)
+  creatures: { baseHealth: 40, baseAttack: 5, baseExperience: 12, baseGold: 4.5, tierRatio: 2, xpRatio: 3, goldRatio: 2.2, leashMultiplier: 3 },
 };

@@ -21,7 +21,7 @@ import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/int
 import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
-import { acceptInvite, actorById, attackedRecently, declineInvite, hasSkull, invite, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
+import { acceptInvite, actorById, attackedRecently, declineInvite, formationSpot, hasSkull, invite, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
 export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk';
 
@@ -145,8 +145,9 @@ export function changeAffinity(h: HeroEntity, id: string, delta: number): void {
 
 const THINK_MS = 300;
 const TRAINING_WEAPON = 'training_sword';
-/** Nível a partir do qual cada monstro vale a caça (o temperamento desloca um pouco). */
-const HUNT_LEVEL: Record<string, number> = { slime: 1, boar: 3, toad: 4, goblin: 5, wolf: 7, spider: 9, skeleton: 11 };
+/** Nível a partir do qual cada monstro vale a caça (dos dados; chefes ficam de fora). */
+const huntLevels = (w: World): Record<string, number> =>
+  Object.fromEntries(Object.values(w.data.monsters).filter((m) => !m.elite && m.level !== undefined).map((m) => [m.id, m.level!]));
 
 // ------------------------------------------------------------------ fala
 export function heroSay(w: World, h: HeroEntity, key: HeroLineKey, vars: Record<string, string | number> = {}, cooldownMs = 15000): void {
@@ -406,7 +407,7 @@ function decide(w: World, h: HeroEntity): void {
   const humanNear = !human.dead && chebyshev(human, h) <= 10;
   const skillLag = c.skills.sword.level < 10 + c.level * 1.4 || c.skills.shielding.level < 10 + c.level * 1.1;
   const canTrain = countItem(c.inventory, TRAINING_WEAPON) > 0 || c.gold >= 60;
-  const untried = Object.keys(HUNT_LEVEL).some((id) => !h.brain.areaStats[id] && HUNT_LEVEL[id]! <= c.level + 1);
+  const untried = Object.entries(huntLevels(w)).some(([id, lv]) => !h.brain.areaStats[id] && lv <= c.level + 1);
   // cada opção recebe uma nota; a escolha é sorteada com peso (quase sempre a melhor, às vezes improvisa)
   const options: [string, number][] = [
     ['hunt', 0.75 + h.brain.mood * 0.1],
@@ -458,7 +459,7 @@ function expectedRate(w: World, h: HeroEntity, id: string): number {
 function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
   const t = h.hero.temperament;
   const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood;
-  const options = Object.entries(HUNT_LEVEL).filter(([id, min]) => min <= lvl + 1 && w.map.spawns.some((s) => s.monsterId === id));
+  const options = Object.entries(huntLevels(w)).filter(([id, min]) => min <= lvl + 1 && w.map.spawns.some((s) => s.monsterId === id));
   if (!options.length) return 'slime';
   const scored = options.map(([id, min]) => {
     const st = h.brain.areaStats[id];
@@ -801,8 +802,9 @@ function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit'): void {
 function retreat(w: World, h: HeroEntity): void {
   setTarget(w, null);
   if (isPz(w.map, h.x, h.y)) return setMode(w, h, 'decide');
+  // recua para dentro do templo (área protegida)
   const start = w.map.playerStart;
-  goTo(w, h, start.x, start.y + 6);
+  goTo(w, h, start.x + w.rng.int(-2, 2), start.y + w.rng.int(-1, 2));
 }
 
 function social(w: World, h: HeroEntity): void {
@@ -862,10 +864,10 @@ function partyMembers(w: World, h: HeroEntity): string[] {
   return partyOf(w, h.id)?.members ?? [];
 }
 
-/** Está num grupo em que o humano é o líder: acompanha o líder em vez de seguir os próprios planos. */
+/** Está num grupo em que o humano é o líder (formação seguir/fila): acompanha o líder em vez de seguir os próprios planos. */
 function followingHuman(w: World, h: HeroEntity): boolean {
   const p = partyOf(w, h.id);
-  return !!p && p.leaderId === w.human.id && !w.human.dead;
+  return !!p && p.leaderId === w.human.id && p.formation !== 'free' && !w.human.dead;
 }
 
 function canInviteHuman(w: World, h: HeroEntity): boolean {
@@ -938,11 +940,17 @@ function follow(w: World, h: HeroEntity): void {
   // luta: o alvo do líder, quem ataca alguém do grupo, ou o monstro mais perto do líder
   if (currentTarget(w)) return hunt(w, h, true, true);
   const members = partyMembers(w, h);
+  const party = partyOf(w, h.id)!;
   const leaderTarget = leader.targetId ? w.monsters.get(leader.targetId) : undefined;
+  // "alvo do líder": foca o mesmo inimigo; "mais próximo": cada um pega o inimigo mais perto de si
+  const nearestTo = (o: { x: number; y: number }) =>
+    [...w.monsters.values()].filter((m) => m.alive && !isPz(w.map, m.x, m.y) && chebyshev(m, o) <= 5 && hasLineOfSight(w, h, m)).sort((a, c) => chebyshev(a, o) - chebyshev(c, o))[0];
   const threat =
-    (leaderTarget?.alive ? leaderTarget : undefined) ??
-    [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8) ??
-    [...w.monsters.values()].filter((m) => m.alive && !isPz(w.map, m.x, m.y) && chebyshev(m, leader) <= 5 && hasLineOfSight(w, h, m)).sort((a, c) => chebyshev(a, leader) - chebyshev(c, leader))[0];
+    party.targeting === 'leader'
+      ? ((leaderTarget?.alive ? leaderTarget : undefined) ??
+        [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8) ??
+        nearestTo(leader))
+      : (nearestTo(h) ?? [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8));
   if (threat && !isPz(w.map, h.x, h.y) && chebyshev(threat, leader) <= 8) {
     setTarget(w, threat.id);
     return;
@@ -950,7 +958,11 @@ function follow(w: World, h: HeroEntity): void {
   // loot por perto (sem se afastar do líder)
   const bag = [...w.lootBags.values()].find((l) => chebyshev(l, h) <= 4 && chebyshev(l, leader) <= 6);
   if (bag && freeSlots(h.character.inventory) > 0) return hunt(w, h, true, true);
-  if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1));
+  // formação: em fila pisa nos passos do líder; "seguir" anda por perto
+  const spot = formationSpot(w, h.id);
+  if (spot && party.formation === 'line') {
+    if (chebyshev(spot, h) > 1 && !isMoving(h, w.now)) goTo(w, h, spot.x, spot.y);
+  } else if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1));
 }
 
 /** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */
@@ -981,6 +993,15 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   const b = h.brain;
   const human = w.human;
   if (b.mode === 'pk') return false;
+  // treino no grupo: revida quem o atacou, mas para antes de se machucar demais
+  if (isSparring(w, h.id, human.id) && !human.dead && !h.dead && attackedRecently(w, human.id, h.id, 6000)) {
+    if (hpPct(h) > 0.3) {
+      if (h.targetId !== human.id) setTarget(w, human.id);
+      return h.targetId === human.id;
+    }
+    if (h.targetId === human.id) h.targetId = null;
+    return false;
+  }
   if (!w.social.pvp || human.dead || h.dead) return false;
   if (sameParty(w, h.id, human.id) || isPz(w.map, h.x, h.y) || isPz(w.map, human.x, human.y)) return false;
   const dist = chebyshev(human, h);

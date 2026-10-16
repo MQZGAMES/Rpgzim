@@ -574,6 +574,17 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
       c.set(9, 12, P.forest[1]!);
     },
   ],
+  // loot das criaturas das faixas 3 a 6
+  ['bandit_mask', (c) => { c.rect(2, 6, 12, 4, P.cloth[1]!); c.rect(4, 7, 3, 2, P.black); c.rect(9, 7, 3, 2, P.black); c.line(14, 7, 15, 11, P.cloth[2]!); c.hline(2, 13, 6, P.cloth[3]!); }],
+  ['bear_claw', (c) => { for (const x of [4, 8, 12]) { c.line(x, 13, x + 2, 4, P.bone[3]!); c.set(x + 2, 3, P.bone[2]!); } c.rect(2, 12, 13, 3, P.leather[2]!); }],
+  ['orc_tooth', (c) => { c.ellipse(8, 8, 3, 6, (x, y, nx) => (nx < 0 ? P.bone[3]! : P.bone[2]!)); c.set(7, 4, P.white); c.hline(6, 10, 13, P.leather[2]!); }],
+  ['scorpion_stinger', (c) => { c.line(3, 13, 9, 7, P.dirt[3]!); c.line(4, 13, 10, 7, P.dirt[2]!); c.disc(11, 5, 2.4, P.dirt[4]!); c.set(13, 3, P.red[4]!); c.set(14, 2, P.red[3]!); }],
+  ['shaman_totem', (c) => { c.rect(6, 3, 4, 11, P.wood[3]!); c.rect(5, 4, 6, 3, P.red[3]!); c.set(6, 5, P.black); c.set(9, 5, P.black); c.rect(5, 9, 6, 2, P.bone[3]!); c.set(4, 2, P.gold[4]!); c.set(11, 2, P.gold[4]!); }],
+  ['ice_fang', (c) => { for (let i = 0; i < 10; i++) { const w2 = Math.max(0, 3 - Math.floor(i / 3)); c.hline(8 - w2, 8 + w2, 3 + i, i % 3 ? P.ice[3]! : P.ice[4]!); } c.set(7, 4, P.white); }],
+  ['dark_emblem', (c) => { c.disc(8, 8, 6, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.75 ? P.gold[3]! : P.purple[1]!)); c.disc(8, 8, 2.5, P.red[3]!); c.set(7, 7, P.red[4]!); }],
+  ['troll_hide', (c) => { c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x * 3 + y) % 5 === 0 ? P.teal[1]! : P.teal[2]!)); for (const [x, y] of [[1, 3], [14, 3], [2, 13], [13, 13]] as const) c.set(x, y, P.teal[2]!); c.line(4, 6, 12, 6, P.teal[3]!); }],
+  ['lich_dust', (c) => { c.rect(5, 3, 6, 2, P.wood[3]!); c.ellipse(8, 10, 5, 5, (x, y, nx, ny) => (ny < -0.4 ? P.ice[3]! : (x + y) % 3 ? P.purple[3]! : P.purple[4]!)); c.set(6, 8, P.white); }],
+  ['dragon_scale', (c) => { for (let y = 2; y < 15; y++) { const w2 = Math.round(Math.sin(((y - 2) / 12) * Math.PI) * 6); c.hline(8 - w2, 8 + w2, y, y < 7 ? P.red[4]! : y < 11 ? P.red[3]! : P.red[2]!); } c.line(8, 3, 8, 13, P.red[1]!); c.set(6, 5, P.gold[4]!); }],
   [
     'meat',
     (c) => {
@@ -1007,6 +1018,21 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.set(5, 10, P.red[3]!);
       c.set(8, 10, P.blue[4]!);
       c.set(11, 10, P.red[3]!);
+    },
+  ],
+  [
+    'lock',
+    (c) => {
+      // cadeado dourado (item travado: não entra no "vender tudo")
+      for (let y = 2; y < 8; y++) {
+        c.set(4, y, P.steel[4]!);
+        c.set(11, y, P.steel[3]!);
+      }
+      c.hline(5, 10, 1, P.steel[4]!);
+      c.rect(2, 7, 12, 8, P.gold[3]!);
+      c.hline(2, 13, 7, P.gold[4]!);
+      c.rect(7, 9, 2, 4, P.black);
+      c.set(7, 9, P.gold[1]!);
     },
   ],
 ];
