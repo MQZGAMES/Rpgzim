@@ -290,12 +290,17 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
   await page.waitForTimeout(400);
   // ele anda sozinho: lê a posição na tela e toca na hora (repete se ele saiu do lugar entre a leitura e o toque)
   await expect(async () => {
+    // fica perto dele a cada tentativa (ele pode ter saído andando para caçar)
+    const h = (await api(page, (a) => a.heroes()))[0]!;
+    await page.evaluate((p) => (window.__RPGZIM__ as { teleport(x: number, y: number): void }).teleport(p.x, p.y), { x: h.x, y: h.y + 2 });
+    await page.waitForTimeout(250);
     const pos = await page.evaluate((id) => (window.__RPGZIM__ as { screenOf(id: string): { x: number; y: number } | null }).screenOf(id), hero.id);
     expect(pos).not.toBeNull();
     await page.touchscreen.tap(pos!.x, pos!.y);
     await expect(page.getByTestId('actor-menu')).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 15_000 });
   // mini mapa: toque num lugar distante -> fecha o painel e caminha até lá
+  // logo depois de outro toque (o navegador descartaria o "click" como toque duplo): o botão responde mesmo assim
   await page.getByTestId('btn-minimap').tap();
   await expect(page.getByTestId('minimap-panel')).toBeVisible();
   await page.getByTestId('minimap-zoom').tap();

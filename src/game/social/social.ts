@@ -94,7 +94,8 @@ export function invite(w: World, fromId: string, toId: string): PartyFail | null
   const to = actorById(w, toId);
   if (!from || !to || from.dead || to.dead) return 'dead';
   const party = w.social.party;
-  if (party && party.members.includes(fromId) && party.leaderId !== fromId) return 'notLeader';
+  // o jogador humano convida mesmo sem ser o líder (os demais membros são heróis que seguem o que ele decide)
+  if (party && party.members.includes(fromId) && party.leaderId !== fromId && fromId !== w.human.id) return 'notLeader';
   if (party && party.members.includes(toId)) return 'alreadyInParty';
   w.social.invites = w.social.invites.filter((i) => !(i.fromId === fromId && i.toId === toId) && i.expiresAt > w.now);
   w.social.invites.push({ fromId, toId, expiresAt: w.now + INVITE_MS });
@@ -156,7 +157,8 @@ export function passLeadership(w: World, leaderId: string, toId: string): PartyF
   if (p.leaderId !== leaderId) return 'notLeader';
   if (!p.members.includes(toId)) return 'notMember';
   p.leaderId = toId;
-  notify(w, `${actorName(w, toId)} agora é o líder do grupo.`);
+  p.trail = []; // o rastro da fila passa a ser o do novo líder
+  notify(w, toId === w.human.id ? 'Você agora é o líder do grupo.' : `${actorName(w, toId)} agora é o líder do grupo.`);
   return null;
 }
 

@@ -12,6 +12,8 @@ import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { isPz } from '../../src/game/world/GameMap';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
 import { advance, makeSim, runUntil } from '../helpers';
+import { asActor } from '../../src/game/simulation/World';
+import { planWalk } from '../../src/game/movement/walk';
 
 function withHero(vocation: 'knight' | 'paladin' | 'druid' | 'sorcerer' = 'knight', seed = 21) {
   const sim = makeSim(vocation, { seed });
@@ -359,5 +361,96 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
     const paladin = makeSim('paladin').world.player.character;
     paladin.inventory[7] = { itemId: 'arrow', count: 20 };
     expect(sellAllPreview(paladin, shop, GAME_DATA).some((r) => r.itemId === 'arrow')).toBe(false);
+  });
+});
+
+describe('grupo: liderança livre e seguir fluido', () => {
+  it('qualquer membro pode virar líder e você pode voltar a liderar (e mudar as regras sem ser o líder)', () => {
+    const { sim, h, w } = withHero();
+    expect(sim.partyInvite(h.id)).toBe(true);
+    sim.partyPassLeader(h.id);
+    expect(w.social.party!.leaderId).toBe(h.id);
+    sim.configureParty({ formation: 'line' });
+    expect(w.social.party!.formation).toBe('line');
+    sim.partyPassLeader(w.human.id);
+    expect(w.social.party!.leaderId).toBe(w.human.id);
+  });
+
+  it('você segue o Boladex líder de perto, sem parar e recomeçar', () => {
+    const { sim, h, w } = withHero();
+    const spot = openField(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    putAt(sim, h, spot.x + 1, spot.y);
+    party(sim, h.id, [h.id, w.human.id]);
+    h.brain.nextThinkAt = Infinity; // o líder só anda o caminho dado
+    expect(asActor(w, h, () => planWalk(w, spot.x - 9, spot.y))).toBe(true);
+    let maxGap = 0;
+    let stalls = 0;
+    let last = { x: w.human.x, y: w.human.y };
+    let lastMoveAt = w.now;
+    let farSince: number | null = null;
+    for (let t = 0; t < 8000; t += 50) {
+      advance(sim, 50, 50);
+      if (w.human.x !== last.x || w.human.y !== last.y) {
+        last = { x: w.human.x, y: w.human.y };
+        lastMoveAt = w.now;
+      }
+      maxGap = Math.max(maxGap, chebyshev(h, w.human));
+      // líder andando, você longe dele e parado por mais de 0,8 s (contando de quando se afastou) = "travado"
+      if (chebyshev(h, w.human) > 2) farSince ??= w.now;
+      else farSince = null;
+      if (h.path?.length && farSince !== null && w.now - Math.max(lastMoveAt, farSince) > 800) stalls++;
+    }
+    expect(maxGap).toBeLessThanOrEqual(4);
+    expect(stalls).toBe(0);
+    expect(chebyshev(h, w.human)).toBeLessThanOrEqual(2);
+  });
+
+  it('o Boladex segue você de perto e para ao seu lado', () => {
+    const { sim, h, w } = withHero();
+    const spot = openField(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    putAt(sim, h, spot.x + 1, spot.y);
+    party(sim, w.human.id, [w.human.id, h.id]);
+    h.brain.mode = 'follow';
+    expect(sim.walkTo(spot.x - 9, spot.y)).toBe(true);
+    let maxGap = 0;
+    for (let t = 0; t < 8000; t += 50) {
+      advance(sim, 50, 50);
+      maxGap = Math.max(maxGap, chebyshev(h, w.human));
+    }
+    expect(maxGap).toBeLessThanOrEqual(5);
+    expect(chebyshev(h, w.human)).toBeLessThanOrEqual(2);
+  });
+
+  it('membros do grupo passam um pelo outro fora da cidade (ninguém trava na trilha)', () => {
+    const { sim, h, w } = withHero();
+    const spot = openField(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    putAt(sim, h, spot.x + 1, spot.y);
+    expect(canEnter(w, spot.x + 1, spot.y, false, w.human.id)).toBe(false);
+    party(sim, w.human.id, [w.human.id, h.id]);
+    expect(canEnter(w, spot.x + 1, spot.y, false, w.human.id)).toBe(true);
+  });
+});
+
+describe('mini mapa: toque em lugar sem acesso', () => {
+  it('tocar no meio de um lago leva até a margem mais próxima (não falha)', () => {
+    const sim = makeSim('knight');
+    const w = sim.world;
+    sim.teleportPlayer(30, 23);
+    // centro de um lago: tile de água cercado de água
+    let lake: { x: number; y: number } | null = null;
+    for (let i = 0; i < w.map.width * w.map.height && !lake; i++) {
+      const x = i % w.map.width;
+      const y = Math.floor(i / w.map.width);
+      let all = true;
+      for (let dy = -2; dy <= 2 && all; dy++) for (let dx = -2; dx <= 2 && all; dx++) all = (w.map.layers.water[(y + dy) * w.map.width + x + dx] ?? -1) >= 0;
+      if (all) lake = { x, y };
+    }
+    expect(lake).not.toBeNull();
+    expect(sim.travelTo(lake!.x, lake!.y)).toBe(true);
+    const goal = w.player.pathGoal!;
+    expect(chebyshev(goal, lake!)).toBeLessThanOrEqual(6);
   });
 });

@@ -34,10 +34,10 @@ import {
 import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
-import { planWalk } from '../movement/walk';
+import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
-import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial, type PartySetting } from '../social/social';
+import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
 import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
@@ -55,6 +55,16 @@ export interface SimulationOptions {
   restorePosition?: boolean;
   /** Heróis com vida própria presentes no mundo (personagens não controlados pelo jogador). */
   heroes?: { hero: HeroDef; character: CharacterState }[];
+}
+
+/** Membro que segue o líder (formação seguir/fila) e ficou para trás: passo 20–35% mais rápido até alcançar. */
+function followCatchUp(w: World, p: PlayerEntity): number {
+  const party = w.social.party;
+  if (!party || party.formation === 'free' || party.leaderId === p.id || !party.members.includes(p.id) || p.targetId) return 1;
+  const leader = actorById(w, party.leaderId);
+  if (!leader || leader.dead) return 1;
+  const d = Math.max(Math.abs(leader.x - p.x), Math.abs(leader.y - p.y));
+  return d > 6 ? 1.35 : d > 2 ? 1.2 : 1;
 }
 
 export class GameSimulation {
@@ -86,6 +96,7 @@ export class GameSimulation {
       chaseRecalcAt: 0,
       chasePaused: false,
       lastMoveCommandAt: -Infinity,
+      following: false,
       nextRegenAt: 0,
       food: null,
       dead: false,
@@ -223,7 +234,7 @@ export class GameSimulation {
     const w = this.world;
     const p = w.player;
     if (p.dead || isMoving(p, w.now)) return;
-    const speed = p.stats.speed;
+    const speed = p.stats.speed * followCatchUp(w, p);
     const dir = p.heldDir;
     if (dir) {
       p.path = null;
@@ -234,6 +245,27 @@ export class GameSimulation {
       if (dir.dx && dir.dy && (tryStep(w, p, dir.dx, 0, speed, false) || tryStep(w, p, 0, dir.dy, speed, false))) return;
       p.facing = dir.dx ? (dir.dx < 0 ? 'left' : 'right') : dir.dy < 0 ? 'up' : 'down';
       return;
+    }
+    // em grupo com outro líder (formação seguir/fila), sem alvo e sem caminho escolhido por você: anda junto do líder.
+    // O caminho é refeito a cada ~0,25 s enquanto anda (sem parar entre recálculos) e para perto dele.
+    if (p === w.human && !p.targetId && (!p.path?.length || p.following) && w.now - p.lastMoveCommandAt > 1200) {
+      const spot = formationSpot(w, p.id);
+      if (!spot) p.following = false;
+      else if (Math.max(Math.abs(spot.x - p.x), Math.abs(spot.y - p.y)) <= spot.tolerance) {
+        if (p.following) {
+          p.path = null;
+          p.pathGoal = null;
+          p.following = false;
+        }
+      } else if (w.now >= p.chaseRecalcAt) {
+        p.chaseRecalcAt = w.now + 250;
+        const path = pathTo(w, p, spot, false, { stopWithin: spot.tolerance, maxNodes: 4000 });
+        if (path?.length) {
+          p.path = path;
+          p.pathGoal = { ...path[path.length - 1]! };
+          p.following = true;
+        }
+      }
     }
     if (p.path && !p.path.length) {
       p.path = null;
@@ -254,16 +286,6 @@ export class GameSimulation {
       p.path = goal ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: far ? 120000 : 2500 }) : null;
       if (!p.path) p.pathGoal = null;
       return;
-    }
-    // em grupo com outro líder (formação seguir/fila): sem comando do jogador, anda junto do líder
-    if (p === w.human && !p.targetId && w.now - p.lastMoveCommandAt > 2500) {
-      const spot = formationSpot(w, p.id);
-      if (spot && Math.max(Math.abs(spot.x - p.x), Math.abs(spot.y - p.y)) > spot.tolerance + 1 && w.now >= p.chaseRecalcAt) {
-        p.chaseRecalcAt = w.now + 500;
-        const path = pathTo(w, p, spot, false, { stopWithin: Math.max(1, spot.tolerance), maxNodes: 2500 });
-        if (path?.length) tryStep(w, p, path[0]!.x - p.x, path[0]!.y - p.y, speed, false);
-        return;
-      }
     }
     // perseguição automática do alvo quando fora de alcance (desligada no modo "atacar parado")
     const t = currentTarget(w) ?? currentActorTarget(w);
@@ -335,13 +357,16 @@ export class GameSimulation {
   }
   /** Viagem longa (toque no mini mapa): caminho pelo mapa todo, contornando monstros quando dá. */
   travelTo(x: number, y: number): boolean {
-    const ok = planWalk(this.world, x, y, { maxNodes: 120000, avoidMonsters: true });
+    // vai até o ponto alcançável mais perto do toque (margem do lago, cerca, porta...)
+    const t = nearestReachable(this.world, x, y) ?? { x, y };
+    const ok = planWalk(this.world, t.x, t.y, { maxNodes: 120000, avoidMonsters: true });
     if (ok) this.manualMove();
     return ok;
   }
   private manualMove(): void {
     const p = this.world.player;
     p.lastMoveCommandAt = this.world.now;
+    p.following = false;
     if (p.targetId) p.chasePaused = true;
   }
   stop(): void {
@@ -474,14 +499,20 @@ export class GameSimulation {
     const fail = kickFromParty(w, w.player.id, id);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
   }
+  /** Escolhe o líder do grupo (qualquer membro, inclusive você de volta). Os outros membros são heróis com
+   * vida própria e aceitam o que o jogador decide no painel do grupo. */
   partyPassLeader(id: string): void {
     const w = this.world;
-    const fail = passLeadership(w, w.player.id, id);
+    const party = w.social.party;
+    const asLeader = party && party.members.includes(w.player.id) ? party.leaderId : w.player.id;
+    const fail = party?.leaderId === id ? null : passLeadership(w, asLeader, id);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
   }
   configureParty(patch: PartySetting): void {
     const w = this.world;
-    const fail = configureParty(w, w.player.id, patch);
+    const party = w.social.party;
+    const asLeader = party && party.members.includes(w.player.id) ? party.leaderId : w.player.id;
+    const fail = configureParty(w, asLeader, patch);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
   }
   disbandParty(): void {

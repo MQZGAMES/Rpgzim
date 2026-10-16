@@ -67,3 +67,37 @@ export function freeCellNear(w: World, x: number, y: number, selfId: string, rad
       }
   return { x, y };
 }
+
+/** Tile alcançável a pé (busca em largura a partir do ator) mais perto de (x, y) — o mini mapa leva até a margem
+ * do lago, até a cerca, até a porta... em vez de falhar quando o toque cai num lugar sem acesso. */
+export function nearestReachable(w: World, x: number, y: number): TilePos | null {
+  const p = w.player;
+  const W = w.map.width;
+  const seen = new Uint8Array(W * w.map.height);
+  const queue: number[] = [p.y * W + p.x];
+  seen[queue[0]!] = 1;
+  let best: TilePos | null = null;
+  let bestD = Infinity;
+  for (let qi = 0; qi < queue.length; qi++) {
+    const i = queue[qi]!;
+    const cx = i % W;
+    const cy = (i - cx) / W;
+    const d = Math.hypot(cx - x, cy - y);
+    if (d < bestD) {
+      bestD = d;
+      best = { x: cx, y: cy };
+      if (d === 0) break;
+    }
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx;
+        const ny = cy + dy;
+        const ni = ny * W + nx;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= w.map.height || seen[ni]) continue;
+        seen[ni] = 1;
+        if (!isSolid(w.map, nx, ny) && (dx === 0 || dy === 0 || (!isSolid(w.map, cx + dx, cy) && !isSolid(w.map, cx, cy + dy)))) queue.push(ni);
+      }
+  }
+  return best;
+}

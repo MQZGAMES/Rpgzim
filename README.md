@@ -33,6 +33,10 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   cache que ficava velha no celular (barra de endereço, área segura, app instalado) e deslocava os toques — perto
   do topo eles caíam "fora do jogo". Tocar num telhado/árvore/água guarda um destino alcançável (não trava se
   alguém cruzar o caminho).
+- **Botões respondem ao toque na hora** (`src/ui/common/useTap.ts`): agem no `pointerup` em vez de esperar o `click`,
+  que o navegador descarta quando dois toques acontecem em menos de ~300 ms (tocar no mapa e logo num botão do menu
+  não fazia nada); o click "fantasma" que viria depois é cancelado, e o fundo de um painel nunca o fecha com o mesmo
+  toque que o abriu.
 - **Mini mapa** (botão de mapa ou tecla M): imagem do mundo gerada dos próprios tiles (`npm run art:world`), você,
   o grupo e o destino; toque num lugar para ir até lá (caminho pelo mapa todo, contornando árvores, muros, água e,
   quando dá, monstros). *Mundo inteiro* / *Aproximar*.
@@ -94,8 +98,11 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   ou treino liberado no grupo).
 - **Grupo**: quando o convite é aceito, abre o **painel do grupo** (botão *grupo* no HUD, com o nº de membros, ou tecla P): passar a liderança (coroa), remover membro, **formação** (livre / todos seguem o líder / fila
   pisando nos passos do líder), **alvo** (o mesmo do líder / cada um o mais próximo), **treino entre membros**
-  (podem se atacar sem caveira e sem perder ouro), sair e desfazer o grupo. Só o líder muda as regras. Com o
-  Boladex de líder, você (sem alvo) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
+  (podem se atacar sem caveira e sem perder ouro), sair e desfazer o grupo. Qualquer membro pode ser o líder (a coroa
+  escolhe, inclusive você de volta) e você ajusta as regras mesmo sem liderar. **Seguir fluido**: quem segue refaz
+  a rota enquanto anda (sem parar e recomeçar), acelera até 35% quando fica para trás, para a até 2 tiles do líder, e
+  membros do grupo passam um pelo outro em qualquer lugar. Com o Boladex de líder, você (sem alvo e sem caminho
+  escolhido) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
 - **PK** (caveira): ligado, personagens podem se atacar fora das áreas protegidas (membros do grupo só no treino).
   Quem ataca alguém sem caveira fica com caveira (5 min; 15 min se matar). Quem morre no PK deixa parte do ouro
   e às vezes um item da mochila no chão.
@@ -135,7 +142,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **160 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **165 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **9 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

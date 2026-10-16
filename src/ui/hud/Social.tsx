@@ -2,7 +2,8 @@
 // convite) e o menu discreto que abre ao tocar num personagem (convidar, grupo, atacar).
 import type { ReactNode } from 'react';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
-import { Bar, ItemIcon, Panel, PixelButton } from '../common/primitives';
+import { Bar, ItemIcon, Panel, PixelButton, TapButton } from '../common/primitives';
+import { useTap } from '../common/useTap';
 
 /** Botão quadrado do HUD (menus, modo de ataque, PK, grupo), com um selo discreto de estado no canto. */
 export function HudButton({
@@ -32,7 +33,7 @@ export function HudButton({
       aria-label={label}
       aria-pressed={pressed}
       title={hotkey ? `${label} (${hotkey})` : label}
-      onClick={onClick}
+      {...useTap(onClick)}
       className="btn-pixel relative flex h-10 w-10 items-center justify-center !border-[7px]"
       data-testid={testId}
     >
@@ -138,8 +139,8 @@ export function PartyPanel() {
   return (
     <Panel title="Grupo" icon="ui_party" onClose={() => session.setPartyPanel(false)}>
       <div data-testid="party-panel">
-        <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.{lead ? '' : ' Só o líder altera as regras.'}</div>
-        <Section title="Membros" hint={lead ? 'Coroa: passar a liderança · X: remover do grupo.' : 'O líder decide a formação e o alvo.'}>
+        <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.</div>
+        <Section title="Membros" hint={`Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}>
           <div className="flex flex-col gap-1">
             {party.members.map((m) => (
               <div key={m.id} className={`frame-slot flex items-center gap-2 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}>
@@ -149,28 +150,28 @@ export function PartyPanel() {
                   {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
                 </span>
                 <Bar className="w-[60px]" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
+                {!m.isLeader && (
+                  <TapButton
+                    className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
+                    title={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
+                    aria-label={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
+                    onTap={() => session.partyPassLeader(m.id)}
+                    data-testid={`party-lead-${m.isYou ? 'you' : m.id}`}
+                  >
+                    <ItemIcon icon="ui_crown" size={14} />
+                  </TapButton>
+                )}
                 {lead && !m.isYou && (
                   <>
-                    <button
-                      type="button"
-                      className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
-                      title={`Tornar ${m.name} o líder`}
-                      aria-label={`Tornar ${m.name} o líder`}
-                      onClick={() => session.partyPassLeader(m.id)}
-                      data-testid={`party-lead-${m.id}`}
-                    >
-                      <ItemIcon icon="ui_crown" size={14} />
-                    </button>
-                    <button
-                      type="button"
+                    <TapButton
                       className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
                       title={`Remover ${m.name}`}
                       aria-label={`Remover ${m.name}`}
-                      onClick={() => session.partyKick(m.id)}
+                      onTap={() => session.partyKick(m.id)}
                       data-testid={`party-kick-${m.id}`}
                     >
                       <ItemIcon icon="ui_close" size={12} />
-                    </button>
+                    </TapButton>
                   </>
                 )}
               </div>
@@ -180,7 +181,7 @@ export function PartyPanel() {
         <Section title="Formação" hint="Como os membros andam fora de combate.">
           <Segmented
             value={party.formation}
-            disabled={!lead}
+            disabled={false}
             testId="party-formation"
             onChange={(formation) => session.configureParty({ formation })}
             options={[
@@ -193,7 +194,7 @@ export function PartyPanel() {
         <Section title="Alvo" hint="Quem cada membro ataca em combate.">
           <Segmented
             value={party.targeting}
-            disabled={!lead}
+            disabled={false}
             testId="party-targeting"
             onChange={(targeting) => session.configureParty({ targeting })}
             options={[
@@ -205,7 +206,7 @@ export function PartyPanel() {
         <Section title="Treino entre membros" hint="Membros podem se atacar fora das áreas protegidas, sem caveira e sem perder ouro.">
           <Segmented
             value={party.friendlyFire ? 'on' : 'off'}
-            disabled={!lead}
+            disabled={false}
             testId="party-ff"
             onChange={(v) => session.configureParty({ friendlyFire: v === 'on' })}
             options={[
@@ -259,7 +260,7 @@ function MiniAction({ icon, label, onClick, testId, gold = false }: { icon: stri
       type="button"
       aria-label={label}
       title={label}
-      onClick={onClick}
+      {...useTap(onClick)}
       className={`${gold ? 'btn-gold' : 'btn-pixel'} flex h-9 w-9 shrink-0 items-center justify-center !border-[6px]`}
       data-testid={testId}
     >
@@ -273,10 +274,9 @@ export function ActorMenu() {
   const session = useSession();
   const id = useLocal((s) => s.actorMenu);
   const hero = useSnap((s) => s.heroes.find((h) => h.id === id) ?? null);
-  const party = useSnap((s) => s.party);
   if (!id || !hero) return null;
   const inParty = hero.inParty;
-  const canInvite = !inParty && (!party || party.youAreLeader);
+  const canInvite = !inParty;
   const canAttack = !hero.attackBlocked;
   return (
     <div className="frame-dark anim-pop pointer-events-auto flex items-center gap-2 !border-[8px] text-[12px]" role="dialog" aria-label={hero.name} data-testid="actor-menu">

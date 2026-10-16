@@ -6,9 +6,7 @@ import { Bar, ItemIcon, Panel, PixelButton, SpriteFrame } from '../common/primit
 export function PlayersPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const heroes = useSnap((s) => s.heroes);
-  const party = useSnap((s) => s.party);
   const me = useSnap((s) => ({ name: s.player.name, region: s.region }));
-  const canInvite = !party || party.youAreLeader;
   return (
     <Panel title="Personagens online" icon="ui_players" onClose={onClose}>
       <div data-testid="players-panel">
@@ -49,8 +47,8 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                 <PixelButton
                   variant="gold"
                   className="shrink-0 !border-[6px] px-1 text-[11px]"
-                  disabled={!canInvite || h.dead}
-                  title={canInvite ? `Chamar ${h.name} para o grupo` : 'Só o líder do grupo convida'}
+                  disabled={h.dead}
+                  title={`Chamar ${h.name} para o grupo`}
                   onClick={() => session.partyInvite(h.id)}
                   data-testid={`player-invite-${h.id}`}
                 >

@@ -989,16 +989,22 @@ function follow(w: World, h: HeroEntity): void {
   const bag = [...w.lootBags.values()].find((l) => chebyshev(l, h) <= 4 && chebyshev(l, leader) <= 6);
   if (bag && freeSlots(h.character.inventory) > 0) return hunt(w, h, true, true);
   // formação: em fila pisa nos passos do líder; "seguir" anda por perto
+  // formação: em fila pisa nos passos do líder; "seguir" fica a até 2 tiles. A rota mira sempre onde o líder
+  // está agora (refeita quando ele se afasta do destino), então o herói anda junto sem parar e recomeçar.
+  const dist = chebyshev(leader, h);
+  const far = dist > 15;
   const spot = formationSpot(w, h.id);
-  if (spot && party.formation === 'line' && chebyshev(leader, h) <= 15) {
-    if (chebyshev(spot, h) > 1 && !isMoving(h, w.now)) goTo(w, h, spot.x, spot.y);
-  } else if (chebyshev(leader, h) > 3 && !isMoving(h, w.now)) {
-    // longe (ex.: chamado pela lista de personagens): atravessa o mapa até o líder, replanejando se ele andar muito
-    const far = chebyshev(leader, h) > 15;
-    const req = h.brain.walkReq;
-    if (far && req && h.path?.length && chebyshev(req, leader) <= 6) return;
-    goTo(w, h, leader.x + w.rng.int(-1, 1), leader.y + w.rng.int(-1, 1), far ? 120000 : 20000);
+  const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: 2 };
+  const req = h.brain.walkReq;
+  if (chebyshev(goal, h) <= goal.near) {
+    if (h.path?.length && req && chebyshev(req, leader) <= 2) {
+      h.path = null; // chegou perto: para ao lado do líder (sem encostar e empurrar)
+      h.pathGoal = null;
+    }
+    return;
   }
+  const stale = !req || !h.path?.length || chebyshev(req, goal) > (far ? 6 : 1);
+  if (stale) goTo(w, h, goal.x, goal.y, far ? 120000 : 20000);
 }
 
 /** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */

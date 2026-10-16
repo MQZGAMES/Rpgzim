@@ -67,6 +67,7 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
     chaseRecalcAt: 0,
     chasePaused: false,
     lastMoveCommandAt: -Infinity,
+    following: false,
     nextRegenAt: 0,
     food: null,
     dead: false,

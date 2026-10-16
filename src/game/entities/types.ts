@@ -50,6 +50,8 @@ export interface PlayerEntity extends Mover {
   chasePaused: boolean;
   /** Último comando de movimento do jogador (a formação do grupo só puxa quem está parado). */
   lastMoveCommandAt: number;
+  /** O caminho atual é o de seguir o líder do grupo (pode ser refeito a qualquer momento). */
+  following: boolean;
   nextRegenAt: number;
   food: { health: number; mana: number; until: number } | null;
   dead: boolean;

@@ -33,8 +33,11 @@ export function canEnter(w: World, x: number, y: number, forMonster: boolean, se
   if (forMonster && isPz(w.map, x, y)) return false;
   const occ = occupant(w, x, y);
   if (occ === undefined || occ === selfId) return true;
-  // na cidade e nas construções personagens passam uns pelos outros — ninguém trava porta nem rua
-  return !forMonster && isCrowdSafe(w.map, x, y) && isActorId(occ) && isActorId(selfId);
+  if (forMonster || !isActorId(occ) || !isActorId(selfId)) return false;
+  // na cidade e nas construções personagens passam uns pelos outros — ninguém trava porta nem rua;
+  // membros do mesmo grupo também (seguir o líder em trilha estreita não trava)
+  const party = w.social.party?.members;
+  return isCrowdSafe(w.map, x, y) || (!!party && party.includes(occ) && party.includes(selfId!));
 }
 
 export function placeOccupant(w: World, m: Mover): void {

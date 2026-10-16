@@ -15,6 +15,7 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
   const [st, setSt] = useState<MiniState>(() => session.minimapState());
   const [zoomed, setZoomed] = useState(true);
   const scroller = useRef<HTMLDivElement>(null);
+  const down = useRef<{ x: number; y: number } | null>(null);
 
   // posições ao vivo (fora do snapshot, para não redesenhar o HUD inteiro a cada passo)
   useEffect(() => {
@@ -47,7 +48,17 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
           <div
             className="relative cursor-crosshair"
             style={zoomed ? { width: st.width * px, height: st.height * px } : { width: '100%', aspectRatio: `${st.width} / ${st.height}` }}
-            onClick={(e) => {
+            // toque (sem arrasto para rolar) ou clique: caminha até o ponto — no pointerup, sem depender do click
+            onPointerDown={(e) => {
+              down.current = { x: e.clientX, y: e.clientY };
+            }}
+            onPointerCancel={() => {
+              down.current = null;
+            }}
+            onPointerUp={(e) => {
+              const d = down.current;
+              down.current = null;
+              if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
               const r = e.currentTarget.getBoundingClientRect();
               const x = Math.floor(((e.clientX - r.left) / r.width) * st.width);
               const y = Math.floor(((e.clientY - r.top) / r.height) * st.height);
