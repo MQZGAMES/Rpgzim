@@ -88,6 +88,8 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
           RPG de fantasia em pixel art · {account ? `progresso sincronizado com o GitHub (${account.repo})` : 'progresso salvo neste navegador'}
           <br />
           Melhor no celular deitado ou em pé · teclado, mouse e toque
+          <br />
+          <span className="text-[10px] opacity-70" data-testid="app-version">versão {__APP_VERSION__}</span>
         </p>
       </div>
       {cloudOpen && <CloudPanel onClose={() => setCloudOpen(false)} onChanged={() => void refresh()} />}

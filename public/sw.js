@@ -32,7 +32,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // GitHub API, fontes externas: direto pela rede
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      // no-cache: sempre confere com o servidor (o GitHub Pages guarda a página por até 10 min)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put('./index.html', copy));

@@ -164,7 +164,8 @@ export class EffectsView {
 
   // ------------------------------------------------------------------ eventos
   private onAttack(e: GameEventMap['attack']): void {
-    if (!this.onScreen(e.from) && !this.onScreen(e.to)) return;
+    // projétil: as duas pontas na tela; golpe corpo a corpo: o alvo na tela (nada atravessa a tela vindo de longe)
+    if (e.projectile ? !this.onScreen(e.from) || !this.onScreen(e.to) : !this.onScreen(e.to)) return;
     const from = this.posOf(e.sourceId, e.from);
     const to = this.posOf(e.targetId, e.to);
     const audio = this.audible(e.sourceId, e.from) || this.audible(e.targetId, e.to) ? this.session.audio : { play: () => undefined };
@@ -237,7 +238,7 @@ export class EffectsView {
     }
     if (spell.target === 'self' && spell.vfx.impact === 'fx_heal') return; // o evento heal já mostra
     if (spell.effect === 'buff') return; // aura mostrada em buffApplied
-    if (spell.vfx.projectile && e.targetId && spell.id !== 'arrow_rain') {
+    if (spell.vfx.projectile && e.targetId && spell.id !== 'arrow_rain' && this.onScreen(e.from)) {
       const to = this.posOf(e.targetId, e.tiles[0] ?? e.from);
       const dur = this.projectile(spell.vfx.projectile, from, to);
       impactAll(dur * 0.9);

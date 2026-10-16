@@ -55,7 +55,7 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
       </label>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Progresso</h3>
       <p className="text-[12px] text-muted">
-        O jogo salva automaticamente neste navegador (ao subir de nível, trocar equipamento, negociar e a cada 45 s).
+        O jogo salva automaticamente neste navegador (ao subir de nível, trocar equipamento, negociar e a cada 1 min).
         {lastSaved ? ` Último salvamento: ${new Date(lastSaved).toLocaleTimeString()}.` : ''}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -64,6 +64,7 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
         </PixelButton>
         <PixelButton onClick={() => void session.exitToMenu()}>Salvar e sair</PixelButton>
       </div>
+      <p className="mt-3 text-[11px] text-muted" data-testid="settings-version">Versão do jogo: {__APP_VERSION__}</p>
     </Panel>
   );
 }

@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Plugin } from 'vite';
+import { execSync } from 'node:child_process';
 
 /** Após o build, grava no service worker a lista de arquivos do jogo e uma versão nova do cache,
  * para que ele funcione offline já depois da primeira visita (e troque o cache a cada publicação). */
@@ -38,8 +39,22 @@ function precacheServiceWorker(): Plugin {
 }
 
 // base relativo: o build funciona tanto na raiz quanto em subpastas (ex.: GitHub Pages /Rpgzim/).
+/** Versão exibida no jogo: data da publicação + commit (ajuda a saber se o navegador pegou a versão nova). */
+function buildVersion(): string {
+  let commit = '';
+  try {
+    commit = execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    /* sem git */
+  }
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${commit ? '·' + commit : ''}`;
+}
+
 export default defineConfig({
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(buildVersion()) },
   plugins: [react(), tailwindcss(), precacheServiceWorker()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
