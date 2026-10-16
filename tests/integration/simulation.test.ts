@@ -46,16 +46,16 @@ describe('movimento', () => {
     sim.teleportPlayer(30, 23); // avenida, área aberta
     const start = { x: p.x, y: p.y };
     sim.setMoveDir({ dx: 1, dy: 0 });
-    advance(sim, 1000);
+    advance(sim, 2000);
     const straight = p.x - start.x;
-    expect(straight).toBeGreaterThanOrEqual(3);
+    expect(straight).toBeGreaterThanOrEqual(5); // ~3 tiles/s (ritmo de celular)
     sim.setMoveDir(null);
     runUntil(sim, () => !isMoving(p, sim.now), 2000);
     sim.teleportPlayer(30, 23);
     sim.setMoveDir({ dx: 1, dy: 1 });
-    advance(sim, 1000);
+    advance(sim, 2000);
     const diag = p.x - 30;
-    expect(diag).toBeGreaterThanOrEqual(2);
+    expect(diag).toBeGreaterThanOrEqual(3);
     // diagonal percorre ~1/sqrt(2) tiles por eixo em relação ao reto
     expect(diag).toBeLessThan(straight);
   });
@@ -731,7 +731,20 @@ describe('grupo, PK e modo de ataque', () => {
     h.brain.quarry = 'slime';
     h.brain.spot = { x: slime.x, y: slime.y };
     h.brain.modeUntil = w.now + 600000;
-    runUntil(sim, () => (h.brain.mode as string) === 'pk', 90000, 50);
+    // o jogador fica por perto (como quem caça junto); o herói pesa a oportunidade a cada poucos segundos
+    runUntil(
+      sim,
+      () => {
+        if (Math.max(Math.abs(h.x - w.human.x), Math.abs(h.y - w.human.y)) > 5) {
+          const c = [...Array(25).keys()].map((i) => ({ x: h.x + (i % 5) - 2, y: h.y + Math.floor(i / 5) - 2 })).find((t) => (t.x !== h.x || t.y !== h.y) && canEnter(w, t.x, t.y, false, w.human.id) && !isPz(w.map, t.x, t.y));
+          if (c) sim.teleportPlayer(c.x, c.y);
+        }
+        w.human.character.health = Math.floor(w.human.stats.maxHealth * 0.3);
+        return (h.brain.mode as string) === 'pk';
+      },
+      90000,
+      50,
+    );
     expect(h.brain.pkTargetId).toBe(w.human.id);
   });
 });

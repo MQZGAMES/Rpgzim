@@ -53,6 +53,13 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
         <input type="checkbox" checked={showLog} onChange={(e) => setShowLog(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" data-testid="toggle-log" />
         Mostrar mensagens do jogo
       </label>
+      <h3 className="mb-1 mt-3 text-[13px] text-gold">Controles</h3>
+      <div className="flex flex-wrap gap-2">
+        <PixelButton onClick={() => session.setPanel('hotbar')} data-testid="settings-hotbar">
+          Configurar atalhos
+        </PixelButton>
+        <PixelButton onClick={() => session.setPanel('help')}>Como jogar</PixelButton>
+      </div>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Progresso</h3>
       <p className="text-[12px] text-muted">
         O jogo salva automaticamente neste navegador (ao subir de nível, trocar equipamento, negociar e a cada 1 min).

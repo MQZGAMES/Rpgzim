@@ -18,7 +18,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     skillMultipliers: mage,
     damage: { melee: 0.6, distance: 0.6, magic: 1.15, healing: 0.9 },
     physicalReduction: 0,
-    baseSpeed: 4.2,
+    baseSpeed: 3,
     attackIntervalMs: 1600,
     spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal'],
     startingEquipment: {
@@ -47,7 +47,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     skillMultipliers: mage,
     damage: { melee: 0.6, distance: 0.6, magic: 1.05, healing: 1.3 },
     physicalReduction: 0,
-    baseSpeed: 4.2,
+    baseSpeed: 3,
     attackIntervalMs: 1600,
     spells: ['earth_thorn', 'frost_burst', 'sap_blessing', 'light_heal'],
     startingEquipment: {
@@ -76,7 +76,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     skillMultipliers: { sword: 1.5, axe: 1.5, club: 1.5, distance: 1, shielding: 1.3, magic: 1.4 },
     damage: { melee: 0.8, distance: 1.15, magic: 0.9, healing: 1 },
     physicalReduction: 0.05,
-    baseSpeed: 4.3,
+    baseSpeed: 3.1,
     attackIntervalMs: 1500,
     spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal'],
     startingEquipment: {
@@ -107,7 +107,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     skillMultipliers: { sword: 1, axe: 1, club: 1, distance: 1.6, shielding: 1, magic: 3 },
     damage: { melee: 1.15, distance: 0.7, magic: 0.7, healing: 0.8 },
     physicalReduction: 0.12,
-    baseSpeed: 4,
+    baseSpeed: 2.9,
     attackIntervalMs: 1400,
     spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal'],
     startingEquipment: {

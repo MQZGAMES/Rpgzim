@@ -100,6 +100,12 @@ espécies sobem ×1 / ×1,25 / ×1,55. XP ×3 e ouro ×2,2 por patamar. Dobrar a
 - **Magias de alvo** (inclusive o Golpe Brutal do Knight): sem alvo, miram o inimigo mais próximo (até 7 tiles) e
   ficam na fila por 4 s, saindo assim que o alvo entra no alcance.
 
+## Ritmo (velocidade)
+
+Jogo pensado para o celular: jogador a ~3 tiles/s (Knight 2,9 · Sorcerer/Druid 3,0 · Paladin 3,1), botas
++0,35/+0,55. Criaturas usam `speedScale: 0.7` sobre a velocidade da espécie (a mais rápida, o Lobo de Gelo,
+fica em 2,8): todas são um pouco mais lentas que o jogador, como no Tibia, e dá para recuar e se posicionar.
+
 ## Pendências conhecidas
 
 - Os equipamentos vão até o nível 18; os patamares 4–6 pedem novos equipamentos (próximo passo).

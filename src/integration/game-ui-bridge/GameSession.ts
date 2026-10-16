@@ -1,5 +1,6 @@
 // Sessão de jogo: liga simulação, persistência, áudio e interface. É a camada de integração explícita
 // entre React e Phaser: o Phaser chama `frame()` a cada quadro; o React lê as stores e envia comandos.
+import { parseHotbarEntry, type HotbarEntry } from '../../domain/rules/hotbar';
 import type { CharacterState } from '../../domain/entities/character';
 import type { EquipSlot } from '../../domain/entities/definitions';
 import type { GameData } from '../../domain/entities/gameData';
@@ -151,7 +152,6 @@ export class GameSession {
   }
 
   private heroSavedAt = new Map<string, number>();
-  private actorMenuAt = 0;
   private hadParty = false;
   private lastHeroTap: { id: string; at: number } | null = null;
   /** Salva o progresso de um herói (no máx. a cada 20 s, exceto `force`). */
@@ -248,17 +248,17 @@ export class GameSession {
         }
       }
       this.lastHeroTap = { id, at: now };
-      const open = this.local.get().actorMenu === id;
-      if (open && now - this.actorMenuAt < 600) return;
-      this.actorMenuAt = now;
-      this.local.update({ actorMenu: open ? null : id });
-      this.audio.play('ui');
+      // toque simples sempre abre (não alterna): fechar é no X ou tocando em outro lugar do mapa
+      if (this.local.get().actorMenu !== id) {
+        this.local.update({ actorMenu: id });
+        this.audio.play('ui');
+      }
       return;
     }
     this.sim.tapEntity(id);
   }
   closeActorMenu(): void {
-    this.local.update({ actorMenu: null });
+    if (this.local.get().actorMenu) this.local.update({ actorMenu: null });
   }
   talkTo(id: string): void {
     this.sim.talkTo(id);
@@ -320,9 +320,17 @@ export class GameSession {
   move(x: number, y: number): void {
     this.sim.setMoveVector(x, y);
   }
-  castSlot(index: number): void {
-    const id = this.sim.world.player.character.hotbar[index];
-    if (id) this.cast(id);
+  /** Usa o atalho: magia, item da mochila ou poção automática. Atalho vazio abre a configuração. */
+  useSlot(index: number): void {
+    const e = parseHotbarEntry(this.sim.world.player.character.hotbar[index]);
+    if (!e) {
+      this.setPanel('hotbar');
+      return;
+    }
+    if (e.kind === 'spell') return this.cast(e.id);
+    if (e.kind === 'potion') return this.quickPotion(e.id);
+    if (!this.sim.useItemById(e.id)) this.audio.play('error');
+    this.dirty = true;
   }
   cast(spellId: string): void {
     if (this.sim.castSpell(spellId)) this.dirty = true;
@@ -444,8 +452,8 @@ export class GameSession {
     this.sim.respawn();
     this.dirty = true;
   }
-  setHotbar(index: number, spellId: string): void {
-    this.sim.setHotbar(index, spellId);
+  setHotbar(index: number, entry: HotbarEntry): void {
+    this.sim.setHotbar(index, entry);
     this.dirty = true;
     this.saves.requestSave(() => this.sim.snapshotCharacter());
   }

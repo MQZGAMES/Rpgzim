@@ -27,7 +27,7 @@ describe('formato de save', () => {
     delete c.stats;
     const parsed = parseSave(D, { version: 1, savedAt: 1, character: c });
     expect(parsed.version).toBe(SAVE_VERSION);
-    expect(parsed.character.hotbar).toEqual(D.vocations.druid.spells);
+    expect(parsed.character.hotbar).toEqual([...D.vocations.druid.spells.map((id) => `spell:${id}`), 'potion:health', 'potion:mana']);
     expect(parsed.character.stats.deaths).toBe(0);
   });
   it('migra saves da versão 2 (sem banco) com depósito vazio', () => {

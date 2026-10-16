@@ -50,7 +50,8 @@ function build(s: Species): MonsterDef {
     directions: s.directions,
     health: hp,
     experience: Math.round(c.baseExperience * c.xpRatio ** s.tier * f),
-    speed: s.speed,
+    // ritmo de celular: criaturas um pouco mais lentas que o jogador (dá para fugir e se posicionar)
+    speed: Math.round(s.speed * c.speedScale * 100) / 100,
     armor: Math.round(1 + s.tier * 3 + s.step),
     defense: Math.round(s.tier * 2 + s.step),
     attack: { ...s.attack, min: Math.max(1, Math.round(atk * 0.6)), max: Math.max(2, Math.round(atk * 1.4)) },

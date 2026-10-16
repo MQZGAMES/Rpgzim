@@ -60,6 +60,7 @@ export function setTarget(w: World, id: string | null): void {
       warnThrottled(w, 'pz', 'Você não pode atacar dentro de uma área protegida.');
     }
   }
+  if (id) p.chasePaused = false; // escolher (ou reescolher) o alvo volta a persegui-lo
   if (p.targetId === id) return;
   p.targetId = id;
   p.chaseRecalcAt = 0;

@@ -2,6 +2,7 @@
 import type { CharacterState } from '../entities/character';
 import { SKILL_IDS, type SkillId } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
+import { defaultHotbar } from './hotbar';
 import type { VocationId } from '../value-objects/ids';
 import { addItem } from './inventory';
 import { computeStats } from './stats';
@@ -43,7 +44,7 @@ export function createCharacter(
     bankGold: 0,
     position: { ...opts.position },
     facing: 'down',
-    hotbar: [...voc.spells],
+    hotbar: defaultHotbar(data, opts.vocation),
     flags: {},
     stats: { monstersKilled: 0, deaths: 0, playTimeMs: 0 },
     createdAt: opts.now,

@@ -37,7 +37,7 @@ const list: ItemDef[] = [
   { id: 'legs_leather', name: 'Calças de Couro', description: 'Confortáveis para longas caminhadas.', type: 'legs', icon: 'item_legs_leather', value: 40, slot: 'legs', armor: 1 },
   { id: 'legs_chain', name: 'Calças de Malha', description: 'Malha de ferro sobre forro acolchoado.', type: 'legs', icon: 'item_legs_chain', value: 240, slot: 'legs', armor: 3, minLevel: 3, vocations: FIGHTERS },
   { id: 'boots_leather', name: 'Botas de Couro', description: 'Solado firme para trilhas.', type: 'boots', icon: 'item_boots_leather', value: 30, slot: 'feet', armor: 1 },
-  { id: 'boots_swift', name: 'Botas Ligeiras', description: 'Encantadas para passos rápidos (+velocidade).', type: 'boots', icon: 'item_boots_swift', value: 650, slot: 'feet', armor: 1, minLevel: 4, bonuses: { speed: 0.6 } },
+  { id: 'boots_swift', name: 'Botas Ligeiras', description: 'Encantadas para passos rápidos (+velocidade).', type: 'boots', icon: 'item_boots_swift', value: 650, slot: 'feet', armor: 1, minLevel: 4, bonuses: { speed: 0.35 } },
   // ---------------------------------------------------------------- acessórios
   { id: 'ring_vigor', name: 'Anel do Vigor', description: 'Pulsa com força vital (+25 de vida máxima).', type: 'ring', icon: 'item_ring_vigor', value: 380, slot: 'ring', bonuses: { maxHealth: 25 } },
   { id: 'amulet_mana', name: 'Amuleto Arcano', description: 'Uma safira que guarda energia (+40 de mana máxima).', type: 'amulet', icon: 'item_amulet_mana', value: 420, slot: 'amulet', bonuses: { maxMana: 40 } },
@@ -84,7 +84,7 @@ const list: ItemDef[] = [
   { id: 'legs_plate', name: 'Calças de Placas', description: 'Placas de aço articuladas.', type: 'legs', icon: 'item_legs_plate', value: 1100, slot: 'legs', armor: 5, minLevel: 10, vocations: FIGHTERS },
   { id: 'legs_royal', name: 'Calças Reais', description: 'Aço polido com detalhes dourados.', type: 'legs', icon: 'item_legs_royal', value: 2900, slot: 'legs', armor: 7, minLevel: 16, vocations: ['knight'] },
   { id: 'boots_steel', name: 'Botas de Aço', description: 'Pesadas, mas protegem bem.', type: 'boots', icon: 'item_boots_steel', value: 700, slot: 'feet', armor: 3, minLevel: 9, vocations: FIGHTERS },
-  { id: 'boots_wind', name: 'Botas do Vento', description: 'Quase flutuam (+velocidade alta).', type: 'boots', icon: 'item_boots_wind', value: 3600, slot: 'feet', armor: 2, minLevel: 14, bonuses: { speed: 0.9 } },
+  { id: 'boots_wind', name: 'Botas do Vento', description: 'Quase flutuam (+velocidade alta).', type: 'boots', icon: 'item_boots_wind', value: 3600, slot: 'feet', armor: 2, minLevel: 14, bonuses: { speed: 0.55 } },
   // ---------------------------------------------------------------- acessórios
   { id: 'ring_power', name: 'Anel da Força', description: 'Aumenta a perícia com armas (+2 em skills de combate).', type: 'ring', icon: 'item_ring_power', value: 1600, slot: 'ring', minLevel: 8, vocations: FIGHTERS, bonuses: { skills: { sword: 2, axe: 2, club: 2, distance: 2 } } },
   { id: 'ring_wisdom', name: 'Anel da Sabedoria', description: 'Clareia a mente do conjurador (+2 Magic Level).', type: 'ring', icon: 'item_ring_wisdom', value: 1600, slot: 'ring', minLevel: 8, vocations: MAGES, bonuses: { magicLevel: 2 } },

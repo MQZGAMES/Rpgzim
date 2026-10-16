@@ -4,15 +4,15 @@ import type { ReactNode } from 'react';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { Bar, ItemIcon, Panel, PixelButton } from '../common/primitives';
 
-/** Botão quadrado do HUD (mesmo visual dos menus), com selo opcional de estado. */
+/** Botão quadrado do HUD (menus, modo de ataque, PK, grupo), com um selo discreto de estado no canto. */
 export function HudButton({
   icon,
   label,
   onClick,
   testId,
   hotkey,
-  badge,
-  badgeClass = 'text-parchment',
+  pip,
+  pipClass = 'bg-[#3b2f52] text-parchment',
   pressed,
   dim = false,
 }: {
@@ -21,8 +21,8 @@ export function HudButton({
   onClick: () => void;
   testId: string;
   hotkey?: string;
-  badge?: string;
-  badgeClass?: string;
+  pip?: string;
+  pipClass?: string;
   pressed?: boolean;
   dim?: boolean;
 }) {
@@ -33,80 +33,56 @@ export function HudButton({
       aria-pressed={pressed}
       title={hotkey ? `${label} (${hotkey})` : label}
       onClick={onClick}
-      className="btn-pixel relative flex h-11 w-11 items-center justify-center !border-[8px]"
+      className="btn-pixel relative flex h-10 w-10 items-center justify-center !border-[7px]"
       data-testid={testId}
     >
-      <ItemIcon icon={icon} size={22} className={dim ? 'opacity-45 grayscale' : ''} />
-      {badge && (
-        <span className={`text-outline pointer-events-none absolute -bottom-[9px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] leading-none ${badgeClass}`}>{badge}</span>
-      )}
+      <ItemIcon icon={icon} size={20} className={dim ? 'opacity-40 grayscale' : ''} />
+      {pip && <span className={`pointer-events-none absolute -bottom-[5px] -right-[5px] rounded-sm px-[3px] text-[8px] font-bold leading-[11px] ${pipClass}`}>{pip}</span>}
     </button>
   );
 }
 
-/** Modo de ataque (seguir/parado), PK e atalho do grupo — no mesmo padrão dos botões de menu. */
+/** Modo de ataque (seguir/parado), PK e atalho do grupo — entram na mesma grade dos botões de menu. */
 export function QuickToggles() {
   const session = useSession();
   const stand = useSnap((s) => s.standAttack);
   const pvp = useSnap((s) => s.pvp);
-  const skullMs = useSnap((s) => s.skullMs);
-  const inParty = useSnap((s) => s.party !== null);
+  const partySize = useSnap((s) => s.party?.members.length ?? 0);
   return (
-    <div className="pointer-events-auto flex flex-col items-end gap-1" data-testid="quick-toggles">
-      <div className="flex max-w-[92px] flex-wrap justify-end gap-x-1 gap-y-3 sm:max-w-none">
-        <HudButton
-          icon={stand ? 'ui_stand' : 'ui_follow'}
-          label={stand ? 'Atacar parado: não persegue o alvo (toque para seguir)' : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'}
-          onClick={() => session.setStandAttack(!stand)}
-          testId="toggle-stand"
-          pressed={stand}
-          badge={stand ? 'parado' : 'seguir'}
-        />
-        <HudButton
-          icon="ui_skull"
-          label={pvp ? 'PK ligado: personagens podem se atacar fora das áreas protegidas' : 'PK desligado: ninguém ataca jogadores'}
-          onClick={() => session.setPvp(!pvp)}
-          testId="toggle-pvp"
-          pressed={pvp}
-          dim={!pvp}
-          badge={pvp ? 'PK on' : 'PK off'}
-          badgeClass={pvp ? 'text-hp-light' : 'text-muted'}
-        />
-        {inParty && <HudButton icon="ui_party" label="Controles do grupo" hotkey="P" onClick={() => session.setPartyPanel(true)} testId="btn-party" badge="grupo" badgeClass="text-[#7fd8ff]" />}
-      </div>
-      {skullMs > 0 && (
-        <span className="text-outline mt-1 text-[10px] text-hp-light" title="Você atacou ou matou um jogador">
-          caveira {Math.ceil(skullMs / 60000)} min
-        </span>
+    <>
+      <HudButton
+        icon={stand ? 'ui_stand' : 'ui_follow'}
+        label={stand ? 'Atacar parado: não persegue o alvo (toque para seguir)' : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'}
+        onClick={() => session.setStandAttack(!stand)}
+        testId="toggle-stand"
+        pressed={stand}
+        pip={stand ? 'parado' : undefined}
+      />
+      <HudButton
+        icon="ui_skull"
+        label={pvp ? 'PK ligado: personagens podem se atacar fora das áreas protegidas' : 'PK desligado: ninguém ataca jogadores'}
+        onClick={() => session.setPvp(!pvp)}
+        testId="toggle-pvp"
+        pressed={pvp}
+        dim={!pvp}
+        pip={pvp ? 'PK on' : undefined}
+        pipClass="bg-hp text-white"
+      />
+      {partySize > 0 && (
+        <HudButton icon="ui_party" label="Grupo" hotkey="P" onClick={() => session.setPartyPanel(true)} testId="btn-party" pip={String(partySize)} pipClass="bg-[#2c6a8a] text-white" />
       )}
-    </div>
+    </>
   );
 }
 
-const FORMATION_LABEL = { free: 'livre', follow: 'seguindo o líder', line: 'em fila' } as const;
-
-/** Quadro compacto do grupo: membros e vida. Tocar abre o painel de controle. */
-export function PartyFrame() {
-  const session = useSession();
-  const party = useSnap((s) => s.party);
-  if (!party) return null;
+/** Caveira do jogador (tempo restante), discreta abaixo dos botões. */
+export function SkullTimer() {
+  const skullMs = useSnap((s) => s.skullMs);
+  if (skullMs <= 0) return null;
   return (
-    <div className="frame-dark pointer-events-auto mt-1 w-[200px] !border-[10px] sm:w-[240px]" data-testid="party-frame">
-      <button type="button" className="mb-1 flex w-full items-center gap-1 text-left text-[11px] text-gold-light" onClick={() => session.setPartyPanel(true)} title="Controles do grupo">
-        <ItemIcon icon="ui_party" size={14} />
-        <span className="flex-1 truncate">Grupo · {FORMATION_LABEL[party.formation]}</span>
-        {party.friendlyFire && <ItemIcon icon="ui_attack" size={12} title="Treino entre membros liberado" />}
-        <ItemIcon icon="ui_gear" size={14} />
-      </button>
-      {party.members.map((m) => (
-        <div key={m.id} className={`flex items-center gap-1 text-[11px] ${m.near ? '' : 'opacity-60'}`}>
-          {m.isLeader ? <ItemIcon icon="ui_crown" size={12} title="Líder" /> : <span className="w-3" />}
-          <span className={`w-[78px] truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}>{m.isYou ? `${m.name} (você)` : m.name}</span>
-          <span className="w-[30px] text-muted">nv {m.level}</span>
-          <Bar className="flex-1" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
-        </div>
-      ))}
-    </div>
+    <span className="text-outline flex items-center gap-1 text-[10px] text-hp-light" title="Você atacou ou matou um jogador">
+      <ItemIcon icon="ui_skull" size={11} /> {Math.ceil(skullMs / 60000)} min
+    </span>
   );
 }
 

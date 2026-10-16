@@ -46,6 +46,10 @@ export interface PlayerEntity extends Mover {
   path: TilePos[] | null;
   pathGoal: TilePos | null;
   chaseRecalcAt: number;
+  /** O jogador andou por conta própria (toque/joystick): não persegue o alvo até escolher um alvo de novo. */
+  chasePaused: boolean;
+  /** Último comando de movimento do jogador (a formação do grupo só puxa quem está parado). */
+  lastMoveCommandAt: number;
   nextRegenAt: number;
   food: { health: number; mana: number; until: number } | null;
   dead: boolean;

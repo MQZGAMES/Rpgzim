@@ -4,13 +4,13 @@ import { Joystick } from '../controls/Joystick';
 import { InventoryPanel } from '../inventory/InventoryPanel';
 import { CharacterPanel } from '../character/CharacterPanel';
 import { SpellBookPanel } from '../spells/SpellBookPanel';
+import { HotbarPanel } from '../spells/HotbarPanel';
 import { NpcDialog, LootWindow } from '../dialogs/NpcDialog';
 import { ShopPanel } from '../shops/ShopPanel';
 import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { StatusPanel } from './StatusPanel';
-import { TargetFrame } from './TargetFrame';
-import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyFrame, PartyPanel, QuickToggles } from './Social';
+import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyPanel, QuickToggles, SkullTimer } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
 import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, RegionBanner } from './Overlays';
 
@@ -25,23 +25,21 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
     <div className="hud-scale pointer-events-none absolute inset-0 z-10 select-none" data-testid="hud">
       {touch && <Joystick />}
       <div className="safe-top safe-x absolute left-0 right-0 top-0 flex items-start justify-between gap-2">
-        <div className="flex flex-col">
-          <StatusPanel />
-          <PartyFrame />
-        </div>
+        <StatusPanel />
         <div className="flex flex-col items-end gap-1">
-        <div className="pointer-events-auto flex max-w-[92px] flex-wrap justify-end gap-1 sm:max-w-none">
-          <MenuButton icon="ui_bag" label="Mochila" hotkey="I" onClick={() => session.setPanel('inventory')} testId="btn-inventory" />
-          <MenuButton icon="ui_char" label="Personagem" hotkey="C" onClick={() => session.setPanel('character')} testId="btn-character" />
-          <MenuButton icon="ui_book" label="Grimório" hotkey="K" onClick={() => session.setPanel('spells')} testId="btn-spells" />
-          <MenuButton icon="ui_gear" label="Menu" hotkey="Esc" onClick={() => session.setPanel('settings')} testId="btn-settings" />
-        </div>
-        <QuickToggles />
+          {/* celular em pé: grade de 3 colunas; telas largas: uma linha só */}
+          <div className="pointer-events-auto grid grid-cols-3 gap-1 sm:flex" data-testid="hud-menu">
+            <MenuButton icon="ui_bag" label="Mochila" hotkey="I" onClick={() => session.setPanel('inventory')} testId="btn-inventory" />
+            <MenuButton icon="ui_char" label="Personagem" hotkey="C" onClick={() => session.setPanel('character')} testId="btn-character" />
+            <MenuButton icon="ui_book" label="Grimório" hotkey="K" onClick={() => session.setPanel('spells')} testId="btn-spells" />
+            <MenuButton icon="ui_gear" label="Menu" hotkey="Esc" onClick={() => session.setPanel('settings')} testId="btn-settings" />
+            <QuickToggles />
+          </div>
+          <SkullTimer />
         </div>
       </div>
-      <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] max-sm:portrait:top-[calc(env(safe-area-inset-top)+206px)] -translate-x-1/2 lg:top-3">
+      <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] max-sm:portrait:top-[calc(env(safe-area-inset-top)+150px)] -translate-x-1/2 lg:top-3">
         <div className="flex flex-col items-center gap-1">
-          <TargetFrame />
           <InvitePrompt />
           <ActorMenu />
         </div>
@@ -66,6 +64,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {panel === 'inventory' && <InventoryPanel onClose={close} />}
       {panel === 'character' && <CharacterPanel onClose={close} />}
       {panel === 'spells' && <SpellBookPanel onClose={close} />}
+      {panel === 'hotbar' && <HotbarPanel onClose={close} />}
       {panel === 'settings' && <SettingsPanel onClose={close} zoomBias={zoomBias} setZoomBias={setZoomBias} showFps={showFps} setShowFps={setShowFps} showLog={showLog} setShowLog={setShowLog} />}
       {panel === 'help' && <HelpPanel onClose={close} touch={touch} />}
       <PartyPanel />

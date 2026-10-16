@@ -3,6 +3,7 @@
 import type { CharacterState, ItemStack } from '../../domain/entities/character';
 import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/definitions';
 import type { GameData } from '../../domain/entities/gameData';
+import { normalizeHotbar } from '../../domain/rules/hotbar';
 import { isVocationId } from '../../domain/value-objects/ids';
 import { MAX_LEVEL, levelForXp } from '../../domain/rules/experience';
 import { sanitizeName } from '../../domain/rules/character';
@@ -99,7 +100,6 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
   const flagsRaw = isObj(c.flags) ? c.flags : {};
   const flags: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(flagsRaw)) if (typeof v === 'boolean') flags[k] = v;
-  const hotbar = (Array.isArray(c.hotbar) ? c.hotbar : []).filter((s): s is string => typeof s === 'string' && !!data.spells[s]).slice(0, 8);
   const character: CharacterState = {
     id: c.id,
     name,
@@ -116,7 +116,7 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     bankGold: Math.floor(num(c.bankGold, 0, 0, 1e9)),
     position: { x: Math.floor(num(pos.x, 0, 0, 10000)), y: Math.floor(num(pos.y, 0, 0, 10000)) },
     facing: c.facing === 'up' || c.facing === 'left' || c.facing === 'right' ? c.facing : 'down',
-    hotbar: hotbar.length ? hotbar : [...data.vocations[c.vocation].spells],
+    hotbar: normalizeHotbar(data, c.vocation, Array.isArray(c.hotbar) ? c.hotbar : []),
     flags,
     stats: {
       monstersKilled: Math.floor(num(statsRaw.monstersKilled, 0, 0, 1e9)),

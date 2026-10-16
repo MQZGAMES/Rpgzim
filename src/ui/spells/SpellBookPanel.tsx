@@ -6,10 +6,15 @@ const TARGET_LABEL: Record<string, string> = { target: 'Alvo', self: 'Si mesmo',
 export function SpellBookPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const book = useSnap((s) => s.spellbook);
-  const hotbar = useSnap((s) => s.hotbar.map((h) => h.id));
+  const hotbar = useSnap((s) => s.hotbar.map((h) => h.spell?.id ?? null));
   return (
     <Panel title="Grimório" onClose={onClose} icon="ui_book" wide>
-      <p className="mb-2 text-[12px] text-muted">Magias gastam mana, têm recarga e evoluem seu Magic Level. Atribua cada magia a um atalho (1–4).</p>
+      <div className="mb-2 flex items-center gap-2">
+        <p className="flex-1 text-[12px] text-muted">Magias gastam mana, têm recarga e evoluem seu Magic Level. Coloque cada magia num atalho (1–6).</p>
+        <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.setPanel('hotbar')} data-testid="open-hotbar">
+          Atalhos
+        </PixelButton>
+      </div>
       <div className="flex flex-col gap-2">
         {book.map((s) => (
           <div key={s.id} className={`frame-tooltip flex gap-3 ${s.unlocked ? '' : 'opacity-70'}`}>
@@ -33,8 +38,8 @@ export function SpellBookPanel({ onClose }: { onClose: () => void }) {
               </div>
               <div className="mt-1 flex items-center gap-1">
                 <span className="text-[11px] text-muted">Atalho:</span>
-                {[0, 1, 2, 3].map((i) => (
-                  <PixelButton key={i} className={`h-7 w-7 !border-[6px] text-[11px] ${hotbar[i] === s.id ? '!text-gold-light' : ''}`} onClick={() => session.setHotbar(i, s.id)} ariaLabel={`Colocar no atalho ${i + 1}`}>
+                {hotbar.map((_, i) => (
+                  <PixelButton key={i} variant={hotbar[i] === s.id ? 'gold' : 'stone'} className="h-7 w-7 !border-[6px] text-[11px]" onClick={() => session.setHotbar(i, { kind: 'spell', id: s.id })} ariaLabel={`Colocar no atalho ${i + 1}`}>
                     {i + 1}
                   </PixelButton>
                 ))}

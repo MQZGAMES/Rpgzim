@@ -44,7 +44,7 @@ export class InputController {
     scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (p.wasTouch) return;
       const wp = scene.cameras.main.getWorldPoint(p.x, p.y);
-      const hit = this.views.pick(wp.x, wp.y) ?? this.views.heroNear(wp.x, wp.y);
+      const hit = this.views.pick(wp.x, wp.y);
       scene.game.canvas.style.cursor = hit ? 'pointer' : 'default';
     });
     session.setScreenTapHandler((cx, cy) => {
@@ -85,13 +85,13 @@ export class InputController {
       case 'Digit2':
       case 'Digit3':
       case 'Digit4':
-        s.castSlot(Number(e.code.slice(5)) - 1);
-        break;
       case 'Digit5':
+      case 'Digit6':
+        s.useSlot(Number(e.code.slice(5)) - 1);
+        break;
       case 'KeyQ':
         s.quickPotion('health');
         break;
-      case 'Digit6':
       case 'KeyR':
         s.quickPotion('mana');
         break;
@@ -156,12 +156,14 @@ export class InputController {
     const cam = this.scene.cameras.main;
     const wp = cam.getWorldPoint(x, y);
     const sim = this.session.sim;
-    const hit = this.views.pick(wp.x, wp.y) ?? this.views.heroNear(wp.x, wp.y);
+    // só o corpo/nome acerta a entidade (um raio maior "roubava" os toques de andar perto do Boladex)
+    const hit = this.views.pick(wp.x, wp.y);
     if (hit) {
       this.session.tapEntity(hit);
       this.session.audio.play('ui');
       return;
     }
+    this.session.closeActorMenu();
     const tx = Math.floor(wp.x / 16);
     const ty = Math.floor(wp.y / 16);
     for (const bag of sim.world.lootBags.values()) {

@@ -3,7 +3,7 @@
 import type { MessageKind } from '../../domain/events/gameEvents';
 import type { UiSnapshot } from './snapshot';
 
-export type Panel = 'inventory' | 'character' | 'spells' | 'settings' | 'help' | null;
+export type Panel = 'inventory' | 'character' | 'spells' | 'settings' | 'help' | 'hotbar' | null;
 
 export interface ChatMessage {
   id: number;

@@ -7,6 +7,7 @@ import { skillProgress } from '../../domain/rules/skills';
 import { castFailMessage } from '../../domain/rules/spells';
 import { countItem } from '../../domain/rules/inventory';
 import { isSellLocked } from '../../domain/rules/economy';
+import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -38,6 +39,20 @@ export interface ItemView {
   better: boolean;
   /** Venda travada pelo jogador (fica fora do "vender tudo"). */
   locked: boolean;
+}
+
+/** Um atalho da barra de ações (magia, item da mochila, poção automática ou vazio). */
+export interface HotbarSlotView {
+  index: number;
+  kind: 'spell' | 'item' | 'potion' | 'empty';
+  spell: SpellView | null;
+  /** Item ou poção automática. */
+  itemId: string | null;
+  icon: string | null;
+  name: string;
+  count: number;
+  cooldownRemaining: number;
+  cooldownMs: number;
 }
 
 export interface SpellView {
@@ -97,7 +112,7 @@ export interface UiSnapshot {
   skullMs: number;
   /** Heróis no mundo (para o menu ao tocar neles). */
   heroes: { id: string; name: string; title: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: boolean; activity: string; attackBlocked: string | null; distance: number; dead: boolean }[];
-  hotbar: SpellView[];
+  hotbar: HotbarSlotView[];
   spellbook: SpellView[];
   inventory: (ItemView | null)[];
   equipment: Record<EquipSlot, ItemView | null>;
@@ -171,6 +186,41 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     better: isUpgrade(w.data, c, def),
     locked: isSellLocked(c, def.id),
   };
+}
+
+const POTION_IDS = { health: ['potion_health', 'potion_health_great', 'potion_health_supreme'], mana: ['potion_mana', 'potion_mana_great', 'potion_mana_supreme'] } as const;
+
+function hotbarView(sim: GameSimulation): HotbarSlotView[] {
+  const w = sim.world;
+  const c = w.player.character;
+  const potionCd = remaining(w.player.cooldowns, POTION, w.now);
+  const out: HotbarSlotView[] = [];
+  for (let index = 0; index < HOTBAR_SIZE; index++) {
+    const e = parseHotbarEntry(c.hotbar[index]);
+    const empty: HotbarSlotView = { index, kind: 'empty', spell: null, itemId: null, icon: null, name: 'Vazio', count: 0, cooldownRemaining: 0, cooldownMs: 0 };
+    if (!e) out.push(empty);
+    else if (e.kind === 'spell') {
+      if (!w.data.spells[e.id]) out.push(empty);
+      else out.push({ ...empty, kind: 'spell', spell: spellView(sim, e.id), name: w.data.spells[e.id]!.name });
+    } else if (e.kind === 'potion') {
+      const ids = POTION_IDS[e.id];
+      out.push({
+        ...empty,
+        kind: 'potion',
+        itemId: e.id,
+        icon: e.id === 'health' ? 'item_potion_health' : 'item_potion_mana',
+        name: e.id === 'health' ? 'Poção de vida (automática)' : 'Poção de mana (automática)',
+        count: ids.reduce((s, id) => s + countItem(c.inventory, id), 0),
+        cooldownRemaining: potionCd,
+        cooldownMs: 1000,
+      });
+    } else {
+      const def = w.data.items[e.id];
+      if (!def) out.push(empty);
+      else out.push({ ...empty, kind: 'item', itemId: def.id, icon: def.icon, name: def.name, count: countItem(c.inventory, def.id), cooldownRemaining: def.type === 'potion' ? potionCd : 0, cooldownMs: def.use?.cooldownMs ?? 1000 });
+    }
+  }
+  return out;
 }
 
 function spellView(sim: GameSimulation, id: string): SpellView {
@@ -314,7 +364,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       distance: Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)),
       dead: h.dead,
     })),
-    hotbar: c.hotbar.filter((id) => !!w.data.spells[id]).map((id) => spellView(sim, id)),
+    hotbar: hotbarView(sim),
     spellbook: voc.spells.map((id) => spellView(sim, id)),
     inventory: c.inventory.map((st) => (st ? itemView(sim, st) : null)),
     equipment,

@@ -26,5 +26,5 @@ export const BALANCE: BalanceConfig = {
   player: { inventorySlots: 20, depotSlots: 40, regenTickMs: 2000, deathXpPenalty: 0.5, deathSkillPenalty: 0.5, respawnInvulnerableMs: 3000 },
   world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 40 },
   // 6 faixas x 3 espécies; cada faixa com o dobro de vida e ataque da anterior (32x da primeira à última)
-  creatures: { baseHealth: 40, baseAttack: 5, baseExperience: 12, baseGold: 4.5, tierRatio: 2, xpRatio: 3, goldRatio: 2.2, leashMultiplier: 3 },
+  creatures: { baseHealth: 40, baseAttack: 5, baseExperience: 12, baseGold: 4.5, tierRatio: 2, xpRatio: 3, goldRatio: 2.2, leashMultiplier: 3, speedScale: 0.7 },
 };

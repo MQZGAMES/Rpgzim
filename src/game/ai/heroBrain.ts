@@ -51,6 +51,11 @@ export interface HeroBrainState {
   after: HeroMode;
   failures: number;
   nextUpgradeTripAt: number;
+  /** Início da visita à vila (limite total de tempo) e quando pode voltar por motivo não urgente. */
+  townStartedAt: number;
+  nextTownAt: number;
+  /** Duelo amistoso (treino no grupo) em andamento até este instante. */
+  duelUntil: number;
   // ---- memória e personalidade em ação
   /** XP e tempo de caça por monstro (aprende onde rende mais) e mortes recentes por área. */
   areaStats: Record<string, { xp: number; ms: number; deaths: number; lastDeathAt: number }>;
@@ -96,6 +101,9 @@ export function newHeroBrain(): HeroBrainState {
     after: 'decide',
     failures: 0,
     nextUpgradeTripAt: 0,
+    townStartedAt: 0,
+    nextTownAt: 0,
+    duelUntil: 0,
     areaStats: {},
     huntXp: 0,
     huntStartedAt: 0,
@@ -372,14 +380,16 @@ function needsTown(w: World, h: HeroEntity): boolean {
   const t = h.hero.temperament;
   const c = h.character;
   if (freeSlots(c.inventory) < 2) return true;
+  // acabou de voltar da vila: só a mochila cheia justifica outra viagem (evita o vai e volta)
+  if (w.now < h.brain.nextTownAt) return false;
   if (lootValue(w, h) >= 250 + t.greed * 600 + c.level * 60) return true;
   const potions = potionsOf(w, h);
   const price = potionPrice(w);
-  const spendable = c.gold + lootValue(w, h);
+  const spendable = c.gold + lootValue(w, h) + c.bankGold;
   const minPotions = 1 + Math.round(t.caution * 4);
   // repõe só quando dá para comprar um bom estoque (senão volta à vila a cada 2 minutos)
-  if (potions === 0 && spendable >= price * 4) return true;
-  if (potions < minPotions && spendable >= price * minPotions * 3) return true;
+  if (potions === 0 && spendable >= price * 5) return true;
+  if (potions < minPotions && spendable >= price * 12) return true;
   if (w.now < h.brain.nextUpgradeTripAt) return false;
   const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40);
   return !!up;
@@ -398,8 +408,8 @@ function decide(w: World, h: HeroEntity): void {
   if (hpPct(h) < 0.5 && potionsOf(w, h) === 0) {
     // sem poções: descansa na área protegida até recuperar (regeneração dobrada) ou pede a bênção
     if (!isPz(w.map, h.x, h.y)) return setMode(w, h, 'retreat');
-    if (hpPct(h) < 0.3) return planTown(w, h, [{ kind: 'heal' }]);
-    return setMode(w, h, 'social', 8000);
+    // no templo: bênção do sacerdote (grátis) e, se der, repõe poções — nada de ficar parado esperando a vida voltar
+    return planTown(w, h, undefined, 'decide', true);
   }
   if (needsTown(w, h)) return planTown(w, h);
   if (followingHuman(w, h)) return setMode(w, h, 'follow');
@@ -458,7 +468,8 @@ function expectedRate(w: World, h: HeroEntity, id: string): number {
 
 function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
   const t = h.hero.temperament;
-  const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood;
+  // sem poções escolhe uma caça mais tranquila (sem precisar voltar à vila)
+  const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood - (potionsOf(w, h) === 0 ? 4 : 0);
   const options = Object.entries(huntLevels(w)).filter(([id, min]) => min <= lvl + 1 && w.map.spawns.some((s) => s.monsterId === id));
   if (!options.length) return 'slime';
   const scored = options.map(([id, min]) => {
@@ -638,7 +649,7 @@ function restoreMainWeapon(w: World, h: HeroEntity): void {
 }
 
 // ------------------------------------------------------------------ vila: vender, comprar, banco, bênção
-function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = 'decide'): void {
+function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = 'decide', heal = false): void {
   const c = h.character;
   const steps: TownStep[] = [];
   if (only) steps.push(...only);
@@ -646,7 +657,8 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
     const earn = lootValue(w, h);
     const budget = c.gold + earn + c.bankGold - keepGold(w, h) - 40;
     const up = bestUpgrade(w, h, budget);
-    const wantPotions = potionsOf(w, h) < 4 + Math.round(h.hero.temperament.caution * 8);
+    const price = potionPrice(w);
+    const wantPotions = potionsOf(w, h) < 4 + Math.round(h.hero.temperament.caution * 8) && c.gold + earn + c.bankGold >= price * 4;
     for (const shop of Object.values(w.data.shops)) {
       const npc = npcByShop(w, shop.id);
       if (!npc) continue;
@@ -668,15 +680,16 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
     }
     steps.length = 0;
     steps.push(...ordered);
-    // saque antes das compras se a economia já dá para um upgrade
-    if (up && c.gold + earn - 30 < up.price) steps.unshift({ kind: 'bank', op: 'withdraw' });
+    // saque antes das compras: para um upgrade ou para um bom estoque de poções
+    if ((up && c.gold + earn - 30 < up.price) || (wantPotions && c.gold + earn < price * 10 && c.bankGold > 0)) steps.unshift({ kind: 'bank', op: 'withdraw' });
     // não volta à vila só por causa de upgrade nos próximos minutos
     h.brain.nextUpgradeTripAt = w.now + 4 * 60000;
     // banco só quando sobra bastante ouro; bênção do sacerdote só se estiver bem ferido
     // com PK ligado guarda quase tudo (quem morre no PK deixa parte do ouro da bolsa no chão)
-    const bankAbove = w.social.pvp ? 30 : 100 + h.hero.temperament.greed * 100;
-    if (c.gold + earn - keepGold(w, h) > bankAbove || c.gold + earn > potionPrice(w) * 8) steps.push({ kind: 'bank', op: 'deposit' });
-    if (hpPct(h) < 0.45 && potionsOf(w, h) === 0) steps.push({ kind: 'heal' });
+    const bankAbove = w.social.pvp ? 30 : 40 + h.hero.temperament.greed * 60;
+    if (c.gold + earn - keepGold(w, h) > bankAbove) steps.push({ kind: 'bank', op: 'deposit' });
+    // ferido e sem poções: a bênção (grátis, no templo) vem primeiro
+    if (heal || (hpPct(h) < 0.45 && potionsOf(w, h) === 0)) steps.unshift({ kind: 'heal' });
     if (!steps.length) {
       startHunt(w, h);
       return;
@@ -684,6 +697,7 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
   }
   h.brain.town = steps;
   h.brain.quarry = null;
+  h.brain.townStartedAt = w.now;
   setMode(w, h, 'town');
   h.brain.modeUntil = 0;
   h.brain.after = then;
@@ -691,8 +705,11 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
 
 function town(w: World, h: HeroEntity): void {
   const b = h.brain;
+  // a visita inteira tem limite: resolve rápido e volta a caçar (o que faltou fica para a próxima)
+  if (b.town.length && w.now - b.townStartedAt > 75000) b.town.length = 0;
   const step = b.town[0];
   if (!step) {
+    b.nextTownAt = w.now + 3 * 60000;
     w.ui.shop = null;
     w.ui.depot = null;
     w.ui.dialog = null;
@@ -711,7 +728,7 @@ function town(w: World, h: HeroEntity): void {
     w.ui.dialog = null;
   };
   // cada etapa tem um limite de tempo (caminho bloqueado, NPC ocupado...)
-  if (w.now - b.stepStartedAt > 90000) return done();
+  if (w.now - b.stepStartedAt > 30000) return done();
   const npc = step.kind === 'shop' ? w.npcs.get(step.npcId) : step.kind === 'bank' ? npcByAction(w, 'openDepot') : npcByAction(w, 'heal');
   if (!npc) return done();
   const action = step.kind === 'shop' ? 'openShop' : step.kind === 'bank' ? 'openDepot' : 'heal';
@@ -753,13 +770,13 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
   if (earned > 0) heroSay(w, h, 'sell', { gold: earned }, 20000);
   if (step.trainingWeapon && countItem(c.inventory, TRAINING_WEAPON) === 0) buyItem(w, TRAINING_WEAPON, 1);
   if (step.buyPotions) {
-    const want = 6 + Math.round(h.hero.temperament.caution * 10) - potionsOf(w, h);
+    const want = 10 + Math.round(h.hero.temperament.caution * 12) - potionsOf(w, h);
     const offer = shop.sells.find((o) => o.itemId === 'potion_health');
     if (offer && want > 0) {
       // guarda um pouco para um upgrade já planejado
       const reserve = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40) ? Math.min(c.gold * 0.4, 300) : 10;
       // no máximo ~60% da bolsa em poções (mínimo 3, se der): o resto vira poupança/upgrade
-      const cap = Math.max(Math.min(3, Math.floor(c.gold / offer.price)), Math.floor((c.gold * 0.6) / offer.price));
+      const cap = Math.max(Math.min(3, Math.floor(c.gold / offer.price)), Math.floor((c.gold * 0.75) / offer.price));
       const qty = Math.min(want, cap, Math.floor((c.gold - reserve) / offer.price));
       if (qty > 0 && buyItem(w, offer.itemId, qty)) heroSay(w, h, 'buy', {}, 60000);
     }
@@ -787,13 +804,15 @@ function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit'): void {
   const c = h.character;
   if (op === 'withdraw') {
     const up = bestUpgrade(w, h, c.gold + c.bankGold - keepGold(w, h) - 40);
-    const need = up ? up.price + 40 - c.gold : 0;
+    const potionNeed = potionsOf(w, h) < 6 ? potionPrice(w) * 12 - c.gold : 0;
+    const need = Math.max(up ? up.price + 40 - c.gold : 0, potionNeed);
     if (need > 0) bankGold(w, 'withdraw', Math.min(need, c.bankGold));
     return;
   }
-  // guarda o excedente; e mesmo sem excedente, poupa uma parte (vai sacar depois para um upgrade)
-  const surplus = c.gold - keepGold(w, h);
-  const savings = Math.floor((c.gold - potionPrice(w) * 3) * (0.2 + h.hero.temperament.greed * 0.2));
+  // guarda o excedente, sem mexer no dinheiro das poções (senão saca de novo na próxima visita)
+  const reserve = keepGold(w, h);
+  const surplus = c.gold - reserve;
+  const savings = c.gold > potionPrice(w) * 30 ? Math.floor((c.gold - reserve) * (0.3 + h.hero.temperament.greed * 0.2)) : 0;
   const amount = Math.max(surplus, savings);
   if (amount >= 20 && bankGold(w, 'deposit', amount)) heroSay(w, h, 'bank', {}, 120000);
 }
@@ -902,13 +921,21 @@ function handleInvites(w: World, h: HeroEntity): void {
     return;
   }
   if (w.now - h.brain.inviteSeenAt < 1500 + w.rng.next() * 1500) return;
+  answerInviteNow(w, h);
+}
+
+/** Responde o convite pendente na hora. Convite do jogador humano: aceita, salvo rixa ou relação ruim. */
+export function answerInviteNow(w: World, h: HeroEntity): void {
+  const inv = pendingInviteFor(w, h.id);
+  if (!inv) return;
   h.brain.inviteSeenAt = 0;
   const t = h.hero.temperament;
   const from = actorById(w, inv.fromId);
   const aff = affinityOf(h, inv.fromId);
   const grudge = h.brain.grudge?.id === inv.fromId && w.now < h.brain.grudge.until;
   const levelGap = from ? Math.abs(from.character.level - h.character.level) : 99;
-  const chance = grudge || h.brain.pkTargetId === inv.fromId ? 0 : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
+  const hostile = grudge || h.brain.pkTargetId === inv.fromId;
+  const chance = hostile ? 0 : inv.fromId === w.human.id ? (aff < -0.3 ? 0.2 : 1) : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
   if (w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
     acceptInvite(w, h.id, inv.fromId);
     changeAffinity(h, inv.fromId, 0.1);
@@ -993,6 +1020,14 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   const b = h.brain;
   const human = w.human;
   if (b.mode === 'pk') return false;
+  // duelo amistoso que ele mesmo começou: para quando alguém fica com pouca vida ou passa o tempo
+  if (h.targetId === human.id && b.duelUntil && (!isSparring(w, h.id, human.id) || w.now > b.duelUntil || hpPct(h) < 0.45 || human.character.health / human.stats.maxHealth < 0.45)) {
+    b.duelUntil = 0;
+    h.targetId = null;
+    heroSay(w, h, 'duelEnd', { player: human.character.name }, 0);
+    return false;
+  }
+  if (b.duelUntil && h.targetId === human.id) return true;
   // treino no grupo: revida quem o atacou, mas para antes de se machucar demais
   if (isSparring(w, h.id, human.id) && !human.dead && !h.dead && attackedRecently(w, human.id, h.id, 6000)) {
     if (hpPct(h) > 0.3) {
@@ -1089,6 +1124,18 @@ function whims(w: World, h: HeroEntity): void {
   if (!human.dead && chebyshev(human, h) <= 6 && b.mode !== 'pk') {
     const c = human.character;
     heroSay(w, h, 'comment', { player: c.name, plevel: c.level, weapon: w.data.items[c.equipment.mainHand?.itemId ?? '']?.name ?? 'as mãos' }, 90000);
+  }
+  // atitudes raras: vontade de PK (com o PK desligado) ou um duelo amistoso no grupo com treino liberado
+  const t = h.hero.temperament;
+  if (!human.dead && chebyshev(human, h) <= 6 && b.mode !== 'pk') {
+    if (!w.social.pvp && !sameParty(w, h.id, human.id) && (t.bravery > 0.6 || b.mood < -0.2) && w.rng.chance(0.04)) heroSay(w, h, 'pkWish', { player: human.character.name }, 600000);
+    else if (isSparring(w, h.id, human.id) && !h.targetId && hpPct(h) > 0.8 && human.character.health / human.stats.maxHealth > 0.8 && !isPz(w.map, h.x, h.y) && !isPz(w.map, human.x, human.y) && w.rng.chance(0.06)) {
+      setTarget(w, human.id);
+      if (h.targetId === human.id) {
+        b.duelUntil = w.now + 20000;
+        heroSay(w, h, 'duel', { player: human.character.name }, 0);
+      }
+    }
   }
   // às vezes muda de ideia no meio da caça (outra área com mais monstros)
   if (b.mode === 'hunt' && w.rng.chance(0.08)) {

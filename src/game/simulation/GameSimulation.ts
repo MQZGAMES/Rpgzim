@@ -36,9 +36,10 @@ import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
+import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
 import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
-import { heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
+import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -83,6 +84,8 @@ export class GameSimulation {
       path: null,
       pathGoal: null,
       chaseRecalcAt: 0,
+      chasePaused: false,
+      lastMoveCommandAt: -Infinity,
       nextRegenAt: 0,
       food: null,
       dead: false,
@@ -251,7 +254,7 @@ export class GameSimulation {
       return;
     }
     // em grupo com outro líder (formação seguir/fila): sem comando do jogador, anda junto do líder
-    if (p === w.human && !p.targetId) {
+    if (p === w.human && !p.targetId && w.now - p.lastMoveCommandAt > 2500) {
       const spot = formationSpot(w, p.id);
       if (spot && Math.max(Math.abs(spot.x - p.x), Math.abs(spot.y - p.y)) > spot.tolerance + 1 && w.now >= p.chaseRecalcAt) {
         p.chaseRecalcAt = w.now + 500;
@@ -263,7 +266,7 @@ export class GameSimulation {
     // perseguição automática do alvo quando fora de alcance (desligada no modo "atacar parado")
     const t = currentTarget(w) ?? currentActorTarget(w);
     const stand = p.character.flags.standAttack === true;
-    if (t && !stand && !weaponCanReach(w, t) && !isPz(w.map, p.x, p.y) && w.now >= p.chaseRecalcAt) {
+    if (t && !stand && !p.chasePaused && !weaponCanReach(w, t) && !isPz(w.map, p.x, p.y) && w.now >= p.chaseRecalcAt) {
       p.chaseRecalcAt = w.now + 350;
       const stop = p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
       const path = pathTo(w, p, { x: t.x, y: t.y }, false, { stopWithin: stop, maxNodes: 1500 });
@@ -318,11 +321,20 @@ export class GameSimulation {
     this.world.player.heldDir = vectorToDir(x, y);
   }
   setMoveDir(dir: DirVector | null): void {
-    this.world.player.heldDir = dir;
+    const p = this.world.player;
+    p.heldDir = dir;
+    if (dir) this.manualMove();
   }
-  /** Caminha até o tile (clique/toque no chão). */
+  /** Caminha até o tile (clique/toque no chão). Andar por conta própria pausa a perseguição do alvo. */
   walkTo(x: number, y: number): boolean {
-    return planWalk(this.world, x, y);
+    const ok = planWalk(this.world, x, y);
+    if (ok) this.manualMove();
+    return ok;
+  }
+  private manualMove(): void {
+    const p = this.world.player;
+    p.lastMoveCommandAt = this.world.now;
+    if (p.targetId) p.chasePaused = true;
   }
   stop(): void {
     const p = this.world.player;
@@ -432,6 +444,9 @@ export class GameSimulation {
     const w = this.world;
     const fail = invite(w, w.player.id, toId);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+    // herói responde na hora (sem precisar insistir)
+    const hero = w.heroes.get(toId);
+    if (!fail && hero) asActor(w, hero, () => answerInviteNow(w, hero));
     return !fail;
   }
   partyAccept(): boolean {
@@ -488,9 +503,12 @@ export class GameSimulation {
     const hero = w.heroes.get(id);
     if (hero) asActor(w, hero, () => heroStatusLine(w, hero));
   }
-  setHotbar(index: number, spellId: string): void {
-    const hb = this.world.player.character.hotbar;
-    if (index >= 0 && index < 8) hb[index] = spellId;
+  /** Vincula uma magia, item ou poção automática a um atalho (se já estava em outro, troca de lugar). */
+  setHotbar(index: number, entry: HotbarEntry): void {
+    const c = this.world.player.character;
+    if (c.hotbar.length !== HOTBAR_SIZE) c.hotbar = normalizeHotbar(this.world.data, c.vocation, c.hotbar);
+    assignHotbar(c.hotbar, index, entry);
+    this.world.events.emit('saveRequested', { reason: 'hotbar' });
   }
 
   // ------------------------------------------------------------------ utilidades para testes/depuração

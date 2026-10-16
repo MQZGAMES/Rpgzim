@@ -225,3 +225,70 @@ describe('controles do grupo', () => {
     expect({ x: w.human.x, y: w.human.y }).toEqual(before);
   });
 });
+
+describe('controle no celular e ritmo', () => {
+  it('andar por conta própria (toque no mapa) pausa a perseguição do alvo até escolher o alvo de novo', () => {
+    const sim = makeSim('knight', { seed: 3 });
+    const w = sim.world;
+    const slime = [...w.monsters.values()].filter((m) => m.def.id === 'slime').sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
+    const spot = [...Array(81).keys()]
+      .map((i) => ({ x: slime.x + (i % 9) - 4, y: slime.y + Math.floor(i / 9) - 4 }))
+      .find((c) => chebyshev(c, slime) === 4 && canEnter(w, c.x, c.y, false, w.player.id) && !isPz(w.map, c.x, c.y))!;
+    sim.teleportPlayer(spot.x, spot.y);
+    slime.state = 'idle';
+    sim.setTarget(slime.id);
+    // toca num tile 3 casas para longe do slime: o personagem vai até lá e fica (não volta para o alvo)
+    const away = { x: spot.x + Math.sign(spot.x - slime.x || 1) * 3, y: spot.y };
+    if (!sim.walkTo(away.x, away.y)) return; // terreno bloqueado nesta seed: nada a provar
+    advance(sim, 4000, 50);
+    expect(w.player.chasePaused).toBe(true);
+    const parked = { x: w.player.x, y: w.player.y };
+    advance(sim, 1500, 50);
+    if (slime.state === 'idle') expect({ x: w.player.x, y: w.player.y }).toEqual(parked);
+    // escolher o alvo de novo volta a perseguir
+    sim.setTarget(slime.id);
+    expect(w.player.chasePaused).toBe(false);
+  });
+
+  it('convite ao Boladex é respondido na hora', () => {
+    const { sim, h, w } = withHero();
+    expect(sim.partyInvite(h.id)).toBe(true);
+    expect(w.social.party?.members).toContain(h.id);
+  });
+
+  it('ritmo de celular: jogador ~3 tiles/s e criaturas mais lentas que ele', () => {
+    for (const v of Object.values(GAME_DATA.vocations)) {
+      expect(v.baseSpeed).toBeGreaterThanOrEqual(2.8);
+      expect(v.baseSpeed).toBeLessThanOrEqual(3.2);
+    }
+    for (const m of Object.values(GAME_DATA.monsters)) expect(m.speed).toBeLessThan(2.9);
+  });
+
+  it('atalhos: vincula item e poção, mostra no snapshot e usa pelo atalho', () => {
+    const sim = makeSim('druid');
+    const c = sim.world.player.character;
+    c.inventory[6] = { itemId: 'meat', count: 2 };
+    sim.setHotbar(0, { kind: 'item', id: 'meat' });
+    const snap = buildSnapshot(sim, 1).hotbar;
+    expect(snap).toHaveLength(6);
+    expect(snap[0]).toMatchObject({ kind: 'item', itemId: 'meat', count: 2 });
+    expect(snap.find((s) => s.kind === 'potion' && s.itemId === 'health')).toBeTruthy();
+    // a magia que estava no 1 foi para onde estava a carne (troca de lugar) — nenhuma se perde
+    expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(GAME_DATA.vocations.druid.spells.slice(0, 4).length - 1);
+    expect(sim.useItemById('meat')).toBe(true);
+    expect(buildSnapshot(sim, 2).hotbar[0]!.count).toBe(1);
+  });
+});
+
+describe('Boladex resolve a vila rápido', () => {
+  it('a visita à vila tem limite de tempo e depois ele não volta tão cedo sem motivo urgente', () => {
+    const { sim, h, w } = withHero();
+    h.brain.town = [{ kind: 'shop', npcId: 'npc:inexistente', buyPotions: true, upgrades: false }, { kind: 'heal' }];
+    h.brain.mode = 'town';
+    h.brain.townStartedAt = w.now - 80000;
+    h.brain.after = 'decide';
+    runUntil(sim, () => h.brain.mode !== 'town', 5000, 50);
+    expect(h.brain.mode).not.toBe('town');
+    expect(h.brain.nextTownAt).toBeGreaterThan(w.now + 2 * 60000);
+  });
+});

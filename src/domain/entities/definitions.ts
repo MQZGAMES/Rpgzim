@@ -303,6 +303,8 @@ export interface BalanceConfig {
     goldRatio: number;
     /** Distância de perseguição = base da espécie × este valor. */
     leashMultiplier: number;
+    /** Escala da velocidade de todas as criaturas (ritmo do jogo no celular). */
+    speedScale: number;
   };
 }
 
@@ -354,7 +356,10 @@ export type HeroLineKey =
   | 'pkSpare'
   | 'pkEscaped'
   | 'revenge'
-  | 'flee';
+  | 'flee'
+  | 'pkWish'
+  | 'duel'
+  | 'duelEnd';
 
 export interface HeroDef {
   id: string;

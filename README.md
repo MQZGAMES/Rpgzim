@@ -25,10 +25,18 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Controles
 - **Toque:** joystick invisível na metade esquerda (aparece só ao pressionar e arrastar); toque no chão para
-  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; magias em
-  arco ao redor do botão; poções; botão de ação contextual. Na mochila, toque duplo equipa/usa.
-- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–4 magias,
-  5/Q vida, 6/R mana, E interagir, I mochila, C personagem, K grimório, Esc menu.
+  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **6 atalhos**
+  em grade ao redor do botão de ataque; botão de ação contextual. Na mochila, toque duplo equipa/usa.
+  Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
+- **Atalhos personalizáveis** (*Menu → Configurar atalhos*, botão *Atalhos* no Grimório, ou tocar num atalho
+  vazio): cada posição numerada (a mesma da tela) recebe uma magia, uma **poção automática** (vida/mana, usa a
+  menor que cobre o que falta) ou um item usável da mochila. Saves antigos são convertidos sozinhos.
+- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–6 atalhos,
+  Q vida, R mana, E interagir, I mochila, C personagem, K grimório, P grupo, Esc menu.
+- **HUD enxuto:** vida/mana compactas à esquerda; à direita, grade de 3 colunas (mochila, personagem, grimório,
+  menu, modo de ataque, PK e grupo). O alvo aparece só no mapa (anel e barra vermelha), sem caixa extra.
+- **Ritmo de celular:** ~3 tiles/s andando (referência: Pokémon 3,75; Tibia 1,5–2,5) e criaturas a 70% da
+  velocidade anterior, um pouco mais lentas que o jogador (dá para se posicionar e fugir).
 
 ## O que existe
 - Mundo contínuo (170×118 tiles): Templo da Aurora → Vila de Pedraluz → Bosque Selvagem → Pântano Sombrio,
@@ -69,11 +77,11 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 ## Grupo, PK e modo de ataque
 - **Modo de ataque** e **PK**: botões quadrados ao lado do menu (mesmo visual), com o estado escrito embaixo.
   *Seguir* persegue o alvo; *Parado* ataca só o que estiver ao alcance (salvo no personagem).
-- **Toque num personagem** (ex.: Boladex): menu discreto com nome, vida e ícones — convidar para o grupo,
-  controles do grupo e atacar (só quando permitido). **Toque duplo** no personagem ataca direto (com PK ligado
+- **Toque num personagem** (ex.: Boladex; o toque vale no corpo e no nome dele): menu discreto com nome, vida e
+  ícones — convidar (ele responde na hora), controles do grupo e atacar (só quando permitido); tocar no chão
+  fecha o menu e anda. **Toque duplo** no personagem ataca direto (com PK ligado
   ou treino liberado no grupo).
-- **Grupo**: quando o convite é aceito, abre o **painel do grupo** (botão *grupo* no HUD, tecla P, ou toque no
-  quadro do grupo): passar a liderança (coroa), remover membro, **formação** (livre / todos seguem o líder / fila
+- **Grupo**: quando o convite é aceito, abre o **painel do grupo** (botão *grupo* no HUD, com o nº de membros, ou tecla P): passar a liderança (coroa), remover membro, **formação** (livre / todos seguem o líder / fila
   pisando nos passos do líder), **alvo** (o mesmo do líder / cada um o mais próximo), **treino entre membros**
   (podem se atacar sem caveira e sem perder ouro), sair e desfazer o grupo. Só o líder muda as regras. Com o
   Boladex de líder, você (sem alvo) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
@@ -83,6 +91,11 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 - **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
   oportunidade, pesa ouro carregado, força relativa, vida do alvo, caveira, relação e temperamento. Sem nada a
   ganhar e sem motivo, não ataca (e às vezes comenta isso).
+- **Vila rápida**: cada visita tem limite (75 s no total, 30 s por parada) e, depois dela, só volta antes de
+  3 min com a mochila cheia; sem poção e ferido pede a bênção do sacerdote (grátis) em vez de esperar a vida voltar;
+  sem poções escolhe uma caça mais tranquila; compra estoques maiores e só guarda no banco o excedente.
+- **Atitudes raras**: às vezes diz que quer PK (com o PK desligado) e, no grupo com treino liberado, desafia
+  você para um duelo amistoso de 20 s (para quando alguém fica com pouca vida).
 - **Caça mais, perde menos tempo**: só volta à vila quando a viagem compensa (mochila cheia, loot que vale, poções acabando com ouro para um bom estoque, upgrade ao alcance), visita só as lojas onde tem o que fazer (na ordem mais curta), troca de ponto quando os monstros acabam e, preso, dá um passo para o lado e replaneja. Na vila os personagens se atravessam (ninguém trava porta). Em simulação de 40 min: ~83% do tempo caçando.
 - **Mais esperto**: aprende quais caças rendem mais XP por minuto, evita onde morreu há pouco, explora áreas novas,
   escolhe atividades com um pouco de acaso (improvisa), comenta o que vê, convida você para o grupo, aceita ou recusa
@@ -111,7 +124,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **146 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, simulação integrada).
+- Vitest: **155 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, simulação integrada).
 - Playwright: **8 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino).

@@ -58,7 +58,8 @@ test('fluxo principal: mover, lutar, magia, loot, equipar, salvar e recarregar',
   expect(slime).not.toBeNull();
   await page.keyboard.press('Tab');
   await expect.poll(async () => (await api(page, (a) => a.player())).target, { timeout: 5000 }).not.toBeNull();
-  await expect(page.getByTestId('target-frame')).toBeVisible();
+  // o alvo aparece só no mapa (anel + barra vermelha): sem caixa extra cobrindo a tela
+  await expect(page.getByTestId('target-frame')).toHaveCount(0);
   // magia pela barra de atalhos (tecla 1 = Golpe Brutal)
   const manaBefore = (await api(page, (a) => a.player())).mana;
   await page.keyboard.press('Digit1');
@@ -241,9 +242,9 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await createCharacter(page, 'knight', 'Social');
   await page.getByTestId('toggle-stand').click();
-  await expect(page.getByTestId('toggle-stand')).toContainText('parado');
+  await expect(page.getByTestId('toggle-stand')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('toggle-pvp').click();
-  await expect(page.getByTestId('toggle-pvp')).toContainText('PK on');
+  await expect(page.getByTestId('toggle-pvp')).toHaveAttribute('aria-pressed', 'true');
   // abre o menu do herói pela simulação do toque (a posição na tela varia com o zoom)
   type HeroInfo = { id: string };
   const id = (await page.evaluate(() => (window.__RPGZIM__ as { heroes(): HeroInfo[] }).heroes()))[0]!.id;
@@ -259,6 +260,8 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   await page.getByTestId('party-formation-line').click();
   await page.getByTestId('party-ff-on').click();
   await page.getByRole('button', { name: 'Fechar' }).first().click();
-  await expect(page.getByTestId('party-frame')).toContainText('em fila');
-  await expect(page.getByTestId('btn-party')).toBeVisible();
+  await expect(page.getByTestId('party-panel')).toHaveCount(0);
+  // o resumo do grupo fica no botão "grupo" do HUD (sem quadro ocupando a tela)
+  await page.getByTestId('btn-party').click();
+  await expect(page.getByTestId('party-formation-line')).toHaveClass(/btn-gold/);
 });
