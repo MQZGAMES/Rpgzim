@@ -109,6 +109,9 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 - **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
   oportunidade, pesa ouro carregado, força relativa, vida do alvo, caveira, relação e temperamento. Sem nada a
   ganhar e sem motivo, não ataca (e às vezes comenta isso).
+- **Loot dividido no grupo**: ao pegar loot do chão com o grupo por perto (mesmo alcance da XP), o ouro e cada item
+  são divididos igualmente entre os membros vivos e perto; o resto da divisão (quando é ímpar) fica com quem pegou.
+  Quem não cabe na mochila deixa o excedente no saco.
 - **Vila rápida**: cada visita tem limite (75 s no total, 30 s por parada) e, depois dela, só volta antes de
   3 min com a mochila cheia; sem poção e ferido pede a bênção do sacerdote (grátis) em vez de esperar a vida voltar;
   sem poções escolhe uma caça mais tranquila; compra estoques maiores e só guarda no banco o excedente.
@@ -142,7 +145,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **165 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **166 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **9 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

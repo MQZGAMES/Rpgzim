@@ -2,6 +2,7 @@
 // Bênção da Seiva em grupo e as regras do grupo (formação, alvo, treino entre membros).
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
+import { countItem } from '../../src/domain/rules/inventory';
 import { CREATURE_LADDER } from '../../src/data/monsters';
 import { createCharacter } from '../../src/domain/rules/character';
 import { isSellLocked, sellAllPreview, setSellLock } from '../../src/domain/rules/economy';
@@ -452,5 +453,23 @@ describe('mini mapa: toque em lugar sem acesso', () => {
     expect(sim.travelTo(lake!.x, lake!.y)).toBe(true);
     const goal = w.player.pathGoal!;
     expect(chebyshev(goal, lake!)).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('loot do chão no grupo', () => {
+  it('o ouro e os itens do chão são divididos igualmente; o resto (ímpar) fica com quem pegou', () => {
+    const { sim, h, w } = withHero();
+    party(sim, w.human.id, [w.human.id, h.id]);
+    // saco com 7 de ouro e 5 gelatinas: 2 pessoas -> cada um leva 3 de ouro e 2 gelatinas; o resto vai para o humano
+    w.lootBags.set('test-bag', { id: 'test-bag', x: w.human.x, y: w.human.y, gold: 7, items: [{ itemId: 'slime_gel', count: 5 }], sourceName: 'Teste', expiresAt: Infinity });
+    w.ui.lootId = 'test-bag';
+    const gold = { human: w.human.character.gold, hero: h.character.gold };
+    const gel = { human: countItem(w.human.character.inventory, 'slime_gel'), hero: countItem(h.character.inventory, 'slime_gel') };
+    sim.takeLoot('all');
+    expect(w.human.character.gold - gold.human).toBe(4);
+    expect(h.character.gold - gold.hero).toBe(3);
+    expect(countItem(w.human.character.inventory, 'slime_gel') - gel.human).toBe(3);
+    expect(countItem(h.character.inventory, 'slime_gel') - gel.hero).toBe(2);
+    expect(w.lootBags.has('test-bag')).toBe(false);
   });
 });

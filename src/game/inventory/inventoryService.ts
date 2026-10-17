@@ -6,6 +6,8 @@ import { addItem, removeAt } from '../../domain/rules/inventory';
 import type { World } from '../simulation/World';
 import type { LootContainer } from '../entities/types';
 import { message, warnThrottled } from '../simulation/World';
+import { xpReceivers } from '../social/social';
+import type { PlayerEntity } from '../entities/types';
 import { refreshStats } from '../progression/progression';
 
 export function useInventoryItem(w: World, index: number): boolean {
@@ -100,10 +102,54 @@ function afterEquipmentChange(w: World): void {
 }
 
 /** Coleta itens de um saco de loot: índice específico ou tudo ('all'). Ouro vai direto para a bolsa. */
+/**
+ * Loot dividido no grupo: cada membro perto e vivo recebe a mesma parte (ouro e cada item); o que sobra da
+ * divisão (resto) fica com quem pegou. Quem não cabe na mochila deixa o excedente no saco para o próximo.
+ */
+function splitWithParty(w: World, bag: LootContainer, which: number | 'all'): void {
+  const picker = w.player;
+  const members = xpReceivers(w, picker.id, bag).filter((m) => m.id !== picker.id);
+  if (!members.length) return;
+  const n = members.length + 1;
+  const share = (total: number) => Math.floor(total / n);
+  const give = (m: PlayerEntity, itemId: string, count: number) => {
+    const got = addItem(w.data, m.character.inventory, itemId, count);
+    if (got > 0 && m === w.human) message(w, `Dividido do grupo: ${got}x ${w.data.items[itemId]?.name ?? itemId}.`, 'loot');
+    if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
+    return got;
+  };
+  // ouro: a parte de cada um; o resto fica no saco (vai com quem pegou)
+  if (bag.gold > 0 && (which === 'all' || which === -1)) {
+    const g = share(bag.gold);
+    for (const m of members) {
+      if (!g) break;
+      m.character.gold += g;
+      bag.gold -= g;
+      if (m === w.human) message(w, `Dividido do grupo: +${g} de ouro.`, 'loot');
+      if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
+    }
+  }
+  // itens: cada item do saco (ou o escolhido) é repartido; a sobra da divisão continua no saco
+  const indices = which === 'all' ? bag.items.map((_, i) => i) : which >= 0 ? [which] : [];
+  for (const i of indices) {
+    const st = bag.items[i];
+    if (!st) continue;
+    const per = share(st.count);
+    if (per <= 0) continue;
+    for (const m of members) {
+      if (st.count < per) break;
+      const got = give(m, st.itemId, per);
+      st.count -= got;
+    }
+  }
+  // (sem remover aqui: `takeLoot` usa os índices e apaga os sacos vazios)
+}
+
 export function takeLoot(w: World, containerId: string, which: number | 'all'): void {
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
   if (!bag) return;
+  splitWithParty(w, bag, which);
   if (bag.gold > 0 && (which === 'all' || which === -1)) {
     c.gold += bag.gold;
     w.events.emit('goldChanged', { amount: c.gold, delta: bag.gold });
