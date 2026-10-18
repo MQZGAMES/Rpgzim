@@ -33,7 +33,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
       <div className="fixed inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/70" />
       <div className="safe-top safe-bottom safe-x relative mx-auto flex min-h-full max-w-[520px] flex-col items-center justify-between gap-6 py-6">
         <div className="mt-[6vh] text-center">
-          <h1 className="font-pixel text-outline text-6xl tracking-wide text-gold-light drop-shadow-[0_4px_0_#33121f] sm:text-7xl">Rpgzim!</h1>
+          <h1 className="font-pixel text-outline text-6xl tracking-wide text-gold-light drop-shadow-[0_4px_0_#33121f] sm:text-7xl">Rpgzim</h1>
           <p className="text-outline mt-2 text-[15px] text-parchment">Crônicas de Pedraluz</p>
         </div>
         <div className="frame-dark w-full max-w-[420px]" data-testid="title-menu">
