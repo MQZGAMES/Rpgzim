@@ -9,9 +9,9 @@ import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
 import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
 
-/** Barra de vida (pixels do mundo): mais larga e mais grossa, na proporção do Tibia (≈ largura do personagem). */
+/** Barra de vida (pixels do mundo): mais larga (≈ largura do personagem), fina como antes. */
 const BAR_W = 20;
-const BAR_H = 3;
+const BAR_H = 2;
 
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 
@@ -65,7 +65,8 @@ export class CreatureView {
 
   /** Topo da "cabeça" (pixels do mundo, relativo ao pé): referência para a barra de vida e o nome. */
   private get headTop(): number {
-    return -this.sprite.displayHeight + this.yOffset + (this.kind === 'humanoid' ? 8 : 2);
+    // topo do quadro do sprite (a maior altura: chapéu do Sorcerer, elmos): a barra e o nome ficam ACIMA do personagem
+    return -this.sprite.displayHeight + this.yOffset - (this.kind === 'humanoid' ? 1 : 0) + (this.kind === 'humanoid' ? 0 : 2);
   }
 
   /** Nome sempre visível acima da barra de vida (na fonte da interface). */
