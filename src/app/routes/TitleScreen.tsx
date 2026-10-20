@@ -73,7 +73,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                   </div>
                 </div>
               )}
-              {slots.length < 6 && (
+              {slots.filter((s) => !isHeroSlot(data, s.slotId)).length < 6 && (
                 <PixelButton variant={slots.length ? 'stone' : 'gold'} className="w-full py-1 text-base" onClick={onNew}>
                   Novo personagem
                 </PixelButton>

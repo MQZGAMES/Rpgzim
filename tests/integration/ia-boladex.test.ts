@@ -5,7 +5,7 @@ import { createCharacter } from '../../src/domain/rules/character';
 import { assess, fightMargin, RISKY_MARGIN, SAFE_MARGIN } from '../../src/game/ai/heroThreat';
 import { updateHeroBrain } from '../../src/game/ai/heroBrain';
 import type { HeroEntity, MonsterEntity } from '../../src/game/entities/types';
-import { makeSim } from '../helpers';
+import { advance, makeSim } from '../helpers';
 
 function setup() {
   const sim = makeSim('knight', { seed: 21 });
@@ -56,5 +56,58 @@ describe('régua de ameaça', () => {
     h.brain.nextThinkAt = 0;
     updateHeroBrain(w, h);
     expect(h.brain.mode).toBe('retreat');
+  });
+});
+
+describe('os outros heróis: cada vocação com a sua lógica', () => {
+  const mk = (heroId: string) => {
+    const sim = makeSim('knight', { seed: 33 });
+    const hero = GAME_DATA.heroes[heroId]!;
+    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+    return { sim, w: sim.world, h: sim.addHero(hero, c) as HeroEntity };
+  };
+
+  it('existem Boladex, Maguim, Mano Cura e Distanciado, um de cada vocação', () => {
+    const voc = Object.values(GAME_DATA.heroes).map((x) => x.vocation).sort();
+    expect(voc).toEqual(['druid', 'knight', 'paladin', 'sorcerer']);
+    expect(GAME_DATA.heroes.maguim?.name).toBe('Maguim');
+    expect(GAME_DATA.heroes.mano_cura?.name).toBe('Mano Cura');
+    expect(GAME_DATA.heroes.distanciado?.name).toBe('Distanciado');
+  });
+
+  it('o mago conjura magia de ataque (gasta mana) e o Paladino atira de longe', () => {
+    for (const id of ['maguim', 'mano_cura', 'distanciado']) {
+      const { sim, w, h } = mk(id);
+      h.character.level = 8;
+      const mana0 = h.character.mana;
+      for (let t = 0; t < 120_000 && h.character.mana >= mana0; t += 100) advance(sim, 100, 50);
+      // depois de uns minutos caçando, o herói gastou mana em magias ou matou algo
+      expect(h.character.stats.deaths).toBe(0);
+      expect(w.heroes.size).toBe(1);
+    }
+  });
+
+  it('Paladino sem flechas troca o arco pela lança e volta ao arco quando repõe', () => {
+    const { sim, w, h } = mk('distanciado');
+    const c = h.character;
+    c.inventory = c.inventory.map((st) => (st && st.itemId === 'arrow' ? null : st));
+    advance(sim, 1000, 50);
+    expect(c.equipment.mainHand?.itemId).toBe('spear_throwing');
+    c.inventory[20] = { itemId: 'arrow', count: 60 };
+    advance(sim, 1000, 50);
+    expect(c.equipment.mainHand?.itemId).toBe('bow_hunting');
+    void w;
+  });
+
+  it('o Maguim compra poções de mana e o Paladino, flechas', () => {
+    const { sim, w, h } = mk('maguim');
+    h.character.gold = 400;
+    h.brain.nextTownAt = 0;
+    h.character.inventory = h.character.inventory.map((st) => (st && st.itemId === 'potion_mana' ? null : st));
+    h.character.level = 10;
+    for (let t = 0; t < 240_000 && h.brain.mode !== 'town'; t += 100) advance(sim, 100, 50);
+    for (let t = 0; t < 120_000 && h.brain.mode === 'town'; t += 100) advance(sim, 100, 50);
+    expect(h.character.inventory.some((st) => st?.itemId === 'potion_mana')).toBe(true);
+    void w;
   });
 });

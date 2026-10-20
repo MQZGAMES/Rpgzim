@@ -87,8 +87,11 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
     brain: newHeroBrain(),
   } satisfies HeroEntity as HeroEntity;
   h.scope.events = heroBus(w, h, w.human.scope.events);
+  // cada herói nasce num ponto próprio do templo (nunca na frente de quem acabou de entrar no jogo)
+  const seed = [...hero.id].reduce((a, ch) => a + ch.charCodeAt(0), 0);
   const pos = character.position;
-  const spot = restorePosition && pos && canEnter(w, pos.x, pos.y, false, h.id) ? pos : freeCellNear(w, w.map.playerStart.x, w.map.playerStart.y + 2, h.id, 6);
+  const atStart = !!pos && pos.x === w.map.playerStart.x && pos.y === w.map.playerStart.y; // herói novo: ainda não saiu do templo
+  const spot = restorePosition && pos && !atStart && canEnter(w, pos.x, pos.y, false, h.id) ? pos : freeCellNear(w, w.map.playerStart.x + (seed % 7) - 3, w.map.playerStart.y + 4 + (seed % 3), h.id, 6);
   h.x = spot.x;
   h.y = spot.y;
   if (character.health <= 0) {

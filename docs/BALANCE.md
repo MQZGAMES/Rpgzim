@@ -138,3 +138,6 @@ Flechas: pedra +1 e metal +2 de ataque por disparo (somam ao ataque da arma e da
 - Estoque de poções: 4 vidas cheias (mín. 600), com poções fortes se vida ≥ 180; poção antes de equipamento.
 - Após morrer ou fugir: passa na vila (cura, banco, poções); evita por 25 min a espécie que o matou.
 - Medido em 90 min × 5 seeds: 0 mortes (antes 6), XP total ≈ −7%.
+
+### Heróis por vocação (90 min, sem jogador)
+Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (as flechas pesam no ouro) · Boladex ≈ 18–19. Mortes: 0–1 por 90 min.

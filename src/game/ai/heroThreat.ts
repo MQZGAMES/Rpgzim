@@ -8,6 +8,7 @@
 import { blockChance, maxWeaponDamage } from '../../domain/rules/damage';
 import { weaponSkillLevel } from '../../domain/rules/stats';
 import { chebyshev } from '../../domain/value-objects/position';
+import { ROLES } from './heroRoles';
 import type { HeroEntity, MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 
@@ -51,7 +52,7 @@ export function heroDpsVs(w: World, h: HeroEntity, m: MonsterEntity): number {
   const res = m.def.resistances?.[weapon.element];
   if (res !== undefined) avg *= res;
   // magias de ataque somam um pouco mais que o golpe básico
-  return Math.max(0.5, avg * 1.12) / (h.stats.attackIntervalMs / 1000);
+  return Math.max(0.5, avg * 1.12 * ROLES[h.character.vocation].dpsMul) / (h.stats.attackIntervalMs / 1000);
 }
 
 /** Poções de vida na mochila (cura de cada uma, da maior para a menor, uma entrada por poção). */

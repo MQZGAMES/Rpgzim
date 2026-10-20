@@ -231,15 +231,15 @@ test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado'
   await createCharacter(page, 'paladin', 'Parceiro');
   type HeroInfo = { id: string; level: number; mode: string; x: number; y: number };
   const heroes = () => page.evaluate(() => (window.__RPGZIM__ as { heroes(): HeroInfo[] }).heroes());
-  expect((await heroes()).map((h) => h.id)).toEqual(['hero:boladex']);
-  const start = (await heroes())[0]!;
+  expect((await heroes()).map((h) => h.id).sort()).toEqual(['hero:boladex', 'hero:distanciado', 'hero:maguim', 'hero:mano_cura']);
+  const start = (await heroes()).find((h) => h.id === 'hero:boladex')!;
   // ele sai andando sozinho (decide caçar/passear sem comando do jogador)
-  await expect.poll(async () => { const h = (await heroes())[0]!; return h.x !== start.x || h.y !== start.y; }, { timeout: 20_000 }).toBe(true);
+  await expect.poll(async () => { const h = (await heroes()).find((x) => x.id === 'hero:boladex')!; return h.x !== start.x || h.y !== start.y; }, { timeout: 20_000 }).toBe(true);
   // jogar como o Boladex: volta ao menu e escolhe o slot dele (sem herói duplicado no mundo)
   await page.goto('/?debug');
   await page.getByTestId('slot-boladex').click();
   await page.waitForFunction(() => (window.__RPGZIM__ as { ready?: () => boolean } | undefined)?.ready?.() === true, null, { timeout: 30_000 });
-  expect(await heroes()).toEqual([]);
+  expect((await heroes()).map((h) => h.id).sort()).toEqual(['hero:distanciado', 'hero:maguim', 'hero:mano_cura']); // sem herói duplicado
   expect((await api(page, (a) => a.player())).inventory.length).toBeGreaterThan(0);
 });
 

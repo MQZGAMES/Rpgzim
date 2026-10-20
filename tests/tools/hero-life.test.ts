@@ -9,7 +9,7 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
   const minutes = Number(process.env.HERO_MINUTES ?? 30);
   const sim = makeSim('druid', { seed: Number(process.env.HERO_SEED ?? 11) });
   const w = sim.world;
-  const hero = GAME_DATA.heroes.boladex!;
+  const hero = GAME_DATA.heroes[process.env.HERO_ID ?? 'boladex']!;
   const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
   const h = sim.addHero(hero, c) as HeroEntity;
   const log: string[] = [];
@@ -32,7 +32,7 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
     if (h.brain.mode !== mode) {
       mode = h.brain.mode;
       const steps = mode === 'town' ? ` passos=${h.brain.town.map((st) => (st.kind === 'shop' ? st.npcId.replace('npc:', '') : st.kind === 'bank' ? 'banco:' + st.op : st.kind)).join(',')} livres=${h.character.inventory.filter((x) => !x).length} poções=${h.character.inventory.reduce((a, st) => a + (st?.itemId.startsWith('potion_health') ? st.count : 0), 0)}` : '';
-      log.push(`${t()} → ${mode}${h.brain.quarry ? ` (${h.brain.quarry})` : ''} hp ${h.character.health}/${h.stats.maxHealth} ouro ${h.character.gold} banco ${h.character.bankGold}${steps}`);
+      log.push(`${t()} → ${mode}${h.brain.quarry ? ` (${h.brain.quarry})` : ''} arma ${h.character.equipment.mainHand?.itemId} flechas ${h.character.inventory.reduce((a, st) => a + (st?.itemId.startsWith('arrow') ? st.count : 0), 0)} mana ${h.character.mana}/${h.stats.maxMana} hp ${h.character.health}/${h.stats.maxHealth} ouro ${h.character.gold} banco ${h.character.bankGold}${steps}`);
     }
   }
   const ch = h.character;

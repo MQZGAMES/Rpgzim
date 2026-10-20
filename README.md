@@ -78,6 +78,16 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
+## Os quatro heróis com vida própria
+Além do **Boladex** (Knight), existem **Maguim** (Sorcerer), **Mano Cura** (Druid) e **Distanciado** (Paladin). Todos
+vivem sozinhos no mundo, aparecem na tela inicial como personagens jogáveis e podem ser convidados para grupos.
+A lógica por vocação está em `src/game/ai/heroRoles.ts` (perfil) e `heroBrain.ts`:
+- **Maguim**: Faísca/Lança/Explosão Ígnea conforme a situação, Escudo de Mana quando cercado, fica a ~3 tiles de quem bate corpo a corpo (recua se a criatura for mais lenta), estoca poções de mana (2,5× a mana máxima) e prioriza varinhas.
+- **Mano Cura**: Espinhos/Rajada Glacial (lentidão), Bênção da Seiva em si e no grupo, Escudo de Mana, estoque de mana e cajados; o mais cuidadoso e sociável.
+- **Distanciado**: Foco do Caçador, Flecha Atordoante em quem se aproxima, Chuva de Flechas em grupos; compra flechas (pedra e, com folga, metal), troca o arco pela lança de arremesso quando as flechas acabam e volta ao arco ao repor; só usa arcos.
+- Todos usam a régua de ameaça do Boladex (fuga antecipada, poções, escolha de área), com margem um pouco menor para quem luta de longe.
+- Cada um nasce num ponto próprio do templo, para não bloquear quem entra no jogo.
+
 ## Boladex — personagem com vida própria
 **Boladex** é um Knight que existe desde o primeiro acesso e aparece na tela inicial como personagem jogável.
 Quando você joga com outro personagem, ele vive sozinho no mesmo mundo, **com as mesmas regras do jogador**:

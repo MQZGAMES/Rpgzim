@@ -9,12 +9,15 @@
 import type { HeroLineKey, ItemDef } from '../../domain/entities/definitions';
 import { chebyshev } from '../../domain/value-objects/position';
 import { addItem, countItem, freeSlots, removeAt } from '../../domain/rules/inventory';
-import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
+import { canUseItem, isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
 import type { HeroEntity, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
+import { AMMO_GOAL, isRanged, ROLES } from './heroRoles';
+import { countAmmo } from '../../domain/rules/ammo';
+import { stepAway } from '../movement/movement';
 import { assess, engagedOrJoining, fightMargin, monstersNear, RISKY_MARGIN, SAFE_MARGIN } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
 import { currentTarget, hasLineOfSight, respawnPlayer, setTarget } from '../combat/combat';
@@ -26,7 +29,7 @@ import { acceptInvite, actorById, attackedRecently, declineInvite, formationSpot
 
 export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
 
-type TownStep = { kind: 'shop'; npcId: string; buyPotions?: boolean; upgrades?: boolean; trainingWeapon?: boolean } | { kind: 'bank'; op: 'withdraw' | 'deposit' } | { kind: 'heal' };
+type TownStep = { kind: 'shop'; npcId: string; buyPotions?: boolean; buyAmmo?: boolean; upgrades?: boolean; trainingWeapon?: boolean } | { kind: 'bank'; op: 'withdraw' | 'deposit' } | { kind: 'heal' };
 
 export interface HeroBrainState {
   mode: HeroMode;
@@ -86,6 +89,8 @@ export interface HeroBrainState {
   avoid: Record<string, number>;
   /** Voltou machucado/morto: antes de caçar de novo passa na vila (cura, banco, poções). */
   prepare: boolean;
+  /** Evita idas seguidas à vila só por munição quando não deu para comprar. */
+  nextAmmoTripAt: number;
   /** Está sem recursos (poucas poções): caça só o que é folgado, com margem maior. */
   frugal: boolean;
 }
@@ -115,6 +120,7 @@ export function newHeroBrain(): HeroBrainState {
     nextTownAt: 0,
     avoid: {},
     prepare: false,
+    nextAmmoTripAt: 0,
     frugal: false,
     walkReq: null,
     areaStats: {},
@@ -208,6 +214,48 @@ function potionHeal(w: World, h: HeroEntity): number {
   }, 0);
 }
 
+/** Mana guardada em poções de mana. */
+function manaStock(w: World, h: HeroEntity): number {
+  return h.character.inventory.reduce((s, st) => {
+    const use = st && w.data.items[st.itemId]?.use;
+    return st && use?.mana && !use.heal ? s + use.mana * st.count : s;
+  }, 0);
+}
+
+/** Estoque de mana que a vocação quer ter na mochila (0 = não compra). */
+function manaGoal(h: HeroEntity): number {
+  const mul = ROLES[h.character.vocation].manaStock;
+  return mul ? Math.max(mul >= 2 ? 180 : 0, Math.round(h.stats.maxMana * mul)) : 0;
+}
+
+/** Tipo de munição do herói: a da arma, ou a de flecha para o Paladino mesmo com a lança na mão. */
+function ammoTypeOf(h: HeroEntity): string | undefined {
+  return h.stats.weapon.ammo ?? (ROLES[h.character.vocation].ammo ? 'arrow' : undefined);
+}
+
+/** Flechas na mochila (0 se a arma não usa munição). */
+function ammoOf(w: World, h: HeroEntity): number {
+  const type = ammoTypeOf(h);
+  return type ? countAmmo(w.data, h.character.inventory, type) : 0;
+}
+
+/** Tem algum arco equipado ou na mochila? */
+function ownsBow(w: World, h: HeroEntity): boolean {
+  const ids = [h.character.equipment.mainHand?.itemId, ...h.character.inventory.map((st) => st?.itemId)];
+  return ids.some((id) => !!id && !!w.data.items[id]?.weapon?.ammo);
+}
+
+/** A arma serve a este herói? Paladino só usa arcos (a flecha é o dano dele); os demais, nada de duas mãos. */
+function weaponFits(w: World, h: HeroEntity, def: ItemDef): boolean {
+  if (def.slot === 'offHand') {
+    const main = h.character.equipment.mainHand;
+    return !main || !w.data.items[main.itemId]?.twoHanded;
+  }
+  if (def.slot !== 'mainHand') return true;
+  if (h.character.vocation === 'paladin') return !!def.weapon?.ammo;
+  return !def.twoHanded;
+}
+
 /** Estoque de cura que ele quer ter ao sair da vila: 4 vidas cheias (mínimo 600). */
 function healGoal(h: HeroEntity): number {
   return Math.max(600, h.stats.maxHealth * 4);
@@ -215,7 +263,7 @@ function healGoal(h: HeroEntity): number {
 
 /** Margem exigida para puxar uma luta: o corajoso aceita menos, o prudente exige mais. */
 function needMargin(h: HeroEntity): number {
-  return SAFE_MARGIN - (h.hero.temperament.bravery - 0.5) * 0.4 + (h.brain.frugal ? 0.4 : 0);
+  return SAFE_MARGIN - (h.hero.temperament.bravery - 0.5) * 0.4 + (h.brain.frugal ? 0.4 : 0) - (isRanged(h.character.vocation) ? 0.15 : 0);
 }
 
 /** Criaturas "de mentira" (vida cheia) para a régua avaliar uma área antes de ir até ela. */
@@ -254,7 +302,9 @@ function npcByAction(w: World, action: string): NpcEntity | undefined {
 function lootValue(w: World, h: HeroEntity): number {
   let total = 0;
   for (const st of h.character.inventory) {
-    if (!st || st.itemId.startsWith('training_') || w.data.items[st.itemId]?.type === 'potion') continue;
+    const def = st && w.data.items[st.itemId];
+    // poções e a munição que ele mesmo usa não são "loot para vender"
+    if (!st || !def || st.itemId.startsWith('training_') || def.type === 'potion' || (def.type === 'ammo' && ammoTypeOf(h) === def.ammoType)) continue;
     const best = Math.max(0, ...Object.values(w.data.shops).map((s) => s.buys.find((o) => o.itemId === st.itemId)?.price ?? 0));
     total += best * st.count;
   }
@@ -267,10 +317,12 @@ export function bestUpgrade(w: World, h: HeroEntity, budget: number): { itemId: 
   for (const shop of Object.values(w.data.shops))
     for (const o of shop.sells) {
       const def = w.data.items[o.itemId];
-      if (!def?.slot || def.twoHanded || def.weapon?.training || o.price > budget) continue;
-      if (!isUpgrade(w.data, h.character, def)) continue;
+      if (!def?.slot || !weaponFits(w, h, def) || def.weapon?.training || o.price > budget) continue;
+      // Paladino sem nenhum arco (só a lança reserva): o primeiro arco que puder usar é prioridade
+      const needBow = h.character.vocation === 'paladin' && !!def.weapon?.ammo && !ownsBow(w, h) && canUseItem(def, h.character);
+      if (!needBow && !isUpgrade(w.data, h.character, def)) continue;
       const cur = h.character.equipment[def.slot];
-      const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
+      const gain = needBow ? 200 : valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
       if (gain < 5) continue; // melhora irrelevante não vale a viagem nem o ouro
       if (!best || gain / o.price > best.gain / best.price) best = { itemId: o.itemId, price: o.price, shopId: shop.id, gain };
     }
@@ -284,13 +336,31 @@ function valueFor(h: HeroEntity, def: ItemDef): number {
   return itemScore(def) - (mage ? 0 : mana);
 }
 
+/** Sem flechas o Paladino troca o arco pela lança de arremesso (não gasta munição); com estoque, volta ao arco. */
+function manageAmmoWeapon(w: World, h: HeroEntity): void {
+  if (h.character.vocation !== 'paladin' || h.brain.mode === 'train') return;
+  const c = h.character;
+  const main = c.equipment.mainHand && w.data.items[c.equipment.mainHand.itemId];
+  if (!main?.weapon || main.weapon.training) return;
+  const ammo = ammoOf(w, h);
+  const find = (pred: (d: ItemDef) => boolean) => c.inventory.findIndex((st) => st && pred(w.data.items[st.itemId]!) && canUseItem(w.data.items[st.itemId]!, c));
+  if (main.weapon.ammo && ammo === 0) {
+    const i = find((d) => d.weapon?.kind === 'distance' && !d.weapon.ammo && !d.weapon.training);
+    if (i >= 0 && equipItem(w, i)) heroSay(w, h, 'retreat', {}, 60000);
+  } else if (!main.weapon.ammo && main.weapon.kind === 'distance' && ammo >= 25) {
+    const i = find((d) => !!d.weapon?.ammo);
+    if (i >= 0) equipItem(w, i);
+  }
+}
+
 /** Equipa o que estiver na mochila e for melhor (ex.: item achado que agora já pode usar). */
 function equipBagUpgrades(w: World, h: HeroEntity): void {
   const c = h.character;
   for (let i = 0; i < c.inventory.length; i++) {
     const st = c.inventory[i];
     const def = st ? w.data.items[st.itemId] : undefined;
-    if (!def?.slot || def.twoHanded || def.weapon?.training || !isUpgrade(w.data, c, def)) continue;
+    if (!def?.slot || !weaponFits(w, h, def) || def.weapon?.training || !isUpgrade(w.data, c, def)) continue;
+    if (def.weapon?.ammo && ammoOf(w, h) < 10) continue; // arco sem flechas não é melhoria
     const cur = c.equipment[def.slot];
     if (valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0) < 5) continue;
     if (equipItem(w, i)) heroSay(w, h, 'upgrade', { item: def.name }, 0);
@@ -367,6 +437,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     h.path = null;
     if (goal) goTo(w, h, goal.x, goal.y);
   }
+  manageAmmoWeapon(w, h);
   survive(w, h);
   handleInvites(w, h);
   if (b.mode !== 'retreat' && thinkPvp(w, h)) return;
@@ -422,11 +493,14 @@ function survive(w: World, h: HeroEntity): void {
     const idx = pickPotion(w, h, danger || pct < 0.25);
     if (idx >= 0) useInventoryItem(w, idx);
   }
-  if (pct < 0.6) tryCast(w, h, 'light_heal');
+  if (pct < 0.65 && h.character.vocation === 'druid' && tryCast(w, h, 'sap_blessing')) {
+    // Bênção da Seiva: cura forte + regeneração (e cura o grupo)
+  } else if (pct < 0.6) tryCast(w, h, 'light_heal');
+  if (pct < 0.7 && attackers.length >= 1 && isRanged(h.character.vocation) && h.character.mana > h.stats.maxMana * 0.5 && !h.buffs.some((b) => b.kind === 'manaShield')) tryCast(w, h, 'mana_shield');
   if (attackers.length >= 2 && pct < 0.75) tryCast(w, h, 'iron_roar');
   // mana baixa no meio da luta: bebe poção de mana para não ficar inútil (magias são o principal dano)
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
-  if (manaPct < 0.35) {
+  if (manaPct < (isRanged(h.character.vocation) ? 0.4 : 0.35)) {
     const idx = pickManaPotion(w, h);
     if (idx >= 0) useInventoryItem(w, idx);
   }
@@ -477,6 +551,8 @@ function needsTown(w: World, h: HeroEntity): boolean {
   const t = h.hero.temperament;
   const c = h.character;
   if (freeSlots(c.inventory) < 2) return true;
+  // sem flecha o Paladino não ataca: repõe assim que dá, mesmo recém-saído da vila
+  if (ROLES[c.vocation].ammo && ammoTypeOf(h) && ammoOf(w, h) < 8 && c.gold + c.bankGold + lootValue(w, h) >= 40 && w.now >= h.brain.nextAmmoTripAt) return true;
   // acabou de voltar da vila: só a mochila cheia justifica outra viagem (evita o vai e volta)
   if (w.now < h.brain.nextTownAt) return false;
   if (lootValue(w, h) >= 250 + t.greed * 600 + c.level * 60) return true;
@@ -487,6 +563,9 @@ function needsTown(w: World, h: HeroEntity): boolean {
   // repõe só quando dá para comprar um bom estoque (senão volta à vila a cada 2 minutos)
   if (potions === 0 && spendable >= price * 5) return true;
   if (potions < minPotions && spendable >= price * 12) return true;
+  // mana e flechas acabando (e dinheiro para repor)
+  if (manaGoal(h) && manaStock(w, h) < manaGoal(h) * 0.3 && spendable >= 45 * 6) return true;
+  if (ROLES[c.vocation].ammo && ammoTypeOf(h) && ammoOf(w, h) < AMMO_GOAL * 0.25 && spendable >= 100) return true;
   // estoque de cura abaixo de ~1,5 vidas cheias e dinheiro para um bom reforço
   if (potionHeal(w, h) < h.stats.maxHealth * 1.5 && spendable >= price * 8) return true;
   if (w.now < h.brain.nextUpgradeTripAt) return false;
@@ -534,7 +613,7 @@ function decide(w: World, h: HeroEntity): void {
   const options: [string, number][] = [
     ['hunt', 0.75 + h.brain.mood * 0.1],
     ['explore', untried ? 0.12 + t.bravery * 0.15 : 0],
-    ['train', skillLag && canTrain ? t.discipline * 0.45 : 0],
+    ['train', skillLag && canTrain && ROLES[c.vocation].trains ? t.discipline * 0.45 : 0],
     ['social', t.sociability * 0.08 + (humanNear ? 0.06 : 0)],
     ['invite', canInviteHuman(w, h) ? t.sociability * 0.5 + affinityOf(h, human.id) * 0.4 : 0],
   ];
@@ -633,8 +712,8 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     // golpes especiais quando vale a pena
     const adjacent = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
     if (!training || assisting) {
-      if (adjacent.length >= 2) tryCast(w, h, 'steel_whirlwind');
-      if (chebyshev(target, h) <= 1 && hpPct(h) > 0.5) tryCast(w, h, 'brutal_strike');
+      fightSpells(w, h, target, adjacent.length);
+      keepDistance(w, h);
     }
     // Loot no mesmo passo do combate: o que já está ao alcance é pego sem largar a criatura e, se for
     // seguro, ele já vai buscando o que caiu mais longe (sobreviver e atacar continuam em primeiro lugar).
@@ -705,6 +784,53 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   else if (w.rng.chance(0.3)) goTo(w, h, (b.spot ?? spot).x + w.rng.int(-3, 3), (b.spot ?? spot).y + w.rng.int(-3, 3));
 }
 
+/** Magias de combate de cada vocação (o Knight nos golpes corpo a corpo; os de longe nos projéteis e rajadas). */
+function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: number): void {
+  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
+  const dist = chebyshev(target, h);
+  const cluster = monstersNear(w, target, 1).length;
+  const engaged = engagedOrJoining(w, h).length;
+  switch (h.character.vocation) {
+    case 'knight':
+      if (adjacent >= 2) tryCast(w, h, 'steel_whirlwind');
+      if (dist <= 1 && hpPct(h) > 0.5) tryCast(w, h, 'brutal_strike');
+      return;
+    case 'sorcerer':
+      if (engaged >= 2 && manaPct > 0.5 && !h.buffs.some((b) => b.kind === 'manaShield')) tryCast(w, h, 'mana_shield');
+      if (monstersNear(w, h, 3).length >= 2 && manaPct > 0.3 && tryCast(w, h, 'fire_nova')) return;
+      if (manaPct > 0.3 && tryCast(w, h, 'flame_lance')) return;
+      if (manaPct > 0.2) tryCast(w, h, 'arcane_bolt');
+      return;
+    case 'druid':
+      if (engaged >= 2 && manaPct > 0.5 && !h.buffs.some((b) => b.kind === 'manaShield')) tryCast(w, h, 'mana_shield');
+      if ((cluster >= 2 || dist <= 3) && manaPct > 0.3 && tryCast(w, h, 'frost_burst')) return;
+      if (manaPct > 0.2) tryCast(w, h, 'earth_thorn');
+      return;
+    case 'paladin': {
+      if (dist <= 6 && manaPct > 0.4) tryCast(w, h, 'hunters_focus');
+      if (dist <= 3 && target.def.attack.range <= 2 && manaPct > 0.25 && tryCast(w, h, 'stunning_arrow')) return; // lento: dá tempo de recuar
+      if (cluster >= 2 && manaPct > 0.3 && ammoOf(w, h) >= 3 && tryCast(w, h, 'arrow_rain')) return;
+      if (manaPct > 0.25) tryCast(w, h, 'holy_arrow');
+      return;
+    }
+  }
+}
+
+/** Quem luta de longe recua um passo quando uma criatura corpo a corpo mais lenta (ou travada) chega perto. */
+function keepDistance(w: World, h: HeroEntity): void {
+  const keep = ROLES[h.character.vocation].keepDistance;
+  if (!keep || isMoving(h, w.now) || h.path?.length) return;
+  const close = [...w.monsters.values()]
+    .filter((m) => m.alive && m.targetId === h.id && m.def.attack.range <= 2 && chebyshev(m, h) < keep)
+    .sort((a, c) => chebyshev(a, h) - chebyshev(c, h));
+  // cercado por 3 ou mais não adianta correr: luta (a régua de fuga cuida do resto)
+  if (!close.length || close.length >= 3) return;
+  const m = close[0]!;
+  const speed = m.def.speed * (w.now < m.slowUntil ? m.slowFactor : 1);
+  if (speed >= h.stats.speed * 0.95) return; // criatura mais rápida: recuar só dá golpe de graça
+  stepAway(w, h, m.x, m.y, h.stats.speed, false);
+}
+
 /** Ponto de surgimento da presa com mais monstros vivos (empate: o mais perto). */
 function bestSpawn(w: World, h: HeroEntity, quarry: string): { x: number; y: number } | null {
   let best: { x: number; y: number; score: number } | null = null;
@@ -724,7 +850,8 @@ function sellable(w: World, h: HeroEntity, itemId: string): boolean {
   if (!countItem(c.inventory, itemId) || itemId.startsWith('training_')) return false;
   const def = w.data.items[itemId];
   // munição só é guardada por quem a usa (o Knight vende as flechas que caem dos goblins)
-  if (!def || def.type === 'potion' || (def.type === 'ammo' && h.stats.weapon.ammo === def.ammoType)) return false;
+  if (!def || def.type === 'potion' || (def.type === 'ammo' && ammoTypeOf(h) === def.ammoType)) return false;
+  if (c.vocation === 'paladin' && def.weapon?.ammo) return false; // o arco fica para quando chegarem as flechas
   if (def.slot && (def.minLevel ?? 1) > c.level && (def.minLevel ?? 1) <= c.level + 3 && isUsableLater(w, h, itemId)) return false;
   if (def.slot && isUpgrade(w.data, c, def)) return false;
   return true;
@@ -983,9 +1110,12 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
       const npc = npcByShop(w, shop.id);
       if (!npc) continue;
       const sells = shop.buys.some((o) => sellable(w, h, o.itemId));
-      const potions = wantPotions && shop.sells.some((o) => o.itemId === 'potion_health') && shop.id === 'potions';
+      const wantMana = !!manaGoal(h) && manaStock(w, h) < manaGoal(h) * 0.6 && c.gold + earn + c.bankGold >= 45 * 4;
+      const potions = (wantPotions || wantMana) && shop.sells.some((o) => o.itemId === 'potion_health') && shop.id === 'potions';
+      const ammoType = ammoTypeOf(h);
+      const ammo = !!ammoType && ammoOf(w, h) < AMMO_GOAL * 0.6 && c.gold + earn + c.bankGold >= 40 && shop.sells.some((o) => w.data.items[o.itemId]?.ammoType === ammoType);
       const upgrades = !!up && up.shopId === shop.id;
-      if (sells || potions || upgrades) steps.push({ kind: 'shop', npcId: npc.id, buyPotions: potions, upgrades });
+      if (sells || potions || upgrades || ammo) steps.push({ kind: 'shop', npcId: npc.id, buyPotions: potions, buyAmmo: ammo, upgrades });
     }
     // caminho mais curto entre as paradas (a partir de onde está)
     let from = { x: h.x, y: h.y };
@@ -999,11 +1129,13 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
       if (n) from = { x: n.x, y: n.y };
     }
     // o alquimista primeiro: com o dinheiro na mão, as poções não perdem para o equipamento
-    ordered.sort((a, b2) => Number(b2.kind === 'shop' && !!b2.buyPotions) - Number(a.kind === 'shop' && !!a.buyPotions));
+    const ammoFirst = !!ammoTypeOf(h) && ammoOf(w, h) < AMMO_GOAL * 0.4;
+    const rank = (s: TownStep) => (s.kind !== 'shop' ? 0 : ammoFirst && s.buyAmmo ? 2 : s.buyPotions ? 1 : 0);
+    ordered.sort((a, b2) => rank(b2) - rank(a));
     steps.length = 0;
     steps.push(...ordered);
     // saque antes das compras: para um upgrade ou para um bom estoque de poções
-    if ((up && c.gold + earn - 30 < up.price) || (wantPotions && c.gold + earn < price * 14 && c.bankGold > 0)) steps.unshift({ kind: 'bank', op: 'withdraw' });
+    if ((up && c.gold + earn - 30 < up.price) || ((wantPotions || !!manaGoal(h)) && c.gold + earn < price * 14 && c.bankGold > 0)) steps.unshift({ kind: 'bank', op: 'withdraw' });
     // não volta à vila só por causa de upgrade nos próximos minutos
     h.brain.nextUpgradeTripAt = w.now + 4 * 60000;
     // banco só quando sobra bastante ouro; bênção do sacerdote só se estiver bem ferido
@@ -1033,6 +1165,7 @@ function town(w: World, h: HeroEntity): void {
   if (!step) {
     b.nextTownAt = w.now + 3 * 60000;
     b.prepare = false;
+    b.nextAmmoTripAt = w.now + 90000;
     w.ui.shop = null;
     w.ui.depot = null;
     w.ui.dialog = null;
@@ -1093,6 +1226,14 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
   if (earned > 0) heroSay(w, h, 'sell', { gold: earned }, 20000);
   if (step.trainingWeapon && countItem(c.inventory, TRAINING_WEAPON) === 0) buyItem(w, TRAINING_WEAPON, 1);
   if (step.buyPotions) {
+    // mana primeiro para os magos (é o dano deles); os demais gastam menos nisso
+    const manaOffer = shop.sells.find((o) => o.itemId === 'potion_mana');
+    if (manaOffer && manaGoal(h)) {
+      const per = w.data.items[manaOffer.itemId]?.use?.mana ?? 60;
+      const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' ? 0.45 : 0.2;
+      const qty = Math.min(Math.ceil((manaGoal(h) - manaStock(w, h)) / per), Math.floor((c.gold * share) / manaOffer.price), 40);
+      if (qty > 0 && buyItem(w, manaOffer.itemId, qty)) heroSay(w, h, 'buy', {}, 60000);
+    }
     const basic = shop.sells.find((o) => o.itemId === 'potion_health');
     const great = shop.sells.find((o) => o.itemId === 'potion_health_great');
     if (basic) {
@@ -1114,6 +1255,24 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       const qty = Math.min(Math.ceil(missing / (w.data.items[basic.itemId]?.use?.heal ?? 70)), Math.floor(budget / basic.price), 40);
       if (qty > 0 && buyItem(w, basic.itemId, qty)) bought = true;
       if (bought) heroSay(w, h, 'buy', {}, 60000);
+    }
+  }
+  if (step.buyAmmo) {
+    const type = ammoTypeOf(h);
+    const offers = shop.sells.filter((o) => type && w.data.items[o.itemId]?.ammoType === type).sort((a, b) => (w.data.items[b.itemId]?.ammoAttack ?? 0) - (w.data.items[a.itemId]?.ammoAttack ?? 0));
+    let missing = AMMO_GOAL - ammoOf(w, h);
+    // com ouro sobrando compra a flecha forte (+2) para metade do estoque; o resto, a de pedra
+    const budget = Math.max(c.gold * 0.7, Math.min(c.gold, 40));
+    let spent = 0;
+    for (const [i, o] of offers.entries()) {
+      const rich = c.gold > 400; // só com folga compra a flecha forte (3 a 6 de ouro cada)
+      if (i === 0 && offers.length > 1 && !rich) continue;
+      const want = i === 0 && offers.length > 1 ? Math.floor(missing / 2) : missing;
+      const qty = Math.min(want, Math.floor((budget - spent) / o.price), 200);
+      if (qty > 0 && buyItem(w, o.itemId, qty)) {
+        missing -= qty;
+        spent += qty * o.price;
+      }
     }
   }
   if (step.upgrades) {
@@ -1326,7 +1485,7 @@ function follow(w: World, h: HeroEntity): void {
   giftPotion(w, h);
   heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
   // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
-  if (baitMonsters(w, h)) return;
+  if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
   // não sai do grupo para caçar longe: larga o alvo que está longe do time
   keepWithGroup(w, h);
   const members = partyMembers(w, h);
