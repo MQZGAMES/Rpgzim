@@ -116,7 +116,7 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   - **branca e amarela duram exatamente o PZ lock** (2 min; 5 min se matar) e só somem quando ele acaba; com menos de 30 s
     restantes, **qualquer combate** (com personagem, NPC ou criatura) renova para 30 s: é preciso ficar 30 s sem atacar
     nem ser atacado. A vermelha não renova;
-  - a caveira aparece **à direita do nome** no mapa (junto do escudo do grupo) e no HUD com o tempo; a vermelha, o PZ lock
+  - a caveira aparece **abaixo da barra de vida, à direita** (junto do escudo do grupo; o nome fica centralizado) e no HUD com o tempo; a vermelha, o PZ lock
     e as mortes injustas valem entre sessões (tempo real).
 - **Morte**: **toda a mochila e o dinheiro da bolsa** caem num saco no chão (qualquer um pode pegar; só some quando alguém
   pegar) e cada equipado tem **10%** de chance de cair (caveira vermelha perde **todos**). O **Amuleto da Perda**

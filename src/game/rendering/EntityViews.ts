@@ -9,6 +9,10 @@ import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
 import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
 
+/** Barra de vida (pixels do mundo): mais larga e mais grossa, na proporção do Tibia (≈ largura do personagem). */
+const BAR_W = 20;
+const BAR_H = 3;
+
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 
 /** Estilo do nome: o do jogador/herói é maior (é informação de combate); o de criatura é discreto. */
@@ -82,7 +86,7 @@ export class CreatureView {
     this.layoutLabel();
   }
 
-  /** Ícones à direita do nome (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
+  /** Ícones abaixo da barra de vida, à direita (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
   setBadges(frames: readonly string[]): void {
     const key = frames.join('|');
     if (key === this.badgeKey) return;
@@ -96,22 +100,21 @@ export class CreatureView {
     this.layoutLabel();
   }
 
-  /** Centraliza [nome + ícones] acima da cabeça; os ícones mantêm o tamanho na tela em qualquer zoom. */
+  /**
+   * Layout do Tibia: o nome fica CENTRALIZADO acima da barra de vida; os ícones (escudo de grupo e caveira) ficam logo
+   * abaixo da barra, começando na ponta direita dela. Os ícones mantêm o tamanho na tela em qualquer zoom.
+   */
   private layoutLabel(): void {
     if (!this.label) return;
     this.layoutZoom = getWorldTextZoom();
     const touch = !!this.scene.registry.get('touch');
-    const icon = cssToWorld(touch ? 12 : 17);
-    const gap = cssToWorld(2);
-    const n = this.badges.length;
-    const textW = this.label.displayWidth;
-    const iconsW = n * (icon + gap);
-    const total = textW + iconsW;
-    const y = this.headTop - 4;
-    // nome primeiro e, à direita dele, os ícones (escudo de grupo e caveira), como no Tibia
-    this.label.setPosition(snapWorld(-total / 2 + textW / 2), y);
+    const icon = cssToWorld(touch ? 13 : 18);
+    const gap = cssToWorld(1);
+    const barTop = this.headTop - 3; // topo da barra (ver setHealthBar)
+    this.label.setPosition(0, barTop - 2);
+    const iconTop = barTop + BAR_H + 2;
     this.badges.forEach((b, i) => {
-      b.setDisplaySize(icon, icon).setPosition(snapWorld(-total / 2 + textW + gap + i * (icon + gap) + icon / 2), y - this.label!.displayHeight * 0.45);
+      b.setDisplaySize(icon, icon).setPosition(snapWorld(BAR_W / 2 - icon * 0.25 + i * (icon + gap) + icon / 2), snapWorld(iconTop + icon / 2));
     });
   }
 
@@ -130,7 +133,7 @@ export class CreatureView {
 
   /** Barra de vida compacta acima da cabeça (redesenhada só quando muda). */
   setHealthBar(pct: number | null, scene: Phaser.Scene = this.scene, color = 0x4fd08a): void {
-    const key = pct === null ? 'none' : `${Math.round(pct * 14)}:${color}`;
+    const key = pct === null ? 'none' : `${Math.round(pct * BAR_W)}:${color}`;
     if (key === this.lastHpKey) return;
     this.lastHpKey = key;
     if (pct === null) {
@@ -142,12 +145,12 @@ export class CreatureView {
       this.container.add(this.bar);
     }
     const g = this.bar.setVisible(true).clear();
-    const w = 14;
+    const w = BAR_W;
     const top = this.headTop - 3;
-    g.fillStyle(0x120d18, 1).fillRect(-w / 2 - 1, top - 1, w + 2, 4);
+    g.fillStyle(0x120d18, 1).fillRect(-w / 2 - 1, top - 1, w + 2, BAR_H + 2);
     const fill = Math.max(1, Math.round(w * pct));
     const c = pct > 0.6 ? color : pct > 0.3 ? 0xf8dc6c : 0xe04a44;
-    g.fillStyle(c, 1).fillRect(-w / 2, top, fill, 2);
+    g.fillStyle(c, 1).fillRect(-w / 2, top, fill, BAR_H);
   }
 
   sync(m: Mover, now: number, animate: boolean, speed: number): void {
