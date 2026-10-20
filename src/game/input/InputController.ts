@@ -96,6 +96,8 @@ export class InputController {
       case 'Digit4':
       case 'Digit5':
       case 'Digit6':
+      case 'Digit7':
+      case 'Digit8':
         s.useSlot(Number(e.code.slice(5)) - 1);
         break;
       case 'KeyQ':

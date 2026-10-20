@@ -323,20 +323,27 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   const fired = () => page.evaluate(() => { const a = (window as unknown as { __RPGZIM__: { castLog(): unknown[]; itemLog(): unknown[] } }).__RPGZIM__; return a.castLog().length + a.itemLog().length; });
   const clear = () => page.evaluate(() => (window as unknown as { __RPGZIM__: { clearCastLog(): void } }).__RPGZIM__.clearCastLog());
 
-  // 1) vãos entre os atalhos: nenhum ponto da grade cai na camada do mapa (tocar ali não anda)
+  // 1) vãos entre os atalhos: nenhum ponto dentro das fileiras de botões cai na camada do mapa (tocar ali não anda);
+  //    os cantos vazios da "pirâmide" continuam livres para tocar no mapa
   const gaps = await page.evaluate(() => {
-    const b = document.querySelector('[data-testid=touch-actions]')!.getBoundingClientRect();
     let onMap = 0;
     let total = 0;
-    for (let y = b.top + 1; y < b.bottom - 1; y += 5)
-      for (let x = b.left + 1; x < b.right - 1; x += 5) {
-        total++;
-        if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
-      }
-    return { onMap, total };
+    for (const row of document.querySelectorAll('[data-testid=touch-row]')) {
+      const b = row.getBoundingClientRect();
+      for (let y = b.top + 1; y < b.bottom - 1; y += 4)
+        for (let x = b.left + 1; x < b.right - 1; x += 4) {
+          total++;
+          if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
+        }
+    }
+    const grid = document.querySelector('[data-testid=touch-actions]')!.getBoundingClientRect();
+    // canto superior esquerdo da pirâmide: vazio, deve deixar o toque chegar ao mapa
+    const corner = document.elementFromPoint(grid.left + 6, grid.top + grid.height * 0.55)?.closest('[data-testid=map-input]') ? 'mapa' : 'bloqueado';
+    return { onMap, total, corner };
   });
   expect(gaps.total).toBeGreaterThan(100);
   expect(gaps.onMap).toBe(0);
+  expect(gaps.corner).toBe('mapa');
 
   // 2) segurar o atalho da magia repete a cada recarga; soltar encerra (nada dispara depois)
   const box = (await page.getByTestId('spell-earth_thorn').boundingBox())!;
@@ -366,6 +373,14 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   const z = await page.getByTestId('joystick').evaluate((el) => ({ inHud: !!el.closest('[data-testid=hud]'), z: Number(getComputedStyle(el).zIndex) }));
   expect(z.inHud).toBe(false);
   expect(z.z).toBeGreaterThanOrEqual(50);
+  // o navegador "perdeu" o fim do toque (troca de app, gesto do sistema): o joystick se solta sozinho
+  await page.evaluate(() => window.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true })));
+  await expect(page.getByTestId('joystick')).toHaveCount(0, { timeout: 3000 });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  // depois de resetar, um novo joystick funciona normalmente
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: ox, y: oy }] });
+  for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: ox + i * 10, y: oy }] });
+  await expect(page.getByTestId('joystick')).toBeVisible();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(page.getByTestId('joystick')).toHaveCount(0);
 
@@ -383,4 +398,25 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   expect(lay.detailsInside).toBe(true);
   expect(lay.scrollers).toBe(0);
   await expect(page.getByTestId('bag-organize')).toBeVisible();
+});
+
+test('PK: caveira e PZ lock no HUD, nome menor no celular e 8 atalhos', async ({ page }, info) => {
+  await createCharacter(page, 'paladin', 'Marca');
+  const isMobile = info.project.name === 'mobile';
+  // 8 atalhos configuráveis (1–8)
+  await expect(page.locator('[data-testid^=slot-], [data-testid^=spell-], [data-testid^=potion-]')).toHaveCount(8);
+  // contador de flechas do paladino com arco
+  await expect(page.getByTestId('ammo-pill')).toContainText('80');
+  // caveira branca + PZ lock aparecem ao lado do painel de status
+  await page.evaluate(() => (window.__RPGZIM__ as unknown as { setPk(k: string, ms: number): void }).setPk('white', 100_000));
+  await expect(page.getByTestId('pk-skull')).toBeVisible();
+  await expect(page.getByTestId('pk-pzlock')).toContainText('PZ');
+  // tamanho do nome: menor no celular (11 px), maior no desktop (16 px)
+  const css = await page.evaluate(() => {
+    const a = window.__RPGZIM__ as unknown as { worldTexts(): { text: string; fontSize: string }[] };
+    const t = a.worldTexts().find((x) => x.text === 'Marca');
+    return t ? parseFloat(t.fontSize) / window.devicePixelRatio : 0;
+  });
+  if (isMobile) expect(css).toBeLessThanOrEqual(12.5);
+  else expect(css).toBeGreaterThanOrEqual(15);
 });

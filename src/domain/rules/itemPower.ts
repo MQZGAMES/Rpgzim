@@ -38,7 +38,7 @@ export function canUseItem(def: ItemDef, c: CharacterState): boolean {
 
 /** O item pode ser equipado agora e é melhor que o que está no slot (ou o slot está vazio). */
 export function isUpgrade(data: GameData, c: CharacterState, def: ItemDef): boolean {
-  if (!def.slot || def.slot === 'ammo' || !canUseItem(def, c)) return false;
+  if (!def.slot || !canUseItem(def, c)) return false;
   const cur = c.equipment[def.slot];
   const curDef = cur ? data.items[cur.itemId] : undefined;
   if (!curDef) return true;

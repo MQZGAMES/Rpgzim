@@ -113,7 +113,8 @@ describe('vocações', () => {
       putAt(sim, h, spot.x + dist, spot.y);
       h.brain.nextThinkAt = Infinity; // boneco de treino parado
       sim.setStandAttack(true);
-      w.human.character.equipment.ammo = { itemId: w.human.character.equipment.ammo!.itemId, count: 999 };
+      // flechas de sobra na mochila (o paladino gasta as da mochila)
+      for (let i = 10; i < 20; i++) w.human.character.inventory[i] = { itemId: 'arrow', count: 100 };
       let dmg = 0;
       sim.events.on('damage', (e) => e.targetId === h.id && e.sourceId === w.human.id && (dmg += e.amount));
       sim.setTarget(h.id);
@@ -281,11 +282,11 @@ describe('controle no celular e ritmo', () => {
     c.inventory[6] = { itemId: 'meat', count: 2 };
     sim.setHotbar(0, { kind: 'item', id: 'meat' });
     const snap = buildSnapshot(sim, 1).hotbar;
-    expect(snap).toHaveLength(6);
+    expect(snap).toHaveLength(8);
     expect(snap[0]).toMatchObject({ kind: 'item', itemId: 'meat', count: 2 });
     expect(snap.find((s) => s.kind === 'potion' && s.itemId === 'health')).toBeTruthy();
-    // a magia que estava no 1 foi para onde estava a carne (troca de lugar) — nenhuma se perde
-    expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(GAME_DATA.vocations.druid.spells.slice(0, 4).length - 1);
+    // o atalho 1 foi trocado pela carne: ficam as outras 5 magias da barra
+    expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(GAME_DATA.vocations.druid.spells.slice(0, 6).length - 1);
     expect(sim.useItemById('meat')).toBe(true);
     expect(buildSnapshot(sim, 2).hotbar[0]!.count).toBe(1);
   });

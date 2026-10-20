@@ -39,7 +39,6 @@ function bestGear(voc: VocationId, L: number): Partial<Record<EquipSlot, string>
   const twoHanded = !!(g.mainHand && D.items[g.mainHand]!.twoHanded);
   for (const slot of ['head', 'amulet', 'body', 'legs', 'ring', 'feet'] as EquipSlot[]) g[slot] = pick(slot, def);
   if (!twoHanded) g.offHand = pick('offHand', def);
-  if (voc === 'paladin') g.ammo = 'arrow';
   return g;
 }
 
@@ -50,7 +49,8 @@ function profile(voc: VocationId, L: number): { c: CharacterState; s: DerivedSta
   for (const [k, v] of Object.entries(sk)) c.skills[k as keyof typeof sk].level = v;
   const gear = bestGear(voc, L);
   c.equipment = {};
-  for (const [slot, id] of Object.entries(gear)) if (id) c.equipment[slot as EquipSlot] = { itemId: id, count: slot === 'ammo' ? 100 : 1 };
+  for (const [slot, id] of Object.entries(gear)) if (id) c.equipment[slot as EquipSlot] = { itemId: id, count: 1 };
+  if (voc === 'paladin') c.inventory[0] = { itemId: 'arrow', count: 100 };
   return { c, s: computeStats(D, c), gear };
 }
 
@@ -147,7 +147,7 @@ test('relatório de balanceamento', () => {
       const ttk = m.health / Math.max(0.1, dpsMax);
       const ttd = s.maxHealth / Math.max(0.1, inc - hpRegenPerSec(voc, L));
       rows.push(`| ${L} | ${D.vocations[voc].name} | ${m.name} | ${s.maxHealth} | ${s.maxMana} | ${s.armor} | ${aa.dps.toFixed(1)} | ${dpsRegen.toFixed(1)} | ${dpsMax.toFixed(1)} | ${hps.toFixed(1)} | ${healPerMana.toFixed(2)} | ${inc.toFixed(1)} | ${ttk.toFixed(1)} s | ${ttd > 0 && Number.isFinite(ttd) ? ttd.toFixed(0) + ' s' : '∞'} |`);
-      gearRows.push(`| ${L} | ${D.vocations[voc].name} | ${Object.entries(gear).filter(([k]) => k !== 'ammo').map(([, id]) => D.items[id!]!.name).join(', ')} |`);
+      gearRows.push(`| ${L} | ${D.vocations[voc].name} | ${Object.entries(gear).map(([, id]) => D.items[id!]!.name).join(', ')} |`);
       (summary[voc] ??= []).push(dpsMax);
     }
   }

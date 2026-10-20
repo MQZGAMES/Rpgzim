@@ -58,6 +58,16 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
     heroes: () =>
       [...sim.world.heroes.values()].map((h) => ({ id: h.id, name: h.character.name, x: h.x, y: h.y, level: h.character.level, hp: h.character.health, gold: h.character.gold, bankGold: h.character.bankGold, mode: h.brain.mode, quarry: h.brain.quarry, dead: h.dead })),
     buildings: () => sim.world.map.buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, doorX: b.doorX })),
+    /** Define a caveira e o PZ lock do jogador (para conferir a interface). */
+    setPk: (kind: 'white' | 'yellow' | 'red' | null, lockMs = 0) => {
+      const w = sim.world;
+      if (kind) w.social.skulls.set(w.human.id, { kind, until: w.now + (kind === 'red' ? 24 * 3600000 : 15 * 60000) });
+      else w.social.skulls.delete(w.human.id);
+      if (lockMs) w.social.pzLocks.set(w.human.id, w.now + lockMs);
+      else w.social.pzLocks.delete(w.human.id);
+    },
+    /** Convida o herói para o grupo (ele aceita na hora). */
+    invite: (id: string) => sim.partyInvite(id),
     /** Relógio do jogo em ms (anda mais devagar que o real quando os quadros demoram). */
     now: () => sim.world.now,
     /** Magias disparados desde o último `clearCastLog` (t instants do relógio do mundo). */

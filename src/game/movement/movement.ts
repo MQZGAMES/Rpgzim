@@ -7,6 +7,8 @@ import type { TilePos } from '../../domain/value-objects/position';
 import { cellIndex, inBounds, isPz, isSolid } from '../world/GameMap';
 import type { Mover, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
+import { warnThrottled } from '../simulation/World';
+import { isPzLocked, pzLockMs } from '../social/social';
 import { canStep, findPath } from './pathfinding';
 
 export function isMoving(m: Mover, now: number): boolean {
@@ -30,6 +32,8 @@ export function occupant(w: World, x: number, y: number): string | undefined {
 export function canEnter(w: World, x: number, y: number, forMonster: boolean, selfId?: string): boolean {
   if (!inBounds(w.map, x, y) || isSolid(w.map, x, y)) return false;
   if (forMonster && isPz(w.map, x, y)) return false;
+  // PZ lock (atacou/matou outro personagem): não entra em áreas protegidas (lojas, templo, casas)
+  if (!forMonster && selfId && isPz(w.map, x, y) && isPzLocked(w, selfId)) return false;
   const occ = occupant(w, x, y);
   if (occ === undefined || occ === selfId) return true;
   // personagens nunca ocupam o mesmo tile (em lugar nenhum): o caminho contorna e, se um insistir por
@@ -124,6 +128,9 @@ export function tryStep(w: World, m: Mover, dx: number, dy: number, speed: numbe
   const nx = m.x + dx;
   const ny = m.y + dy;
   if (!canEnter(w, nx, ny, forMonster, m.id)) {
+    if (!forMonster && m.id === w.human.id && isPz(w.map, nx, ny) && isPzLocked(w, m.id)) {
+      warnThrottled(w, 'pzlock', `PZ lock: você não pode entrar em áreas protegidas por mais ${Math.ceil(pzLockMs(w, m.id) / 1000)} s.`, 2500);
+    }
     // barrado por outro personagem: conta a insistência (troca de lugar depois de alguns segundos)
     if (!forMonster && isPlayerEntity(m)) resolveStuck(w, m, occupant(w, nx, ny) ?? null);
     return false;

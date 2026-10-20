@@ -1,7 +1,8 @@
 // Interação entre personagens-jogadores (humano e heróis): grupo e PK.
 // - Grupo: convite (expira), aceitar/recusar, sair, remover, passar liderança; XP dividida igualmente.
-// - PK: só com a permissão de PK do mundo ligada, fora de áreas protegidas e nunca entre membros do grupo.
-//   Quem ataca um personagem sem caveira ganha caveira (5 min; 15 min se matar).
+// - PK (estilo Tibia): só com a permissão de PK do mundo ligada, fora de áreas protegidas e nunca entre membros
+//   do grupo. Atacar quem não tem caveira dá caveira branca; atacar uma caveira branca dá caveira amarela; 3 mortes
+//   injustas em 24 h dão caveira vermelha (24 h). Quem ataca fica com PZ lock (2 min; 5 min se matar).
 import { chebyshev } from '../../domain/value-objects/position';
 import { isPz } from '../world/GameMap';
 import type { PlayerEntity } from '../entities/types';
@@ -35,19 +36,40 @@ export interface SocialState {
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
-  /** Caveira: até quando cada personagem está marcado como agressor. */
-  skulls: Map<string, number>;
+  /** Caveira de cada personagem: tipo e até quando. */
+  skulls: Map<string, SkullState>;
+  /** PZ lock: até quando o personagem não pode entrar em áreas protegidas. */
+  pzLocks: Map<string, number>;
+  /** Mortes injustas (vítima sem caveira) de cada personagem: instantes, para a caveira vermelha. */
+  unjust: Map<string, number[]>;
   /** Último ataque de A em B: chave `${atacante}>${vitima}` -> instante. */
   aggressions: Map<string, number>;
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, invites: [], pvp, skulls: new Map(), aggressions: new Map() };
+  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), aggressions: new Map() };
+}
+
+export type SkullKind = 'white' | 'yellow' | 'red';
+export interface SkullState {
+  kind: SkullKind;
+  until: number;
 }
 
 export const INVITE_MS = 60000;
-const SKULL_MS = 5 * 60000;
-const KILL_SKULL_MS = 15 * 60000;
+/** PZ lock ao atacar outro personagem e ao matá-lo. */
+export const PZ_LOCK_ATTACK_MS = 2 * 60000;
+export const PZ_LOCK_KILL_MS = 5 * 60000;
+/** Duração das caveiras. */
+export const WHITE_SKULL_MS = 15 * 60000;
+export const YELLOW_SKULL_MS = 2 * 60000;
+export const RED_SKULL_MS = 24 * 3600000;
+/** Com menos que isto para acabar, qualquer combate (com personagem, NPC ou criatura) renova para este valor. */
+export const SKULL_RENEW_MS = 30000;
+/** 3 mortes injustas dentro desta janela dão caveira vermelha. */
+export const UNJUST_WINDOW_MS = 24 * 3600000;
+export const UNJUST_KILLS_FOR_RED = 3;
+const SKULL_RANK: Record<SkullKind, number> = { yellow: 1, white: 2, red: 3 };
 /** Distância máxima para receber a parte da XP do grupo. */
 export const PARTY_SHARE_RANGE = 20;
 
@@ -251,20 +273,110 @@ export function formationSpot(w: World, memberId: string): { x: number; y: numbe
   return { x: leader.x, y: leader.y, tolerance: 2 };
 }
 
-export function hasSkull(w: World, id: string): boolean {
-  return (w.social.skulls.get(id) ?? 0) > w.now;
+/** Caveira ativa do personagem (ou null). */
+export function skullOf(w: World, id: string): SkullState | null {
+  const s = w.social.skulls.get(id);
+  return s && s.until > w.now ? s : null;
 }
 
-/** Registra um ataque entre personagens e aplica a caveira (legítima defesa contra quem tem caveira não marca). */
+export function hasSkull(w: World, id: string): boolean {
+  return !!skullOf(w, id);
+}
+
+/** Coloca uma caveira: a de maior gravidade vence (vermelha > branca > amarela) e nunca encurta o tempo. */
+function setSkull(w: World, id: string, kind: SkullKind, ms: number): void {
+  const cur = skullOf(w, id);
+  const until = w.now + ms;
+  if (!cur || SKULL_RANK[kind] > SKULL_RANK[cur.kind]) w.social.skulls.set(id, { kind, until });
+  else if (cur.kind === kind) cur.until = Math.max(cur.until, until);
+}
+
+/** PZ lock: quanto falta (ms) e se ainda está ativo. */
+export function pzLockMs(w: World, id: string): number {
+  return Math.max(0, (w.social.pzLocks.get(id) ?? 0) - w.now);
+}
+export function isPzLocked(w: World, id: string): boolean {
+  return pzLockMs(w, id) > 0;
+}
+function lockPz(w: World, id: string, ms: number): void {
+  w.social.pzLocks.set(id, Math.max(w.social.pzLocks.get(id) ?? 0, w.now + ms));
+}
+
+/**
+ * Qualquer combate (atacar ou ser atacado, por personagem, NPC ou criatura) renova a caveira branca/amarela
+ * para 30 s se faltarem menos que isso: é preciso ficar 30 s inteiros sem lutar para ela acabar.
+ */
+export function touchCombat(w: World, id: string): void {
+  const s = skullOf(w, id);
+  if (s && s.kind !== 'red' && s.until - w.now < SKULL_RENEW_MS) s.until = w.now + SKULL_RENEW_MS;
+}
+
+/** Registra um ataque entre personagens e aplica as marcas (caveira, PZ lock) conforme a caveira da vítima. */
 export function registerAggression(w: World, attackerId: string, victimId: string): void {
   w.social.aggressions.set(`${attackerId}>${victimId}`, w.now);
-  if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira
-  const selfDefense = hasSkull(w, victimId) || w.now - (w.social.aggressions.get(`${victimId}>${attackerId}`) ?? -Infinity) < 60000;
-  if (!selfDefense) w.social.skulls.set(attackerId, Math.max(w.social.skulls.get(attackerId) ?? 0, w.now + SKULL_MS));
+  if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
+  lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
+  const victim = skullOf(w, victimId)?.kind ?? null;
+  if (victim === 'red') {
+    // atacar um caveira vermelha é justo: nada muda
+  } else if (victim === 'white') {
+    // atacar uma caveira branca: o atacante (que ainda não tem caveira) fica com caveira amarela
+    if (!skullOf(w, attackerId)) setSkull(w, attackerId, 'yellow', YELLOW_SKULL_MS);
+  } else {
+    // vítima sem caveira (ou só amarela): o atacante vira agressor, caveira branca
+    setSkull(w, attackerId, 'white', WHITE_SKULL_MS);
+  }
+  touchCombat(w, attackerId);
+  touchCombat(w, victimId);
 }
 
-export function registerPlayerKill(w: World, killerId: string): void {
-  w.social.skulls.set(killerId, Math.max(w.social.skulls.get(killerId) ?? 0, w.now + KILL_SKULL_MS));
+/**
+ * Matou outro personagem: PZ lock de 5 min. Se a vítima não tinha caveira a morte é injusta; a 3ª em 24 h dá
+ * caveira vermelha por 24 h. Matar uma caveira branca/amarela/vermelha é justo (só o PZ lock).
+ */
+export function registerPlayerKill(w: World, killerId: string, victimSkull: SkullKind | null): void {
+  lockPz(w, killerId, PZ_LOCK_KILL_MS);
+  if (victimSkull !== null) return;
+  setSkull(w, killerId, 'white', WHITE_SKULL_MS);
+  const list = (w.social.unjust.get(killerId) ?? []).filter((t) => w.now - t < UNJUST_WINDOW_MS);
+  list.push(w.now);
+  w.social.unjust.set(killerId, list);
+  if (list.length >= UNJUST_KILLS_FOR_RED) {
+    setSkull(w, killerId, 'red', RED_SKULL_MS);
+    if (killerId === w.human.id) message(w, 'Você matou injustamente 3 vezes: caveira VERMELHA por 24 horas!', 'warning');
+  }
+}
+
+/** Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). */
+export function onPlayerDeath(w: World, id: string): void {
+  w.social.pzLocks.delete(id);
+  if (skullOf(w, id)?.kind !== 'red') w.social.skulls.delete(id);
+}
+
+// ------------------------------------------------------------------ persistência (tempo real, vale entre sessões)
+/** Copia o estado de PK salvo no personagem (tempo real) para o mundo (tempo de simulação). */
+export function loadPk(w: World, a: PlayerEntity): void {
+  const pk = a.character.pk;
+  if (!pk) return;
+  const real = Date.now();
+  if (pk.skull && pk.skullUntil > real) w.social.skulls.set(a.id, { kind: pk.skull, until: w.now + (pk.skullUntil - real) });
+  if (pk.pzLockUntil > real) w.social.pzLocks.set(a.id, w.now + (pk.pzLockUntil - real));
+  w.social.unjust.set(
+    a.id,
+    pk.unjust.filter((t) => real - t < UNJUST_WINDOW_MS).map((t) => w.now - (real - t)),
+  );
+}
+
+/** Grava o estado de PK do mundo no personagem (para salvar). */
+export function savePk(w: World, a: PlayerEntity): void {
+  const real = Date.now();
+  const s = skullOf(w, a.id);
+  a.character.pk = {
+    skull: s?.kind ?? null,
+    skullUntil: s ? real + (s.until - w.now) : 0,
+    pzLockUntil: isPzLocked(w, a.id) ? real + pzLockMs(w, a.id) : 0,
+    unjust: (w.social.unjust.get(a.id) ?? []).filter((t) => w.now - t < UNJUST_WINDOW_MS).map((t) => real - (w.now - t)),
+  };
 }
 
 /** `a` atacou `b` nos últimos `ms`? */
@@ -276,7 +388,8 @@ export function attackedRecently(w: World, a: string, b: string, ms = 30000): bo
 export function updateSocial(w: World): void {
   recordLeaderTrail(w);
   if (w.social.invites.some((i) => i.expiresAt <= w.now)) w.social.invites = w.social.invites.filter((i) => i.expiresAt > w.now);
-  for (const [id, until] of w.social.skulls) if (until <= w.now) w.social.skulls.delete(id);
+  for (const [id, sk] of w.social.skulls) if (sk.until <= w.now) w.social.skulls.delete(id);
+  for (const [id, until] of w.social.pzLocks) if (until <= w.now) w.social.pzLocks.delete(id);
   // membros que deixaram de existir saem do grupo
   const p = w.social.party;
   if (p && p.members.some((id) => !allActors(w).some((a) => a.id === id))) {

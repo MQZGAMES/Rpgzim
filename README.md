@@ -25,7 +25,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Controles
 - **Toque:** joystick invisível na metade esquerda (aparece só ao pressionar e arrastar); toque no chão para
-  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **6 atalhos**
+  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **8 atalhos** (pirâmide colada ao botão de ataque)
   em grade ao redor do botão de ataque; botão de ação contextual. Na mochila, toque duplo equipa/usa.
   Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
 - **Entrada do mapa unificada** (`src/ui/controls/MapInput.tsx`): uma camada única trata toque e mouse (andar,
@@ -48,7 +48,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Atalhos personalizáveis** (*Menu → Configurar atalhos*, botão *Atalhos* no Grimório, ou tocar num atalho
   vazio): cada posição numerada (a mesma da tela) recebe uma magia, uma **poção automática** (vida/mana, usa a
   menor que cobre o que falta) ou um item usável da mochila. Saves antigos são convertidos sozinhos.
-- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–6 atalhos,
+- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–8 atalhos,
   Q vida, R mana, E interagir, I mochila, C personagem, K grimório, M mini mapa, O online, P grupo, Esc menu.
 - **HUD enxuto:** vida/mana compactas à esquerda; à direita, grade de 4 colunas (mochila, personagem, grimório,
   menu / mini mapa, online, modo de ataque, PK / grupo). O alvo aparece só no mapa (anel e barra vermelha), sem caixa extra.
@@ -74,7 +74,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   própria e barra de ações sempre visível, em retrato, paisagem e desktop).
 - **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres para lutar (e ninguém atravessa ninguém: se travar, trocam de lugar).
 - Inventário, 9 slots de equipamento, ataque/defesa visíveis em cada item (verde ▲ quando é melhor que o
-  equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta), munição.
+  equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta) e flechas na mochila.
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
@@ -106,9 +106,28 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   a rota enquanto anda (sem parar e recomeçar), acelera até 35% quando fica para trás, para a até 2 tiles do líder, e
   quem trava no outro troca de lugar após 5 s. Com o Boladex de líder, você (sem alvo e sem caminho
   escolhido) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
-- **PK** (caveira): ligado, personagens podem se atacar fora das áreas protegidas (membros do grupo só no treino).
-  Quem ataca alguém sem caveira fica com caveira (5 min; 15 min se matar). Quem morre no PK deixa parte do ouro
-  e às vezes um item da mochila no chão.
+- **PK estilo Tibia** (botão de caveira liga o ataque entre personagens, fora de áreas protegidas; membros do grupo só no treino):
+  - atacar quem **não tem caveira** = **caveira branca** (15 min) e **PZ lock** de 2 min (não entra em lojas, templo, casas);
+  - atacar uma **caveira branca** (sem ter caveira) = **caveira amarela** (2 min); atacar caveira vermelha é justo;
+  - **matar** = PZ lock de 5 min; matar quem não tinha caveira é **morte injusta**: a 3ª em 24 h dá **caveira vermelha**
+    por **24 h** (matar branca/amarela/vermelha não conta);
+  - com menos de 30 s de caveira branca/amarela, **qualquer combate** (com personagem, NPC ou criatura) renova para 30 s:
+    é preciso ficar 30 s sem atacar nem ser atacado; a vermelha não renova;
+  - a caveira aparece ao lado do nome no mapa (junto do **escudo do grupo**) e no HUD com o tempo e o PZ lock;
+    a vermelha, o PZ lock e as mortes injustas valem entre sessões (tempo real).
+- **Morte**: **toda a mochila e o dinheiro da bolsa** caem num saco no chão (qualquer um pode pegar; só some quando alguém
+  pegar) e cada equipado tem **10%** de chance de cair (caveira vermelha perde **todos**). O **Amuleto da Perda**
+  (10.000, em todas as lojas) protege tudo e se desfaz. Morrendo, o PZ lock some; caveira branca/amarela também (renasce
+  sem caveira); a vermelha continua contando as 24 h. O Boladex volta ao local da morte para recuperar seu saco.
+- **Grupo visível** (estilo Tibia): escudo ao lado do nome — **amarelo com estrela = líder**, **azul = membro**.
+- **Flechas**: não há mais slot de munição; ficam na mochila e são gastas sozinhas, **das mais fortes para as mais fracas**
+  (*Flecha de Metal* +2 de ataque, *Flecha de Pedra* +1; vendidas no mercador). Com arco equipado, um contador mostra as
+  flechas por tipo perto do botão de ataque (laranja <20, vermelho piscando sem flechas).
+- **Magias novas**: *Corrida* (todas: velocidade por 8 s e desfaz lentidão), *Escudo de Mana* (Sorcerer/Druid: por 5 min o
+  dano sai da mana; ícone no HUD e bolha azul no personagem), *Grito de Guerra* (Knight: atrai criaturas em 3 tiles) e
+  *Flecha Atordoante* (Paladin: dano + lentidão). Lentidão de gelo (Rajada Glacial, Flecha Atordoante) vale também para
+  jogadores e heróis. *Redemoinho de Aço* e *Flecha Sagrada* com 2 s de exaustão.
+- **Segurando uma magia com alvo**: se o alvo morreu, sumiu ou saiu da tela, o próximo é o inimigo mais próximo.
 - **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
   oportunidade, pesa ouro carregado, força relativa, vida do alvo, caveira, relação e temperamento. Sem nada a
   ganhar e sem motivo, não ataca (e às vezes comenta isso).
@@ -123,7 +142,7 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   enquanto luta** (sobreviver e atacar vêm primeiro; sem ninguém encostado ele busca o saco mais distante).
 - **Criaturas** trocam de alvo pelo personagem mais próximo (a isca prende o foco por 4 s); quando o alvo volta ao
   respawn, o ataque do jogador é **cancelado** (o próximo ataque seleciona o mais próximo).
-- **Mochila**: layout compacto sem rolagem (equipamento em 5 colunas, mochila em 7, detalhes e ações sempre à vista;
+- **Mochila**: layout compacto sem rolagem (equipamento em 4 colunas, mochila em 7, detalhes e ações sempre à vista;
   em celular deitado vira 3 colunas e no desktop, 2), botão **Organizar** (remove os espaços vazios) e diferença de
   atributos em relação ao equipado em cada item (ex.: *+2 atq*, *+6 def*), também na loja.
 - **Nomes no mapa** (desktop): jogadores e heróis com fonte maior e posição na grade de pixels da tela (sem tremer ao andar).
@@ -160,8 +179,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **184 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
-- Playwright: **10 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **210 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Playwright: **12 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
   na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.

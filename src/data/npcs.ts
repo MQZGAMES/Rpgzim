@@ -250,13 +250,13 @@ const list2: ShopDef[] = [
   {
     id: 'equipment',
     name: 'Ferraria de Pedraluz',
-    sells: equipmentSells.map(([itemId, price]) => ({ itemId, price })),
+    sells: [...equipmentSells.map(([itemId, price]) => ({ itemId, price })), { itemId: 'amulet_loss', price: 10000 }],
     buys: [...equipmentSells.map(([itemId, price]) => ({ itemId, price: sellPct(price) })), { itemId: 'dagger', price: 10 }],
   },
   {
     id: 'potions',
     name: 'Alquimia da Selene',
-    sells: potionSells.map(([itemId, price]) => ({ itemId, price })),
+    sells: [...potionSells.map(([itemId, price]) => ({ itemId, price })), { itemId: 'amulet_loss', price: 10000 }],
     buys: [
       ...potionSells.filter(([id]) => !id.startsWith('potion')).map(([itemId, price]) => ({ itemId, price: sellPct(price) })),
       { itemId: 'slime_gel', price: 5 },
@@ -273,6 +273,8 @@ const list2: ShopDef[] = [
     name: 'Banca do Ilário',
     sells: [
       { itemId: 'arrow', price: 2 },
+      { itemId: 'arrow_metal', price: 6 },
+      { itemId: 'amulet_loss', price: 10000 },
       { itemId: 'meat', price: 8 },
       { itemId: 'potion_health', price: 45 },
     ],
@@ -285,6 +287,7 @@ const list2: ShopDef[] = [
       { itemId: 'meat', price: 3 },
       { itemId: 'dagger', price: 9 },
       { itemId: 'arrow', price: 1 },
+      { itemId: 'arrow_metal', price: 3 },
       { itemId: 'wolf_pelt', price: 22 },
       { itemId: 'bone_fragment', price: 10 },
       { itemId: 'bandit_mask', price: 40 },

@@ -1,5 +1,7 @@
 // Sistema de combate: ataque automático do jogador, aplicação de dano, mortes, loot e penalidade.
 // O resultado (acerto, dano, bloqueio) é decidido aqui; a renderização apenas reage aos eventos.
+import { countAmmo, takeAmmo } from '../../domain/rules/ammo';
+import { EQUIP_SLOTS } from '../../domain/entities/definitions';
 import type { Element } from '../../domain/value-objects/element';
 import { chebyshev } from '../../domain/value-objects/position';
 import { applyDeathPenalty } from '../../domain/rules/experience';
@@ -15,7 +17,7 @@ import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { asActor, message, nextId, warnThrottled } from '../simulation/World';
-import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, registerAggression, registerPlayerKill, xpReceivers } from '../social/social';
+import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, onPlayerDeath, registerAggression, registerPlayerKill, skullOf, touchCombat, xpReceivers } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function hasLineOfSight(w: World, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
@@ -140,16 +142,17 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
   const from = { x: p.x, y: p.y };
   const to = { x: target.x, y: target.y };
   // munição e mana são verificadas antes do ataque
+  // a flecha é gasta direto da mochila (as mais fortes primeiro) e soma o ataque dela ao disparo
+  let ammoAttack = 0;
   if (weapon.ammo) {
-    const ammo = c.equipment.ammo;
-    const ammoDef = ammo && w.data.items[ammo.itemId];
-    if (!ammo || !ammoDef || ammoDef.ammoType !== weapon.ammo || ammo.count <= 0) {
-      warnThrottled(w, 'ammo', 'Sem munição! Equipe flechas no slot de munição.', 2500);
+    const taken = takeAmmo(w.data, c.inventory, weapon.ammo, 1);
+    if (!taken.used) {
+      warnThrottled(w, 'ammo', 'Sem flechas na mochila! Compre mais no mercador.', 2500);
       return;
     }
-    ammo.count -= 1;
-    if (ammo.count <= 0) delete c.equipment.ammo;
+    ammoAttack = taken.attack;
     w.events.emit('itemsChanged', {});
+    if (!countAmmo(w.data, c.inventory, weapon.ammo)) warnThrottled(w, 'ammo-last', 'Suas flechas acabaram!', 4000);
   }
   if (weapon.kind === 'wand') {
     const cost = weapon.manaCost ?? 0;
@@ -184,7 +187,7 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
       else registerAggression(w, p.id, target.id);
       return;
     }
-    raw = rollWeaponDamage({ level: c.level, skill, weaponAttack: weapon.attack, vocationModifier: mod }, w.rng);
+    raw = rollWeaponDamage({ level: c.level, skill, weaponAttack: weapon.attack + ammoAttack, vocationModifier: mod }, w.rng);
   }
   applyHit(w, target, raw, weapon.element, false);
 }
@@ -218,6 +221,7 @@ export const TAUNT_MS = 4000;
 
 export function damageMonster(w: World, m: MonsterEntity, amount: number, element: Element, sourceId: string | null): void {
   if (!m.alive) return;
+  if (sourceId && actorById(w, sourceId)) touchCombat(w, sourceId); // lutar renova a caveira que está acabando
   const dmg = Math.max(0, Math.round(amount));
   m.hp -= dmg;
   w.events.emit('damage', { targetId: m.id, sourceId, amount: dmg, element, blocked: dmg === 0, position: { x: m.x, y: m.y } });
@@ -267,6 +271,7 @@ function killMonster(w: World, m: MonsterEntity): void {
 export function damagePlayer(w: World, raw: number, element: Element, source: DamageSource, fixed = false): void {
   const p = w.player;
   if (p.dead || w.now < p.invulnerableUntil) return;
+  touchCombat(w, p.id); // ser atacado (por personagem, NPC ou criatura) renova a caveira que está acabando
   const pos = { x: p.x, y: p.y };
   const hasShield = p.stats.shieldDefense > 0;
   const cfg = w.data.balance.combat;
@@ -280,7 +285,14 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Da
     }
   }
   const res = fixed ? { damage: Math.round(raw), absorbed: raw <= 0 } : mitigate(raw, element, { armor: p.stats.armor, damageReduction: p.stats.damageReduction, physicalReduction: p.stats.physicalReduction }, w.rng);
-  p.character.health = Math.max(0, p.character.health - res.damage);
+  // Escudo de Mana: o dano sai da mana primeiro; o que passar (mana zerada) atinge a vida
+  let toHealth = res.damage;
+  if (toHealth > 0 && p.buffs.some((b) => b.kind === 'manaShield' && b.expiresAt > w.now) && p.character.mana > 0) {
+    const absorbed = Math.min(toHealth, p.character.mana);
+    p.character.mana -= absorbed;
+    toHealth -= absorbed;
+  }
+  p.character.health = Math.max(0, p.character.health - toHealth);
   w.events.emit('damage', { targetId: p.id, sourceId: source.id, amount: res.damage, element, blocked: res.absorbed, position: pos });
   if (p.character.health <= 0) killPlayer(w, source);
 }
@@ -288,6 +300,7 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Da
 function killPlayer(w: World, killer: DamageSource): void {
   const p = w.player;
   const c = p.character;
+  const skullBefore = skullOf(w, p.id)?.kind ?? null;
   p.dead = true;
   p.path = null;
   p.pathGoal = null;
@@ -319,27 +332,53 @@ function killPlayer(w: World, killer: DamageSource): void {
   w.events.emit('entityDied', { entityId: p.id, kind: 'player', position: { x: p.x, y: p.y }, spriteKey: c.vocation });
   w.events.emit('playerDied', { xpLost: before - c.experience, killerId: killer.id, killerName: killer.name, byPlayer: killer.kind === 'player' });
   message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
-  if (killer.kind === 'player' && !isSparring(w, killer.id, p.id)) dropPkLoot(w, p, killer);
+  const sparring = killer.kind === 'player' && isSparring(w, killer.id, p.id);
+  if (killer.kind === 'player' && !sparring) registerPlayerKill(w, killer.id, skullBefore);
+  onPlayerDeath(w, p.id);
+  if (!sparring) dropDeathLoot(w, p, skullBefore === 'red');
 }
 
-/** Morte no PK: parte do ouro da bolsa e às vezes um item da mochila ficam no chão (nunca o equipado). */
-function dropPkLoot(w: World, victim: PlayerEntity, killer: DamageSource): void {
+/**
+ * Perdas da morte: TODA a mochila e o dinheiro da bolsa caem num saco no chão (qualquer um pode pegar e ele só
+ * some quando alguém pegar); cada item equipado tem 10% de chance de cair (caveira vermelha perde todos).
+ * O Amuleto da Perda protege tudo — e se desfaz.
+ */
+function dropDeathLoot(w: World, victim: PlayerEntity, redSkull: boolean): void {
   const c = victim.character;
-  registerPlayerKill(w, killer.id);
-  const gold = Math.floor(c.gold * 0.3);
-  c.gold -= gold;
-  const items: { itemId: string; count: number }[] = [];
-  const stacks = c.inventory.map((st, i) => ({ st, i })).filter((x) => x.st && w.data.items[x.st.itemId]?.type !== 'potion');
-  if (stacks.length && w.rng.chance(0.5)) {
-    const pick = stacks[w.rng.int(0, stacks.length - 1)]!;
-    items.push({ ...pick.st! });
-    c.inventory[pick.i] = null;
+  const amulet = c.equipment.amulet;
+  if (amulet && w.data.items[amulet.itemId]?.protectsOnDeath) {
+    delete c.equipment.amulet;
+    refreshStats(w);
+    message(w, 'Seu Amuleto da Perda se desfez e protegeu seus itens e seu dinheiro!', 'system');
+    w.events.emit('itemsChanged', {});
+    return;
   }
-  if (!gold && !items.length) return;
+  const items: { itemId: string; count: number }[] = [];
+  for (let i = 0; i < c.inventory.length; i++) {
+    const st = c.inventory[i];
+    if (st) items.push({ ...st });
+    c.inventory[i] = null;
+  }
+  const gold = c.gold;
+  c.gold = 0;
+  const lostEquip: string[] = [];
+  for (const slot of EQUIP_SLOTS) {
+    const st = c.equipment[slot];
+    if (!st) continue;
+    if (redSkull || w.rng.chance(0.1)) {
+      items.push({ ...st });
+      lostEquip.push(w.data.items[st.itemId]?.name ?? st.itemId);
+      delete c.equipment[slot];
+    }
+  }
+  refreshStats(w);
+  if (!items.length && !gold) return;
   const id = nextId(w, 'loot');
-  w.lootBags.set(id, { id, x: victim.x, y: victim.y, items, gold, expiresAt: w.now + w.data.balance.world.lootDecayMs, sourceName: c.name });
+  w.lootBags.set(id, { id, ownerId: victim.id, x: victim.x, y: victim.y, items, gold, expiresAt: Infinity, sourceName: `${c.name} (morto)` });
   w.events.emit('lootDropped', { containerId: id, position: { x: victim.x, y: victim.y } });
   w.events.emit('itemsChanged', {});
+  message(w, `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu (qualquer um pode pegar).`, 'warning');
+  if (lostEquip.length) message(w, `Também caiu equipamento: ${lostEquip.join(', ')}.`, 'warning');
 }
 
 export function respawnPlayer(w: World): void {

@@ -1,6 +1,7 @@
 // Criação dos heróis e do "contexto" deles: cada herói tem o próprio estado de janelas e um barramento
 // de eventos. Do barramento dele, só o que o mundo deve ver/ouvir segue para o barramento principal
 // (golpes, dano, magias, mortes, loot, falas); mensagens e avisos da interface ficam com o herói.
+import { loadPk, savePk } from '../social/social';
 import type { CharacterState } from '../../domain/entities/character';
 import type { HeroDef } from '../../domain/entities/definitions';
 import { EventBus } from '../../domain/events/EventBus';
@@ -58,6 +59,8 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
     stuckSince: 0,
     stuckWith: null,
     stuckAt: 0,
+    slowUntil: 0,
+    slowFactor: 1,
     character,
     stats: computeStats(w.data, character),
     buffs: [],
@@ -94,12 +97,14 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
   }
   placeOccupant(w, h);
   w.heroes.set(h.id, h);
+  loadPk(w, h);
   return h;
 }
 
 /** Estado salvável do herói (posição e orientação atualizadas). */
-export function heroSnapshot(h: HeroEntity): CharacterState {
+export function heroSnapshot(w: World, h: HeroEntity): CharacterState {
   const c = h.character;
+  savePk(w, h);
   c.position = { x: h.x, y: h.y };
   c.facing = h.facing;
   c.updatedAt = Date.now();

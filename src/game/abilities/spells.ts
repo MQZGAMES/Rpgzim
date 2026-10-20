@@ -1,5 +1,6 @@
 // Conjuração de magias: valida requisitos, consome mana/munição, inicia cooldowns, treina Magic Level
 // e aplica o efeito pelas regras centrais. Os efeitos visuais são apenas consequência do evento spellCast.
+import { countAmmo, takeAmmo } from '../../domain/rules/ammo';
 import type { SpellDef } from '../../domain/entities/definitions';
 import { chebyshev, type TilePos } from '../../domain/value-objects/position';
 import { GLOBAL_SPELL, remaining, startCooldown } from '../../domain/rules/cooldowns';
@@ -8,8 +9,9 @@ import { castFailMessage, validateCast } from '../../domain/rules/spells';
 import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { asActor, warnThrottled } from '../simulation/World';
-import { actorSource, aggro, currentActorTarget, currentTarget, damageMonster, damagePlayer, hasLineOfSight, targetNearest } from '../combat/combat';
+import type { PlayerEntity } from '../entities/types';
+import { allActors, asActor, warnThrottled } from '../simulation/World';
+import { actorSource, aggro, currentActorTarget, currentTarget, damageMonster, damagePlayer, hasLineOfSight, setTarget, targetNearest } from '../combat/combat';
 import { actorById, canAttackActor, partyOf, registerAggression } from '../social/social';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
 
@@ -22,7 +24,6 @@ export function castCheck(w: World, spell: SpellDef) {
   const p = w.player;
   const c = p.character;
   const t = currentTarget(w) ?? currentActorTarget(w);
-  const ammo = c.equipment.ammo;
   return validateCast(spell, {
     vocation: c.vocation,
     level: c.level,
@@ -33,7 +34,7 @@ export function castCheck(w: World, spell: SpellDef) {
     globalCooldownRemaining: remaining(p.cooldowns, GLOBAL_SPELL, w.now),
     inProtectionZone: isPz(w.map, p.x, p.y),
     target: t ? { exists: true, alive: t.kind === 'monster' ? t.alive : !t.dead, hostile: t.kind === 'monster' || !canAttackActor(w, p, t), distance: chebyshev(p, t), lineOfSight: hasLineOfSight(w, p, t) } : null,
-    ammoCount: ammo && w.data.items[ammo.itemId]?.ammoType === 'arrow' ? ammo.count : 0,
+    ammoCount: countAmmo(w.data, c.inventory, 'arrow'),
     weaponKind: p.stats.weapon.kind,
   });
 }
@@ -52,6 +53,9 @@ function areaTiles(w: World, center: TilePos, radius: number): TilePos[] {
   return out;
 }
 
+/** Alcance (tiles) do que o jogador enxerga na tela: além disso o alvo conta como "fora da tela". */
+export const SCREEN_RANGE = 9;
+
 export function castSpell(w: World, spellId: string): boolean {
   const spell = w.data.spells[spellId];
   if (!spell) return false;
@@ -59,8 +63,14 @@ export function castSpell(w: World, spellId: string): boolean {
   const c = p.character;
   // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo
   // (golpes corpo a corpo também: mira o mais próximo por perto e o golpe sai ao chegar nele)
-  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !currentTarget(w) && !currentActorTarget(w) && !p.dead) {
-    targetNearest(w, Math.max(spell.range, 7));
+  // Alvo morto, sumido ou fora da tela (ex.: segurando o botão da magia): passa para o inimigo mais próximo.
+  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !p.dead) {
+    const cur = currentTarget(w) ?? currentActorTarget(w);
+    const offScreen = !!cur && chebyshev(p, cur) > SCREEN_RANGE;
+    if (!cur || offScreen) {
+      if (offScreen) setTarget(w, null);
+      targetNearest(w, Math.max(spell.range, SCREEN_RANGE));
+    }
   }
   const check = castCheck(w, spell);
   if (!check.ok && check.reason === 'outOfRange') {
@@ -80,10 +90,14 @@ export function castSpell(w: World, spellId: string): boolean {
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
   startCooldown(p.cooldowns, GLOBAL_SPELL, w.now, w.data.balance.combat.globalSpellCooldownMs);
   trainPlayerSkill(w, 'magic', spell.manaCost);
-  if (spell.ammoCost && c.equipment.ammo) {
-    c.equipment.ammo.count -= spell.ammoCost;
-    if (c.equipment.ammo.count <= 0) delete c.equipment.ammo;
+  let ammoAtk = 0;
+  if (spell.ammoCost) {
+    ammoAtk = takeAmmo(w.data, c.inventory, 'arrow', spell.ammoCost).attack;
     w.events.emit('itemsChanged', {});
+  }
+  if (spell.cancelSlow) {
+    p.slowUntil = 0;
+    p.slowFactor = 1;
   }
 
   const target = currentTarget(w);
@@ -114,7 +128,7 @@ export function castSpell(w: World, spellId: string): boolean {
   if (spell.effect === 'damage' && spell.formula) {
     const power = spell.formula.kind === 'magic' ? p.stats.magicLevel : spell.formula.kind === 'distance' ? p.stats.skills.distance : p.stats.skills[p.stats.weapon.skill === 'magic' ? 'club' : p.stats.weapon.skill];
     const mod = spell.formula.kind === 'magic' ? voc.damage.magic : spell.formula.kind === 'distance' ? voc.damage.distance : voc.damage.melee;
-    const range = spellRange(spell.formula, { level: c.level, power, weaponAttack: p.stats.weapon.attack }, mod);
+    const range = spellRange(spell.formula, { level: c.level, power, weaponAttack: p.stats.weapon.attack + ammoAtk }, mod);
     for (const m of victims) {
       const raw = rollRange(range, w.rng);
       const res = mitigate(raw, spell.element, { armor: m.def.armor, resistances: m.def.resistances }, w.rng);
@@ -126,12 +140,20 @@ export function castSpell(w: World, spellId: string): boolean {
       // golpe em área com isca: o monstro atingido vira as costas para quem atacava e persegue o conjurador
       aggro(w, m, spell.attract ? p.id : undefined);
     }
-    // PK: o personagem mirado também é atingido (se estiver na área do efeito)
-    if (actorTarget && tiles.some((t) => t.x === actorTarget.x && t.y === actorTarget.y) && !canAttackActor(w, p, actorTarget)) {
-      registerAggression(w, p.id, actorTarget.id);
+    // PK: o personagem mirado e, em magias de área, todos os atacáveis dentro dela também são atingidos
+    // (a lentidão da magia vale para jogadores e personagens humanos, como para as criaturas)
+    const inArea = (a: PlayerEntity) => tiles.some((t) => t.x === a.x && t.y === a.y);
+    const hitActors = spell.target === 'target' ? (actorTarget && inArea(actorTarget) ? [actorTarget] : []) : allActors(w).filter((a) => a.id !== p.id && !a.dead && inArea(a));
+    for (const a of hitActors) {
+      if (canAttackActor(w, p, a)) continue;
+      registerAggression(w, p.id, a.id);
       const raw = rollRange(range, w.rng);
       const src = actorSource(p);
-      asActor(w, actorTarget, () => damagePlayer(w, raw, spell.element, src));
+      asActor(w, a, () => damagePlayer(w, raw, spell.element, src));
+      if (spell.slow) {
+        a.slowUntil = w.now + spell.slow.durationMs;
+        a.slowFactor = spell.slow.factor;
+      }
     }
   } else if (spell.effect === 'heal' && spell.formula) {
     const range = spellRange(spell.formula, { level: c.level, power: p.stats.magicLevel, weaponAttack: 0 }, voc.damage.healing);

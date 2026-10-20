@@ -21,9 +21,9 @@ import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/int
 import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
-import { acceptInvite, actorById, attackedRecently, declineInvite, formationSpot, hasSkull, invite, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
+import { acceptInvite, actorById, attackedRecently, declineInvite, formationSpot, hasSkull, invite, isPzLocked, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
-export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk';
+export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
 
 type TownStep = { kind: 'shop'; npcId: string; buyPotions?: boolean; upgrades?: boolean; trainingWeapon?: boolean } | { kind: 'bank'; op: 'withdraw' | 'deposit' } | { kind: 'heal' };
 
@@ -51,6 +51,8 @@ export interface HeroBrainState {
   after: HeroMode;
   failures: number;
   nextUpgradeTripAt: number;
+  /** Tentativas de recuperar o saco de morte (perde tudo ao morrer: ele volta para buscar). */
+  recoverTries: number;
   /** Início da visita à vila (limite total de tempo) e quando pode voltar por motivo não urgente. */
   townStartedAt: number;
   nextTownAt: number;
@@ -101,6 +103,7 @@ export function newHeroBrain(): HeroBrainState {
     after: 'decide',
     failures: 0,
     nextUpgradeTripAt: 0,
+    recoverTries: 0,
     townStartedAt: 0,
     nextTownAt: 0,
     walkReq: null,
@@ -137,6 +140,8 @@ export function heroActivity(w: World, h: HeroEntity): string {
       return 'passeando pela vila';
     case 'retreat':
       return 'recuando para se curar';
+    case 'recover':
+      return 'buscando seus itens perdidos';
     case 'follow':
       return 'acompanhando o grupo';
     case 'pk':
@@ -232,7 +237,7 @@ function equipBagUpgrades(w: World, h: HeroEntity): void {
   for (let i = 0; i < c.inventory.length; i++) {
     const st = c.inventory[i];
     const def = st ? w.data.items[st.itemId] : undefined;
-    if (!def?.slot || def.slot === 'ammo' || def.twoHanded || def.weapon?.training || !isUpgrade(w.data, c, def)) continue;
+    if (!def?.slot || def.twoHanded || def.weapon?.training || !isUpgrade(w.data, c, def)) continue;
     const cur = c.equipment[def.slot];
     if (valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0) < 5) continue;
     if (equipItem(w, i)) heroSay(w, h, 'upgrade', { item: def.name }, 0);
@@ -329,6 +334,9 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     case 'retreat':
       retreat(w, h);
       break;
+    case 'recover':
+      recover(w, h);
+      break;
     case 'dead':
       setMode(w, h, 'decide');
       break;
@@ -346,7 +354,7 @@ function survive(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const pct = hpPct(h);
   // quem está batendo nele: corpo a corpo encostado e atiradores dentro do alcance deles
-  const attackers = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.max(2, m.def.attack.range));
+  const attackers = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.min(3, Math.max(2, m.def.attack.range)));
   // poção de vida: com alguém batendo, abaixo do limiar da prudência; em emergência (<25%) bebe sempre
   if ((pct < 0.45 + t.caution * 0.15 && attackers.length) || pct < 0.25) {
     const idx = pickPotion(w, h);
@@ -398,6 +406,7 @@ function tryCast(w: World, h: HeroEntity, spellId: string): boolean {
 /** Vale a viagem à vila? Só com motivo de verdade (mochila cheia, loot que compensa, poções acabando
  * com ouro para repor de uma vez, upgrade ao alcance) — viagens curtas e frequentes matam a caça. */
 function needsTown(w: World, h: HeroEntity): boolean {
+  if (isPzLocked(w, h.id)) return false; // com PZ lock não entra em lojas/templo
   const t = h.hero.temperament;
   const c = h.character;
   if (freeSlots(c.inventory) < 2) return true;
@@ -425,8 +434,17 @@ function keepGold(w: World, h: HeroEntity): number {
 function decide(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const c = h.character;
+  const b = h.brain;
   equipBagUpgrades(w, h);
-  if (hpPct(h) < 0.5 && potionsOf(w, h) === 0) {
+  // morreu e perdeu tudo: volta ao local da morte para pegar o saco (o que caiu fica no chão para qualquer um)
+  const grave = [...w.lootBags.values()].find((l) => l.ownerId === h.id);
+  if (grave && b.recoverTries < 2 && !isPzLocked(w, h.id)) {
+    b.recoverTries++;
+    heroSay(w, h, 'recover', {}, 0);
+    return setMode(w, h, 'recover', 4 * 60000);
+  }
+  if (!grave) b.recoverTries = 0;
+  if (hpPct(h) < 0.5 && potionsOf(w, h) === 0 && !isPzLocked(w, h.id)) {
     // sem poções: descansa na área protegida até recuperar (regeneração dobrada) ou pede a bênção
     if (!isPz(w.map, h.x, h.y)) return setMode(w, h, 'retreat');
     // no templo: bênção do sacerdote (grátis) e, se der, repõe poções — nada de ficar parado esperando a vida voltar
@@ -1010,7 +1028,24 @@ function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit'): void {
 }
 
 // ------------------------------------------------------------------ recuo, praça
+/** Vai até o saco de morte, pega tudo (e reequipa o que for melhor) e volta à vida normal. */
+function recover(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const grave = [...w.lootBags.values()].find((l) => l.ownerId === h.id);
+  if (!grave || (b.modeUntil && w.now > b.modeUntil)) return setMode(w, h, 'decide');
+  if (chebyshev(grave, h) <= LOOT_RANGE) {
+    collectLootWhileFighting(w, h);
+    // mochila cheia ou sobra: o que não coube continua no saco; sem espaço, desiste
+    if ([...w.lootBags.values()].some((l) => l.ownerId === h.id) && freeSlots(h.character.inventory) <= 0) return setMode(w, h, 'decide');
+    return;
+  }
+  // se alguém encosta, luta (hunt cuida do alvo); senão, vai direto ao saco
+  if (engagedByMonsters(w, h)) return hunt(w, h, true, true);
+  if (!isMoving(h, w.now) && !h.path?.length) goTo(w, h, grave.x, grave.y, 120000);
+}
+
 function retreat(w: World, h: HeroEntity): void {
+  if (isPzLocked(w, h.id)) return setMode(w, h, 'decide'); // com PZ lock não há templo para onde recuar
   setTarget(w, null);
   if (isPz(w.map, h.x, h.y)) return setMode(w, h, 'decide');
   // recua para dentro do templo (área protegida)

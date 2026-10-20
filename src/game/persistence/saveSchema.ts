@@ -4,6 +4,7 @@ import type { CharacterState, ItemStack } from '../../domain/entities/character'
 import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/definitions';
 import type { GameData } from '../../domain/entities/gameData';
 import { normalizeHotbar } from '../../domain/rules/hotbar';
+import { addItem } from '../../domain/rules/inventory';
 import { isVocationId } from '../../domain/value-objects/ids';
 import { MAX_LEVEL, levelForXp } from '../../domain/rules/experience';
 import { sanitizeName } from '../../domain/rules/character';
@@ -95,6 +96,9 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     const st = validStack(data, eqRaw[slot]);
     if (st && data.items[st.itemId]!.slot === slot) equipment[slot] = st;
   }
+  // migração: o slot de munição foi removido; as flechas equipadas voltam para a mochila
+  const legacyAmmo = validStack(data, eqRaw.ammo);
+  if (legacyAmmo) addItem(data, inventory, legacyAmmo.itemId, legacyAmmo.count);
   const pos = isObj(c.position) ? c.position : {};
   const statsRaw = isObj(c.stats) ? c.stats : {};
   const flagsRaw = isObj(c.flags) ? c.flags : {};
@@ -118,6 +122,7 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     facing: c.facing === 'up' || c.facing === 'left' || c.facing === 'right' ? c.facing : 'down',
     hotbar: normalizeHotbar(data, c.vocation, Array.isArray(c.hotbar) ? c.hotbar : []),
     flags,
+    pk: parsePk(c.pk),
     stats: {
       monstersKilled: Math.floor(num(statsRaw.monstersKilled, 0, 0, 1e9)),
       deaths: Math.floor(num(statsRaw.deaths, 0, 0, 1e9)),
@@ -127,6 +132,13 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     updatedAt: num(c.updatedAt, Date.now()),
   };
   return { version: SAVE_VERSION, savedAt: num(file.savedAt, Date.now()), character };
+}
+
+function parsePk(raw: unknown): CharacterState['pk'] {
+  if (!isObj(raw)) return undefined;
+  const skull = raw.skull === 'white' || raw.skull === 'yellow' || raw.skull === 'red' ? raw.skull : null;
+  const times = Array.isArray(raw.unjust) ? raw.unjust.filter((t): t is number => typeof t === 'number' && Number.isFinite(t)).slice(-10) : [];
+  return { skull, skullUntil: num(raw.skullUntil, 0, 0, 1e15), pzLockUntil: num(raw.pzLockUntil, 0, 0, 1e15), unjust: times };
 }
 
 export function toSaveFile(character: CharacterState): SaveFile {

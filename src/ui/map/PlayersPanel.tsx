@@ -28,7 +28,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
               <div className="min-w-0 flex-1 text-[12px]">
                 <div className="flex items-center gap-1">
                   {h.isLeader && <ItemIcon icon="ui_crown" size={11} title="Líder do grupo" />}
-                  {h.skull && <ItemIcon icon="ui_skull" size={11} title="Tem caveira" />}
+                  {h.skull && <ItemIcon icon={`ui_skull_${h.skull}`} size={12} title="Tem caveira" />}
                   <b className={h.inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{h.name}</b>
                   <span className="truncate text-muted">
                     · {h.vocationName} nv {h.level}

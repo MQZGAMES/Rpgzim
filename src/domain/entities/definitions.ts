@@ -17,7 +17,7 @@ export const SKILL_LABEL: Record<SkillId, string> = {
 };
 
 // ------------------------------------------------------------------ itens
-export const EQUIP_SLOTS = ['head', 'amulet', 'body', 'mainHand', 'offHand', 'legs', 'ring', 'feet', 'ammo'] as const;
+export const EQUIP_SLOTS = ['head', 'amulet', 'body', 'mainHand', 'offHand', 'legs', 'ring', 'feet'] as const;
 export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 
 export const SLOT_LABEL: Record<EquipSlot, string> = {
@@ -29,7 +29,6 @@ export const SLOT_LABEL: Record<EquipSlot, string> = {
   legs: 'Calças',
   ring: 'Anel',
   feet: 'Botas',
-  ammo: 'Munição',
 };
 
 export type ItemType =
@@ -107,12 +106,16 @@ export interface ItemDef {
   minLevel?: number;
   use?: ItemUse;
   ammoType?: 'arrow';
+  /** Munição: bônus de ataque que cada flecha soma ao disparo. */
+  ammoAttack?: number;
+  /** Amuleto que protege os itens, o dinheiro e a mochila na morte (e some quando o personagem morre). */
+  protectsOnDeath?: boolean;
 }
 
 // ------------------------------------------------------------------ magias
 export type SpellTargetType = 'target' | 'self' | 'areaSelf' | 'areaTarget';
 export type SpellEffectType = 'damage' | 'heal' | 'buff';
-export type BuffKind = 'defense' | 'attackSpeed' | 'haste' | 'regen' | 'distanceDamage';
+export type BuffKind = 'defense' | 'attackSpeed' | 'haste' | 'regen' | 'distanceDamage' | 'manaShield';
 
 export interface SpellFormula {
   /** Fonte de poder: magia (nível + magic level), corpo a corpo ou distância (nível + skill + arma). */
@@ -153,6 +156,8 @@ export interface SpellDef {
   partyRadius?: number;
   /** O golpe em área também vira a atenção dos monstros atingidos para quem conjurou (isca). */
   attract?: boolean;
+  /** Ao conjurar, remove a lentidão de quem conjurou (Corrida). */
+  cancelSlow?: boolean;
   /** Munição consumida (flechas). */
   ammoCost?: number;
   /** Exige uma categoria de arma empunhada. */
@@ -359,7 +364,8 @@ export type HeroLineKey =
   | 'pkEscaped'
   | 'revenge'
   | 'flee'
-  | 'pkWish';
+  | 'pkWish'
+  | 'recover';
 
 export interface HeroDef {
   id: string;

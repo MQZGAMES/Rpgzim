@@ -4,18 +4,20 @@ import type Phaser from 'phaser';
 import { renderPos, isMoving } from '../movement/movement';
 import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
+import { skullOf } from '../social/social';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
-import { worldText, snapWorld, dprSafe } from './text';
+import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
 
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 
 /** Estilo do nome: o do jogador/herói é maior (é informação de combate); o de criatura é discreto. */
 export type NameKind = 'actor' | 'creature';
 
-const NAME_STYLE: Record<NameKind, { size: number; weight: number }> = {
-  actor: { size: 16, weight: 800 },
-  creature: { size: 11, weight: 700 },
+/** Tamanho do nome na tela (px CSS): maior no desktop; no celular, menor (a tela é pequena e o zoom já amplia). */
+const NAME_STYLE: Record<NameKind, { desktop: number; touch: number; weight: number }> = {
+  actor: { desktop: 16, touch: 11, weight: 800 },
+  creature: { desktop: 11, touch: 9, weight: 700 },
 };
 
 export class CreatureView {
@@ -27,6 +29,10 @@ export class CreatureView {
   private labelText = '';
   private labelColor = '';
   private labelKind: NameKind = 'creature';
+  /** Ícones ao lado do nome (escudo de grupo, caveira de PK), como no Tibia. */
+  private badges: Phaser.GameObjects.Image[] = [];
+  private badgeKey = '';
+  private layoutZoom = 0;
   private lastHpKey = '';
   private flashUntil = 0;
   /** Deslocamento temporário (investida de ataque), em pixels. */
@@ -65,14 +71,47 @@ export class CreatureView {
     this.labelColor = color;
     this.labelKind = nameKind;
     const style = NAME_STYLE[nameKind];
+    const size = this.scene.registry.get('touch') ? style.touch : style.desktop;
     if (!this.label) {
-      this.label = worldText(this.scene, 0, 0, text, { size: style.size, color, weight: style.weight });
+      this.label = worldText(this.scene, 0, 0, text, { size, color, weight: style.weight });
       this.label.setOrigin(0.5, 1);
       this.container.add(this.label);
     } else {
-      this.label.setText(text).setColor(color).setFontSize(`${style.size * dprSafe()}px`);
+      this.label.setText(text).setColor(color).setFontSize(`${size * dprSafe()}px`);
     }
-    this.label.setPosition(0, this.headTop - 4);
+    this.layoutLabel();
+  }
+
+  /** Ícones à esquerda do nome (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
+  setBadges(frames: readonly string[]): void {
+    const key = frames.join('|');
+    if (key === this.badgeKey) return;
+    this.badgeKey = key;
+    for (const b of this.badges) b.destroy();
+    this.badges = frames.map((f) => {
+      const img = this.scene.add.image(0, 0, 'icons', f);
+      this.container.add(img);
+      return img;
+    });
+    this.layoutLabel();
+  }
+
+  /** Centraliza [ícones + nome] acima da cabeça; os ícones mantêm o tamanho na tela em qualquer zoom. */
+  private layoutLabel(): void {
+    if (!this.label) return;
+    this.layoutZoom = getWorldTextZoom();
+    const touch = !!this.scene.registry.get('touch');
+    const icon = cssToWorld(touch ? 12 : 17);
+    const gap = cssToWorld(2);
+    const n = this.badges.length;
+    const textW = this.label.displayWidth;
+    const iconsW = n * (icon + gap);
+    const total = textW + iconsW;
+    const y = this.headTop - 4;
+    this.label.setPosition(snapWorld(-total / 2 + iconsW + textW / 2), y);
+    this.badges.forEach((b, i) => {
+      b.setDisplaySize(icon, icon).setPosition(snapWorld(-total / 2 + i * (icon + gap) + icon / 2), y - this.label!.displayHeight * 0.45);
+    });
   }
 
   get height(): number {
@@ -81,6 +120,7 @@ export class CreatureView {
 
   setLabelVisible(v: boolean): void {
     this.label?.setVisible(v);
+    for (const b of this.badges) b.setVisible(v);
   }
 
   flash(now: number): void {
@@ -117,6 +157,7 @@ export class CreatureView {
     const y = snapWorld((p.y + 1) * 16 - 1 + this.lunge.y);
     this.container.setPosition(x, y);
     this.container.setDepth(ySort(p.y, 0.5));
+    if (this.layoutZoom !== getWorldTextZoom()) this.layoutLabel(); // zoom mudou: reposiciona os ícones do nome
     if (this.dead) return;
     const moving = animate && isMoving(m, now);
     if (this.kind === 'humanoid') {
@@ -176,6 +217,8 @@ export class EntityViews {
     private readonly scene: Phaser.Scene,
     private readonly world: World,
   ) {
+    // os ícones ao lado do nome (escudo, caveira) são reduzidos com filtro suave, como o texto (0 = LINEAR)
+    scene.textures.get('icons').setFilter(0);
     const p = world.player;
     this.player = new CreatureView(scene, p.id, p.character.vocation, 'humanoid', 's', 1);
     for (const m of world.monsters.values()) this.addMonster(m);
@@ -200,14 +243,17 @@ export class EntityViews {
   }
 
   /** Nome do personagem com marcas de grupo (★ líder) e caveira (PK). */
-  private actorPlate(a: PlayerEntity, base: string): { text: string; color: string } {
+  /** Nome + ícones ao lado dele: escudo de grupo (líder amarelo, membro azul) e caveira de PK (branca, amarela, vermelha). */
+  private actorPlate(a: PlayerEntity, base: string): { text: string; color: string; badges: string[] } {
     const w = this.world;
     const party = w.social.party;
     const inParty = !!party && party.members.includes(a.id) && party.members.includes(w.human.id);
-    const skull = (w.social.skulls.get(a.id) ?? 0) > w.now;
-    const text = `${party?.leaderId === a.id && inParty ? '★ ' : ''}${skull ? '☠ ' : ''}${a.character.name}`;
-    const color = skull ? '#ff7a6a' : inParty && a.id !== w.human.id ? '#7fd8ff' : base;
-    return { text, color };
+    const badges: string[] = [];
+    if (inParty) badges.push(party!.leaderId === a.id ? 'ui_shield_leader' : 'ui_shield_member');
+    const skull = skullOf(w, a.id);
+    if (skull) badges.push(`ui_skull_${skull.kind}`);
+    const color = inParty && a.id !== w.human.id ? '#7fd8ff' : base;
+    return { text: a.character.name, color, badges };
   }
 
   get(id: string): CreatureView | undefined {
@@ -263,11 +309,13 @@ export class EntityViews {
       v.sync(h, now, true, h.stats.speed);
       const plate = this.actorPlate(h, '#8ff0b0');
       v.setName(plate.text, plate.color, 'actor');
+      v.setBadges(plate.badges);
       v.setLabelVisible(!h.dead);
       v.setHealthBar(h.dead ? null : h.character.health / h.stats.maxHealth, this.scene, h.id === targetId ? 0xff6a5a : 0x4fd08a);
     }
     const plate = this.actorPlate(p, '#fbf8ef');
     this.player.setName(plate.text, plate.color, 'actor');
+    this.player.setBadges(plate.badges);
     this.player.setLabelVisible(!p.dead);
     this.player.setHealthBar(p.dead ? null : p.character.health / p.stats.maxHealth, this.scene, 0x4fd08a);
   }

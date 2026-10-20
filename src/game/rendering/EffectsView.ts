@@ -251,7 +251,7 @@ export class EffectsView {
   }
 
   private onBuff(targetId: string, kind: string, durationMs: number): void {
-    const name = kind === 'defense' ? 'fx_buff_iron' : kind === 'attackSpeed' ? 'fx_buff_focus' : kind === 'regen' ? 'fx_heal' : 'fx_haste';
+    const name = kind === 'defense' ? 'fx_buff_iron' : kind === 'attackSpeed' ? 'fx_buff_focus' : kind === 'regen' ? 'fx_heal' : kind === 'manaShield' ? 'fx_mana_shield' : 'fx_haste';
     const v = this.vis(targetId);
     if (!v) return;
     const s = this.scene.add.sprite(v.container.x, v.container.y, 'fx', `${name}_0`).setOrigin(0.5, 1).setDepth(v.container.depth + 1);

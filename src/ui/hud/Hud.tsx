@@ -10,8 +10,8 @@ import { NpcDialog, LootWindow } from '../dialogs/NpcDialog';
 import { ShopPanel } from '../shops/ShopPanel';
 import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
-import { StatusPanel } from './StatusPanel';
-import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyPanel, QuickToggles, SkullTimer } from './Social';
+import { BuffBar, StatusPanel } from './StatusPanel';
+import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyPanel, PkBadge, QuickToggles } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
 import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, RegionBanner } from './Overlays';
 
@@ -25,7 +25,11 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
   return (
     <div className="hud-scale pointer-events-none absolute inset-0 z-10 select-none" data-testid="hud">
       <div className="safe-top safe-x absolute left-0 right-0 top-0 flex items-start justify-between gap-2">
-        <StatusPanel />
+        <div className="flex flex-col items-start">
+          <StatusPanel />
+          <PkBadge />
+          <BuffBar />
+        </div>
         <div className="flex flex-col items-end gap-1">
           {/* celular em pé: grade de 4 colunas; telas largas: uma linha só */}
           <div className="pointer-events-auto grid grid-cols-4 gap-1 sm:flex" data-testid="hud-menu">
@@ -37,7 +41,6 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
             <MenuButton icon="ui_players" label="Personagens online" hotkey="O" onClick={() => session.setPanel('players')} testId="btn-players" />
             <QuickToggles />
           </div>
-          <SkullTimer />
         </div>
       </div>
       <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] max-sm:portrait:top-[calc(env(safe-area-inset-top)+150px)] -translate-x-1/2 lg:top-3">
@@ -49,7 +52,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {showLog && (
         <div
           className={`absolute left-[max(8px,env(safe-area-inset-left))] ${
-            touch ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] max-w-[calc(100vw-232px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-290px))]'
+            touch ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] max-w-[calc(100vw-232px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-335px))]'
           }`}
         >
           <MessageLog max={touch ? 5 : 7} />

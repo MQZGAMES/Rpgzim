@@ -5,7 +5,7 @@
 // - Toque/clique curto: anda até o ponto, seleciona monstro/personagem ou fala com NPC.
 // - Celular: pressionar e arrastar na metade esquerda inferior vira o joystick (invisível até arrastar).
 // - Mouse: cursor de "mão" sobre o que dá para clicar.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { uiImage } from '../../assets';
 import { useLocal, useSession } from '../../integration/game-ui-bridge/hooks';
@@ -26,6 +26,43 @@ export function MapInputLayer() {
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
+  // Anti-travamento: a lista de toques do navegador é a fonte da verdade. Se o joystick está ativo e não há
+  // nenhum dedo na tela (pointerup/touchend perdido por troca de app, notificação, gesto do sistema...), reseta.
+  const touchCount = useRef(0);
+  const lastEventAt = useRef(0);
+  const joyActive = useRef(false);
+  const endRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    const onTouch = (e: TouchEvent) => {
+      touchCount.current = e.touches.length;
+      lastEventAt.current = performance.now();
+      if (e.touches.length === 0 && joyActive.current) endRef.current();
+    };
+    const reset = () => {
+      touchCount.current = 0;
+      if (joyActive.current) endRef.current();
+    };
+    const opts = { capture: true, passive: true } as const;
+    for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel'] as const) window.addEventListener(t, onTouch, opts);
+    window.addEventListener('blur', reset);
+    window.addEventListener('pagehide', reset);
+    document.addEventListener('visibilitychange', reset);
+    // vigia: sem dedo na tela por >350 ms com o joystick ativo, ou sem nenhum evento por 8 s -> solta
+    const timer = window.setInterval(() => {
+      if (!joyActive.current) return;
+      const idle = performance.now() - lastEventAt.current;
+      if ((touchCount.current === 0 && idle > 350) || idle > 8000) endRef.current();
+    }, 250);
+    return () => {
+      for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel'] as const) window.removeEventListener(t, onTouch, opts);
+      window.removeEventListener('blur', reset);
+      window.removeEventListener('pagehide', reset);
+      document.removeEventListener('visibilitychange', reset);
+      window.clearInterval(timer);
+      if (joyActive.current) session.move(0, 0);
+    };
+  }, [session]);
+
   const moveJoy = (cx: number, cy: number, o: { x: number; y: number }) => {
     let dx = cx - o.x;
     let dy = cy - o.y;
@@ -39,10 +76,12 @@ export function MapInputLayer() {
   };
   const endJoy = () => {
     joyId.current = null;
+    joyActive.current = false;
     setOrigin(null);
     setKnob({ x: 0, y: 0 });
     session.move(0, 0);
   };
+  endRef.current = endJoy;
 
   return (
     <div
@@ -74,10 +113,15 @@ export function MapInputLayer() {
           p.moved = true;
           if (p.joy && joyId.current === null) {
             joyId.current = p.id;
+            joyActive.current = true;
+            lastEventAt.current = performance.now();
             setOrigin({ x: p.x, y: p.y });
           }
         }
-        if (joyId.current === p.id) moveJoy(e.clientX, e.clientY, { x: p.x, y: p.y });
+        if (joyId.current === p.id) {
+          lastEventAt.current = performance.now();
+          moveJoy(e.clientX, e.clientY, { x: p.x, y: p.y });
+        }
       }}
       onPointerUp={(e) => {
         const p = pointers.current.get(e.pointerId);

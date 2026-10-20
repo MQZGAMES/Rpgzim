@@ -20,7 +20,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0,
     baseSpeed: 3,
     attackIntervalMs: 1600,
-    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal'],
+    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal', 'mana_shield', 'haste'],
     startingEquipment: {
       mainHand: { itemId: 'wand_ember' },
       body: { itemId: 'robe_apprentice' },
@@ -49,7 +49,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0,
     baseSpeed: 3,
     attackIntervalMs: 1600,
-    spells: ['earth_thorn', 'frost_burst', 'sap_blessing', 'light_heal'],
+    spells: ['earth_thorn', 'frost_burst', 'sap_blessing', 'light_heal', 'mana_shield', 'haste'],
     startingEquipment: {
       mainHand: { itemId: 'rod_sprout' },
       body: { itemId: 'robe_druid' },
@@ -78,15 +78,15 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0.05,
     baseSpeed: 3.1,
     attackIntervalMs: 1500,
-    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal'],
+    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal', 'stunning_arrow', 'haste'],
     startingEquipment: {
       mainHand: { itemId: 'bow_hunting' },
       body: { itemId: 'armor_leather' },
       legs: { itemId: 'legs_leather' },
       feet: { itemId: 'boots_leather' },
-      ammo: { itemId: 'arrow', count: 80 },
     },
     startingInventory: [
+      { itemId: 'arrow', count: 80 },
       { itemId: 'spear_throwing', count: 1 },
       { itemId: 'potion_health', count: 3 },
       { itemId: 'potion_mana', count: 1 },
@@ -109,7 +109,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0.12,
     baseSpeed: 2.9,
     attackIntervalMs: 1400,
-    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal'],
+    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste'],
     startingEquipment: {
       mainHand: { itemId: 'sword_short' },
       offHand: { itemId: 'shield_wood' },

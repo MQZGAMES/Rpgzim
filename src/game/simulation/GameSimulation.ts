@@ -37,7 +37,7 @@ import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
-import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, newSocialState, passLeadership, updateSocial, type PartySetting } from '../social/social';
+import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
 import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
@@ -87,6 +87,8 @@ export class GameSimulation {
       stuckSince: 0,
       stuckWith: null,
       stuckAt: 0,
+      slowUntil: 0,
+      slowFactor: 1,
       character: c,
       stats: computeStats(opts.data, c),
       buffs: [],
@@ -139,6 +141,7 @@ export class GameSimulation {
       player.y = pos.y;
     }
     placeOccupant(w, player);
+    loadPk(w, player); // caveira, PZ lock e mortes injustas de sessões anteriores
     // NPCs
     for (const n of w.map.npcs) {
       const def = w.data.npcs[n.npcId];
@@ -237,7 +240,8 @@ export class GameSimulation {
     const w = this.world;
     const p = w.player;
     if (p.dead || isMoving(p, w.now)) return;
-    const speed = p.stats.speed * followCatchUp(w, p);
+    // lentidão (gelo) reduz o passo; "seguir o líder" acelera um pouco quem ficou para trás
+    const speed = p.stats.speed * followCatchUp(w, p) * (w.now < p.slowUntil ? p.slowFactor : 1);
     const dir = p.heldDir;
     if (dir) {
       p.path = null;
@@ -580,6 +584,7 @@ export class GameSimulation {
     c.position = { x: p.x, y: p.y };
     c.facing = p.facing;
     c.updatedAt = Date.now();
+    savePk(this.world, p);
     return structuredClone(c);
   }
 }

@@ -47,6 +47,9 @@ export interface PlayerEntity extends Mover {
   stuckWith: string | null;
   /** Instante da última tentativa de passar por `stuckWith`. */
   stuckAt: number;
+  /** Lentidão (magias de gelo) sobre o personagem: até quando e fator de velocidade. */
+  slowUntil: number;
+  slowFactor: number;
   nextAttackAt: number;
   heldDir: DirVector | null;
   path: TilePos[] | null;
@@ -118,6 +121,8 @@ export interface NpcEntity extends Mover {
 
 export interface LootContainer {
   id: string;
+  /** Dono original (saco de morte): o herói volta para recuperar o que perdeu. */
+  ownerId?: string;
   x: number;
   y: number;
   items: ItemStack[];

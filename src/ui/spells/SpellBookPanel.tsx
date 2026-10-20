@@ -10,7 +10,7 @@ export function SpellBookPanel({ onClose }: { onClose: () => void }) {
   return (
     <Panel title="Grimório" onClose={onClose} icon="ui_book" wide>
       <div className="mb-2 flex items-center gap-2">
-        <p className="flex-1 text-[12px] text-muted">Magias gastam mana, têm recarga e evoluem seu Magic Level. Coloque cada magia num atalho (1–6).</p>
+        <p className="flex-1 text-[12px] text-muted">Magias gastam mana, têm recarga e evoluem seu Magic Level. Coloque cada magia num atalho (1–8).</p>
         <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.setPanel('hotbar')} data-testid="open-hotbar">
           Atalhos
         </PixelButton>

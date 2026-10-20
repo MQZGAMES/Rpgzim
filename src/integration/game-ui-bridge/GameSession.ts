@@ -162,7 +162,7 @@ export class GameSession {
     const now = performance.now();
     if (!force && now - (this.heroSavedAt.get(heroId) ?? -Infinity) < 20000) return Promise.resolve();
     this.heroSavedAt.set(heroId, now);
-    return this.saves.save(heroSnapshot(h)).catch(() => undefined);
+    return this.saves.save(heroSnapshot(this.sim.world, h)).catch(() => undefined);
   }
   private saveHeroes(): Promise<void> {
     return Promise.all([...this.sim.world.heroes.values()].map((h) => this.saveHero(h.hero.id, true))).then(() => undefined);

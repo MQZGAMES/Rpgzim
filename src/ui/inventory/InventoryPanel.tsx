@@ -18,7 +18,6 @@ const SLOT_ICON: Record<EquipSlot, string> = {
   legs: 'item_legs_leather',
   ring: 'item_ring_vigor',
   feet: 'item_boots_leather',
-  ammo: 'item_arrow',
 };
 
 function statMap(itemId: string | null | undefined): Record<string, number> {
@@ -267,8 +266,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
               <Slot slot="amulet" />
               <Slot slot="mainHand" />
               <Slot slot="offHand" />
-              <Slot slot="ammo" />
-              <Slot slot="body" />
+                <Slot slot="body" />
               <Slot slot="ring" />
               <Slot slot="legs" />
               <Slot slot="feet" />

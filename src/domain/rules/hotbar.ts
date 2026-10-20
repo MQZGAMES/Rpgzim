@@ -4,7 +4,9 @@
 import type { GameData } from '../entities/gameData';
 import type { VocationId } from '../value-objects/ids';
 
-export const HOTBAR_SIZE = 6;
+export const HOTBAR_SIZE = 8;
+/** Tamanho da barra nas versões antigas (os atalhos novos entram depois dele). */
+const LEGACY_SIZE = 6;
 
 export type HotbarEntry = { kind: 'spell'; id: string } | { kind: 'item'; id: string } | { kind: 'potion'; id: 'health' | 'mana' } | null;
 
@@ -44,11 +46,17 @@ export function normalizeHotbar(data: GameData, vocation: VocationId, raw: reado
   if (!list.some(Boolean)) return defaultHotbar(data, vocation);
   // save antigo (só magias, 4 posições): mantém as magias e acrescenta as poções automáticas
   const legacy = list.every((s) => !s.includes(':'));
-  const base = legacy ? [...list.slice(0, HOTBAR_SIZE - 2), ...new Array(Math.max(0, HOTBAR_SIZE - 2 - list.length)).fill(''), 'potion:health', 'potion:mana'] : list;
+  const base = legacy ? [...list.slice(0, LEGACY_SIZE - 2), ...new Array(Math.max(0, LEGACY_SIZE - 2 - list.length)).fill(''), 'potion:health', 'potion:mana'] : list;
   const out: string[] = [];
   for (let i = 0; i < HOTBAR_SIZE; i++) {
     const e = parseHotbarEntry(base[i]);
     out.push(valid(data, vocation, e) ? encodeHotbarEntry(e) : '');
+  }
+  // barra antiga (6 atalhos): as magias novas da vocação ocupam os atalhos novos, se ainda não estiverem na barra
+  if (list.length <= LEGACY_SIZE) {
+    const have = new Set(out);
+    const fresh = data.vocations[vocation].spells.filter((id) => !have.has(`spell:${id}`));
+    for (let i = LEGACY_SIZE; i < HOTBAR_SIZE && fresh.length; i++) if (!out[i]) out[i] = `spell:${fresh.shift()}`;
   }
   return out;
 }

@@ -113,6 +113,17 @@ fica em 2,8): todas são um pouco mais lentas que o jogador, como no Tibia, e d�
   (`TAUNT_MS`), sem trocar de alvo pelo "mais próximo" nesse período.
 - Criaturas reavaliam o alvo todo quadro: trocam para quem estiver estritamente mais perto (empate mantém o atual).
 
+## Magias de utilidade
+
+| Magia | Vocação | Mana | Recarga | Efeito |
+|---|---|---|---|---|
+| Corrida | todas | 40 | 18 s | +1,4 tiles/s por 8 s; remove lentidão |
+| Escudo de Mana | Sorcerer, Druid | 70 | 30 s | 5 min: dano tira da mana primeiro |
+| Grito de Guerra | Knight | 25 | 8 s | raio 3, dano leve, atrai (isca 4 s) |
+| Flecha Atordoante | Paladin | 25 | 5 s | dano à distância + lentidão 60% por 3,5 s; 1 flecha |
+
+Flechas: pedra +1 e metal +2 de ataque por disparo (somam ao ataque da arma e das magias que gastam flecha).
+
 ## Pendências conhecidas
 
 - Os equipamentos vão até o nível 18; os patamares 4–6 pedem novos equipamentos (próximo passo).

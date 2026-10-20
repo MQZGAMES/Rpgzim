@@ -25,14 +25,6 @@ export function equipFromInventory(data: GameData, c: CharacterState, index: num
   if (!check.ok) return check;
   const slot = check.slot;
 
-  // Munição igual à equipada: apenas soma à pilha do slot
-  const current = c.equipment[slot];
-  if (slot === 'ammo' && current && current.itemId === stack.itemId) {
-    current.count += stack.count;
-    c.inventory[index] = null;
-    return { ok: true, slot };
-  }
-
   // Itens que precisarão voltar para a mochila
   const displaced: EquipSlot[] = [];
   if (c.equipment[slot]) displaced.push(slot);
@@ -42,9 +34,8 @@ export function equipFromInventory(data: GameData, c: CharacterState, index: num
     if (main?.twoHanded) displaced.push('mainHand');
   }
   // Simula a troca numa cópia da mochila: só confirma se tudo couber (operação atômica).
-  const moving = slot === 'ammo' ? stack.count : 1;
   const inv = c.inventory.map((st) => (st ? { ...st } : null));
-  const taken = removeAt(inv, index, moving)!;
+  const taken = removeAt(inv, index, 1)!;
   for (const s of displaced) {
     const st = c.equipment[s]!;
     if (addItem(data, inv, st.itemId, st.count) < st.count) return { ok: false, reason: 'inventoryFull' };

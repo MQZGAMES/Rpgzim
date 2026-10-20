@@ -38,6 +38,8 @@ export interface CharacterState {
   /** Barra de atalhos de magias (ids). */
   hotbar: string[];
   flags: Record<string, boolean>;
+  /** Estado de PK (caveira, PZ lock, mortes injustas), em tempo real para valer entre sessões. */
+  pk?: { skull: 'white' | 'yellow' | 'red' | null; skullUntil: number; pzLockUntil: number; unjust: number[] };
   stats: { monstersKilled: number; deaths: number; playTimeMs: number };
   createdAt: number;
   updatedAt: number;

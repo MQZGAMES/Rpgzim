@@ -76,14 +76,39 @@ export function QuickToggles() {
   );
 }
 
-/** Caveira do jogador (tempo restante), discreta abaixo dos botões. */
-export function SkullTimer() {
-  const skullMs = useSnap((s) => s.skullMs);
-  if (skullMs <= 0) return null;
+const SKULL_LABEL = { white: 'Caveira branca', yellow: 'Caveira amarela', red: 'Caveira vermelha' } as const;
+const SKULL_HINT = {
+  white: 'Você atacou alguém sem caveira. Fique sem lutar nos últimos 30 s para a caveira acabar.',
+  yellow: 'Você atacou uma caveira branca (defesa justa).',
+  red: 'Caveira vermelha (3 mortes injustas): dura 24 h. Se morrer, perde TODOS os itens e o ouro.',
+} as const;
+
+/** Tempo restante: "14:32" (min:s) ou, acima de 1 h, "23h 59m". */
+export function formatPkTime(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  if (s >= 3600) return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** PK estilo Tibia: caveira (cor e tempo) e PZ lock restante, colados ao painel de status. */
+export function PkBadge() {
+  const pk = useSnap((s) => s.pk);
+  if (!pk.skull && pk.pzLockMs <= 0) return null;
   return (
-    <span className="text-outline flex items-center gap-1 text-[10px] text-hp-light" title="Você atacou ou matou um jogador">
-      <ItemIcon icon="ui_skull" size={11} /> {Math.ceil(skullMs / 60000)} min
-    </span>
+    <div className="pointer-events-none mt-[2px] flex items-center gap-2" data-testid="pk-badge">
+      {pk.skull && (
+        <span className="text-outline flex items-center gap-1 rounded-sm bg-[#120d18]/80 px-1 text-[11px] text-parchment" title={`${SKULL_LABEL[pk.skull]}: ${SKULL_HINT[pk.skull]}`} data-testid="pk-skull">
+          <ItemIcon icon={`ui_skull_${pk.skull}`} size={14} />
+          {formatPkTime(pk.skullMs)}
+        </span>
+      )}
+      {pk.pzLockMs > 0 && (
+        <span className="text-outline flex items-center gap-1 rounded-sm bg-[#3a0a12]/85 px-1 text-[11px] text-hp-light" title="PZ lock: você não pode entrar em áreas protegidas (lojas, templo, casas)" data-testid="pk-pzlock">
+          <ItemIcon icon="ui_lock" size={12} />
+          PZ {formatPkTime(pk.pzLockMs)}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -283,7 +308,7 @@ export function ActorMenu() {
       <div className="w-[118px] min-w-0">
         <div className="flex items-center gap-1 truncate">
           {hero.isLeader && <ItemIcon icon="ui_crown" size={11} />}
-          {hero.skull && <ItemIcon icon="ui_skull" size={11} title="Tem caveira" />}
+          {hero.skull && <ItemIcon icon={`ui_skull_${hero.skull}`} size={12} title={SKULL_LABEL[hero.skull]} />}
           <b className={inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{hero.name}</b>
         </div>
         <div className="truncate text-[10px] text-muted">

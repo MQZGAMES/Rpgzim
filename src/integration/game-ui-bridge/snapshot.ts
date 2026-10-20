@@ -1,5 +1,6 @@
 // Projeção do estado da simulação para a interface (somente leitura, dados prontos para exibir).
 // É uma função pura: a interface nunca acessa diretamente o estado mutável da simulação.
+import { ammoBreakdown } from '../../domain/rules/ammo';
 import { EQUIP_SLOTS, SKILL_IDS, SKILL_LABEL, SLOT_LABEL, type EquipSlot, type ItemDef, type SkillId } from '../../domain/entities/definitions';
 import type { ItemStack } from '../../domain/entities/character';
 import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
@@ -15,7 +16,7 @@ import type { GameSimulation } from '../../game/simulation/GameSimulation';
 import { castCheck, spellCooldownRemaining } from '../../game/abilities/spells';
 import { nearbyInteractables } from '../../game/interaction/interaction';
 import { nearbyLootBags } from '../../game/inventory/inventoryService';
-import { PARTY_SHARE_RANGE, PVP_FAIL_MESSAGE, actorById, actorName, canAttackActor, hasSkull, partyOf, pendingInviteFor, sameParty } from '../../game/social/social';
+import { PARTY_SHARE_RANGE, PVP_FAIL_MESSAGE, actorById, actorName, canAttackActor, partyOf, pzLockMs, skullOf, pendingInviteFor, sameParty } from '../../game/social/social';
 import { heroActivity } from '../../game/ai/heroBrain';
 
 export interface ItemView {
@@ -111,16 +112,18 @@ export interface UiSnapshot {
   pvp: boolean;
   standAttack: boolean;
   /** Tempo restante da caveira do jogador (ms), 0 sem caveira. */
-  skullMs: number;
+  /** PK estilo Tibia: caveira atual (tipo e tempo restante) e PZ lock restante. */
+  pk: { skull: 'white' | 'yellow' | 'red' | null; skullMs: number; pzLockMs: number };
   /** Heróis no mundo (para o menu ao tocar neles). */
-  heroes: { id: string; name: string; title: string; vocation: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: boolean; activity: string; attackBlocked: string | null; distance: number; dead: boolean; region: string }[];
+  heroes: { id: string; name: string; title: string; vocation: string; vocationName: string; level: number; hp: number; maxHp: number; inParty: boolean; isLeader: boolean; skull: 'white' | 'yellow' | 'red' | null; activity: string; attackBlocked: string | null; distance: number; dead: boolean; region: string }[];
   hotbar: HotbarSlotView[];
   spellbook: SpellView[];
   inventory: (ItemView | null)[];
   equipment: Record<EquipSlot, ItemView | null>;
   slotLabels: Record<EquipSlot, string>;
   potions: { health: number; mana: number; cooldown: number };
-  ammo: number | null;
+  /** Flechas na mochila por tipo (mais forte primeiro); null quando a arma não usa munição. */
+  ammo: { total: number; types: { itemId: string; name: string; icon: string; attack: number; count: number }[] } | null;
   interaction: { kind: string; id: string; label: string } | null;
   dialog: { npcName: string; npcTitle: string; sprite: string; text: string; options: string[] } | null;
   shop: {
@@ -293,7 +296,8 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const bags = w.ui.lootId ? nearbyLootBags(w) : [];
   const region = regionAt(w.map, p.x, p.y);
   const building = buildingAt(w.map, p.x, p.y);
-  const ammo = c.equipment.ammo;
+  const ammoType = p.stats.weapon.ammo;
+  const ammoTypes = ammoType ? ammoBreakdown(w.data, c.inventory, ammoType).map((a) => ({ itemId: a.itemId, name: w.data.items[a.itemId]!.name, icon: w.data.items[a.itemId]!.icon, attack: a.attack, count: a.count })) : [];
   return {
     version,
     now: w.now,
@@ -347,7 +351,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
     standAttack: c.flags.standAttack === true,
-    skullMs: Math.max(0, (w.social.skulls.get(p.id) ?? 0) - w.now),
+    pk: { skull: skullOf(w, p.id)?.kind ?? null, skullMs: Math.max(0, (skullOf(w, p.id)?.until ?? 0) - w.now), pzLockMs: pzLockMs(w, p.id) },
     heroes: [...w.heroes.values()].map((h) => ({
       id: h.id,
       name: h.character.name,
@@ -359,7 +363,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       maxHp: h.stats.maxHealth,
       inParty: sameParty(w, p.id, h.id),
       isLeader: w.social.party?.leaderId === h.id,
-      skull: hasSkull(w, h.id),
+      skull: skullOf(w, h.id)?.kind ?? null,
       activity: heroActivity(w, h),
       attackBlocked: (() => {
         const f = canAttackActor(w, p, h);
@@ -375,7 +379,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     equipment,
     slotLabels: SLOT_LABEL,
     potions: { health: ['potion_health', 'potion_health_great', 'potion_health_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), mana: ['potion_mana', 'potion_mana_great', 'potion_mana_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), cooldown: remaining(p.cooldowns, POTION, w.now) },
-    ammo: p.stats.weapon.ammo ? (ammo && w.data.items[ammo.itemId]?.ammoType === p.stats.weapon.ammo ? ammo.count : 0) : null,
+    ammo: ammoType ? { total: ammoTypes.reduce((s, a) => s + a.count, 0), types: ammoTypes } : null,
     interaction: near ? { kind: near.kind, id: near.id, label: near.label } : null,
     dialog: dialogNpc && page ? { npcName: dialogNpc.def.name, npcTitle: dialogNpc.def.title, sprite: dialogNpc.def.sprite, text: page.text, options: page.options.map((o) => o.label) } : null,
     shop:

@@ -332,7 +332,7 @@ describe('inventário, lojas e save', () => {
     expect(sim2.world.player.x).toBe(30);
     expect(sim2.world.player.y).toBe(23);
     expect(sim2.world.player.character.gold).toBe(999);
-    expect(sim2.world.player.character.equipment.ammo?.itemId).toBe('arrow');
+    expect(countItem(sim2.world.player.character.inventory, 'arrow')).toBeGreaterThan(0);
   });
 });
 

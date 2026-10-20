@@ -1,5 +1,5 @@
 // Controles de ação. No toque: botão de ataque no canto e os 6 atalhos (magias/itens/poções) em grade ao redor.
-// No desktop: barra inferior com atalhos numerados (1–6). Os atalhos são configuráveis (painel "Atalhos").
+// No desktop: barra inferior com atalhos numerados (1–8). Os atalhos são configuráveis (painel "Atalhos").
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
@@ -74,32 +74,65 @@ function InteractButton({ size = 56 }: { size?: number }) {
   );
 }
 
-/** Posição de cada atalho na grade 3x3 do toque (linha / coluna): o 1º fica colado no botão de ataque. */
-export const TOUCH_SLOT_CELLS = ['3 / 2', '2 / 3', '3 / 1', '1 / 3', '2 / 1', '2 / 2'] as const;
-export const TOUCH_SLOT = 48;
-const ATTACK = 70;
+/**
+ * Atalhos no celular: "pirâmide" colada ao botão de ataque (canto inferior direito). Cada fileira é um bloco
+ * contínuo — tocar nos vãos entre botões da mesma fileira ou entre fileiras aciona a grade, nunca anda pelo
+ * mapa; os cantos vazios em cima/à esquerda ficam livres para tocar no mapa.
+ * Índices dos atalhos, da fileira de cima para a de baixo, da esquerda para a direita; o 1º fica ao lado do ataque.
+ */
+export const TOUCH_ROWS: readonly (readonly number[])[] = [
+  [7, 4], // atalhos 8 e 5
+  [5, 2, 1], // 6, 3 e 2
+  [6, 3, 0], // 7, 4 e 1 (+ botão de ataque)
+];
+export const TOUCH_SLOT = 42;
+export const TOUCH_ATTACK = 66;
+/** Quanto as fileiras de cima recuam à direita para ficarem alinhadas sobre o botão de ataque. */
+const ABOVE_ATTACK_INSET = Math.round((TOUCH_ATTACK - TOUCH_SLOT) / 2);
+
+/** Contador de flechas (só com arco equipado): ícone e quantidade por tipo, mais forte primeiro; vermelho quando acabando. */
+export function AmmoPill({ compact = false }: { compact?: boolean }) {
+  const ammo = useSnap((s) => s.ammo);
+  if (!ammo) return null;
+  const low = ammo.total < 20;
+  return (
+    <div
+      className={`pointer-events-none flex items-center gap-2 rounded-sm border-2 px-[6px] py-[2px] text-[11px] leading-none ${
+        ammo.total === 0 ? 'anim-glow border-hp bg-[#3a0a12]/85 text-hp-light' : low ? 'border-[#c87a2a] bg-[#2a1608]/85 text-[#ffb35a]' : 'border-[#5b4a78] bg-[#140e1e]/80 text-parchment'
+      }`}
+      title="Flechas na mochila: as mais fortes são usadas primeiro"
+      data-testid="ammo-pill"
+    >
+      {ammo.types.length ? (
+        ammo.types.map((t) => (
+          <span key={t.itemId} className="inline-flex items-center gap-[2px]" title={`${t.name} (+${t.attack} de ataque)`}>
+            <ItemIcon icon={t.icon} size={compact ? 14 : 16} />
+            <b>{t.count}</b>
+          </span>
+        ))
+      ) : (
+        <span className="inline-flex items-center gap-[2px]">
+          <ItemIcon icon="item_arrow" size={compact ? 14 : 16} className="grayscale" />
+          <b>0</b>
+        </span>
+      )}
+      {ammo.total === 0 && <span>sem flechas!</span>}
+    </div>
+  );
+}
 
 export function TouchActions() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
-  const ammo = useSnap((s) => s.ammo);
-  return (
-    <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-2 pr-[max(10px,env(safe-area-inset-right))]">
-      <div
-        className="pointer-events-auto grid items-center justify-items-center gap-[8px]"
-        style={{ gridTemplateColumns: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px`, gridTemplateRows: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px` }}
-        data-testid="touch-actions"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <div className="flex w-full justify-end self-end" style={{ gridArea: '1 / 1 / 2 / 3' }}>
-          <InteractButton />
-        </div>
-        {hotbar.map((slot) => (
-          <div key={slot.index} className="pointer-events-auto" style={{ gridArea: TOUCH_SLOT_CELLS[slot.index] }}>
-            <HotbarSlot slot={slot} size={TOUCH_SLOT} />
-          </div>
-        ))}
+  const row = (idxs: readonly number[], inset: number, last = false) => (
+    <div
+      className="pointer-events-auto flex items-center justify-end gap-[6px] px-[5px] py-[3px]"
+      style={{ marginRight: inset }}
+      data-testid="touch-row"
+    >
+      {idxs.map((i) => (hotbar[i] ? <HotbarSlot key={i} slot={hotbar[i]!} size={TOUCH_SLOT} /> : null))}
+      {last && (
         <button
           type="button"
           aria-label={hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
@@ -108,19 +141,26 @@ export function TouchActions() {
             session.audio.unlock();
             session.cycleTarget();
           }}
-          className={`btn-gold pointer-events-auto relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
-          style={{ gridArea: '3 / 3', width: ATTACK, height: ATTACK }}
+          className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
+          style={{ width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
           data-testid="attack-button"
         >
-          <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={28} />
+          <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={26} />
           <span className="text-[10px] leading-none">{hasTarget ? 'Trocar' : 'Atacar'}</span>
-          {ammo !== null && (
-            <span className={`text-outline absolute -left-[6px] -top-[8px] text-[10px] leading-none ${ammo === 0 ? 'text-hp-light' : 'text-parchment'}`}>
-              <ItemIcon icon="item_arrow" size={12} className="inline-block align-middle" />
-              {ammo}
-            </span>
-          )}
         </button>
+      )}
+    </div>
+  );
+  return (
+    <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
+      <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
+        <div className="flex flex-col items-end gap-1 pb-1">
+          <AmmoPill compact />
+          <InteractButton />
+        </div>
+        {row(TOUCH_ROWS[0]!, ABOVE_ATTACK_INSET)}
+        {row(TOUCH_ROWS[1]!, ABOVE_ATTACK_INSET)}
+        {row(TOUCH_ROWS[2]!, 0, true)}
       </div>
     </div>
   );
@@ -129,27 +169,24 @@ export function TouchActions() {
 export function DesktopActionBar() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
-  const ammo = useSnap((s) => s.ammo);
   return (
     <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
-      <InteractButton size={44} />
-      <div className="frame-dark pointer-events-auto flex items-end gap-2 !border-[10px]">
+      <div className="flex items-center gap-2">
+        <AmmoPill />
+        <InteractButton size={44} />
+      </div>
+      <div className="frame-dark pointer-events-auto flex items-end gap-[6px] !border-[10px]">
         {hotbar.map((slot) => (
-          <HotbarSlot key={slot.index} slot={slot} size={48} keyHint={String(slot.index + 1)} />
+          <HotbarSlot key={slot.index} slot={slot} size={46} keyHint={String(slot.index + 1)} />
         ))}
-        <button type="button" onClick={() => session.setPanel('hotbar')} className="btn-pixel flex h-[48px] w-7 items-center justify-center !border-[6px] text-[10px]" title="Configurar atalhos" data-testid="btn-hotbar-config">
+        <button type="button" onClick={() => session.setPanel('hotbar')} className="btn-pixel flex h-[46px] w-7 items-center justify-center !border-[6px] text-[10px]" title="Configurar atalhos" data-testid="btn-hotbar-config">
           <ItemIcon icon="ui_gear" size={14} />
         </button>
-        <div className="mx-1 h-11 w-[2px] bg-dusk" />
-        <button type="button" onClick={() => session.cycleTarget()} className="btn-gold flex h-[48px] flex-col items-center justify-center px-1 text-[10px]" title="Alvo mais próximo (Tab/Espaço)">
+        <div className="mx-1 h-10 w-[2px] bg-dusk" />
+        <button type="button" onClick={() => session.cycleTarget()} className="btn-gold flex h-[46px] flex-col items-center justify-center px-1 text-[10px]" title="Alvo mais próximo (Tab/Espaço)">
           <ItemIcon icon="ui_target" size={22} />
           Tab
         </button>
-        {ammo !== null && (
-          <span className={`text-outline self-center text-[11px] ${ammo === 0 ? 'text-hp-light' : ''}`}>
-            <ItemIcon icon="item_arrow" size={14} className="inline-block align-middle" /> {ammo}
-          </span>
-        )}
       </div>
     </div>
   );

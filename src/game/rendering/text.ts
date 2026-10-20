@@ -61,6 +61,11 @@ export function cssToWorld(cssPx: number): number {
   return (cssPx * dpr) / zoom;
 }
 
+/** Zoom atual da câmera (para recalcular o que depende dele, como a posição dos ícones ao lado do nome). */
+export function getWorldTextZoom(): number {
+  return zoom;
+}
+
 /** Fator de densidade do dispositivo (o texto do mundo é desenhado em pixels físicos). */
 export function dprSafe(): number {
   return dpr;

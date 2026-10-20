@@ -366,23 +366,31 @@ function amulet(gem: Ramp) {
   };
 }
 
-function arrow() {
+/** Flecha: de pedra (ponta cinza e penas vermelhas) ou de metal (ponta de aço maior e penas azuis). */
+function arrow(metal = false) {
+  const head: Ramp = metal ? P.steel : P.stone;
+  const fletch: Ramp = metal ? P.blue : P.red;
   return (c: PixelCanvas) => {
-    diag(c, 3, 12, 9, P.wood[4]!);
-    c.set(12, 3, P.steel[5]!);
-    c.set(13, 2, P.steel[4]!);
-    c.set(12, 2, P.steel[3]!);
-    c.set(13, 3, P.steel[3]!);
-    c.set(14, 1, P.steel[5]!);
+    diag(c, 3, 12, 9, metal ? P.iron[3]! : P.wood[4]!);
+    c.set(12, 3, head[5] ?? head[4]!);
+    c.set(13, 2, head[4]!);
+    c.set(12, 2, head[3]!);
+    c.set(13, 3, head[3]!);
+    c.set(14, 1, head[5] ?? head[4]!);
+    if (metal) {
+      c.set(11, 4, head[4]!);
+      c.set(13, 4, head[3]!);
+      c.set(12, 1, head[4]!);
+    }
     c.set(2, 12, P.white);
     c.set(3, 13, P.white);
-    c.set(1, 13, P.red[3]!);
-    c.set(2, 14, P.red[3]!);
+    c.set(1, 13, fletch[3]!);
+    c.set(2, 14, fletch[3]!);
     c.set(1, 12, P.white);
-    c.set(2, 13, P.red[4]!);
+    c.set(2, 13, fletch[4]!);
     // feixe de 3 flechas
-    diag(c, 6, 13, 7, P.wood[3]!);
-    c.set(13, 6, P.steel[4]!);
+    diag(c, 6, 13, 7, metal ? P.iron[2]! : P.wood[3]!);
+    c.set(13, 6, head[4]!);
   };
 }
 
@@ -480,6 +488,15 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   ['potion_health_supreme', potion(R.dragon, true)],
   ['potion_mana_supreme', potion(R.voidc, true)],
   ['arrow', arrow()],
+  ['arrow_metal', arrow(true)],
+  [
+    'amulet_loss',
+    (c) => {
+      amulet(P.red)(c);
+      // cruz branca no centro da gema: protege contra a perda
+      for (const [x, y] of [[8, 9], [8, 11], [7, 10], [9, 10], [8, 10]] as const) c.set(x, y, P.white);
+    },
+  ],
   ['potion_health', potion(P.red)],
   ['potion_mana', potion(P.blue)],
   ['potion_health_great', potion(P.red, true)],
@@ -775,6 +792,62 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
       c.rect(4, 7, 8, 2, P.heal[4]!);
     },
   ],
+  [
+    'haste',
+    P.ice,
+    (c) => {
+      // dois chevrons ">>" com rastros de velocidade
+      for (const x0 of [4, 8]) {
+        for (let i = 0; i < 5; i++) {
+          c.set(x0 + Math.min(i, 4 - i), 3 + i, P.white);
+          c.set(x0 + Math.min(i, 4 - i) + 1, 3 + i, P.ice[4]!);
+          c.set(x0 + Math.min(i, 4 - i), 12 - i, P.white);
+        }
+      }
+      for (const [x, y, l] of [[1, 6, 3], [1, 9, 4], [2, 12, 3]] as const) c.hline(x, x + l, y, P.ice[3]!);
+    },
+  ],
+  [
+    'mana_shield',
+    P.blue,
+    (c) => {
+      // bolha de mana com uma gota dentro
+      c.ellipse(8, 8, 6, 6, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.72 ? (nx + ny < -0.2 ? P.blue[4]! : P.blue[3]!) : 0));
+      c.ellipse(8, 8, 4, 4, P.blue[1]!);
+      c.disc(8, 9, 2, P.water[4]!);
+      c.set(8, 5, P.water[5] ?? P.white);
+      c.set(8, 6, P.water[4]!);
+      c.set(7, 8, P.white);
+      c.set(4, 4, P.white);
+    },
+  ],
+  [
+    'war_cry',
+    P.gold,
+    (c) => {
+      // corneta de guerra e ondas de som
+      for (let x = 2; x <= 8; x++) {
+        const h = Math.round(1 + (x - 2) * 0.7);
+        for (let y = 8 - h; y <= 8 + h; y++) c.set(x, y, y < 8 ? P.gold[4]! : P.gold[2]!);
+      }
+      c.rect(2, 7, 2, 3, P.leather[3]!);
+      for (const [x, r] of [[10, 3], [12, 5]] as const) for (let y = 8 - r; y <= 8 + r; y++) if (Math.abs(y - 8) >= r - 1) c.set(x, y, P.white);
+    },
+  ],
+  [
+    'stunning_arrow',
+    P.ice,
+    (c) => {
+      // flecha atravessando um cristal de gelo
+      diag(c, 2, 13, 11, P.ice[4]!);
+      c.set(13, 2, P.white);
+      c.set(12, 2, P.ice[3]!);
+      c.set(13, 3, P.ice[3]!);
+      c.set(1, 13, P.red[3]!);
+      c.set(2, 14, P.red[3]!);
+      for (const [x, y] of [[9, 9], [10, 9], [9, 10], [4, 4], [5, 4], [4, 5], [11, 12], [12, 12]] as const) c.set(x, y, P.ice[3]!);
+    },
+  ],
 ];
 for (const [name, ramp, draw] of SPELLS)
   icon(
@@ -788,6 +861,31 @@ for (const [name, ramp, draw] of SPELLS)
     },
     false,
   );
+
+// caveira de PK (cores do estilo Tibia: branca, amarela, vermelha) e escudo de grupo (líder amarelo, membro azul)
+function skullIcon(light: Color, mid: Color) {
+  return (c: PixelCanvas) => {
+    c.disc(8, 7, 5.6, (x, y, nx, ny) => (ny < -0.3 ? light : mid));
+    c.rect(5, 11, 6, 3, mid);
+    c.rect(5, 6, 2, 3, P.black);
+    c.rect(9, 6, 2, 3, P.black);
+    c.set(8, 9, P.black);
+    for (const x of [6, 8, 10]) c.set(x, 13, P.black);
+    c.set(6, 3, P.white);
+  };
+}
+
+function shieldIcon(r: Ramp, star: boolean) {
+  return (c: PixelCanvas) => {
+    for (let y = 1; y <= 14; y++) {
+      const half = y < 9 ? 5 : Math.max(0, Math.round(5 - (y - 8) * 0.85));
+      for (let x = 8 - half; x <= 7 + half; x++) c.set(x, y, x < 8 - half * 0.3 ? r[4]! : r[3]!);
+    }
+    c.hline(3, 12, 2, r[5] ?? r[4]!);
+    if (star) for (const [x, y] of [[8, 5], [7, 6], [8, 6], [9, 6], [8, 7], [6, 6], [10, 6]] as const) c.set(x, y, P.white);
+    else for (const [x, y] of [[8, 5], [8, 6], [8, 7], [8, 8], [7, 6], [9, 6]] as const) c.set(x, y, P.white);
+  };
+}
 
 // ---------------------------------------------------------------- interface
 const UI: [string, (c: PixelCanvas) => void][] = [
@@ -1067,6 +1165,11 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.set(7, 3, P.white);
     },
   ],
+  ['skull_white', skullIcon(P.white, P.bone[3]!)],
+  ['skull_yellow', skullIcon(P.gold[5]!, P.gold[3]!)],
+  ['skull_red', skullIcon(P.red[4]!, P.red[3]!)],
+  ['shield_leader', shieldIcon(P.gold, true)],
+  ['shield_member', shieldIcon(P.blue, false)],
 ];
 for (const [name, draw] of UI) icon(`ui_${name}`, draw);
 
