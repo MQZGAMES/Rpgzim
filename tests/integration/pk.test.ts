@@ -12,7 +12,6 @@ import {
   RED_SKULL_MS,
   SKULL_RENEW_MS,
   isPzLocked,
-  killCredits,
   loadPk,
   pzLockMs,
   registerAggression,
@@ -131,22 +130,63 @@ describe('PK: caveiras e PZ lock', () => {
     expect(pzLockMs(w, human.id)).toBeGreaterThan(4 * 60000);
   });
 
-  it('os DOIS últimos personagens que bateram na vítima contam a morte', () => {
-    const { sim, w, h, human } = world();
-    // dois outros personagens batem no herói e, por último, o humano dá o golpe final
-    registerAggression(w, 'hero:antigo', h.id);
-    advance(sim, 1000, 250);
-    registerAggression(w, 'hero:ajudante', h.id);
-    advance(sim, 1000, 250);
-    registerAggression(w, human.id, h.id);
-    expect(killCredits(w, h.id)).toEqual([human.id, 'hero:ajudante']); // o 1º ficou de fora
-    h.invulnerableUntil = 0;
-    asActor(w, h, () => damagePlayer(w, 999999, 'fire', actorSource(human), true));
-    expect(pzLockMs(w, human.id)).toBeGreaterThan(PZ_LOCK_ATTACK_MS); // 5 min de quem matou
-    expect(pzLockMs(w, 'hero:ajudante')).toBe(PZ_LOCK_KILL_MS); // o ajudante também contou a morte
-    expect(pzLockMs(w, 'hero:antigo')).toBeLessThan(PZ_LOCK_ATTACK_MS); // o primeiro só tinha o PZ do ataque
-    expect(w.social.unjust.get('hero:ajudante')).toHaveLength(1);
-    expect(w.social.unjust.get('hero:antigo') ?? []).toHaveLength(0);
+  describe('quem matou: maior dano + último golpe', () => {
+    const hit = (w: ReturnType<typeof world>['w'], victim: HeroEntity, raw: number, src: { id: string; name: string; kind: 'player' | 'monster' }) => {
+      victim.invulnerableUntil = 0;
+      asActor(w, victim, () => damagePlayer(w, raw, 'fire', src, true));
+    };
+    const monster = { id: 'mon:troll', name: 'Troll', kind: 'monster' as const };
+
+    it('o jogador que atacou uma vez, mas a morte veio de criaturas, NÃO pega morte injusta', () => {
+      const { w, h, human } = world();
+      h.character.health = h.stats.maxHealth = 400;
+      registerAggression(w, human.id, h.id); // atacou uma vez (caveira branca e PZ lock de 2 min)
+      hit(w, h, 10, actorSource(human));
+      hit(w, h, 150, monster);
+      hit(w, h, 150, monster);
+      hit(w, h, 999, monster); // golpe final de uma criatura
+      expect(h.dead).toBe(true);
+      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+      expect(pzLockMs(w, human.id)).toBeLessThanOrEqual(PZ_LOCK_ATTACK_MS); // sem os 5 min de quem mata
+    });
+
+    it('mesmo com o último golpe, se uma criatura causou mais dano a morte é da criatura', () => {
+      const { w, h, human } = world();
+      h.character.health = h.stats.maxHealth = 400;
+      registerAggression(w, human.id, h.id);
+      hit(w, h, 300, monster);
+      hit(w, h, 50, actorSource(human)); // o jogador dá o último golpe, mas com muito menos dano
+      expect(h.dead).toBe(false);
+      hit(w, h, 100, actorSource(human));
+      expect(h.dead).toBe(true);
+      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    });
+
+    it('quem dá o MAIOR dano e o último golpe pega a morte (injusta se a vítima não tinha caveira)', () => {
+      const { sim, w, h, human } = world();
+      const notices: string[] = [];
+      sim.events.on('pkNotice', (e) => notices.push(e.text));
+      h.character.health = h.stats.maxHealth = 400;
+      registerAggression(w, human.id, h.id);
+      hit(w, h, 100, monster);
+      hit(w, h, 120, actorSource(human));
+      hit(w, h, 500, actorSource(human)); // maior dano e golpe final
+      expect(h.dead).toBe(true);
+      expect(w.social.unjust.get(human.id)).toHaveLength(1);
+      expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
+      expect(notices.some((t) => t.includes('MORTE INJUSTA'))).toBe(true);
+    });
+
+    it('se OUTRO personagem deu mais dano, quem só deu o último golpe também não pega', () => {
+      const { w, h, human } = world();
+      h.character.health = h.stats.maxHealth = 400;
+      registerAggression(w, 'hero:forte', h.id);
+      hit(w, h, 300, { id: 'hero:forte', name: 'Forte', kind: 'player' });
+      registerAggression(w, human.id, h.id);
+      hit(w, h, 120, actorSource(human)); // último golpe, mas menos dano que o outro
+      expect(h.dead).toBe(true);
+      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    });
   });
 
   it('com menos de 30 s de PZ lock/caveira, qualquer combate renova para 30 s; sem lutar por 30 s tudo acaba', () => {

@@ -110,7 +110,8 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   - atacar quem **não tem caveira** = **caveira branca** e **PZ lock** de 2 min (não entra em lojas, templo, casas);
   - quem **revida** contra o agressor não ganha caveira; já um **terceiro** que ataca uma caveira branca sem ter sido
     atacado por ela fica com **caveira amarela**; atacar caveira vermelha é justo;
-  - **matar** = PZ lock de 5 min; os **dois últimos personagens que bateram** na vítima contam a morte. Matar quem não
+  - **matar** = PZ lock de 5 min, para quem deu o **maior dano** e também o **último golpe** (nos últimos 60 s). Se uma
+    criatura causou mais dano ou deu o golpe final, a morte é da criatura e ninguém pega morte injusta. Matar quem não
     tinha caveira é **morte injusta** (aviso na tela); a 3ª em 24 h dá **caveira vermelha** por **24 h**. Matar caveira
     branca, amarela ou vermelha não conta como injusta;
   - **branca e amarela duram exatamente o PZ lock** (2 min; 5 min se matar) e só somem quando ele acaba; com menos de 30 s

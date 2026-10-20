@@ -4,7 +4,7 @@
 //   do grupo. Atacar quem não tem caveira dá caveira branca; um terceiro que ataca uma caveira branca sem ter sido
 //   atacado por ela fica com caveira amarela (quem revida contra o agressor não ganha nada); 3 mortes injustas em
 //   24 h dão caveira vermelha (24 h). Quem ataca fica com PZ lock (2 min; 5 min se matar) e as caveiras branca e
-//   amarela duram exatamente o PZ lock. Os dois últimos personagens que bateram na vítima contam a morte.
+//   amarela duram exatamente o PZ lock. A morte conta para quem deu o MAIOR dano e também o último golpe.
 import { chebyshev } from '../../domain/value-objects/position';
 import { isPz } from '../world/GameMap';
 import type { PlayerEntity } from '../entities/types';
@@ -44,14 +44,14 @@ export interface SocialState {
   pzLocks: Map<string, number>;
   /** Mortes injustas (vítima sem caveira) de cada personagem: instantes, para a caveira vermelha. */
   unjust: Map<string, number[]>;
-  /** Últimos personagens que bateram em cada vítima (até 2, o mais recente primeiro): dividem o crédito da morte. */
-  hitters: Map<string, { id: string; at: number }[]>;
+  /** Dano recebido por cada personagem (de quem e quanto): decide quem matou (maior dano + último golpe). */
+  damageLog: Map<string, { id: string; amount: number; at: number }[]>;
   /** Último ataque de A em B: chave `${atacante}>${vitima}` -> instante. */
   aggressions: Map<string, number>;
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), hitters: new Map(), aggressions: new Map() };
+  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
 }
 
 export type SkullKind = 'white' | 'yellow' | 'red';
@@ -66,7 +66,7 @@ export const PZ_LOCK_ATTACK_MS = 2 * 60000;
 export const PZ_LOCK_KILL_MS = 5 * 60000;
 /** Caveira vermelha: 24 h. As brancas e amarelas duram o mesmo que o PZ lock. */
 export const RED_SKULL_MS = 24 * 3600000;
-/** Quem bateu na vítima nesta janela (os dois últimos) conta a morte. */
+/** Só o dano recebido nesta janela conta para decidir quem matou. */
 export const KILL_CREDIT_MS = 60000;
 /** Com menos que isto para acabar o PZ lock/caveira, qualquer combate (com personagem, NPC ou criatura) renova para este valor. */
 export const SKULL_RENEW_MS = 30000;
@@ -331,16 +331,26 @@ export function touchCombat(w: World, id: string): void {
   }
 }
 
-/** Anota quem bateu na vítima: os dois últimos (distintos) dividem o crédito da morte. */
-function noteHit(w: World, attackerId: string, victimId: string): void {
-  const list = (w.social.hitters.get(victimId) ?? []).filter((h) => h.id !== attackerId && w.now - h.at < KILL_CREDIT_MS);
-  list.unshift({ id: attackerId, at: w.now });
-  w.social.hitters.set(victimId, list.slice(0, 2));
+/** Registra o dano que a vítima recebeu (de personagens e de criaturas). */
+export function recordDamage(w: World, victimId: string, sourceId: string, amount: number): void {
+  if (amount <= 0) return;
+  const list = (w.social.damageLog.get(victimId) ?? []).filter((d) => w.now - d.at < KILL_CREDIT_MS);
+  list.push({ id: sourceId, amount, at: w.now });
+  w.social.damageLog.set(victimId, list);
 }
 
-/** Quem conta a morte da vítima: os dois últimos personagens que bateram nela nos últimos 60 s. */
-export function killCredits(w: World, victimId: string): string[] {
-  return (w.social.hitters.get(victimId) ?? []).filter((h) => w.now - h.at < KILL_CREDIT_MS).map((h) => h.id);
+/**
+ * Quem matou a vítima, para a regra de PK: só conta quem deu o ÚLTIMO golpe e também o MAIOR dano (nos últimos
+ * 60 s) e for um personagem. Se uma criatura causou mais dano, ou o golpe final foi de uma criatura, ou outro
+ * personagem deu mais dano, ninguém "matou" para a regra de PK (a morte é da criatura).
+ */
+export function killCredit(w: World, victimId: string, finalSourceId: string | null): string | null {
+  if (!finalSourceId || !actorById(w, finalSourceId)) return null;
+  const sums = new Map<string, number>();
+  for (const d of w.social.damageLog.get(victimId) ?? []) if (w.now - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
+  const mine = sums.get(finalSourceId) ?? 0;
+  const top = Math.max(0, ...sums.values());
+  return mine > 0 && mine >= top ? finalSourceId : null;
 }
 
 /** Aviso na tela (e no registro) para o jogador humano sobre PK. */
@@ -361,7 +371,6 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
   const defending = attackedRecently(w, victimId, attackerId, PZ_LOCK_ATTACK_MS); // a vítima atacou o atacante antes
   w.social.aggressions.set(`${attackerId}>${victimId}`, w.now);
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
-  noteHit(w, attackerId, victimId);
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
   const victim = skullOf(w, victimId)?.kind ?? null;
   if (victim === 'red') {
@@ -404,7 +413,7 @@ export function registerPlayerKill(w: World, killerId: string, victimSkull: Skul
 /** Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). */
 export function onPlayerDeath(w: World, id: string): void {
   w.social.pzLocks.delete(id);
-  w.social.hitters.delete(id);
+  w.social.damageLog.delete(id);
   if (skullOf(w, id)?.kind !== 'red') w.social.skulls.delete(id);
 }
 

@@ -17,7 +17,7 @@ import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { asActor, message, nextId, warnThrottled } from '../simulation/World';
-import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, killCredits, onPlayerDeath, registerAggression, registerPlayerKill, skullOf, touchCombat, xpReceivers } from '../social/social';
+import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, killCredit, onPlayerDeath, recordDamage, registerAggression, registerPlayerKill, skullOf, touchCombat, xpReceivers } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function hasLineOfSight(w: World, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
@@ -292,6 +292,7 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Da
     p.character.mana -= absorbed;
     toHealth -= absorbed;
   }
+  recordDamage(w, p.id, source.id, res.damage); // de quem veio o dano (decide quem matou)
   const manaLoss = res.damage - toHealth;
   p.character.health = Math.max(0, p.character.health - toHealth);
   w.events.emit('damage', { targetId: p.id, sourceId: source.id, amount: toHealth, ...(manaLoss > 0 ? { manaLoss } : {}), element, blocked: res.absorbed && manaLoss === 0, position: pos });
@@ -334,11 +335,11 @@ function killPlayer(w: World, killer: DamageSource): void {
   w.events.emit('playerDied', { xpLost: before - c.experience, killerId: killer.id, killerName: killer.name, byPlayer: killer.kind === 'player' });
   message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
   const sparring = killer.kind === 'player' && isSparring(w, killer.id, p.id);
-  // os dois últimos personagens que bateram na vítima (e o autor do golpe final, se for personagem) contam a morte
+  // a morte conta para quem deu o MAIOR dano e o ÚLTIMO golpe, e só se for personagem: se uma criatura causou mais
+  // dano (ou deu o golpe final), quem matou foi a criatura e ninguém pega morte injusta
   if (!sparring) {
-    const credited = new Set(killCredits(w, p.id));
-    if (killer.kind === 'player') credited.add(killer.id);
-    for (const id of credited) if (id !== p.id) registerPlayerKill(w, id, skullBefore, c.name);
+    const killerId = killCredit(w, p.id, killer.kind === 'player' ? killer.id : null);
+    if (killerId && killerId !== p.id) registerPlayerKill(w, killerId, skullBefore, c.name);
   }
   onPlayerDeath(w, p.id);
   if (!sparring) dropDeathLoot(w, p, skullBefore === 'red');
