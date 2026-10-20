@@ -34,6 +34,8 @@ export interface GameEventMap extends Record<string, unknown> {
   playerRespawned: Record<string, never>;
   buffApplied: { targetId: string; kind: string; durationMs: number };
   targetChanged: { targetId: string | null };
+  /** Dois personagens trocaram de lugar depois de insistirem um no caminho do outro. */
+  actorsSwapped: { firstId: string; secondId: string };
   itemUsed: { itemId: string };
   saveRequested: { reason: string };
   // ---- heróis (personagens com vida própria)

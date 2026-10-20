@@ -1,9 +1,22 @@
 // Loja: comprar e vender com preços configuráveis, quantidade, comparação e feedback de ouro.
 import { useState } from 'react';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
+import type { ItemView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
-import { ItemDetails } from '../inventory/InventoryPanel';
+import { ItemDetails, statDiff } from '../inventory/InventoryPanel';
 import { ItemStats } from '../inventory/ItemCell';
+
+/** Diferença de atributos do item da loja em relação ao que está equipado (ex.: "+1 def"). */
+function ShopDiff({ item, equipped }: { item: ItemView; equipped: ItemView | null }) {
+  const diff = statDiff(item, equipped);
+  if (!diff) return null;
+  const better = diff.startsWith('+');
+  return (
+    <span className={`text-outline text-[11px] leading-none ${better ? 'text-heal' : 'text-hp-light'}`} data-testid="shop-diff">
+      {diff}
+    </span>
+  );
+}
 
 export function ShopPanel() {
   const session = useSession();
@@ -67,6 +80,7 @@ export function ShopPanel() {
                   {o.item.kept && <ItemIcon icon="ui_lock" size={12} title="Venda travada" />}
                   <span className="min-w-0 truncate text-[13px]">{o.item.name}</span>
                   <ItemStats item={o.item} size="md" />
+                  {o.item.slot && <ShopDiff item={o.item} equipped={eq[o.item.slot]} />}
                 </span>
                 <span className={`block text-[11px] ${tab === 'buy' && o.extra ? 'text-hp-light' : 'text-gold-light'}`}>
                   {o.price} ouro{tab === 'sell' ? ` · você tem ${o.owned}` : ''}

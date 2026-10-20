@@ -3,24 +3,34 @@
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
+import { HOLD_MS, useHoldRepeat } from '../common/useHoldRepeat';
 import { SpellButton } from './SpellButton';
 
 /** Um atalho: magia, item/poção (com quantidade e recarga) ou vazio (toque abre a configuração). */
 export function HotbarSlot({ slot, size, keyHint }: { slot: HotbarSlotView; size: number; keyHint?: string }) {
   const session = useSession();
+  // manter pressionado repete o item/poção a cada recarga
+  // (o hook é chamado sempre: trocar o tipo do atalho não pode mudar a quantidade de hooks)
+  const { handlers } = useHoldRepeat({
+    onFire: () => session.useSlot(slot.index),
+    cooldownRemaining: slot.cooldownRemaining,
+    cooldownMs: slot.cooldownMs,
+    canRepeat: slot.count > 0,
+    onRelease: (heldMs) => heldMs >= HOLD_MS && session.cancelQueuedSpell(),
+  });
   if (slot.kind === 'spell' && slot.spell) return <SpellButton spell={slot.spell} size={size} keyHint={keyHint} onCast={() => session.useSlot(slot.index)} />;
   if (slot.kind === 'empty') {
     return (
       <button
-        type="button"
-        aria-label={`Atalho ${slot.index + 1} vazio: configurar`}
-        title="Atalho vazio — toque para configurar"
-        onClick={() => session.setPanel('hotbar')}
-        className="relative flex items-center justify-center rounded-sm border-2 border-dashed border-[#6b5a86] bg-black/30 text-[18px] leading-none text-muted"
-        style={{ width: size, height: size }}
-        data-testid={`slot-${slot.index}`}
+          type="button"
+          aria-label={`Atalho ${slot.index + 1} vazio: configurar`}
+          title="Atalho vazio — toque para configurar"
+          onClick={() => session.setPanel('hotbar')}
+          className="relative flex items-center justify-center rounded-sm border-2 border-dashed border-[#6b5a86] bg-black/30 text-[18px] leading-none text-muted"
+          style={{ width: size, height: size }}
+          data-testid={`slot-${slot.index}`}
       >
-        +{keyHint && <span className="text-outline absolute -left-[4px] -top-[6px] text-[10px] leading-none text-gold-light">{keyHint}</span>}
+          +{keyHint && <span className="text-outline absolute -left-[4px] -top-[6px] text-[10px] leading-none text-gold-light">{keyHint}</span>}
       </button>
     );
   }
@@ -30,10 +40,7 @@ export function HotbarSlot({ slot, size, keyHint }: { slot: HotbarSlotView; size
       type="button"
       aria-label={`${slot.name} (${slot.count})`}
       title={slot.name}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        session.useSlot(slot.index);
-      }}
+      {...handlers}
       className={`frame-slot relative flex items-center justify-center !border-[6px] active:translate-y-px ${slot.count === 0 ? 'opacity-55' : ''}`}
       style={{ width: size, height: size }}
       data-testid={slot.kind === 'potion' ? `potion-${slot.itemId}` : `slot-${slot.index}`}
@@ -80,9 +87,10 @@ export function TouchActions() {
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-2 pr-[max(10px,env(safe-area-inset-right))]">
       <div
-        className="pointer-events-none grid items-center justify-items-center gap-[8px]"
+        className="pointer-events-auto grid items-center justify-items-center gap-[8px]"
         style={{ gridTemplateColumns: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px`, gridTemplateRows: `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${ATTACK}px` }}
         data-testid="touch-actions"
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="flex w-full justify-end self-end" style={{ gridArea: '1 / 1 / 2 / 3' }}>
           <InteractButton />

@@ -130,13 +130,6 @@ export function isPz(m: GameMap, x: number, y: number): boolean {
   return inBounds(m, x, y) && m.pz[cellIndex(m, x, y)] === 1;
 }
 
-/** Tile de cidade ou área protegida: personagens passam uns pelos outros (ninguém trava porta/rua). */
-export function isCrowdSafe(m: GameMap, x: number, y: number): boolean {
-  if (!inBounds(m, x, y)) return false;
-  const i = cellIndex(m, x, y);
-  return m.pz[i] === 1 || m.city[i] === 1;
-}
-
 export function blocksSight(m: GameMap, x: number, y: number): boolean {
   return !inBounds(m, x, y) || m.sight[cellIndex(m, x, y)] === 1;
 }

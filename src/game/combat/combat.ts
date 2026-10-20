@@ -189,15 +189,32 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
   applyHit(w, target, raw, weapon.element, false);
 }
 
-/** O monstro passa a perseguir quem o atacou (o ator em execução), se ainda não tiver outro alvo. */
-export function aggro(w: World, m: MonsterEntity): void {
-  if (!m.alive || w.player.dead) return;
-  if (m.state !== 'chasing' && m.state !== 'attacking') {
+/**
+ * O monstro passa a perseguir quem o atacou.
+ * Sem `attractor`, o monstro já perseguindo alguém não é roubado (o alvo mais próximo continua valendo).
+ * Com `attractor` (ex.: golpe em área do Knight), o monstro vira as costas para quem estava atacando
+ * e persegue quem o atraiu — é o "puxar a atenção" do Knight.
+ */
+export function aggro(w: World, m: MonsterEntity, attractor?: string): void {
+  if (!m.alive) return;
+  const id = attractor ?? w.player.id;
+  const actor = attractor ? actorById(w, attractor) : w.player;
+  if (!actor || actor.dead) return;
+  const chasing = m.state === 'chasing' || m.state === 'attacking';
+  if (chasing && m.targetId === id) return;
+  // sem isca explícita, quem já persegue alguém continua com o alvo atual
+  if (chasing && attractor === undefined && m.targetId) return;
+  if (!chasing) {
     m.state = 'chasing';
     m.nextThinkAt = w.now;
-    m.targetId = w.player.id;
-  } else if (!m.targetId) m.targetId = w.player.id;
+  }
+  m.targetId = id;
+  // a isca prende o monstro no conjurador por um tempo: o "inimigo mais próximo" não rouba o foco
+  if (attractor) m.tauntUntil = w.now + TAUNT_MS;
 }
+
+/** Quanto tempo o monstro fica preso no alvo atraído (isca do Knight). */
+export const TAUNT_MS = 4000;
 
 export function damageMonster(w: World, m: MonsterEntity, amount: number, element: Element, sourceId: string | null): void {
   if (!m.alive) return;

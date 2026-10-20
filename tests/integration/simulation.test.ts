@@ -750,7 +750,7 @@ describe('grupo, PK e modo de ataque', () => {
 });
 
 describe('Boladex não trava no jogador', () => {
-  it('jogador parado na porta do templo não bloqueia o herói (na vila os personagens se atravessam)', () => {
+  it('jogador parado na porta do templo não bloqueia o herói (insistindo, eles trocam de lugar)', () => {
     const sim = makeSim('knight', { seed: 4 });
     const w = sim.world;
     const hero = GAME_DATA.heroes.boladex!;
@@ -762,7 +762,8 @@ describe('Boladex não trava no jogador', () => {
     // o herói sai do templo para caçar: precisa passar pela porta
     runUntil(sim, () => h.y > door.y + 2, 30000, 50);
     expect(h.y).toBeGreaterThan(door.y + 2);
-    // e o jogador continua registrado no tile dele (ninguém "some" da ocupação)
-    expect(w.occupancy.get(door.y * w.map.width + door.x)).toBe(w.human.id);
+    // e ninguém "some" da ocupação: cada um está registrado no tile onde está (houve troca de lugar)
+    expect(w.occupancy.get(w.human.y * w.map.width + w.human.x)).toBe(w.human.id);
+    expect(w.occupancy.get(h.y * w.map.width + h.x)).toBe(h.id);
   });
 });

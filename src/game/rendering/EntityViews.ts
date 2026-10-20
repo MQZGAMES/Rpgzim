@@ -6,9 +6,17 @@ import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '
 import type { World } from '../simulation/World';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
-import { worldText } from './text';
+import { worldText, snapWorld, dprSafe } from './text';
 
 const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
+
+/** Estilo do nome: o do jogador/herói é maior (é informação de combate); o de criatura é discreto. */
+export type NameKind = 'actor' | 'creature';
+
+const NAME_STYLE: Record<NameKind, { size: number; weight: number }> = {
+  actor: { size: 16, weight: 800 },
+  creature: { size: 11, weight: 700 },
+};
 
 export class CreatureView {
   readonly container: Phaser.GameObjects.Container;
@@ -18,6 +26,7 @@ export class CreatureView {
   private label: Phaser.GameObjects.Text | null = null;
   private labelText = '';
   private labelColor = '';
+  private labelKind: NameKind = 'creature';
   private lastHpKey = '';
   private flashUntil = 0;
   /** Deslocamento temporário (investida de ataque), em pixels. */
@@ -33,12 +42,13 @@ export class CreatureView {
     readonly yOffset: number,
     name?: string,
     labelColor = '#fff09a',
+    nameKind: NameKind = 'creature',
   ) {
     this.shadow = scene.add.image(0, -2, 'objects', `shadow_${shadow}`);
     this.sprite = scene.add.sprite(0, yOffset, sheet, 0).setOrigin(0.5, 1);
     this.container = scene.add.container(0, 0, [this.shadow, this.sprite]);
     this.scene = scene;
-    if (name) this.setName(name, labelColor);
+    if (name) this.setName(name, labelColor, nameKind);
   }
 
   private readonly scene: Phaser.Scene;
@@ -49,15 +59,19 @@ export class CreatureView {
   }
 
   /** Nome sempre visível acima da barra de vida (na fonte da interface). */
-  setName(text: string, color: string): void {
-    if (text === this.labelText && color === this.labelColor && this.label) return;
+  setName(text: string, color: string, nameKind: NameKind = this.labelKind): void {
+    if (text === this.labelText && color === this.labelColor && this.label && nameKind === this.labelKind) return;
     this.labelText = text;
     this.labelColor = color;
+    this.labelKind = nameKind;
+    const style = NAME_STYLE[nameKind];
     if (!this.label) {
-      this.label = worldText(this.scene, 0, 0, text, { size: 11, color });
+      this.label = worldText(this.scene, 0, 0, text, { size: style.size, color, weight: style.weight });
       this.label.setOrigin(0.5, 1);
       this.container.add(this.label);
-    } else this.label.setText(text).setColor(color);
+    } else {
+      this.label.setText(text).setColor(color).setFontSize(`${style.size * dprSafe()}px`);
+    }
     this.label.setPosition(0, this.headTop - 4);
   }
 
@@ -97,8 +111,10 @@ export class CreatureView {
 
   sync(m: Mover, now: number, animate: boolean, speed: number): void {
     const p = renderPos(m, now);
-    const x = Math.round(p.x * 16 + 8 + this.lunge.x);
-    const y = Math.round((p.y + 1) * 16 - 1 + this.lunge.y);
+    // Encaixa na grade de pixels da tela: sem isso o desenho "pula" meio pixel a cada quadro
+    // (a interpolação é fracionária) e o nome do personagem treme enquanto o personagem anda.
+    const x = snapWorld(p.x * 16 + 8 + this.lunge.x);
+    const y = snapWorld((p.y + 1) * 16 - 1 + this.lunge.y);
     this.container.setPosition(x, y);
     this.container.setDepth(ySort(p.y, 0.5));
     if (this.dead) return;
@@ -199,7 +215,7 @@ export class EntityViews {
   }
 
   private addHero(h: HeroEntity): CreatureView {
-    const v = new CreatureView(this.scene, h.id, h.character.vocation, 'humanoid', 's', 1, h.character.name, '#8ff0b0');
+    const v = new CreatureView(this.scene, h.id, h.character.vocation, 'humanoid', 's', 1, h.character.name, '#8ff0b0', 'actor');
     this.heroes.set(h.id, v);
     return v;
   }
@@ -246,12 +262,12 @@ export class EntityViews {
       if (!v.container.visible) continue;
       v.sync(h, now, true, h.stats.speed);
       const plate = this.actorPlate(h, '#8ff0b0');
-      v.setName(plate.text, plate.color);
+      v.setName(plate.text, plate.color, 'actor');
       v.setLabelVisible(!h.dead);
       v.setHealthBar(h.dead ? null : h.character.health / h.stats.maxHealth, this.scene, h.id === targetId ? 0xff6a5a : 0x4fd08a);
     }
     const plate = this.actorPlate(p, '#fbf8ef');
-    this.player.setName(plate.text, plate.color);
+    this.player.setName(plate.text, plate.color, 'actor');
     this.player.setLabelVisible(!p.dead);
     this.player.setHealthBar(p.dead ? null : p.character.health / p.stats.maxHealth, this.scene, 0x4fd08a);
   }

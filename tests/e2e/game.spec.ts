@@ -314,3 +314,73 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
   await page.getByTestId(`player-invite-${hero.id}`).tap();
   await expect(page.getByTestId(`player-party-${hero.id}`)).toBeVisible();
 });
+
+test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não andam; joystick por cima do HUD; mochila sem rolagem', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
+  await createCharacter(page, 'druid', 'Toque');
+  await api(page, (a) => a.teleport(80, 22));
+  await page.waitForTimeout(500);
+  const fired = () => page.evaluate(() => { const a = (window as unknown as { __RPGZIM__: { castLog(): unknown[]; itemLog(): unknown[] } }).__RPGZIM__; return a.castLog().length + a.itemLog().length; });
+  const clear = () => page.evaluate(() => (window as unknown as { __RPGZIM__: { clearCastLog(): void } }).__RPGZIM__.clearCastLog());
+
+  // 1) vãos entre os atalhos: nenhum ponto da grade cai na camada do mapa (tocar ali não anda)
+  const gaps = await page.evaluate(() => {
+    const b = document.querySelector('[data-testid=touch-actions]')!.getBoundingClientRect();
+    let onMap = 0;
+    let total = 0;
+    for (let y = b.top + 1; y < b.bottom - 1; y += 5)
+      for (let x = b.left + 1; x < b.right - 1; x += 5) {
+        total++;
+        if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
+      }
+    return { onMap, total };
+  });
+  expect(gaps.total).toBeGreaterThan(100);
+  expect(gaps.onMap).toBe(0);
+
+  // 2) segurar o atalho da magia repete a cada recarga; soltar encerra (nada dispara depois)
+  const box = (await page.getByTestId('spell-earth_thorn').boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const gameNow = () => page.evaluate(() => (window as unknown as { __RPGZIM__: { now(): number } }).__RPGZIM__.now());
+  await clear();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
+  // o relógio do jogo pode andar mais devagar que o real (quadros lentos): espera os disparos, não segundos
+  await expect.poll(fired, { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx - 150, y: cy - 250 }] }); // solta com o dedo fora do botão
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await clear();
+  // depois de soltar, passam 4,5 s de JOGO (mais que duas recargas) e nada dispara
+  const t0 = await gameNow();
+  await expect.poll(async () => (await gameNow()) - t0, { timeout: 30_000 }).toBeGreaterThan(4500);
+  expect(await fired()).toBe(0);
+
+  // 3) joystick: aparece por cima de tudo (fora da árvore do HUD) enquanto arrasta
+  const vp = page.viewportSize()!;
+  const ox = vp.width * 0.2;
+  const oy = vp.height * 0.7;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: ox, y: oy }] });
+  for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: ox + i * 10, y: oy }] });
+  await expect(page.getByTestId('joystick')).toBeVisible();
+  const z = await page.getByTestId('joystick').evaluate((el) => ({ inHud: !!el.closest('[data-testid=hud]'), z: Number(getComputedStyle(el).zIndex) }));
+  expect(z.inHud).toBe(false);
+  expect(z.z).toBeGreaterThanOrEqual(50);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByTestId('joystick')).toHaveCount(0);
+
+  // 4) mochila: detalhes e ações à vista, sem rolagem e dentro do painel
+  await page.getByTestId('btn-inventory').tap();
+  await page.getByTestId('bag-0').tap();
+  const lay = await page.evaluate(() => {
+    const dlg = document.querySelector('[role=dialog]')!.getBoundingClientRect();
+    const act = document.querySelector('[data-testid=bag-actions]')!.getBoundingClientRect();
+    const det = document.querySelector('[data-testid=item-details]')!.getBoundingClientRect();
+    const scrollers = [...document.querySelectorAll('[role=dialog] *')].filter((e) => e.scrollHeight > e.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(e).overflowY)).length;
+    return { actionsInside: act.bottom <= dlg.bottom + 1 && act.top >= dlg.top, detailsInside: det.bottom <= dlg.bottom + 1, scrollers };
+  });
+  expect(lay.actionsInside).toBe(true);
+  expect(lay.detailsInside).toBe(true);
+  expect(lay.scrollers).toBe(0);
+  await expect(page.getByTestId('bag-organize')).toBeVisible();
+});

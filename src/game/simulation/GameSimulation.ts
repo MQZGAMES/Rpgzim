@@ -84,6 +84,9 @@ export class GameSimulation {
       facing: c.facing ?? 'down',
       move: null,
       moveEnd: 0,
+      stuckSince: 0,
+      stuckWith: null,
+      stuckAt: 0,
       character: c,
       stats: computeStats(opts.data, c),
       buffs: [],
@@ -413,6 +416,14 @@ export class GameSimulation {
   }
   discard(index: number): void {
     discardItem(this.world, index);
+  }
+  /** Compacta a mochila sem alterar a ordem relativa dos itens. */
+  organizeInventory(): void {
+    const inv = this.world.player.character.inventory;
+    const filled = inv.filter((s): s is NonNullable<typeof s> => s !== null);
+    inv.splice(0, inv.length, ...filled, ...Array.from({ length: inv.length - filled.length }, () => null));
+    this.world.events.emit('itemsChanged', {});
+    this.world.events.emit('saveRequested', { reason: 'inventory' });
   }
   /** Coleta da janela de loot: 'all' (todos os sacos ao redor), 'gold' ou um item de um saco específico. */
   takeLoot(which: 'all' | 'gold' | { bagId: string; index: number }): void {

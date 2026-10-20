@@ -39,6 +39,7 @@ export function ItemCell({
   testId,
   emptyLabel = 'Espaço vazio',
   iconSize = 32,
+  diff,
 }: {
   item: ItemView | null;
   active?: boolean;
@@ -47,6 +48,8 @@ export function ItemCell({
   testId?: string;
   emptyLabel?: string;
   iconSize?: number;
+  /** Diferença de atributos em relação ao equipado (ex.: "+1 def"). */
+  diff?: string | null;
 }) {
   const lastUp = useRef(0);
   return (
@@ -70,7 +73,7 @@ export function ItemCell({
         }
       }}
       className={`frame-slot relative flex aspect-square items-center justify-center !border-[5px] ${active ? 'outline-2 outline-gold-light' : ''} ${item?.better ? 'shadow-[inset_0_0_0_2px_rgba(79,208,138,0.55)]' : ''}`}
-      aria-label={item ? `${item.name}${item.count > 1 ? ` x${item.count}` : ''}${item.better ? ' (melhor que o equipado)' : ''}` : emptyLabel}
+      aria-label={item ? `${item.name}${item.count > 1 ? ` x${item.count}` : ''}${item.better ? ' (melhor que o equipado)' : ''}${diff ? ` (${diff})` : ''}` : emptyLabel}
       data-testid={testId}
       data-better={item?.better ? 'true' : undefined}
     >
@@ -83,6 +86,11 @@ export function ItemCell({
       )}
       {item?.better && <span className="text-outline pointer-events-none absolute bottom-[-5px] left-[-3px] text-[10px] leading-none text-heal">▲</span>}
       {item?.kept && <ItemIcon icon="ui_lock" size={11} className="pointer-events-none absolute right-[-3px] top-[-4px]" title="Venda travada" />}
+      {diff && (
+        <span className="text-outline pointer-events-none absolute -bottom-[5px] right-[-3px] text-[9px] leading-none text-gold-light" data-testid="item-diff">
+          {diff}
+        </span>
+      )}
     </button>
   );
 }

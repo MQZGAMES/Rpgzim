@@ -123,7 +123,8 @@ export function castSpell(w: World, spellId: string): boolean {
         m.slowFactor = spell.slow.factor;
       }
       damageMonster(w, m, res.damage, spell.element, p.id);
-      aggro(w, m);
+      // golpe em área com isca: o monstro atingido vira as costas para quem atacava e persegue o conjurador
+      aggro(w, m, spell.attract ? p.id : undefined);
     }
     // PK: o personagem mirado também é atingido (se estiver na área do efeito)
     if (actorTarget && tiles.some((t) => t.x === actorTarget.x && t.y === actorTarget.y) && !canAttackActor(w, p, actorTarget)) {

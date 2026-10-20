@@ -22,14 +22,16 @@ function monsterAvoidance(w: World): (x: number, y: number) => number {
   return (x, y) => danger.get(y * w.map.width + x) ?? 0;
 }
 
-export function planWalk(w: World, x: number, y: number, opts: { quiet?: boolean; maxNodes?: number; avoidMonsters?: boolean } = {}): boolean {
+export function planWalk(w: World, x: number, y: number, opts: { quiet?: boolean; maxNodes?: number; avoidMonsters?: boolean; stopWithin?: number } = {}): boolean {
   const p = w.player;
   if (p.dead) return false;
   w.ui.pending = null;
   const maxNodes = opts.maxNodes ?? 12000;
   const solid = isSolid(w.map, x, y);
   const extraCost = opts.avoidMonsters ? monsterAvoidance(w) : undefined;
-  let path = pathTo(w, p, { x, y }, false, { stopWithin: solid ? 1 : 0, maxNodes, extraCost });
+  // `stopWithin` deixa o caminho terminar a uma distância do destino (seguir o líder sem entrar no tile dele)
+  const stop = opts.stopWithin ?? (solid ? 1 : 0);
+  let path = pathTo(w, p, { x, y }, false, { stopWithin: stop, maxNodes, extraCost });
   for (let r = 1, tries = 0; !path && r <= 10 && tries < 8; r++) {
     const ring: { x: number; y: number; d: number }[] = [];
     for (let dy = -r; dy <= r; dy++)

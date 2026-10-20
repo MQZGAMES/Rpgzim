@@ -41,6 +41,12 @@ export interface PlayerEntity extends Mover {
   buffs: ActiveBuff[];
   cooldowns: Cooldowns;
   targetId: string | null;
+  /** Desde quando tenta atravessar o mesmo personagem (para o swap após insistência). */
+  stuckSince: number;
+  /** Quem está bloqueando o caminho (troca de lugar com ele depois de alguns segundos). */
+  stuckWith: string | null;
+  /** Instante da última tentativa de passar por `stuckWith`. */
+  stuckAt: number;
   nextAttackAt: number;
   heldDir: DirVector | null;
   path: TilePos[] | null;
@@ -98,6 +104,8 @@ export interface MonsterEntity extends Mover {
   pathGoal: TilePos | null;
   /** Ator (jogador ou herói) que o monstro está perseguindo/atacando. */
   targetId: string | null;
+  /** Até quando o monstro fica preso no alvo que o atraiu (isca do Knight): ignora o "mais próximo". */
+  tauntUntil: number;
 }
 
 export interface NpcEntity extends Mover {

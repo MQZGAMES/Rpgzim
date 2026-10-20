@@ -385,6 +385,14 @@ export class GameSession {
     if (!this.sim.useItemById(e.id)) this.audio.play('error');
     this.dirty = true;
   }
+  /** Soltou um atalho que estava pressionado: a magia que ficou na fila (alvo fora de alcance) não dispara depois. */
+  cancelQueuedSpell(): void {
+    this.sim.world.player.queuedSpell = null;
+  }
+  organizeInventory(): void {
+    this.sim.organizeInventory();
+    this.dirty = true;
+  }
   cast(spellId: string): void {
     if (this.sim.castSpell(spellId)) this.dirty = true;
   }

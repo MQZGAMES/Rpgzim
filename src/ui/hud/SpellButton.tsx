@@ -1,18 +1,26 @@
 import type { SpellView } from '../../integration/game-ui-bridge/snapshot';
+import { useSession } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
+import { HOLD_MS, useHoldRepeat } from '../common/useHoldRepeat';
 
 /** Botão de magia com varredura de recarga, custo de mana e estado indisponível. */
 export function SpellButton({ spell, size = 48, keyHint, onCast }: { spell: SpellView; size?: number; keyHint?: string; onCast: () => void }) {
+  // manter pressionado repete a magia a cada recarga (sem precisar clicar de novo)
+  const session = useSession();
+  const { handlers } = useHoldRepeat({
+    onFire: onCast,
+    cooldownRemaining: spell.cooldownRemaining,
+    cooldownMs: spell.cooldownMs,
+    canRepeat: spell.unlocked,
+    onRelease: (heldMs) => heldMs >= HOLD_MS && session.cancelQueuedSpell(),
+  });
   const cdPct = spell.cooldownRemaining > 0 ? Math.min(1, spell.cooldownRemaining / Math.max(spell.cooldownMs, 1000)) : 0;
   const locked = !spell.unlocked;
   const noMana = spell.reason === 'Mana insuficiente.';
   return (
     <button
       type="button"
-      onPointerDown={(e) => {
-        e.preventDefault();
-        onCast();
-      }}
+      {...handlers}
       aria-label={`${spell.name} (${spell.manaCost} de mana)`}
       title={`${spell.name} — ${spell.words}\n${spell.description}\nMana: ${spell.manaCost} · Recarga: ${spell.cooldownMs / 1000}s${spell.reason ? `\n${spell.reason}` : ''}`}
       className="frame-slot relative flex items-center justify-center !border-[6px] active:translate-y-px"

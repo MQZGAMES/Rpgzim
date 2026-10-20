@@ -21,12 +21,22 @@ export interface WorldTextStyle {
   stroke?: string | null;
 }
 
+/**
+ * Encaixa um valor do mundo na grade de pixels da tela (1/zoom de pixel do mundo).
+ * Textos e sprites desenhados fora dessa grade tremem: o WebGL arredonda os vértices do quad a cada
+ * quadro e o desenho "pula" meio pixel, deixando o nome do personagem ilegível enquanto ele anda.
+ */
+export function snapWorld(v: number): number {
+  return Math.round(v * zoom) / zoom;
+}
+
 /** Cria um texto do mundo já escalado para o zoom atual (e reescalado automaticamente quando ele muda). */
 export function worldText(scene: Phaser.Scene, x: number, y: number, text: string, style: WorldTextStyle): Phaser.GameObjects.Text {
   const px = style.size * dpr;
   const t = scene.add.text(x, y, text, {
     fontFamily: WORLD_FONT,
     fontSize: `${px}px`,
+    // o canvas aceita peso numérico ("800") e usa a fonte variável (Nunito Variable) com esse peso
     fontStyle: String(style.weight ?? 800),
     color: style.color ?? '#fbf8ef',
     align: style.align ?? 'center',
@@ -49,6 +59,11 @@ export function setWorldTextZoom(z: number): void {
 /** Tamanho na tela convertido para pixels do mundo (para posicionar molduras e barras). */
 export function cssToWorld(cssPx: number): number {
   return (cssPx * dpr) / zoom;
+}
+
+/** Fator de densidade do dispositivo (o texto do mundo é desenhado em pixels físicos). */
+export function dprSafe(): number {
+  return dpr;
 }
 
 /** Garante que a fonte já foi carregada antes do primeiro texto (senão o canvas usa a fonte padrão). */

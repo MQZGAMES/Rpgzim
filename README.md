@@ -42,6 +42,9 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   quando dá, monstros). *Mundo inteiro* / *Aproximar*.
 - **Personagens online** (botão de pessoas ou tecla O): quem está no mundo, onde e fazendo o quê; **+ Grupo** chama
   para o grupo na hora e a pessoa vem andando até você (aparece no mini mapa).
+- **Segurar o atalho repete** a magia/item/poção a cada recarga (sem ficar clicando); soltar encerra na hora e cancela
+  a magia que estava na fila. No celular, o toque **nos vãos entre os atalhos aciona a grade** (nunca anda pelo mapa) e
+  o **joystick fica por cima de todo o HUD**.
 - **Atalhos personalizáveis** (*Menu → Configurar atalhos*, botão *Atalhos* no Grimório, ou tocar num atalho
   vazio): cada posição numerada (a mesma da tela) recebe uma magia, uma **poção automática** (vida/mana, usa a
   menor que cobre o que falta) ou um item usável da mochila. Saves antigos são convertidos sozinhos.
@@ -69,7 +72,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado, a munição da arma equipada nem o
   **travado**: na mochila/equipamento, *Travar venda* põe um cadeado no item). Janela responsiva (lista com rolagem
   própria e barra de ações sempre visível, em retrato, paisagem e desktop).
-- **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres (mas lá os personagens se atravessam).
+- **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres para lutar (e ninguém atravessa ninguém: se travar, trocam de lugar).
 - Inventário, 9 slots de equipamento, ataque/defesa visíveis em cada item (verde ▲ quando é melhor que o
   equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta), munição.
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
@@ -101,7 +104,7 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   (podem se atacar sem caveira e sem perder ouro), sair e desfazer o grupo. Qualquer membro pode ser o líder (a coroa
   escolhe, inclusive você de volta) e você ajusta as regras mesmo sem liderar. **Seguir fluido**: quem segue refaz
   a rota enquanto anda (sem parar e recomeçar), acelera até 35% quando fica para trás, para a até 2 tiles do líder, e
-  membros do grupo passam um pelo outro em qualquer lugar. Com o Boladex de líder, você (sem alvo e sem caminho
+  quem trava no outro troca de lugar após 5 s. Com o Boladex de líder, você (sem alvo e sem caminho
   escolhido) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
 - **PK** (caveira): ligado, personagens podem se atacar fora das áreas protegidas (membros do grupo só no treino).
   Quem ataca alguém sem caveira fica com caveira (5 min; 15 min se matar). Quem morre no PK deixa parte do ouro
@@ -109,15 +112,27 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
 - **Boladex no PK**: revida quando atacado (ou foge se estiver perdendo), busca vingança de quem o matou e, por
   oportunidade, pesa ouro carregado, força relativa, vida do alvo, caveira, relação e temperamento. Sem nada a
   ganhar e sem motivo, não ataca (e às vezes comenta isso).
+- **Personagens não se sobrepõem** (nem na cidade): o caminho contorna e, se um insistir contra o outro por 5 s,
+  os dois **trocam de lugar**.
 - **Loot dividido no grupo**: ao pegar loot do chão com o grupo por perto (mesmo alcance da XP), o ouro e cada item
   são divididos igualmente entre os membros vivos e perto; o resto da divisão (quando é ímpar) fica com quem pegou.
   Quem não cabe na mochila deixa o excedente no saco.
+- **Papel em grupo (Knight/Boladex)**: *Redemoinho de Aço* atrai os monstros atingidos para o Knight (isca de 4 s,
+  vale para você também); o Boladex puxa criaturas ociosas para o grupo, vira para si quem ataca os colegas, bebe poção
+  de mana/vida (também contra atiradores e em emergência), dá poção ao colega morrendo e **pega o loot da tela toda
+  enquanto luta** (sobreviver e atacar vêm primeiro; sem ninguém encostado ele busca o saco mais distante).
+- **Criaturas** trocam de alvo pelo personagem mais próximo (a isca prende o foco por 4 s); quando o alvo volta ao
+  respawn, o ataque do jogador é **cancelado** (o próximo ataque seleciona o mais próximo).
+- **Mochila**: layout compacto sem rolagem (equipamento em 5 colunas, mochila em 7, detalhes e ações sempre à vista;
+  em celular deitado vira 3 colunas e no desktop, 2), botão **Organizar** (remove os espaços vazios) e diferença de
+  atributos em relação ao equipado em cada item (ex.: *+2 atq*, *+6 def*), também na loja.
+- **Nomes no mapa** (desktop): jogadores e heróis com fonte maior e posição na grade de pixels da tela (sem tremer ao andar).
 - **Vila rápida**: cada visita tem limite (75 s no total, 30 s por parada) e, depois dela, só volta antes de
   3 min com a mochila cheia; sem poção e ferido pede a bênção do sacerdote (grátis) em vez de esperar a vida voltar;
   sem poções escolhe uma caça mais tranquila; compra estoques maiores e só guarda no banco o excedente.
 - **Atitudes raras**: às vezes diz que quer PK (com o PK desligado). Ataque ou PK só por decisão própria **fora do
   grupo**: em grupo nunca ataca nem desafia ninguém (no treino liberado, só revida se você atacar).
-- **Caça mais, perde menos tempo**: só volta à vila quando a viagem compensa (mochila cheia, loot que vale, poções acabando com ouro para um bom estoque, upgrade ao alcance), visita só as lojas onde tem o que fazer (na ordem mais curta), troca de ponto quando os monstros acabam e, preso, dá um passo para o lado e replaneja. Na vila os personagens se atravessam (ninguém trava porta). Em simulação de 40 min: ~83% do tempo caçando.
+- **Caça mais, perde menos tempo**: só volta à vila quando a viagem compensa (mochila cheia, loot que vale, poções acabando com ouro para um bom estoque, upgrade ao alcance), visita só as lojas onde tem o que fazer (na ordem mais curta), troca de ponto quando os monstros acabam e, preso, dá um passo para o lado e replaneja. Se alguém trava a porta, trocam de lugar após 5 s. Em simulação de 40 min: ~83% do tempo caçando.
 - **Mais esperto**: aprende quais caças rendem mais XP por minuto, evita onde morreu há pouco, explora áreas novas,
   escolhe atividades com um pouco de acaso (improvisa), comenta o que vê, convida você para o grupo, aceita ou recusa
   convites conforme a relação, acompanha você quando você é o líder e te dá poção quando você está mal.
@@ -145,8 +160,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **166 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
-- Playwright: **9 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **184 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Playwright: **10 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
   na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.

@@ -8,7 +8,7 @@ import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, asActor, nextId } from '../simulation/World';
 import { canEnter, greedyStepToward, isMoving, pathTo, placeOccupant, removeOccupant, settle, stepAway, tryStep } from '../movement/movement';
-import { damagePlayer, hasLineOfSight, monsterSource } from '../combat/combat';
+import { damagePlayer, hasLineOfSight, monsterSource, setTarget } from '../combat/combat';
 
 export function createMonster(w: World, monsterId: string, spawnId: string, x: number, y: number): MonsterEntity {
   const def = w.data.monsters[monsterId]!;
@@ -37,6 +37,7 @@ export function createMonster(w: World, monsterId: string, spawnId: string, x: n
     pathAt: 0,
     pathGoal: null,
     targetId: null,
+    tauntUntil: 0,
   };
   return m;
 }
@@ -107,6 +108,14 @@ export function updateMonster(w: World, m: MonsterEntity): void {
     m.targetId = p?.id ?? null;
   } else if (m.state === 'returning') {
     p = nearestActor(w, m, 2);
+  }
+  // Se outro personagem estiver estritamente mais perto, trocar de alvo é melhor do que ignorar
+  // a ameaça próxima. Empates mantêm o alvo atual (quem o monstro já está atacando ou quem o atraiu).
+  // Durante a isca (taunt) o monstro não troca: foi o conjure que puxou a atenção dele.
+  const nearest = nearestActor(w, m, m.def.aggroRadius);
+  if (nearest && w.now >= m.tauntUntil && (!p || chebyshev(m, nearest) < chebyshev(m, p))) {
+    p = nearest;
+    m.targetId = nearest.id;
   }
   const homeDist = chebyshev(m, { x: m.homeX, y: m.homeY });
   if (!p) {
@@ -227,10 +236,20 @@ export function sendHome(w: World, m: MonsterEntity): void {
   m.hp = m.def.health;
   m.state = 'idle';
   m.targetId = null;
+  m.tauntUntil = 0;
   m.path = null;
   m.pathGoal = null;
   m.slowUntil = 0;
   m.nextWanderAt = w.now + 1500;
+  // Um alvo que voltou ao respawn não pode continuar recebendo ataques: o ataque é cancelado (sem escolher
+  // outro alvo sozinho — o próximo ataque/magia seleciona o inimigo mais próximo).
+  for (const a of allActors(w)) {
+    if (a.targetId !== m.id) continue;
+    asActor(w, a, () => {
+      setTarget(w, null);
+      a.queuedSpell = null;
+    });
+  }
   w.events.emit('monsterReturned', { entityId: m.id, from, to: { x: m.x, y: m.y } });
 }
 
@@ -250,6 +269,7 @@ function respawn(w: World, m: MonsterEntity): void {
   m.alive = true;
   m.state = 'idle';
   m.targetId = null;
+  m.tauntUntil = 0;
   m.move = null;
   m.slowUntil = 0;
   m.nextAttackAt = w.now + 1000;

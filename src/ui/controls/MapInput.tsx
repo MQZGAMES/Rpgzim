@@ -6,6 +6,7 @@
 // - Celular: pressionar e arrastar na metade esquerda inferior vira o joystick (invisível até arrastar).
 // - Mouse: cursor de "mão" sobre o que dá para clicar.
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { uiImage } from '../../assets';
 import { useLocal, useSession } from '../../integration/game-ui-bridge/hooks';
 
@@ -100,11 +101,11 @@ export function MapInputLayer() {
     >
       {/* área do joystick (só referência visual/testes; quem trata o toque é a camada inteira) */}
       {touch && <div className="pointer-events-none absolute bottom-0 left-0 h-[46%] w-[50%]" data-testid="joystick-zone" />}
-      {origin && (
-        <div className="pointer-events-none fixed" style={{ left: origin.x - 64, top: origin.y - 64, width: 128, height: 128 }} data-testid="joystick">
+      {origin && createPortal(
+        <div className="pointer-events-none fixed z-50" style={{ left: origin.x - 64, top: origin.y - 64, width: 128, height: 128 }} data-testid="joystick">
           <img src={uiImage('joystick_base')} alt="" className="pixelated h-full w-full opacity-90" draggable={false} />
           <img src={uiImage('joystick_knob')} alt="" draggable={false} className="pixelated absolute" style={{ width: 56, height: 56, left: 36 + knob.x, top: 36 + knob.y }} />
-        </div>
+        </div>, document.body
       )}
     </div>
   );

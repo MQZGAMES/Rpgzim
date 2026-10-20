@@ -1,11 +1,21 @@
 // API de inspeção para testes automatizados (Playwright) e depuração. Exposta somente em desenvolvimento
 // ou com ?debug na URL. Não faz parte da jogabilidade.
+import type Phaser from 'phaser';
 import type { GameSession } from '../integration/game-ui-bridge/GameSession';
 
-export function installDebugApi(session: GameSession): () => void {
+export function installDebugApi(session: GameSession, getGame?: () => Phaser.Game): () => void {
   const enabled = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug');
   if (!enabled) return () => undefined;
   const sim = session.sim;
+  // contador de magias/itens disparados (para conferir a repetição por pressão)
+  const castLog: { spellId: string; at: number }[] = [];
+  const itemLog: { itemId: string; at: number }[] = [];
+  const damageLog: { targetId: string; amount: number; blocked: boolean }[] = [];
+  const attackLog: { sourceId: string; targetId: string; at: number }[] = [];
+  sim.events.on('spellCast', (e) => castLog.push({ spellId: e.spellId, at: sim.world.now }));
+  sim.events.on('itemUsed', (e) => itemLog.push({ itemId: e.itemId, at: sim.world.now }));
+  sim.events.on('damage', (e) => damageLog.push({ targetId: e.targetId, amount: e.amount, blocked: e.blocked }));
+  sim.events.on('attack', (e) => attackLog.push({ sourceId: e.sourceId, targetId: e.targetId, at: sim.world.now }));
   window.__RPGZIM__ = {
     ready: () => session.local.get().ready,
     fps: () => session.local.get().fps,
@@ -48,6 +58,49 @@ export function installDebugApi(session: GameSession): () => void {
     heroes: () =>
       [...sim.world.heroes.values()].map((h) => ({ id: h.id, name: h.character.name, x: h.x, y: h.y, level: h.character.level, hp: h.character.health, gold: h.character.gold, bankGold: h.character.bankGold, mode: h.brain.mode, quarry: h.brain.quarry, dead: h.dead })),
     buildings: () => sim.world.map.buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, doorX: b.doorX })),
+    /** Relógio do jogo em ms (anda mais devagar que o real quando os quadros demoram). */
+    now: () => sim.world.now,
+    /** Magias disparados desde o último `clearCastLog` (t instants do relógio do mundo). */
+    castLog: () => castLog.slice(),
+    /** Itens usados desde o último `clearCastLog`. */
+    itemLog: () => itemLog.slice(),
+    clearCastLog: () => {
+      castLog.length = 0;
+      itemLog.length = 0;
+      damageLog.length = 0;
+      attackLog.length = 0;
+    },
+    /** Danos aplicados (por alvo) desde o último `clearCastLog`. */
+    damageLog: () => damageLog.slice(),
+    /** Ataques (por par fonte/alvo) desde o último `clearCastLog`. */
+    attackLog: () => attackLog.slice(),
+    /** Textos do mundo (nomes, falas): tamanho, peso e escala — usado para conferir a legibilidade. */
+    worldTexts: () => {
+      const game = getGame?.();
+      const scene = game?.scene.getScene('world');
+      if (!scene) return [];
+      const out: { text: string; fontSize: string; fontStyle: string; scale: number; x: number; y: number; cx: number; cy: number }[] = [];
+      const visit = (list: Phaser.GameObjects.GameObject[]) => {
+        for (const o of list) {
+          if ((o as Phaser.GameObjects.Text).type === 'Text') {
+            const t = o as Phaser.GameObjects.Text;
+            out.push({ text: t.text, fontSize: String(t.style.fontSize), fontStyle: String(t.style.fontStyle), scale: t.scaleX, x: t.x, y: t.y, cx: t.parentContainer ? t.parentContainer.x : t.x, cy: t.parentContainer ? t.parentContainer.y : t.y });
+          }
+          const container = o as Phaser.GameObjects.Container;
+          if (Array.isArray(container.list)) visit(container.list);
+        }
+      };
+      visit(scene.children.list);
+      return out;
+    },
+    /** Zoom da câmera e se a posição do desenho está na grade de pixels (sem tremulação). */
+    renderInfo: () => {
+      const game = getGame?.();
+      const scene = game?.scene.getScene('world');
+      if (!scene) return null;
+      const cam = scene.cameras.main;
+      return { zoom: cam.zoom, roundPixels: cam.renderRoundPixels, dpr: window.devicePixelRatio };
+    },
   };
   return () => {
     delete window.__RPGZIM__;

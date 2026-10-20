@@ -28,8 +28,8 @@ const list: SpellDef[] = [
   },
   {
     id: 'fire_nova', name: 'Explosão Ígnea', words: 'ignis orbis', icon: 'spell_fire_nova',
-    description: 'Onda de fogo que atinge todos os inimigos ao redor (raio 2).', vocations: ['sorcerer'], minLevel: 4, minMagicLevel: 2,
-    manaCost: 45, cooldownMs: 8000, range: 0, radius: 2, target: 'areaSelf', effect: 'damage', element: 'fire',
+    description: 'Onda de fogo que atinge todos os inimigos ao redor (raio 3).', vocations: ['sorcerer'], minLevel: 4, minMagicLevel: 2,
+    manaCost: 45, cooldownMs: 8000, range: 0, radius: 3, target: 'areaSelf', effect: 'damage', element: 'fire',
     formula: { kind: 'magic', levelFactor: 0.5, powerFactor: 2.2, base: 15, min: 0.8, max: 1.2 },
     vfx: { impact: 'fx_fire', sfx: 'fire', color: '#f6953a' },
   },
@@ -43,8 +43,8 @@ const list: SpellDef[] = [
   },
   {
     id: 'frost_burst', name: 'Rajada Glacial', words: 'gelu ventus', icon: 'spell_frost_burst',
-    description: 'Explosão de gelo no alvo e vizinhos (raio 1) que os deixa lentos.', vocations: ['druid'], minLevel: 2, minMagicLevel: 1,
-    manaCost: 25, cooldownMs: 4500, range: 5, radius: 1, target: 'areaTarget', effect: 'damage', element: 'ice',
+    description: 'Explosão de gelo no alvo e vizinhos (raio 2) que os deixa lentos.', vocations: ['druid'], minLevel: 2, minMagicLevel: 1,
+    manaCost: 25, cooldownMs: 4500, range: 5, radius: 2, target: 'areaTarget', effect: 'damage', element: 'ice',
     formula: { kind: 'magic', levelFactor: 0.5, powerFactor: 2.4, base: 16, min: 0.85, max: 1.15 },
     slow: { factor: 0.5, durationMs: 3000 },
     vfx: { projectile: 'proj_ice', impact: 'fx_ice', sfx: 'ice', color: '#a6dcfa' },
@@ -91,8 +91,9 @@ const list: SpellDef[] = [
   },
   {
     id: 'steel_whirlwind', name: 'Redemoinho de Aço', words: 'ferrum turbo', icon: 'spell_steel_whirlwind',
-    description: 'Giro com a arma que atinge todos os inimigos adjacentes.', vocations: ['knight'], minLevel: 2, minMagicLevel: 0,
+    description: 'Giro com a arma que atinge todos os inimigos adjacentes e vira a atenção deles para você.', vocations: ['knight'], minLevel: 2, minMagicLevel: 0,
     manaCost: 30, cooldownMs: 6000, range: 0, radius: 1, target: 'areaSelf', effect: 'damage', element: 'physical',
+    attract: true,
     formula: { kind: 'melee', levelFactor: 0.25, powerFactor: 0.75, base: 4, min: 0.8, max: 1.2 },
     requiresWeapon: 'melee',
     vfx: { impact: 'fx_whirl', sfx: 'whirl', color: '#b8c2d3' },

@@ -106,6 +106,13 @@ Jogo pensado para o celular: jogador a ~3 tiles/s (Knight 2,9 · Sorcerer/Druid 
 +0,35/+0,55. Criaturas usam `speedScale: 0.7` sobre a velocidade da espécie (a mais rápida, o Lobo de Gelo,
 fica em 2,8): todas são um pouco mais lentas que o jogador, como no Tibia, e dá para recuar e se posicionar.
 
+## Áreas e controle de grupo
+
+- **Explosão Ígnea** (Sorcerer) raio 2 → 3 e **Rajada Glacial** (Druid) raio 1 → 2: +1 tile para todos os lados.
+- **Redemoinho de Aço** (Knight) tem `attract`: os monstros atingidos passam a perseguir o conjurador por 4 s
+  (`TAUNT_MS`), sem trocar de alvo pelo "mais próximo" nesse período.
+- Criaturas reavaliam o alvo todo quadro: trocam para quem estiver estritamente mais perto (empate mantém o atual).
+
 ## Pendências conhecidas
 
 - Os equipamentos vão até o nível 18; os patamares 4–6 pedem novos equipamentos (próximo passo).

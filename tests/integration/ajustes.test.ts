@@ -7,7 +7,7 @@ import { CREATURE_LADDER } from '../../src/data/monsters';
 import { createCharacter } from '../../src/domain/rules/character';
 import { isSellLocked, sellAllPreview, setSellLock } from '../../src/domain/rules/economy';
 import { chebyshev } from '../../src/domain/value-objects/position';
-import { canEnter } from '../../src/game/movement/movement';
+import { canEnter, resolveStuck } from '../../src/game/movement/movement';
 import { canAttackActor, configureParty, hasSkull } from '../../src/game/social/social';
 import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { isPz } from '../../src/game/world/GameMap';
@@ -50,6 +50,14 @@ function openField(sim: GameSimulation): { x: number; y: number } {
       }
   throw new Error('sem campo aberto');
 }
+
+/** Remove os monstros vivos (o teste é de movimento, não de combate). */
+const clearMonsters = (sim: GameSimulation) => {
+  for (const m of sim.world.monsters.values()) {
+    m.alive = false;
+    m.respawnAt = Infinity;
+  }
+};
 
 const party = (sim: GameSimulation, leaderId: string, ids: string[]) => {
   sim.world.social.party = { leaderId, members: ids, formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
@@ -379,6 +387,7 @@ describe('grupo: liderança livre e seguir fluido', () => {
 
   it('você segue o Boladex líder de perto, sem parar e recomeçar', () => {
     const { sim, h, w } = withHero();
+    clearMonsters(sim);
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
@@ -409,6 +418,7 @@ describe('grupo: liderança livre e seguir fluido', () => {
 
   it('o Boladex segue você de perto e para ao seu lado', () => {
     const { sim, h, w } = withHero();
+    clearMonsters(sim);
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
@@ -424,14 +434,24 @@ describe('grupo: liderança livre e seguir fluido', () => {
     expect(chebyshev(h, w.human)).toBeLessThanOrEqual(2);
   });
 
-  it('membros do grupo passam um pelo outro fora da cidade (ninguém trava na trilha)', () => {
+  it('membros do grupo não se sobrepõem fora da cidade (e a insistência troca os lugares)', () => {
     const { sim, h, w } = withHero();
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
+    // ninguém entra no tile de outro personagem (fora da cidade)
     expect(canEnter(w, spot.x + 1, spot.y, false, w.human.id)).toBe(false);
     party(sim, w.human.id, [w.human.id, h.id]);
-    expect(canEnter(w, spot.x + 1, spot.y, false, w.human.id)).toBe(true);
+    expect(canEnter(w, spot.x + 1, spot.y, false, w.human.id)).toBe(false);
+    // insistindo por mais de 5 s, os dois trocam de lugar em vez de ficar travados
+    const before = { x: w.human.x, y: w.human.y };
+    const heroBefore = { x: h.x, y: h.y };
+    w.human.stuckSince = w.now - 6000;
+    w.human.stuckAt = w.now;
+    w.human.stuckWith = h.id;
+    resolveStuck(w, w.human, h.id);
+    expect([w.human.x, w.human.y]).toEqual([heroBefore.x, heroBefore.y]);
+    expect([h.x, h.y]).toEqual([before.x, before.y]);
   });
 });
 

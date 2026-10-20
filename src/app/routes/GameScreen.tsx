@@ -46,7 +46,7 @@ export function GameScreen({ character, heroes = [], onExit }: { character: Char
     const h = createGame(host.current, s);
     h.setZoomBias(loadPrefs().zoomBias);
     handle.current = h;
-    const uninstall = installDebugApi(s);
+    const uninstall = installDebugApi(s, () => h.game);
     s.pushMessage(`Bem-vindo a Pedraluz, ${character.name}! Fale com o Sacerdote Oriel para aprender o básico.`, 'system');
     setSession(s);
     return () => {

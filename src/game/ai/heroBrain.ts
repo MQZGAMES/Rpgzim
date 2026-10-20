@@ -11,7 +11,7 @@ import { chebyshev } from '../../domain/value-objects/position';
 import { addItem, countItem, freeSlots, removeAt } from '../../domain/rules/inventory';
 import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
-import type { HeroEntity, NpcEntity } from '../entities/types';
+import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
@@ -243,11 +243,11 @@ function potionPrice(w: World): number {
   return Math.min(...Object.values(w.data.shops).flatMap((s) => s.sells.filter((o) => o.itemId === 'potion_health').map((o) => o.price)), 999);
 }
 
-function goTo(w: World, h: HeroEntity, x: number, y: number, maxNodes = 20000): void {
+function goTo(w: World, h: HeroEntity, x: number, y: number, maxNodes = 20000, stopWithin?: number): void {
   const b = h.brain;
   if (b.walkReq && b.walkReq.x === x && b.walkReq.y === y && h.path?.length) return;
   b.walkReq = { x, y };
-  if (!planWalk(w, x, y, { quiet: true, maxNodes })) b.lastPos.at = w.now - 3000;
+  if (!planWalk(w, x, y, { quiet: true, maxNodes, stopWithin })) b.lastPos.at = w.now - 3000;
 }
 
 function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void {
@@ -345,13 +345,21 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
 function survive(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const pct = hpPct(h);
-  const attackers = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 2);
-  if (pct < 0.45 + t.caution * 0.15 && attackers.length) {
+  // quem está batendo nele: corpo a corpo encostado e atiradores dentro do alcance deles
+  const attackers = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.max(2, m.def.attack.range));
+  // poção de vida: com alguém batendo, abaixo do limiar da prudência; em emergência (<25%) bebe sempre
+  if ((pct < 0.45 + t.caution * 0.15 && attackers.length) || pct < 0.25) {
     const idx = pickPotion(w, h);
     if (idx >= 0) useInventoryItem(w, idx);
   }
   if (pct < 0.6) tryCast(w, h, 'light_heal');
   if (attackers.length >= 2 && pct < 0.75) tryCast(w, h, 'iron_roar');
+  // mana baixa no meio da luta: bebe poção de mana para não ficar inútil (magias são o principal dano)
+  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
+  if (manaPct < 0.35) {
+    const idx = pickManaPotion(w, h);
+    if (idx >= 0) useInventoryItem(w, idx);
+  }
   // recua quando a vida está crítica e não há poções (coragem atrasa a decisão)
   if (pct < 0.32 - t.bravery * 0.12 && potionsOf(w, h) === 0 && h.brain.mode !== 'retreat' && !isPz(w.map, h.x, h.y)) {
     heroSay(w, h, 'retreat', {}, 20000);
@@ -359,6 +367,7 @@ function survive(w: World, h: HeroEntity): void {
   }
 }
 
+/** Índice da poção de vida na mochila que melhor compensa a vida que falta (-1 se não houver). */
 function pickPotion(w: World, h: HeroEntity): number {
   const missing = h.stats.maxHealth - h.character.health;
   const owned = h.character.inventory
@@ -366,6 +375,16 @@ function pickPotion(w: World, h: HeroEntity): number {
     .filter((p) => p.heal > 0 && !p.mana)
     .sort((a, b) => a.heal - b.heal);
   return (owned.find((p) => p.heal >= missing * 0.8) ?? owned[owned.length - 1])?.i ?? -1;
+}
+
+/** Índice da poção de mana na mochila que melhor compensa a mana que falta (-1 se não houver). */
+function pickManaPotion(w: World, h: HeroEntity): number {
+  const missing = h.stats.maxMana - h.character.mana;
+  const owned = h.character.inventory
+    .map((st, i) => ({ i, mana: st ? (w.data.items[st.itemId]?.use?.mana ?? 0) : 0, heal: st ? (w.data.items[st.itemId]?.use?.heal ?? 0) : 0 }))
+    .filter((p) => p.mana > 0 && !p.heal)
+    .sort((a, b) => a.mana - b.mana);
+  return (owned.find((p) => p.mana >= missing * 0.8) ?? owned[owned.length - 1])?.i ?? -1;
 }
 
 function tryCast(w: World, h: HeroEntity, spellId: string): boolean {
@@ -511,6 +530,7 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     return planTown(w, h);
   }
   helpHuman(w, h);
+  supportParty(w, h);
   const target = currentTarget(w);
   if (target) {
     // golpes especiais quando vale a pena
@@ -519,24 +539,17 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
       if (adjacent.length >= 2) tryCast(w, h, 'steel_whirlwind');
       if (chebyshev(target, h) <= 1 && hpPct(h) > 0.5) tryCast(w, h, 'brutal_strike');
     }
+    // Loot no mesmo passo do combate: o que já está ao alcance é pego sem largar a criatura e, se for
+    // seguro, ele já vai buscando o que caiu mais longe (sobreviver e atacar continuam em primeiro lugar).
+    collectLootWhileFighting(w, h);
+    chaseLoot(w, h, target);
     return;
   }
-  // pega o loot por perto antes de procurar o próximo
-  const bag = [...w.lootBags.values()].filter((l) => chebyshev(l, h) <= 6).sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0];
-  if (bag && freeSlots(h.character.inventory) > 0) {
+  // pega o loot da tela toda antes de procurar o próximo (a menos que alguém esteja batendo nele)
+  const bag = nearestLoot(w, h);
+  if (bag && !engagedByMonsters(w, h)) {
     if (chebyshev(bag, h) <= LOOT_RANGE) {
-      const before = new Map(h.character.inventory.filter(Boolean).map((s) => [s!.itemId, countItem(h.character.inventory, s!.itemId)]));
-      takeAllNearbyLoot(w);
-      w.ui.lootId = null;
-      equipBagUpgrades(w, h);
-      for (const st of h.character.inventory) {
-        if (!st) continue;
-        const def = w.data.items[st.itemId];
-        if (def && def.value >= 300 && (before.get(st.itemId) ?? 0) < countItem(h.character.inventory, st.itemId)) {
-          h.brain.mood = Math.min(1, h.brain.mood + 0.4);
-          heroSay(w, h, 'rareLoot', { item: def.name }, 0);
-        }
-      }
+      collectLootWhileFighting(w, h);
     } else if (!isMoving(h, w.now) && !h.path?.length) goTo(w, h, bag.x, bag.y);
     return;
   }
@@ -608,6 +621,182 @@ function helpHuman(w: World, h: HeroEntity): void {
     setTarget(w, threat.id);
     heroSay(w, h, 'help', { player: human.character.name }, 30000);
     changeAffinity(h, human.id, 0.02);
+  }
+}
+
+/**
+ * Em grupo, o herói não larga o time para caçar o monstro mais próximo: ele só luta quando a ameaça
+ * é real (monstro atacando alguém do grupo) ou quando o alvo já está ao alcance. Caçar longe do líder
+ * separates o grupo e ninguém mais ajuda ninguém.
+ */
+function keepWithGroup(w: World, h: HeroEntity): void {
+  const leader = w.human;
+  const members = nearbyPartyMembers(w, h, PARTY_SUPPORT_RANGE);
+  // o herói já pegou um alvo que o grupo está combatendo: pode ir pra cima dele
+  const t = currentTarget(w);
+  if (t && (members.some((m) => m.targetId === t.id) || t.targetId === leader.id)) return;
+  // alvo de quem está longe do grupo: larga o alvo e volta para perto do líder
+  if (t && chebyshev(t, leader) > BAIT_LEADER_RANGE) {
+    setTarget(w, null);
+  }
+}
+
+// ------------------------------------------------------------------ grupo: cura, poções e isca
+/** Membros do grupo (vivo, por perto) do herói — inclui o jogador humano. */
+function nearbyPartyMembers(w: World, h: HeroEntity, radius: number): PlayerEntity[] {
+  const party = partyOf(w, h.id);
+  if (!party) return [];
+  return party.members
+    .map((id) => actorById(w, id))
+    .filter((m): m is PlayerEntity => !!m && !m.dead && chebyshev(m, h) <= radius);
+}
+
+/**
+ * Papel de suporte do herói em grupo: cura os colegas feridos (com a magia de cura do grupo),
+ * dá poção de vida a quem está morrendo e bebe poção de mana quando precisa.
+ * Roda antes da decisão de combate: quem está lutando precisa estar de pé.
+ */
+function supportParty(w: World, h: HeroEntity): void {
+  const members = nearbyPartyMembers(w, h, PARTY_SUPPORT_RANGE);
+  if (!members.length) return;
+  // cura o colega mais ferido por perto (a magia de grupo alcança todo mundo no raio)
+  const hurt = members
+    .map((m) => ({ m, pct: m.character.health / Math.max(1, m.stats.maxHealth) }))
+    .filter((x) => x.pct < 0.6)
+    .sort((a, b) => a.pct - b.pct)[0];
+  if (hurt) {
+    if (tryCast(w, h, 'sap_blessing')) return;
+    if (tryCast(w, h, 'light_heal') && hurt.pct < 0.45) return;
+  }
+  // poção de vida para o colega em estado crítico
+  const dying = hurt && hurt.pct < 0.3 ? hurt.m : null;
+  if (dying && potionsOf(w, h) >= 2 && w.now >= h.brain.nextGiftAt) {
+    giftPotionTo(w, h, dying);
+  }
+}
+
+/** Dá uma poção de vida da mochila para um colega de grupo. */
+function giftPotionTo(w: World, h: HeroEntity, mate: PlayerEntity): void {
+  const idx = h.character.inventory.findIndex((st) => st?.itemId === 'potion_health');
+  if (idx < 0) return;
+  if (addItem(w.data, mate.character.inventory, 'potion_health', 1) !== 1) return;
+  removeAt(h.character.inventory, idx, 1);
+  h.brain.nextGiftAt = w.now + 45000;
+  changeAffinity(h, mate.id, 0.05);
+  heroSay(w, h, 'gift', { player: mate.character.name }, 0);
+  mate.scope.events.emit('message', { text: `${h.character.name} te deu uma Poção de Vida.`, kind: 'loot' });
+  mate.scope.events.emit('itemsChanged', {});
+}
+
+/** Alcance em que o herói cuida dos colegas de grupo. */
+const PARTY_SUPPORT_RANGE = 6;
+
+/**
+ * Isca: quando um monstro persegue ou ataca um colega do grupo, o herói chama a atenção dele
+ * (ataca o monstro e usa a magia de área que puxa a atenção) para o colega poder recuar e se curar.
+ * A isca só vale para monstros perto do grupo: o herói não larga o time para persegui-lo longe.
+ * Retorna true quando o herói assumiu a isca (o turno dele é o de puxar o monstro).
+ */
+function baitMonsters(w: World, h: HeroEntity): boolean {
+  const leader = w.human;
+  const members = nearbyPartyMembers(w, h, BAIT_RANGE);
+  if (!members.length) return false;
+  // monstro que está perseguindo ou atacando um colega (e não o próprio herói), perto do grupo
+  const threat = [...w.monsters.values()].find(
+    (m) =>
+      m.alive &&
+      m.targetId &&
+      m.targetId !== h.id &&
+      members.some((mate) => mate.id === m.targetId) &&
+      chebyshev(m, h) <= BAIT_RANGE &&
+      chebyshev(m, leader) <= BAIT_LEADER_RANGE,
+  );
+  if (!threat) return false;
+  // chama a atenção: o golpe em área (raio 1) vira os monstros encostados nele para o herói
+  if (chebyshev(threat, h) <= 1) {
+    if (tryCast(w, h, 'steel_whirlwind')) return true;
+  }
+  if (!currentTarget(w) || currentTarget(w)?.id !== threat.id) setTarget(w, threat.id);
+  // o herói fica entre o monstro e o colega: é ele que leva a pancada
+  if (chebyshev(threat, h) > 1) goTo(w, h, threat.x, threat.y);
+  return true;
+}
+
+/** Alcance em que o Knight puxa criaturas ainda paradas para o grupo. */
+const LURE_RANGE = 7;
+
+/**
+ * Papel de tanque em grupo: com o time inteiro sem alvo e saudável, o Knight ataca a criatura ociosa mais
+ * próxima (perto do líder) para trazê-la até o grupo — quem leva as pancadas é ele, não os colegas frágeis.
+ */
+function lureMonsters(w: World, h: HeroEntity, leader: PlayerEntity): boolean {
+  if (h.character.vocation !== 'knight' || hpPct(h) < 0.7 || isPz(w.map, h.x, h.y)) return false;
+  if (leader.character.health / Math.max(1, leader.stats.maxHealth) < 0.5) return false; // time ferido: nada de puxar mais
+  const target = [...w.monsters.values()]
+    .filter((m) => m.alive && !m.targetId && !isPz(w.map, m.x, m.y) && chebyshev(m, h) <= LURE_RANGE && chebyshev(m, leader) <= LURE_RANGE + 1 && hasLineOfSight(w, h, m))
+    .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0];
+  if (!target) return false;
+  setTarget(w, target.id);
+  return currentTarget(w)?.id === target.id;
+}
+
+/** Alcance em que o herói puxa a atenção dos monstros dos colegas. */
+const BAIT_RANGE = 8;
+/** A isca não arrasta o herói para longe do grupo. */
+const BAIT_LEADER_RANGE = 5;
+
+/** Distância (tiles) em que o herói enxerga loot no chão (a tela toda). */
+const LOOT_SCAN = 10;
+
+/** Saco de loot mais próximo na tela, se ainda couber alguma coisa na mochila. */
+function nearestLoot(w: World, h: HeroEntity): { x: number; y: number } | undefined {
+  if (freeSlots(h.character.inventory) <= 0) return undefined;
+  return [...w.lootBags.values()].filter((l) => chebyshev(l, h) <= LOOT_SCAN).sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0];
+}
+
+/** Algum monstro está batendo (ou prestes a bater) no herói? Aí lutar e sobreviver vêm antes do loot. */
+function engagedByMonsters(w: World, h: HeroEntity): boolean {
+  return [...w.monsters.values()].some((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 2);
+}
+
+/**
+ * Com um alvo selecionado: se não há ninguém batendo nele e o saco está mais perto que a criatura, vai pegá-lo
+ * no caminho (as duas coisas ao mesmo tempo); se alguém encosta, larga o loot e luta.
+ */
+function chaseLoot(w: World, h: HeroEntity, target: { x: number; y: number }): void {
+  const bag = nearestLoot(w, h);
+  if (!bag || chebyshev(bag, h) <= LOOT_RANGE) return;
+  if (engagedByMonsters(w, h) || hpPct(h) < 0.45) {
+    // luta/sobrevivência primeiro: abandona a caminhada até o loot
+    if (h.path?.length && h.pathGoal && [...w.lootBags.values()].some((l) => l.x === h.pathGoal!.x && l.y === h.pathGoal!.y)) {
+      h.path = null;
+      h.pathGoal = null;
+    }
+    return;
+  }
+  if (chebyshev(bag, h) > chebyshev(target, h) + 2) return; // a criatura está bem mais perto: ataca primeiro
+  if (!isMoving(h, w.now) && !h.path?.length) goTo(w, h, bag.x, bag.y);
+}
+
+/**
+ * Pega o loot que já está ao alcance sem largar a luta: chamar `takeAllNearbyLoot` aqui permite
+ * ao herói recolher o que caiu enquanto continua atacando a criatura.
+ */
+function collectLootWhileFighting(w: World, h: HeroEntity): void {
+  if (freeSlots(h.character.inventory) <= 0) return;
+  const bags = [...w.lootBags.values()].filter((l) => chebyshev(l, h) <= LOOT_RANGE);
+  if (!bags.length) return;
+  const before = new Map(h.character.inventory.filter(Boolean).map((s) => [s!.itemId, countItem(h.character.inventory, s!.itemId)]));
+  takeAllNearbyLoot(w);
+  w.ui.lootId = null;
+  equipBagUpgrades(w, h);
+  for (const st of h.character.inventory) {
+    if (!st) continue;
+    const def = w.data.items[st.itemId];
+    if (def && def.value >= 300 && (before.get(st.itemId) ?? 0) < countItem(h.character.inventory, st.itemId)) {
+      h.brain.mood = Math.min(1, h.brain.mood + 0.4);
+      heroSay(w, h, 'rareLoot', { item: def.name }, 0);
+    }
   }
 }
 
@@ -967,34 +1156,67 @@ function follow(w: World, h: HeroEntity): void {
   }
   giftPotion(w, h);
   heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
-  // luta: o alvo do líder, quem ataca alguém do grupo, ou o monstro mais perto do líder
-  if (currentTarget(w)) return hunt(w, h, true, true);
+  // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
+  if (baitMonsters(w, h)) return;
+  // não sai do grupo para caçar longe: larga o alvo que está longe do time
+  keepWithGroup(w, h);
   const members = partyMembers(w, h);
   const party = partyOf(w, h.id)!;
   const leaderTarget = leader.targetId ? w.monsters.get(leader.targetId) : undefined;
-  // "alvo do líder": foca o mesmo inimigo; "mais próximo": cada um pega o inimigo mais perto de si
+  // Luta: o herói só sai do lado do líder se a ameaça estiver perto do grupo.
+  // Se já tem alvo, ele luta; se não, escolhe a ameaça real (alvo do líder ou quem ataca o time).
+  if (currentTarget(w)) {
+    // Afastou-se demais do líder durante a luta? larga o alvo e volta (o monstro persegue e vem junto).
+    // A folga é grande de propósito: perto do líder ele luta sem ficar indo e voltando.
+    if (chebyshev(leader, h) > FOLLOW_FIGHT_LEASH) {
+      setTarget(w, null);
+      walkToLeader(w, h, leader, { x: leader.x, y: leader.y, near: 2 }, false);
+      return;
+    }
+    return hunt(w, h, true, true);
+  }
+  // "alvo do líder": foca o mesmo inimigo; "mais próximo": cada um pega o inimigo mais perto de si.
+  // Em ambos os casos a ameaça precisa estar perto do grupo: o herói não sai correndo atrás dela
+  // (o time se separa e ninguém mais ajuda ninguém).
   const nearestTo = (o: { x: number; y: number }) =>
     [...w.monsters.values()].filter((m) => m.alive && !isPz(w.map, m.x, m.y) && chebyshev(m, o) <= 5 && hasLineOfSight(w, h, m)).sort((a, c) => chebyshev(a, o) - chebyshev(c, o))[0];
+  // ameaça real: o monstro está atacando ou perseguendo alguém do grupo (ou é o alvo do líder)
+  const attackingGroup = [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8);
   const threat =
     party.targeting === 'leader'
-      ? ((leaderTarget?.alive ? leaderTarget : undefined) ??
-        [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8) ??
-        nearestTo(leader))
-      : (nearestTo(h) ?? [...w.monsters.values()].find((m) => m.alive && m.targetId && members.includes(m.targetId) && chebyshev(m, h) <= 8));
-  if (threat && !isPz(w.map, h.x, h.y) && chebyshev(threat, leader) <= 8) {
+      ? ((leaderTarget?.alive ? leaderTarget : undefined) ?? attackingGroup)
+      : (attackingGroup ?? nearestTo(h));
+  if (threat && !isPz(w.map, h.x, h.y) && chebyshev(threat, leader) <= BAIT_LEADER_RANGE) {
     setTarget(w, threat.id);
     return;
   }
-  // loot por perto (sem se afastar do líder)
-  const bag = [...w.lootBags.values()].find((l) => chebyshev(l, h) <= 4 && chebyshev(l, leader) <= 6);
-  if (bag && freeSlots(h.character.inventory) > 0) return hunt(w, h, true, true);
-  // formação: em fila pisa nos passos do líder; "seguir" anda por perto
+  // grupo parado e nada atacando: o Knight "lura" — puxa a criatura mais próxima para o grupo, levando a pancada
+  if (lureMonsters(w, h, leader)) return;
+  // loot na tela toda (sem se afastar demais do líder), a menos que alguém esteja batendo nele
+  const bag = [...w.lootBags.values()].find((l) => chebyshev(l, h) <= LOOT_SCAN && chebyshev(l, leader) <= LOOT_SCAN + 2);
+  if (bag && freeSlots(h.character.inventory) > 0 && !engagedByMonsters(w, h)) return hunt(w, h, true, true);
   // formação: em fila pisa nos passos do líder; "seguir" fica a até 2 tiles. A rota mira sempre onde o líder
   // está agora (refeita quando ele se afasta do destino), então o herói anda junto sem parar e recomeçar.
-  const dist = chebyshev(leader, h);
-  const far = dist > 15;
   const spot = formationSpot(w, h.id);
+  const far = chebyshev(leader, h) > 15;
   const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: 2 };
+  walkToLeader(w, h, leader, goal, far);
+}
+
+/** Distância máxima do líder durante uma luta antes de o herói largar o alvo e voltar (o time não se separa). */
+const FOLLOW_FIGHT_LEASH = 8;
+
+/**
+ * Caminha para perto do líder (ou para a posição da formação). O caminho termina a 2 tiles do líder:
+ * os personagens não se sobrepõem, então "chegar" significa "ficar ao lado".
+ */
+function walkToLeader(
+  w: World,
+  h: HeroEntity,
+  leader: PlayerEntity,
+  goal: { x: number; y: number; near: number },
+  far: boolean,
+): void {
   const req = h.brain.walkReq;
   if (chebyshev(goal, h) <= goal.near) {
     if (h.path?.length && req && chebyshev(req, leader) <= 2) {
@@ -1004,7 +1226,8 @@ function follow(w: World, h: HeroEntity): void {
     return;
   }
   const stale = !req || !h.path?.length || chebyshev(req, goal) > (far ? 6 : 1);
-  if (stale) goTo(w, h, goal.x, goal.y, far ? 120000 : 20000);
+  // "seguir" para a 2 tiles do líder (não entra no tile dele: os personagens não se sobrepõem)
+  if (stale) goTo(w, h, goal.x, goal.y, far ? 120000 : 20000, goal.near);
 }
 
 /** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */

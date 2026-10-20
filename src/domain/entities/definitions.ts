@@ -151,6 +151,8 @@ export interface SpellDef {
   slow?: { factor: number; durationMs: number };
   /** Cura/bênção também alcança os membros do grupo neste raio (tiles). */
   partyRadius?: number;
+  /** O golpe em área também vira a atenção dos monstros atingidos para quem conjurou (isca). */
+  attract?: boolean;
   /** Munição consumida (flechas). */
   ammoCost?: number;
   /** Exige uma categoria de arma empunhada. */

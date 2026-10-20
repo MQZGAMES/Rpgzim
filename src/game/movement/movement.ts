@@ -4,8 +4,8 @@
 // - A ocupação reserva o tile de destino no início do passo (colisão entre criaturas confiável).
 import { facingFrom } from '../../domain/value-objects/direction';
 import type { TilePos } from '../../domain/value-objects/position';
-import { cellIndex, inBounds, isCrowdSafe, isPz, isSolid } from '../world/GameMap';
-import type { Mover } from '../entities/types';
+import { cellIndex, inBounds, isPz, isSolid } from '../world/GameMap';
+import type { Mover, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { canStep, findPath } from './pathfinding';
 
@@ -26,19 +26,84 @@ export function occupant(w: World, x: number, y: number): string | undefined {
   return w.occupancy.get(cellIndex(w.map, x, y));
 }
 
-const isActorId = (id: string | undefined) => !!id && (id === 'player' || id.startsWith('hero:'));
 
 export function canEnter(w: World, x: number, y: number, forMonster: boolean, selfId?: string): boolean {
   if (!inBounds(w.map, x, y) || isSolid(w.map, x, y)) return false;
   if (forMonster && isPz(w.map, x, y)) return false;
   const occ = occupant(w, x, y);
   if (occ === undefined || occ === selfId) return true;
-  if (forMonster || !isActorId(occ) || !isActorId(selfId)) return false;
-  // na cidade e nas construções personagens passam uns pelos outros — ninguém trava porta nem rua;
-  // membros do mesmo grupo também (seguir o líder em trilha estreita não trava)
-  const party = w.social.party?.members;
-  return isCrowdSafe(w.map, x, y) || (!!party && party.includes(occ) && party.includes(selfId!));
+  // personagens nunca ocupam o mesmo tile (em lugar nenhum): o caminho contorna e, se um insistir por
+  // `SWAP_AFTER_MS` contra o outro, os dois trocam de lugar (ver `resolveStuck`) — ninguém trava porta nem rua
+  return false;
 }
+
+/** O tile só está ocupado por outro personagem (jogador/herói): dá para planejar passando por ele e trocar de lugar. */
+function blockedOnlyByActor(w: World, x: number, y: number, selfId: string): boolean {
+  if (!inBounds(w.map, x, y) || isSolid(w.map, x, y)) return false;
+  const occ = occupant(w, x, y);
+  return occ !== undefined && occ !== selfId && isActor(w, occ);
+}
+/** Custo extra de planejar através de um personagem (prefere contornar quando há espaço). */
+const ACTOR_PATH_COST = 10;
+
+/** Personagens (jogador e heróis) que podem trocar de lugar entre si. */
+function isActor(w: World, id: string | null): id is string {
+  if (!id) return false;
+  if (id === w.human.id) return true;
+  return w.heroes.has(id);
+}
+
+/** O mover é um personagem (e não um monstro/NPC)? */
+function isPlayerEntity(m: Mover): m is PlayerEntity {
+  return 'character' in m;
+}
+
+/**
+ * Tentativa de atravessar outro personagem. Se a insistência durar `SWAP_AFTER_MS`, os dois trocam
+ * de lugar (quem empurrava passa e quem era empurrado recua) — destrava a trilha sem teleportar.
+ */
+export function resolveStuck(w: World, m: PlayerEntity, blockedBy: string | null): void {
+  if (!blockedBy || !isActor(w, blockedBy)) return;
+  // insistência = tentativas seguidas contra o mesmo personagem; um intervalo grande sem tentar zera a contagem
+  // (passos laterais no meio do caminho não zeram: quem desvia e volta continua "insistindo")
+  if (m.stuckWith !== blockedBy || w.now - m.stuckAt > STUCK_FORGET_MS) {
+    m.stuckWith = blockedBy;
+    m.stuckSince = w.now;
+    m.stuckAt = w.now;
+    return;
+  }
+  m.stuckAt = w.now;
+  if (w.now - m.stuckSince < SWAP_AFTER_MS) return;
+  const other = w.human.id === blockedBy ? w.human : w.heroes.get(blockedBy);
+  if (!other) return;
+  swapPlaces(w, m, other);
+  m.stuckWith = null;
+  m.stuckSince = 0;
+  other.stuckWith = null;
+  other.stuckSince = 0;
+}
+
+/** Troca as posições de dois personagens (o bloqueado vai para o lugar de quem bloqueava). */
+function swapPlaces(w: World, a: PlayerEntity, b: PlayerEntity): void {
+  const ax = a.x;
+  const ay = a.y;
+  removeOccupant(w, a);
+  removeOccupant(w, b);
+  a.x = b.x;
+  a.y = b.y;
+  b.x = ax;
+  b.y = ay;
+  a.move = null;
+  b.move = null;
+  placeOccupant(w, a);
+  placeOccupant(w, b);
+  w.events.emit('actorsSwapped', { firstId: a.id, secondId: b.id });
+}
+
+/** Tempo de insistência antes de os personagens trocarem de lugar. */
+export const SWAP_AFTER_MS = 5000;
+/** Sem tentar passar por este tempo, a insistência é esquecida. */
+const STUCK_FORGET_MS = 1500;
 
 export function placeOccupant(w: World, m: Mover): void {
   w.occupancy.set(cellIndex(w.map, m.x, m.y), m.id);
@@ -58,7 +123,11 @@ export function tryStep(w: World, m: Mover, dx: number, dy: number, speed: numbe
   if (isMoving(m, w.now) || (dx === 0 && dy === 0)) return false;
   const nx = m.x + dx;
   const ny = m.y + dy;
-  if (!canEnter(w, nx, ny, forMonster, m.id)) return false;
+  if (!canEnter(w, nx, ny, forMonster, m.id)) {
+    // barrado por outro personagem: conta a insistência (troca de lugar depois de alguns segundos)
+    if (!forMonster && isPlayerEntity(m)) resolveStuck(w, m, occupant(w, nx, ny) ?? null);
+    return false;
+  }
   if (!canStep((x, y) => staticFree(w, x, y), m.x, m.y, dx, dy)) return false;
   const duration = (1000 / Math.max(0.5, speed)) * (dx !== 0 && dy !== 0 ? Math.SQRT2 : 1);
   // encadeia no fim do passo anterior se ele terminou há pouco (movimento contínuo)
@@ -103,11 +172,12 @@ export function pathTo(
     {
       width: w.map.width,
       height: w.map.height,
-      passable: (x, y) => canEnter(w, x, y, forMonster, m.id),
+      // personagens contam como passagem (com custo): o passo contra eles gera a insistência que vira troca de lugar
+      passable: (x, y) => canEnter(w, x, y, forMonster, m.id) || (!forMonster && blockedOnlyByActor(w, x, y, m.id)),
       staticFree: (x, y) => staticFree(w, x, y) && !(forMonster && isPz(w.map, x, y)),
       stopWithin: opts.stopWithin,
       maxNodes: opts.maxNodes,
-      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0) + (extra ? extra(x, y) : 0),
+      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0) + (extra ? extra(x, y) : 0) + (!forMonster && blockedOnlyByActor(w, x, y, m.id) ? ACTOR_PATH_COST : 0),
     },
   );
 }
