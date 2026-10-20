@@ -129,3 +129,12 @@ Flechas: pedra +1 e metal +2 de ataque por disparo (somam ao ataque da arma e da
 - Os equipamentos vão até o nível 18; os patamares 4–6 pedem novos equipamentos (próximo passo).
 - Monstros que causam dano de terra (aranha, sapo) ignoram armadura, o que é proposital (contra-ataque aos tanques).
 - Valores de skill/ML por nível são estimativas; uma telemetria de sessões reais refinaria a tabela.
+
+## IA do Boladex: régua de ameaça
+
+`src/game/ai/heroThreat.ts` calcula a margem de uma luta (vida efetiva com poções ÷ dano esperado, matando a criatura mais fraca primeiro). Segura ≥ 1,6 · arriscada 1,0–1,6 · perdida < 1,0.
+- Escolhe a caça só entre áreas em que aguenta 3 da presa e os vizinhos; só puxa criatura nova se a margem do grupo todo for segura e a vida ≥ 75%.
+- Bebe poção quando um golpe tira metade da vida ou restam < 3,5 s; foge (Corrida) com margem < 1, 4+ atacantes ou sem poções e vida < 55%.
+- Estoque de poções: 4 vidas cheias (mín. 600), com poções fortes se vida ≥ 180; poção antes de equipamento.
+- Após morrer ou fugir: passa na vila (cura, banco, poções); evita por 25 min a espécie que o matou.
+- Medido em 90 min × 5 seeds: 0 mortes (antes 6), XP total ≈ −7%.
