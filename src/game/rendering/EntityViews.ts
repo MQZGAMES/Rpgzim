@@ -65,8 +65,8 @@ export class CreatureView {
 
   /** Topo da "cabeça" (pixels do mundo, relativo ao pé): referência para a barra de vida e o nome. */
   private get headTop(): number {
-    // topo do quadro do sprite (a maior altura: chapéu do Sorcerer, elmos): a barra e o nome ficam ACIMA do personagem
-    return -this.sprite.displayHeight + this.yOffset - (this.kind === 'humanoid' ? 1 : 0) + (this.kind === 'humanoid' ? 0 : 2);
+    // 4 px abaixo do topo do quadro do sprite (metade do 8 original): perto da cabeça, sem ficar distante
+    return -this.sprite.displayHeight + this.yOffset + (this.kind === 'humanoid' ? 4 : 2);
   }
 
   /** Nome sempre visível acima da barra de vida (na fonte da interface). */
