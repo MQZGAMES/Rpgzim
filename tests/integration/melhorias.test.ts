@@ -49,8 +49,8 @@ function openField(sim: GameSimulation): { x: number; y: number } {
   throw new Error('sem campo aberto');
 }
 
-describe('golpe em área do Knight atrai os monstros', () => {
-  it('o monstro atingido vira as costas para quem atacava e persegue o Knight', () => {
+describe('Grito de Guerra do Knight atrai os monstros', () => {
+  it('o monstro vira as costas para quem atacava e persegue o Knight', () => {
     const { sim, h, w } = withHero('knight');
     const spot = openField(sim);
     putAt(sim, h, spot.x, spot.y);
@@ -59,22 +59,23 @@ describe('golpe em área do Knight atrai os monstros', () => {
     putAt(sim, monster, spot.x + 1, spot.y);
     monster.targetId = w.human.id;
     monster.state = 'attacking';
-    // o Knight conjura o Redemoinho de Aço (magia de área com isca)
+    // o Knight conjura o Grito de Guerra (magia de área com isca)
     h.character.mana = 999;
     h.stats.magicLevel = 5;
     h.character.level = 10;
     h.character.skills.magic.level = 5;
     h.stats = { ...h.stats, magicLevel: 5 };
     // o conjurador é o herói: a conjuração roda no contexto dele
-    const cast = asActor(w, h, () => sim.castSpell('steel_whirlwind'));
+    const cast = asActor(w, h, () => sim.castSpell('war_cry'));
     expect(cast).toBe(true);
     // o monstro agora persegue o Knight, não o jogador humano
     expect(monster.targetId).toBe(h.id);
     expect(monster.tauntUntil).toBeGreaterThan(w.now);
   });
 
-  it('a magia tem a marca de isca nos dados', () => {
-    expect(GAME_DATA.spells.steel_whirlwind?.attract).toBe(true);
+  it('só o Grito de Guerra é isca: o Redemoinho de Aço causa apenas dano', () => {
+    expect(GAME_DATA.spells.war_cry?.attract).toBe(true);
+    expect(GAME_DATA.spells.steel_whirlwind?.attract).toBeUndefined();
     // as outras magias de área não viram isca
     expect(GAME_DATA.spells.fire_nova?.attract).toBeUndefined();
   });

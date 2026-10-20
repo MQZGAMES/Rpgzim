@@ -34,6 +34,8 @@ export interface PartyInvite {
 }
 
 export interface SocialState {
+  /** Relógio de PK em ms. No jogo é o relógio real (Date.now): caveira e PZ lock passam mesmo com o jogo pausado ou fechado. */
+  clock?: () => number;
   party: Party | null;
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
@@ -52,6 +54,11 @@ export interface SocialState {
 
 export function newSocialState(pvp = false): SocialState {
   return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
+}
+
+/** Hora usada pelas regras de PK: relógio real no jogo (a caveira vermelha de 24 h conta com o jogo fechado); nos testes, o tempo da simulação. */
+export function pkNow(w: World): number {
+  return w.social.clock ? w.social.clock() : w.now;
 }
 
 export type SkullKind = 'white' | 'yellow' | 'red';
@@ -280,7 +287,7 @@ export function formationSpot(w: World, memberId: string): { x: number; y: numbe
 /** Caveira ativa do personagem (ou null). */
 export function skullOf(w: World, id: string): SkullState | null {
   const s = w.social.skulls.get(id);
-  return s && s.until > w.now ? s : null;
+  return s && s.until > pkNow(w) ? s : null;
 }
 
 export function hasSkull(w: World, id: string): boolean {
@@ -291,17 +298,17 @@ export function hasSkull(w: World, id: string): boolean {
 function setSkull(w: World, id: string, kind: SkullKind, ms = 0): void {
   const cur = skullOf(w, id);
   if (kind === 'red') {
-    if (!cur || cur.kind !== 'red') w.social.skulls.set(id, { kind, until: w.now + ms });
-    else cur.until = Math.max(cur.until, w.now + ms);
+    if (!cur || cur.kind !== 'red') w.social.skulls.set(id, { kind, until: pkNow(w) + ms });
+    else cur.until = Math.max(cur.until, pkNow(w) + ms);
     return;
   }
   if (cur && SKULL_RANK[kind] <= SKULL_RANK[cur.kind]) return;
-  w.social.skulls.set(id, { kind, until: Math.max(w.social.pzLocks.get(id) ?? 0, w.now) });
+  w.social.skulls.set(id, { kind, until: Math.max(w.social.pzLocks.get(id) ?? 0, pkNow(w)) });
 }
 
 /** PZ lock: quanto falta (ms) e se ainda está ativo. */
 export function pzLockMs(w: World, id: string): number {
-  return Math.max(0, (w.social.pzLocks.get(id) ?? 0) - w.now);
+  return Math.max(0, (w.social.pzLocks.get(id) ?? 0) - pkNow(w));
 }
 export function isPzLocked(w: World, id: string): boolean {
   return pzLockMs(w, id) > 0;
@@ -310,11 +317,11 @@ export function isPzLocked(w: World, id: string): boolean {
 /** Caveiras branca/amarela só somem quando o PZ lock some: o fim delas acompanha o do PZ lock. */
 function syncSkull(w: World, id: string): void {
   const s = w.social.skulls.get(id);
-  if (s && s.kind !== 'red') s.until = Math.max(w.social.pzLocks.get(id) ?? 0, w.now);
+  if (s && s.kind !== 'red') s.until = Math.max(w.social.pzLocks.get(id) ?? 0, pkNow(w));
 }
 
 function lockPz(w: World, id: string, ms: number): void {
-  w.social.pzLocks.set(id, Math.max(w.social.pzLocks.get(id) ?? 0, w.now + ms));
+  w.social.pzLocks.set(id, Math.max(w.social.pzLocks.get(id) ?? 0, pkNow(w) + ms));
   syncSkull(w, id);
 }
 
@@ -325,8 +332,8 @@ function lockPz(w: World, id: string, ms: number): void {
  */
 export function touchCombat(w: World, id: string): void {
   const lock = w.social.pzLocks.get(id);
-  if (lock && lock > w.now && lock - w.now < SKULL_RENEW_MS) {
-    w.social.pzLocks.set(id, w.now + SKULL_RENEW_MS);
+  if (lock && lock > pkNow(w) && lock - pkNow(w) < SKULL_RENEW_MS) {
+    w.social.pzLocks.set(id, pkNow(w) + SKULL_RENEW_MS);
     syncSkull(w, id);
   }
 }
@@ -334,8 +341,8 @@ export function touchCombat(w: World, id: string): void {
 /** Registra o dano que a vítima recebeu (de personagens e de criaturas). */
 export function recordDamage(w: World, victimId: string, sourceId: string, amount: number): void {
   if (amount <= 0) return;
-  const list = (w.social.damageLog.get(victimId) ?? []).filter((d) => w.now - d.at < KILL_CREDIT_MS);
-  list.push({ id: sourceId, amount, at: w.now });
+  const list = (w.social.damageLog.get(victimId) ?? []).filter((d) => pkNow(w) - d.at < KILL_CREDIT_MS);
+  list.push({ id: sourceId, amount, at: pkNow(w) });
   w.social.damageLog.set(victimId, list);
 }
 
@@ -347,7 +354,7 @@ export function recordDamage(w: World, victimId: string, sourceId: string, amoun
 export function killCredit(w: World, victimId: string, finalSourceId: string | null): string | null {
   if (!finalSourceId || !actorById(w, finalSourceId)) return null;
   const sums = new Map<string, number>();
-  for (const d of w.social.damageLog.get(victimId) ?? []) if (w.now - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
+  for (const d of w.social.damageLog.get(victimId) ?? []) if (pkNow(w) - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
   const mine = sums.get(finalSourceId) ?? 0;
   const top = Math.max(0, ...sums.values());
   return mine > 0 && mine >= top ? finalSourceId : null;
@@ -369,7 +376,7 @@ function pkNotice(w: World, id: string, text: string, danger: boolean): void {
  */
 export function registerAggression(w: World, attackerId: string, victimId: string): void {
   const defending = attackedRecently(w, victimId, attackerId, PZ_LOCK_ATTACK_MS); // a vítima atacou o atacante antes
-  w.social.aggressions.set(`${attackerId}>${victimId}`, w.now);
+  w.social.aggressions.set(`${attackerId}>${victimId}`, pkNow(w));
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
   const victim = skullOf(w, victimId)?.kind ?? null;
@@ -401,8 +408,8 @@ export function registerPlayerKill(w: World, killerId: string, victimSkull: Skul
   if (victimSkull !== null) return;
   setSkull(w, killerId, 'white');
   syncSkull(w, killerId);
-  const list = (w.social.unjust.get(killerId) ?? []).filter((t) => w.now - t < UNJUST_WINDOW_MS);
-  list.push(w.now);
+  const list = (w.social.unjust.get(killerId) ?? []).filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS);
+  list.push(pkNow(w));
   w.social.unjust.set(killerId, list);
   if (list.length >= UNJUST_KILLS_FOR_RED) {
     setSkull(w, killerId, 'red', RED_SKULL_MS);
@@ -423,11 +430,11 @@ export function loadPk(w: World, a: PlayerEntity): void {
   const pk = a.character.pk;
   if (!pk) return;
   const real = Date.now();
-  if (pk.skull && pk.skullUntil > real) w.social.skulls.set(a.id, { kind: pk.skull, until: w.now + (pk.skullUntil - real) });
-  if (pk.pzLockUntil > real) w.social.pzLocks.set(a.id, w.now + (pk.pzLockUntil - real));
+  if (pk.skull && pk.skullUntil > real) w.social.skulls.set(a.id, { kind: pk.skull, until: pkNow(w) + (pk.skullUntil - real) });
+  if (pk.pzLockUntil > real) w.social.pzLocks.set(a.id, pkNow(w) + (pk.pzLockUntil - real));
   w.social.unjust.set(
     a.id,
-    pk.unjust.filter((t) => real - t < UNJUST_WINDOW_MS).map((t) => w.now - (real - t)),
+    pk.unjust.filter((t) => real - t < UNJUST_WINDOW_MS).map((t) => pkNow(w) - (real - t)),
   );
 }
 
@@ -437,23 +444,23 @@ export function savePk(w: World, a: PlayerEntity): void {
   const s = skullOf(w, a.id);
   a.character.pk = {
     skull: s?.kind ?? null,
-    skullUntil: s ? real + (s.until - w.now) : 0,
+    skullUntil: s ? real + (s.until - pkNow(w)) : 0,
     pzLockUntil: isPzLocked(w, a.id) ? real + pzLockMs(w, a.id) : 0,
-    unjust: (w.social.unjust.get(a.id) ?? []).filter((t) => w.now - t < UNJUST_WINDOW_MS).map((t) => real - (w.now - t)),
+    unjust: (w.social.unjust.get(a.id) ?? []).filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS).map((t) => real - (pkNow(w) - t)),
   };
 }
 
 /** `a` atacou `b` nos últimos `ms`? */
 export function attackedRecently(w: World, a: string, b: string, ms = 30000): boolean {
-  return w.now - (w.social.aggressions.get(`${a}>${b}`) ?? -Infinity) < ms;
+  return pkNow(w) - (w.social.aggressions.get(`${a}>${b}`) ?? -Infinity) < ms;
 }
 
 /** Limpa convites vencidos e a caveira expirada. */
 export function updateSocial(w: World): void {
   recordLeaderTrail(w);
   if (w.social.invites.some((i) => i.expiresAt <= w.now)) w.social.invites = w.social.invites.filter((i) => i.expiresAt > w.now);
-  for (const [id, sk] of w.social.skulls) if (sk.until <= w.now) w.social.skulls.delete(id);
-  for (const [id, until] of w.social.pzLocks) if (until <= w.now) w.social.pzLocks.delete(id);
+  for (const [id, sk] of w.social.skulls) if (sk.until <= pkNow(w)) w.social.skulls.delete(id);
+  for (const [id, until] of w.social.pzLocks) if (until <= pkNow(w)) w.social.pzLocks.delete(id);
   // membros que deixaram de existir saem do grupo
   const p = w.social.party;
   if (p && p.members.some((id) => !allActors(w).some((a) => a.id === id))) {

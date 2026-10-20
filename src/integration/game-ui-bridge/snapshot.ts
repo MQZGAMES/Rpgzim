@@ -16,7 +16,7 @@ import type { GameSimulation } from '../../game/simulation/GameSimulation';
 import { castCheck, spellCooldownRemaining } from '../../game/abilities/spells';
 import { nearbyInteractables } from '../../game/interaction/interaction';
 import { nearbyLootBags } from '../../game/inventory/inventoryService';
-import { PARTY_SHARE_RANGE, PVP_FAIL_MESSAGE, actorById, actorName, canAttackActor, partyOf, pzLockMs, skullOf, pendingInviteFor, sameParty } from '../../game/social/social';
+import { PARTY_SHARE_RANGE, PVP_FAIL_MESSAGE, actorById, actorName, canAttackActor, partyOf, pkNow, pzLockMs, skullOf, pendingInviteFor, sameParty } from '../../game/social/social';
 import { heroActivity } from '../../game/ai/heroBrain';
 
 export interface ItemView {
@@ -351,7 +351,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
     standAttack: c.flags.standAttack === true,
-    pk: { skull: skullOf(w, p.id)?.kind ?? null, skullMs: Math.max(0, (skullOf(w, p.id)?.until ?? 0) - w.now), pzLockMs: pzLockMs(w, p.id) },
+    pk: { skull: skullOf(w, p.id)?.kind ?? null, skullMs: Math.max(0, (skullOf(w, p.id)?.until ?? 0) - pkNow(w)), pzLockMs: pzLockMs(w, p.id) },
     heroes: [...w.heroes.values()].map((h) => ({
       id: h.id,
       name: h.character.name,

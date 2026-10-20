@@ -57,7 +57,7 @@ export class GameSession {
       const hero = Object.values(opts.data.heroes).find((d) => d.slotId === hc.id);
       return hero && hc.id !== character.id ? [{ hero, character: hc }] : [];
     });
-    this.sim = new GameSimulation({ data: opts.data, map: opts.map, character, restorePosition: restore, heroes });
+    this.sim = new GameSimulation({ data: opts.data, map: opts.map, character, restorePosition: restore, heroes, clock: Date.now });
     character = this.sim.world.player.character;
     if (!restore) {
       character.health = this.sim.world.player.stats.maxHealth;

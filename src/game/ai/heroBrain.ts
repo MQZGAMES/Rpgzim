@@ -730,9 +730,9 @@ function baitMonsters(w: World, h: HeroEntity): boolean {
       chebyshev(m, leader) <= BAIT_LEADER_RANGE,
   );
   if (!threat) return false;
-  // chama a atenção: o golpe em área (raio 1) vira os monstros encostados nele para o herói
-  if (chebyshev(threat, h) <= 1) {
-    if (tryCast(w, h, 'steel_whirlwind')) return true;
+  // chama a atenção: o Grito de Guerra (raio 5) vira as criaturas por perto para o herói
+  if (chebyshev(threat, h) <= 4) {
+    if (tryCast(w, h, 'war_cry')) return true;
   }
   if (!currentTarget(w) || currentTarget(w)?.id !== threat.id) setTarget(w, threat.id);
   // o herói fica entre o monstro e o colega: é ele que leva a pancada

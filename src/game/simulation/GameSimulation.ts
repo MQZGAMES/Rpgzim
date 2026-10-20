@@ -53,6 +53,8 @@ export interface SimulationOptions {
   loot?: LootGenerator;
   /** Restaura a posição salva (se válida); caso contrário usa o ponto de nascimento. */
   restorePosition?: boolean;
+  /** Relógio das regras de PK (caveira, PZ lock): no jogo, `Date.now` — conta o tempo real mesmo com o jogo pausado/fechado. */
+  clock?: () => number;
   /** Heróis com vida própria presentes no mundo (personagens não controlados pelo jogador). */
   heroes?: { hero: HeroDef; character: CharacterState }[];
 }
@@ -122,7 +124,7 @@ export class GameSimulation {
       player,
       human: player,
       heroes: new Map(),
-      social: newSocialState(c.flags.pvp === true),
+      social: Object.assign(newSocialState(c.flags.pvp === true), { clock: opts.clock }),
       monsters: new Map(),
       npcs: new Map(),
       lootBags: new Map(),

@@ -135,7 +135,8 @@ describe('Escudo de Mana', () => {
 });
 
 describe('Knight e Paladin', () => {
-  it('Grito de Guerra atrai as criaturas em 3 tiles', () => {
+  it('Grito de Guerra: raio 5, recarga de 2 s, atrai as criaturas; o Redemoinho de Aço não atrai', () => {
+    expect(GAME_DATA.spells.war_cry).toMatchObject({ radius: 5, cooldownMs: 2000 });
     const sim = makeSim('knight');
     clearMonsters(sim);
     levelUp(sim, 10, 0);
@@ -144,11 +145,22 @@ describe('Knight e Paladin', () => {
     sim.teleportPlayer(spot.x, spot.y);
     const m = [...w.monsters.values()][0]!;
     m.alive = true;
-    put(sim, m, spot.x + 3, spot.y);
+    put(sim, m, spot.x + 5, spot.y);
     m.state = 'idle';
     expect(GAME_DATA.spells.war_cry?.attract).toBe(true);
     expect(sim.castSpell('war_cry')).toBe(true);
     expect(m.targetId).toBe(w.player.id);
+    // o Redemoinho de Aço só causa dano: o monstro atingido não é puxado
+    advance(sim, 2500, 100);
+    const other = [...w.monsters.values()][1]!;
+    other.alive = true;
+    put(sim, other, spot.x + 1, spot.y + 1);
+    other.state = 'idle';
+    other.targetId = null;
+    other.def = { ...other.def, aggroRadius: 0 };
+    other.hp = 1e6;
+    expect(sim.castSpell('steel_whirlwind')).toBe(true);
+    expect(other.tauntUntil).toBe(0);
   });
 
   it('Flecha Atordoante deixa o alvo lento, gasta 1 flecha e a mais forte vai primeiro', () => {

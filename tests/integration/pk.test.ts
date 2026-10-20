@@ -324,3 +324,37 @@ describe('PK: persistência e interface', () => {
     expect(pk.pzLockMs).toBeGreaterThan(110000);
   });
 });
+
+describe('PK: o tempo é o do relógio (não o do jogo ativo)', () => {
+  it('com o relógio real, caveira e PZ lock passam mesmo com o jogo parado (pausado ou fechado)', () => {
+    const { sim, w, human } = world();
+    let real = 1_000_000;
+    w.social.clock = () => real;
+    registerAggression(w, human.id, 'hero:boladex'); // caveira branca + PZ lock de 2 min
+    expect(skullOf(w, human.id)?.kind).toBe('white');
+    // o jogo fica parado (o tempo da simulação não anda), mas o relógio avança 3 min
+    const simNow = w.now;
+    real += 3 * 60000;
+    expect(w.now).toBe(simNow);
+    expect(skullOf(w, human.id)).toBeNull();
+    expect(isPzLocked(w, human.id)).toBe(false);
+    void sim;
+  });
+
+  it('salvou com caveira branca e voltou depois do prazo: sumiu; a vermelha só some depois de 24 h', () => {
+    const { w, human } = world();
+    const now = Date.now();
+    human.character.pk = { skull: 'white', skullUntil: now - 1000, pzLockUntil: now - 1000, unjust: [] };
+    loadPk(w, human);
+    expect(skullOf(w, human.id)).toBeNull();
+    expect(isPzLocked(w, human.id)).toBe(false);
+    // caveira vermelha com 23 h restantes continua; passadas as 24 h, some
+    human.character.pk = { skull: 'red', skullUntil: now + 23 * 3600000, pzLockUntil: 0, unjust: [] };
+    loadPk(w, human);
+    expect(skullOf(w, human.id)?.kind).toBe('red');
+    w.social.skulls.clear();
+    human.character.pk = { skull: 'red', skullUntil: now - 5 * 60000, pzLockUntil: 0, unjust: [] };
+    loadPk(w, human);
+    expect(skullOf(w, human.id)).toBeNull();
+  });
+});

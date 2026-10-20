@@ -61,9 +61,10 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
     /** Define a caveira e o PZ lock do jogador (para conferir a interface). */
     setPk: (kind: 'white' | 'yellow' | 'red' | null, lockMs = 0) => {
       const w = sim.world;
-      if (kind) w.social.skulls.set(w.human.id, { kind, until: w.now + (kind === 'red' ? 24 * 3600000 : 15 * 60000) });
+      const t = w.social.clock ? w.social.clock() : w.now;
+      if (kind) w.social.skulls.set(w.human.id, { kind, until: t + (kind === 'red' ? 24 * 3600000 : 15 * 60000) });
       else w.social.skulls.delete(w.human.id);
-      if (lockMs) w.social.pzLocks.set(w.human.id, w.now + lockMs);
+      if (lockMs) w.social.pzLocks.set(w.human.id, t + lockMs);
       else w.social.pzLocks.delete(w.human.id);
     },
     /** Dispara um aviso de PK na tela (para conferir a interface). */

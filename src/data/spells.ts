@@ -106,8 +106,8 @@ const list: SpellDef[] = [
   // ---------------------------------------------------------------- Knight
   {
     id: 'war_cry', name: 'Grito de Guerra', words: 'bellum clamor', icon: 'spell_war_cry',
-    description: 'Berro que vira a atenção das criaturas em 3 tiles para você (dano leve). Ideal para proteger o grupo.', vocations: ['knight'], minLevel: 3, minMagicLevel: 0,
-    manaCost: 25, cooldownMs: 8000, range: 0, radius: 3, target: 'areaSelf', effect: 'damage', element: 'physical',
+    description: 'Berro que vira a atenção das criaturas em 5 tiles para você (dano leve). Ideal para proteger o grupo.', vocations: ['knight'], minLevel: 3, minMagicLevel: 0,
+    manaCost: 25, cooldownMs: 2000, range: 0, radius: 5, target: 'areaSelf', effect: 'damage', element: 'physical',
     attract: true,
     formula: { kind: 'melee', levelFactor: 0.1, powerFactor: 0.3, base: 2, min: 0.8, max: 1.2 },
     vfx: { impact: 'fx_whirl', sfx: 'whirl', color: '#e0b03a' },
@@ -122,9 +122,8 @@ const list: SpellDef[] = [
   },
   {
     id: 'steel_whirlwind', name: 'Redemoinho de Aço', words: 'ferrum turbo', icon: 'spell_steel_whirlwind',
-    description: 'Giro com a arma que atinge todos os inimigos adjacentes e vira a atenção deles para você.', vocations: ['knight'], minLevel: 2, minMagicLevel: 0,
+    description: 'Giro com a arma que atinge todos os inimigos adjacentes.', vocations: ['knight'], minLevel: 2, minMagicLevel: 0,
     manaCost: 30, cooldownMs: 2000, range: 0, radius: 1, target: 'areaSelf', effect: 'damage', element: 'physical',
-    attract: true,
     formula: { kind: 'melee', levelFactor: 0.25, powerFactor: 0.75, base: 4, min: 0.8, max: 1.2 },
     requiresWeapon: 'melee',
     vfx: { impact: 'fx_whirl', sfx: 'whirl', color: '#b8c2d3' },
