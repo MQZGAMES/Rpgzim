@@ -5,7 +5,7 @@ import type { HotbarEntry } from '../../domain/rules/hotbar';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
-import { TOUCH_ROWS } from '../hud/ActionControls';
+import { TOUCH_CELLS } from '../hud/ActionControls';
 
 function SlotPreview({ slot, selected, onSelect }: { slot: HotbarSlotView; selected: boolean; onSelect: () => void }) {
   const icon = slot.spell?.icon ?? slot.icon;
@@ -63,18 +63,16 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
         <p className="text-[12px] text-muted">Toque numa posição e escolha o que ela usa. As posições são as mesmas da tela{touch ? ' (o 1 fica colado no botão de ataque)' : ' (teclas 1–8)'}.</p>
         <div className="mt-2 flex justify-center">
           {touch ? (
-            // mesma "pirâmide" da tela: o atalho 1 fica colado no botão de ataque
-            <div className="flex flex-col items-end">
-              {TOUCH_ROWS.map((row, r) => (
-                <div key={r} className="flex items-center justify-end gap-2 py-1" style={{ marginRight: r < 2 ? 14 : 0 }}>
-                  {row.map((i) => (hotbar[i] ? <SlotPreview key={i} slot={hotbar[i]!} selected={sel === i} onSelect={() => setSel(i)} /> : null))}
-                  {r === 2 && (
-                    <div className="btn-gold flex h-[60px] w-[60px] items-center justify-center opacity-70" aria-hidden>
-                      <ItemIcon icon="ui_attack" size={24} />
-                    </div>
-                  )}
+            // mesmo quadrado 3x3 da tela: o atalho 1 fica colado no botão de ataque
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, 48px) 56px', gridTemplateRows: 'repeat(2, 48px) 56px' }}>
+              {hotbar.map((slot) => (
+                <div key={slot.index} className="flex items-center justify-center" style={{ gridRow: TOUCH_CELLS[slot.index]![0], gridColumn: TOUCH_CELLS[slot.index]![1] }}>
+                  <SlotPreview slot={slot} selected={sel === slot.index} onSelect={() => setSel(slot.index)} />
                 </div>
               ))}
+              <div className="btn-gold flex items-center justify-center opacity-70" style={{ gridRow: 3, gridColumn: 3 }} aria-hidden>
+                <ItemIcon icon="ui_attack" size={24} />
+              </div>
             </div>
           ) : (
             <div className="flex gap-2">

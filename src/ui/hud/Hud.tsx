@@ -13,7 +13,7 @@ import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { BuffBar, StatusPanel } from './StatusPanel';
 import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyPanel, PkBadge, QuickToggles } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
-import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, RegionBanner } from './Overlays';
+import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, PkToast, RegionBanner } from './Overlays';
 
 export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setShowLog }: { zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void; showLog: boolean; setShowLog: (v: boolean) => void }) {
   const session = useSession();
@@ -52,7 +52,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {showLog && (
         <div
           className={`absolute left-[max(8px,env(safe-area-inset-left))] ${
-            touch ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] max-w-[calc(100vw-232px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-335px))]'
+            touch ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] max-w-[calc(100vw-196px)]' : 'bottom-3 max-w-[min(440px,calc(50vw-335px))]'
           }`}
         >
           <MessageLog max={touch ? 5 : 7} />
@@ -61,6 +61,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       {touch ? <TouchActions /> : <DesktopActionBar />}
       <RegionBanner />
       <LevelUpToast />
+      <PkToast />
       {showFps && <FpsCounter />}
       <NpcDialog />
       <LootWindow />

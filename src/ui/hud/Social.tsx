@@ -78,8 +78,8 @@ export function QuickToggles() {
 
 const SKULL_LABEL = { white: 'Caveira branca', yellow: 'Caveira amarela', red: 'Caveira vermelha' } as const;
 const SKULL_HINT = {
-  white: 'Você atacou alguém sem caveira. Fique sem lutar nos últimos 30 s para a caveira acabar.',
-  yellow: 'Você atacou uma caveira branca (defesa justa).',
+  white: 'Você atacou alguém sem caveira. Dura o PZ lock (2 min; 5 min se matar) e é renovada se você lutar nos últimos 30 s.',
+  yellow: 'Você atacou uma caveira branca sem ter sido atacado por ela. Dura o PZ lock.',
   red: 'Caveira vermelha (3 mortes injustas): dura 24 h. Se morrer, perde TODOS os itens e o ouro.',
 } as const;
 
@@ -90,24 +90,27 @@ export function formatPkTime(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** PK estilo Tibia: caveira (cor e tempo) e PZ lock restante, colados ao painel de status. */
+/** PK estilo Tibia: caveira (cor e tempo) e PZ lock. Branca/amarela duram o PZ lock: um chip só; a vermelha tem o seu. */
 export function PkBadge() {
   const pk = useSnap((s) => s.pk);
   if (!pk.skull && pk.pzLockMs <= 0) return null;
+  const together = pk.skull && pk.skull !== 'red';
   return (
     <div className="pointer-events-none mt-[2px] flex items-center gap-2" data-testid="pk-badge">
       {pk.skull && (
         <span className="text-outline flex items-center gap-1 rounded-sm bg-[#120d18]/80 px-1 text-[11px] text-parchment" title={`${SKULL_LABEL[pk.skull]}: ${SKULL_HINT[pk.skull]}`} data-testid="pk-skull">
           <ItemIcon icon={`ui_skull_${pk.skull}`} size={14} />
+          {together && <ItemIcon icon="ui_lock" size={11} />}
           {formatPkTime(pk.skullMs)}
         </span>
       )}
-      {pk.pzLockMs > 0 && (
+      {pk.pzLockMs > 0 && !together && (
         <span className="text-outline flex items-center gap-1 rounded-sm bg-[#3a0a12]/85 px-1 text-[11px] text-hp-light" title="PZ lock: você não pode entrar em áreas protegidas (lojas, templo, casas)" data-testid="pk-pzlock">
           <ItemIcon icon="ui_lock" size={12} />
           PZ {formatPkTime(pk.pzLockMs)}
         </span>
       )}
+      {together && <span className="sr-only" data-testid="pk-pzlock">PZ lock {formatPkTime(pk.pzLockMs)}</span>}
     </div>
   );
 }

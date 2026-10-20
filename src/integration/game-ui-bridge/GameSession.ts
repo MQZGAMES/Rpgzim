@@ -91,6 +91,7 @@ export class GameSession {
         if (reg) this.audio.setMusic(reg.music);
       }),
       ev.on('levelUp', (e) => this.local.update({ levelUp: { id: ++this.msgSeq, level: e.level } })),
+      ev.on('pkNotice', (e) => this.local.update({ pkToast: { id: ++this.msgSeq, text: e.text, danger: e.danger } })),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
       ev.on('partyChanged', () => {

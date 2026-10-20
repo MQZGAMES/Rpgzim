@@ -17,6 +17,8 @@ export interface UiLocalState {
   messages: ChatMessage[];
   banner: { id: number; title: string; subtitle?: string } | null;
   levelUp: { id: number; level: number } | null;
+  /** Aviso de PK na tela (ex.: morte injusta). */
+  pkToast: { id: number; text: string; danger: boolean } | null;
   ready: boolean;
   saving: boolean;
   lastSaved: number | null;
@@ -49,7 +51,7 @@ export class Store<T> {
 }
 
 export function createLocalStore(touch: boolean): Store<UiLocalState> {
-  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, ready: false, saving: false, lastSaved: null, fps: 0, touch, actorMenu: null, partyPanel: false });
+  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, pkToast: null, ready: false, saving: false, lastSaved: null, fps: 0, touch, actorMenu: null, partyPanel: false });
 }
 
 export function createSnapshotStore(initial: UiSnapshot): Store<UiSnapshot> {

@@ -60,6 +60,25 @@ export function LevelUpToast() {
   );
 }
 
+/** Aviso de PK no alto da tela (morte injusta, caveira nova); some sozinho. */
+export function PkToast() {
+  const toast = useLocal((s) => s.pkToast);
+  const session = useSession();
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => session.local.update({ pkToast: null }), toast.danger ? 5200 : 3600);
+    return () => clearTimeout(t);
+  }, [toast, session]);
+  if (!toast) return null;
+  return (
+    <div key={toast.id} className="anim-pop pointer-events-none absolute left-0 right-0 top-[22%] z-30 flex justify-center px-3" role="alert" data-testid="pk-toast">
+      <div className={`max-w-[360px] rounded-sm border-2 px-3 py-2 text-center text-[13px] leading-snug shadow-lg ${toast.danger ? 'border-hp bg-[#3a0a12]/92 text-[#ffd0c8]' : 'border-[#c8a23a] bg-[#2a2008]/92 text-gold-light'}`}>
+        {toast.text}
+      </div>
+    </div>
+  );
+}
+
 export function DeathOverlay() {
   const dead = useSnap((s) => s.player.dead);
   const session = useSession();

@@ -25,7 +25,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Controles
 - **Toque:** joystick invisível na metade esquerda (aparece só ao pressionar e arrastar); toque no chão para
-  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **8 atalhos** (pirâmide colada ao botão de ataque)
+  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **8 atalhos** num quadrado 3×3 com o botão de ataque no canto
   em grade ao redor do botão de ataque; botão de ação contextual. Na mochila, toque duplo equipa/usa.
   Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
 - **Entrada do mapa unificada** (`src/ui/controls/MapInput.tsx`): uma camada única trata toque e mouse (andar,
@@ -107,24 +107,27 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   quem trava no outro troca de lugar após 5 s. Com o Boladex de líder, você (sem alvo e sem caminho
   escolhido) anda junto dele. A **XP é dividida igualmente** entre os membros vivos a até 20 tiles.
 - **PK estilo Tibia** (botão de caveira liga o ataque entre personagens, fora de áreas protegidas; membros do grupo só no treino):
-  - atacar quem **não tem caveira** = **caveira branca** (15 min) e **PZ lock** de 2 min (não entra em lojas, templo, casas);
-  - atacar uma **caveira branca** (sem ter caveira) = **caveira amarela** (2 min); atacar caveira vermelha é justo;
-  - **matar** = PZ lock de 5 min; matar quem não tinha caveira é **morte injusta**: a 3ª em 24 h dá **caveira vermelha**
-    por **24 h** (matar branca/amarela/vermelha não conta);
-  - com menos de 30 s de caveira branca/amarela, **qualquer combate** (com personagem, NPC ou criatura) renova para 30 s:
-    é preciso ficar 30 s sem atacar nem ser atacado; a vermelha não renova;
-  - a caveira aparece ao lado do nome no mapa (junto do **escudo do grupo**) e no HUD com o tempo e o PZ lock;
-    a vermelha, o PZ lock e as mortes injustas valem entre sessões (tempo real).
+  - atacar quem **não tem caveira** = **caveira branca** e **PZ lock** de 2 min (não entra em lojas, templo, casas);
+  - quem **revida** contra o agressor não ganha caveira; já um **terceiro** que ataca uma caveira branca sem ter sido
+    atacado por ela fica com **caveira amarela**; atacar caveira vermelha é justo;
+  - **matar** = PZ lock de 5 min; os **dois últimos personagens que bateram** na vítima contam a morte. Matar quem não
+    tinha caveira é **morte injusta** (aviso na tela); a 3ª em 24 h dá **caveira vermelha** por **24 h**. Matar caveira
+    branca, amarela ou vermelha não conta como injusta;
+  - **branca e amarela duram exatamente o PZ lock** (2 min; 5 min se matar) e só somem quando ele acaba; com menos de 30 s
+    restantes, **qualquer combate** (com personagem, NPC ou criatura) renova para 30 s: é preciso ficar 30 s sem atacar
+    nem ser atacado. A vermelha não renova;
+  - a caveira aparece **à direita do nome** no mapa (junto do escudo do grupo) e no HUD com o tempo; a vermelha, o PZ lock
+    e as mortes injustas valem entre sessões (tempo real).
 - **Morte**: **toda a mochila e o dinheiro da bolsa** caem num saco no chão (qualquer um pode pegar; só some quando alguém
   pegar) e cada equipado tem **10%** de chance de cair (caveira vermelha perde **todos**). O **Amuleto da Perda**
   (10.000, em todas as lojas) protege tudo e se desfaz. Morrendo, o PZ lock some; caveira branca/amarela também (renasce
   sem caveira); a vermelha continua contando as 24 h. O Boladex volta ao local da morte para recuperar seu saco.
-- **Grupo visível** (estilo Tibia): escudo ao lado do nome — **amarelo com estrela = líder**, **azul = membro**.
+- **Grupo visível** (estilo Tibia): escudo à direita do nome — **amarelo com estrela = líder**, **azul = membro**.
 - **Flechas**: não há mais slot de munição; ficam na mochila e são gastas sozinhas, **das mais fortes para as mais fracas**
   (*Flecha de Metal* +2 de ataque, *Flecha de Pedra* +1; vendidas no mercador). Com arco equipado, um contador mostra as
   flechas por tipo perto do botão de ataque (laranja <20, vermelho piscando sem flechas).
 - **Magias novas**: *Corrida* (todas: velocidade por 8 s e desfaz lentidão), *Escudo de Mana* (Sorcerer/Druid: por 5 min o
-  dano sai da mana; ícone no HUD e bolha azul no personagem), *Grito de Guerra* (Knight: atrai criaturas em 3 tiles) e
+  dano sai da mana; ícone no HUD e contorno azul discreto no personagem; o dano que sai da mana aparece em azul), *Grito de Guerra* (Knight: atrai criaturas em 3 tiles) e
   *Flecha Atordoante* (Paladin: dano + lentidão). Lentidão de gelo (Rajada Glacial, Flecha Atordoante) vale também para
   jogadores e heróis. *Redemoinho de Aço* e *Flecha Sagrada* com 2 s de exaustão.
 - **Segurando uma magia com alvo**: se o alvo morreu, sumiu ou saiu da tela, o próximo é o inimigo mais próximo.
@@ -179,7 +182,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **210 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **213 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **12 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

@@ -1,8 +1,10 @@
 // Interação entre personagens-jogadores (humano e heróis): grupo e PK.
 // - Grupo: convite (expira), aceitar/recusar, sair, remover, passar liderança; XP dividida igualmente.
 // - PK (estilo Tibia): só com a permissão de PK do mundo ligada, fora de áreas protegidas e nunca entre membros
-//   do grupo. Atacar quem não tem caveira dá caveira branca; atacar uma caveira branca dá caveira amarela; 3 mortes
-//   injustas em 24 h dão caveira vermelha (24 h). Quem ataca fica com PZ lock (2 min; 5 min se matar).
+//   do grupo. Atacar quem não tem caveira dá caveira branca; um terceiro que ataca uma caveira branca sem ter sido
+//   atacado por ela fica com caveira amarela (quem revida contra o agressor não ganha nada); 3 mortes injustas em
+//   24 h dão caveira vermelha (24 h). Quem ataca fica com PZ lock (2 min; 5 min se matar) e as caveiras branca e
+//   amarela duram exatamente o PZ lock. Os dois últimos personagens que bateram na vítima contam a morte.
 import { chebyshev } from '../../domain/value-objects/position';
 import { isPz } from '../world/GameMap';
 import type { PlayerEntity } from '../entities/types';
@@ -42,12 +44,14 @@ export interface SocialState {
   pzLocks: Map<string, number>;
   /** Mortes injustas (vítima sem caveira) de cada personagem: instantes, para a caveira vermelha. */
   unjust: Map<string, number[]>;
+  /** Últimos personagens que bateram em cada vítima (até 2, o mais recente primeiro): dividem o crédito da morte. */
+  hitters: Map<string, { id: string; at: number }[]>;
   /** Último ataque de A em B: chave `${atacante}>${vitima}` -> instante. */
   aggressions: Map<string, number>;
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), aggressions: new Map() };
+  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), hitters: new Map(), aggressions: new Map() };
 }
 
 export type SkullKind = 'white' | 'yellow' | 'red';
@@ -60,11 +64,11 @@ export const INVITE_MS = 60000;
 /** PZ lock ao atacar outro personagem e ao matá-lo. */
 export const PZ_LOCK_ATTACK_MS = 2 * 60000;
 export const PZ_LOCK_KILL_MS = 5 * 60000;
-/** Duração das caveiras. */
-export const WHITE_SKULL_MS = 15 * 60000;
-export const YELLOW_SKULL_MS = 2 * 60000;
+/** Caveira vermelha: 24 h. As brancas e amarelas duram o mesmo que o PZ lock. */
 export const RED_SKULL_MS = 24 * 3600000;
-/** Com menos que isto para acabar, qualquer combate (com personagem, NPC ou criatura) renova para este valor. */
+/** Quem bateu na vítima nesta janela (os dois últimos) conta a morte. */
+export const KILL_CREDIT_MS = 60000;
+/** Com menos que isto para acabar o PZ lock/caveira, qualquer combate (com personagem, NPC ou criatura) renova para este valor. */
 export const SKULL_RENEW_MS = 30000;
 /** 3 mortes injustas dentro desta janela dão caveira vermelha. */
 export const UNJUST_WINDOW_MS = 24 * 3600000;
@@ -283,12 +287,16 @@ export function hasSkull(w: World, id: string): boolean {
   return !!skullOf(w, id);
 }
 
-/** Coloca uma caveira: a de maior gravidade vence (vermelha > branca > amarela) e nunca encurta o tempo. */
-function setSkull(w: World, id: string, kind: SkullKind, ms: number): void {
+/** Coloca uma caveira: a de maior gravidade vence (vermelha > branca > amarela). Branca/amarela duram o PZ lock. */
+function setSkull(w: World, id: string, kind: SkullKind, ms = 0): void {
   const cur = skullOf(w, id);
-  const until = w.now + ms;
-  if (!cur || SKULL_RANK[kind] > SKULL_RANK[cur.kind]) w.social.skulls.set(id, { kind, until });
-  else if (cur.kind === kind) cur.until = Math.max(cur.until, until);
+  if (kind === 'red') {
+    if (!cur || cur.kind !== 'red') w.social.skulls.set(id, { kind, until: w.now + ms });
+    else cur.until = Math.max(cur.until, w.now + ms);
+    return;
+  }
+  if (cur && SKULL_RANK[kind] <= SKULL_RANK[cur.kind]) return;
+  w.social.skulls.set(id, { kind, until: Math.max(w.social.pzLocks.get(id) ?? 0, w.now) });
 }
 
 /** PZ lock: quanto falta (ms) e se ainda está ativo. */
@@ -298,58 +306,105 @@ export function pzLockMs(w: World, id: string): number {
 export function isPzLocked(w: World, id: string): boolean {
   return pzLockMs(w, id) > 0;
 }
+
+/** Caveiras branca/amarela só somem quando o PZ lock some: o fim delas acompanha o do PZ lock. */
+function syncSkull(w: World, id: string): void {
+  const s = w.social.skulls.get(id);
+  if (s && s.kind !== 'red') s.until = Math.max(w.social.pzLocks.get(id) ?? 0, w.now);
+}
+
 function lockPz(w: World, id: string, ms: number): void {
   w.social.pzLocks.set(id, Math.max(w.social.pzLocks.get(id) ?? 0, w.now + ms));
+  syncSkull(w, id);
 }
 
 /**
- * Qualquer combate (atacar ou ser atacado, por personagem, NPC ou criatura) renova a caveira branca/amarela
- * para 30 s se faltarem menos que isso: é preciso ficar 30 s inteiros sem lutar para ela acabar.
+ * Qualquer combate (atacar ou ser atacado, por personagem, NPC ou criatura) renova o PZ lock (e a caveira
+ * branca/amarela que o acompanha) para 30 s se faltarem menos que isso: é preciso ficar 30 s inteiros sem
+ * lutar para eles acabarem. A caveira vermelha não renova.
  */
 export function touchCombat(w: World, id: string): void {
-  const s = skullOf(w, id);
-  if (s && s.kind !== 'red' && s.until - w.now < SKULL_RENEW_MS) s.until = w.now + SKULL_RENEW_MS;
+  const lock = w.social.pzLocks.get(id);
+  if (lock && lock > w.now && lock - w.now < SKULL_RENEW_MS) {
+    w.social.pzLocks.set(id, w.now + SKULL_RENEW_MS);
+    syncSkull(w, id);
+  }
 }
 
-/** Registra um ataque entre personagens e aplica as marcas (caveira, PZ lock) conforme a caveira da vítima. */
+/** Anota quem bateu na vítima: os dois últimos (distintos) dividem o crédito da morte. */
+function noteHit(w: World, attackerId: string, victimId: string): void {
+  const list = (w.social.hitters.get(victimId) ?? []).filter((h) => h.id !== attackerId && w.now - h.at < KILL_CREDIT_MS);
+  list.unshift({ id: attackerId, at: w.now });
+  w.social.hitters.set(victimId, list.slice(0, 2));
+}
+
+/** Quem conta a morte da vítima: os dois últimos personagens que bateram nela nos últimos 60 s. */
+export function killCredits(w: World, victimId: string): string[] {
+  return (w.social.hitters.get(victimId) ?? []).filter((h) => w.now - h.at < KILL_CREDIT_MS).map((h) => h.id);
+}
+
+/** Aviso na tela (e no registro) para o jogador humano sobre PK. */
+function pkNotice(w: World, id: string, text: string, danger: boolean): void {
+  if (id !== w.human.id) return;
+  message(w, text, 'warning');
+  w.human.scope.events.emit('pkNotice', { text, danger });
+}
+
+/**
+ * Registra um ataque entre personagens e aplica as marcas conforme a caveira da vítima:
+ * - vítima sem caveira: o atacante vira agressor (caveira branca) — e quem revida contra ele não ganha caveira;
+ * - vítima com caveira branca: um terceiro que a ataca sem ter sido atacado por ela fica com caveira amarela;
+ * - vítima com caveira vermelha: justo, nada muda.
+ * Todo atacante recebe PZ lock de 2 min.
+ */
 export function registerAggression(w: World, attackerId: string, victimId: string): void {
+  const defending = attackedRecently(w, victimId, attackerId, PZ_LOCK_ATTACK_MS); // a vítima atacou o atacante antes
   w.social.aggressions.set(`${attackerId}>${victimId}`, w.now);
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
+  noteHit(w, attackerId, victimId);
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
   const victim = skullOf(w, victimId)?.kind ?? null;
   if (victim === 'red') {
     // atacar um caveira vermelha é justo: nada muda
   } else if (victim === 'white') {
-    // atacar uma caveira branca: o atacante (que ainda não tem caveira) fica com caveira amarela
-    if (!skullOf(w, attackerId)) setSkull(w, attackerId, 'yellow', YELLOW_SKULL_MS);
-  } else {
-    // vítima sem caveira (ou só amarela): o atacante vira agressor, caveira branca
-    setSkull(w, attackerId, 'white', WHITE_SKULL_MS);
+    // revidar contra quem te atacou é defesa; já um terceiro que bate numa caveira branca fica amarelo
+    if (!defending && !skullOf(w, attackerId)) {
+      setSkull(w, attackerId, 'yellow');
+      pkNotice(w, attackerId, 'Você atacou uma caveira branca sem ser atacado por ela: caveira AMARELA.', false);
+    }
+  } else if (!defending) {
+    // vítima sem caveira: o atacante vira agressor
+    const had = skullOf(w, attackerId);
+    setSkull(w, attackerId, 'white');
+    if (!had || had.kind === 'yellow') pkNotice(w, attackerId, 'Ataque injusto: você ficou com caveira BRANCA.', false);
   }
   touchCombat(w, attackerId);
   touchCombat(w, victimId);
 }
 
 /**
- * Matou outro personagem: PZ lock de 5 min. Se a vítima não tinha caveira a morte é injusta; a 3ª em 24 h dá
- * caveira vermelha por 24 h. Matar uma caveira branca/amarela/vermelha é justo (só o PZ lock).
+ * Matou outro personagem: PZ lock de 5 min (a caveira branca/amarela acompanha). Se a vítima não tinha caveira a
+ * morte é injusta (aviso na tela); a 3ª em 24 h dá caveira vermelha por 24 h. Matar uma caveira
+ * branca/amarela/vermelha é justo.
  */
-export function registerPlayerKill(w: World, killerId: string, victimSkull: SkullKind | null): void {
+export function registerPlayerKill(w: World, killerId: string, victimSkull: SkullKind | null, victimName = 'o personagem'): void {
   lockPz(w, killerId, PZ_LOCK_KILL_MS);
   if (victimSkull !== null) return;
-  setSkull(w, killerId, 'white', WHITE_SKULL_MS);
+  setSkull(w, killerId, 'white');
+  syncSkull(w, killerId);
   const list = (w.social.unjust.get(killerId) ?? []).filter((t) => w.now - t < UNJUST_WINDOW_MS);
   list.push(w.now);
   w.social.unjust.set(killerId, list);
   if (list.length >= UNJUST_KILLS_FOR_RED) {
     setSkull(w, killerId, 'red', RED_SKULL_MS);
-    if (killerId === w.human.id) message(w, 'Você matou injustamente 3 vezes: caveira VERMELHA por 24 horas!', 'warning');
-  }
+    pkNotice(w, killerId, `MORTE INJUSTA! (${list.length}/${UNJUST_KILLS_FOR_RED}) Você ficou com caveira VERMELHA por 24 horas!`, true);
+  } else pkNotice(w, killerId, `MORTE INJUSTA! Você matou ${victimName}, que não tinha caveira (${list.length}/${UNJUST_KILLS_FOR_RED} em 24 h; a 3ª dá caveira vermelha).`, true);
 }
 
 /** Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). */
 export function onPlayerDeath(w: World, id: string): void {
   w.social.pzLocks.delete(id);
+  w.social.hitters.delete(id);
   if (skullOf(w, id)?.kind !== 'red') w.social.skulls.delete(id);
 }
 

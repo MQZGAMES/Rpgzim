@@ -66,6 +66,8 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
       if (lockMs) w.social.pzLocks.set(w.human.id, w.now + lockMs);
       else w.social.pzLocks.delete(w.human.id);
     },
+    /** Dispara um aviso de PK na tela (para conferir a interface). */
+    pkNotice: (text: string, danger = true) => sim.world.human.scope.events.emit('pkNotice', { text, danger }),
     /** Convida o herói para o grupo (ele aceita na hora). */
     invite: (id: string) => sim.partyInvite(id),
     /** Relógio do jogo em ms (anda mais devagar que o real quando os quadros demoram). */

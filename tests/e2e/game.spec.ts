@@ -323,27 +323,26 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   const fired = () => page.evaluate(() => { const a = (window as unknown as { __RPGZIM__: { castLog(): unknown[]; itemLog(): unknown[] } }).__RPGZIM__; return a.castLog().length + a.itemLog().length; });
   const clear = () => page.evaluate(() => (window as unknown as { __RPGZIM__: { clearCastLog(): void } }).__RPGZIM__.clearCastLog());
 
-  // 1) vãos entre os atalhos: nenhum ponto dentro das fileiras de botões cai na camada do mapa (tocar ali não anda);
-  //    os cantos vazios da "pirâmide" continuam livres para tocar no mapa
+  // 1) quadrado 3x3: nenhum ponto dentro dele (botões e vãos) cai na camada do mapa, então tocar ali nunca anda
   const gaps = await page.evaluate(() => {
+    const grid = document.querySelector('[data-testid=touch-grid]')!;
+    const b = grid.getBoundingClientRect();
     let onMap = 0;
     let total = 0;
-    for (const row of document.querySelectorAll('[data-testid=touch-row]')) {
-      const b = row.getBoundingClientRect();
-      for (let y = b.top + 1; y < b.bottom - 1; y += 4)
-        for (let x = b.left + 1; x < b.right - 1; x += 4) {
-          total++;
-          if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
-        }
-    }
-    const grid = document.querySelector('[data-testid=touch-actions]')!.getBoundingClientRect();
-    // canto superior esquerdo da pirâmide: vazio, deve deixar o toque chegar ao mapa
-    const corner = document.elementFromPoint(grid.left + 6, grid.top + grid.height * 0.55)?.closest('[data-testid=map-input]') ? 'mapa' : 'bloqueado';
-    return { onMap, total, corner };
+    for (let y = b.top + 1; y < b.bottom - 1; y += 4)
+      for (let x = b.left + 1; x < b.right - 1; x += 4) {
+        total++;
+        if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
+      }
+    const atk = document.querySelector('[data-testid=attack-button]')!.getBoundingClientRect();
+    const slots = [...grid.querySelectorAll('button')].filter((e) => e.getAttribute('data-testid') !== 'attack-button');
+    return { onMap, total, attack: Math.round(atk.width), slots: slots.length, square: Math.abs(b.width - b.height) < 3 };
   });
   expect(gaps.total).toBeGreaterThan(100);
   expect(gaps.onMap).toBe(0);
-  expect(gaps.corner).toBe('mapa');
+  expect(gaps.slots).toBe(8); // 8 atalhos + o botão de ataque = 9 posições
+  expect(gaps.attack).toBeLessThanOrEqual(56);
+  expect(gaps.square).toBe(true);
 
   // 2) segurar o atalho da magia repete a cada recarga; soltar encerra (nada dispara depois)
   const box = (await page.getByTestId('spell-earth_thorn').boundingBox())!;

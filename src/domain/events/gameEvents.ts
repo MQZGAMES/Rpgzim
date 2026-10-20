@@ -6,7 +6,10 @@ import type { SkillId } from '../entities/definitions';
 export type MessageKind = 'info' | 'warning' | 'loot' | 'combat' | 'system' | 'levelup' | 'chat';
 
 export interface GameEventMap extends Record<string, unknown> {
-  damage: { targetId: string; sourceId: string | null; amount: number; element: Element; blocked: boolean; position: TilePos };
+  /** `amount` é o dano na vida; `manaLoss` (Escudo de Mana) é a parte que saiu da mana. */
+  damage: { targetId: string; sourceId: string | null; amount: number; manaLoss?: number; element: Element; blocked: boolean; position: TilePos };
+  /** Aviso de PK para o jogador (ex.: morte injusta). */
+  pkNotice: { text: string; danger: boolean };
   heal: { targetId: string; amount: number; mana: boolean; position: TilePos };
   attack: { sourceId: string; targetId: string; kind: 'melee' | 'distance' | 'wand'; element: Element; projectile?: string; from: TilePos; to: TilePos };
   missed: { sourceId: string; targetId: string; position: TilePos };

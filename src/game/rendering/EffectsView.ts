@@ -197,6 +197,14 @@ export class EffectsView {
     const x = v ? v.container.x : tileCenter(e.position).x;
     const y = v ? v.container.y - v.height + 6 : tileCenter(e.position).y - 12;
     const delay = e.sourceId && e.sourceId !== e.targetId ? 0 : 0;
+    if (e.manaLoss) {
+      // Escudo de Mana: o que saiu da mana em azul; o que passou para a vida em vermelho, logo acima
+      this.floatText(`-${e.manaLoss}`, x, y, 0x69a0e0, 800, delay);
+      if (e.amount > 0) this.floatText(String(e.amount), x, y - 9, 0xff5040, 800, delay);
+      v?.flash(this.session.sim.now);
+      if (this.audible(e.targetId, e.position)) this.session.audio.play(isPlayer ? 'hurt' : 'hit');
+      return;
+    }
     if (e.blocked || e.amount === 0) {
       this.floatText(e.blocked && isPlayer ? 'BLOQUEOU' : 'ABSORVEU', x, y, 0xa9b0bf, 700, delay);
       this.playFx('hit', x, y + 6, DEPTH.overlay);
@@ -255,7 +263,8 @@ export class EffectsView {
     const v = this.vis(targetId);
     if (!v) return;
     const s = this.scene.add.sprite(v.container.x, v.container.y, 'fx', `${name}_0`).setOrigin(0.5, 1).setDepth(v.container.depth + 1);
-    s.play({ key: `fx:${name}`, repeat: -1, frameRate: 10 });
+    s.play({ key: `fx:${name}`, repeat: -1, frameRate: kind === 'manaShield' ? 5 : 10 });
+    if (kind === 'manaShield') s.setAlpha(0.7); // aura discreta: o personagem continua em evidência
     this.auras.push({ sprite: s, until: this.session.sim.now + durationMs, targetId });
     if (this.audible(targetId)) this.session.audio.play('buff');
   }

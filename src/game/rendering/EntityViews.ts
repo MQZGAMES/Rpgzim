@@ -82,7 +82,7 @@ export class CreatureView {
     this.layoutLabel();
   }
 
-  /** Ícones à esquerda do nome (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
+  /** Ícones à direita do nome (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
   setBadges(frames: readonly string[]): void {
     const key = frames.join('|');
     if (key === this.badgeKey) return;
@@ -96,7 +96,7 @@ export class CreatureView {
     this.layoutLabel();
   }
 
-  /** Centraliza [ícones + nome] acima da cabeça; os ícones mantêm o tamanho na tela em qualquer zoom. */
+  /** Centraliza [nome + ícones] acima da cabeça; os ícones mantêm o tamanho na tela em qualquer zoom. */
   private layoutLabel(): void {
     if (!this.label) return;
     this.layoutZoom = getWorldTextZoom();
@@ -108,9 +108,10 @@ export class CreatureView {
     const iconsW = n * (icon + gap);
     const total = textW + iconsW;
     const y = this.headTop - 4;
-    this.label.setPosition(snapWorld(-total / 2 + iconsW + textW / 2), y);
+    // nome primeiro e, à direita dele, os ícones (escudo de grupo e caveira), como no Tibia
+    this.label.setPosition(snapWorld(-total / 2 + textW / 2), y);
     this.badges.forEach((b, i) => {
-      b.setDisplaySize(icon, icon).setPosition(snapWorld(-total / 2 + i * (icon + gap) + icon / 2), y - this.label!.displayHeight * 0.45);
+      b.setDisplaySize(icon, icon).setPosition(snapWorld(-total / 2 + textW + gap + i * (icon + gap) + icon / 2), y - this.label!.displayHeight * 0.45);
     });
   }
 

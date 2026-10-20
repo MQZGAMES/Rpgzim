@@ -7,11 +7,12 @@ import { countItem } from '../../src/domain/rules/inventory';
 import { actorSource, damagePlayer, respawnPlayer } from '../../src/game/combat/combat';
 import { canEnter } from '../../src/game/movement/movement';
 import {
+  PZ_LOCK_ATTACK_MS,
+  PZ_LOCK_KILL_MS,
   RED_SKULL_MS,
   SKULL_RENEW_MS,
-  WHITE_SKULL_MS,
-  YELLOW_SKULL_MS,
   isPzLocked,
+  killCredits,
   loadPk,
   pzLockMs,
   registerAggression,
@@ -45,23 +46,38 @@ function kill(sim: GameSimulation, killer: HeroEntity | GameSimulation['world'][
 }
 
 describe('PK: caveiras e PZ lock', () => {
-  it('atacar quem não tem caveira dá caveira branca (15 min) e PZ lock de 2 min', () => {
+  it('atacar quem não tem caveira dá caveira branca e PZ lock de 2 min (a caveira dura o PZ lock)', () => {
     const { w, h, human } = world();
     registerAggression(w, human.id, h.id);
     expect(skullOf(w, human.id)?.kind).toBe('white');
-    expect(skullOf(w, human.id)!.until - w.now).toBe(WHITE_SKULL_MS);
-    expect(pzLockMs(w, human.id)).toBe(2 * 60000);
+    expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_ATTACK_MS);
+    expect(skullOf(w, human.id)!.until - w.now).toBe(PZ_LOCK_ATTACK_MS);
     expect(skullOf(w, h.id)).toBeNull(); // quem apanha não ganha nada
-    expect(isPzLocked(w, h.id)).toBe(false);
   });
 
-  it('atacar uma caveira branca dá caveira amarela; atacar uma caveira vermelha é justo', () => {
+  it('quem REVIDA contra o agressor não fica com caveira amarela (só o PZ lock)', () => {
     const { w, h, human } = world();
-    registerAggression(w, human.id, h.id); // o humano vira branco
-    registerAggression(w, h.id, human.id); // o herói revida contra um branco
+    registerAggression(w, human.id, h.id); // o humano ataca primeiro: caveira branca
+    registerAggression(w, h.id, human.id); // o herói (vítima) revida
+    expect(skullOf(w, h.id)).toBeNull();
+    expect(isPzLocked(w, h.id)).toBe(true);
+  });
+
+  it('um TERCEIRO que ataca a caveira branca sem ter sido atacado por ela fica com caveira amarela', () => {
+    const { sim, w, h, human } = world();
+    registerAggression(w, human.id, 'hero:vitima'); // o humano é agressor (branca)
+    // o herói nunca foi atacado pelo humano: se bater nele, é um terceiro
+    expect(skullOf(w, h.id)).toBeNull();
+    registerAggression(w, h.id, human.id);
     expect(skullOf(w, h.id)?.kind).toBe('yellow');
-    expect(skullOf(w, h.id)!.until - w.now).toBe(YELLOW_SKULL_MS);
-    // caveira vermelha: atacante sem caveira continua sem caveira (só PZ lock)
+    expect(skullOf(w, h.id)!.until - w.now).toBe(PZ_LOCK_ATTACK_MS);
+    // e matar a caveira amarela não é morte injusta (só PZ lock de 5 min)
+    kill(sim, human, h);
+    expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
+  });
+
+  it('atacar uma caveira vermelha é justo (sem caveira, só PZ lock)', () => {
     const b = world();
     b.w.social.skulls.set(b.h.id, { kind: 'red', until: b.w.now + RED_SKULL_MS });
     registerAggression(b.w, b.human.id, b.h.id);
@@ -69,81 +85,103 @@ describe('PK: caveiras e PZ lock', () => {
     expect(isPzLocked(b.w, b.human.id)).toBe(true);
   });
 
-  it('o PZ lock impede entrar em áreas protegidas (lojas, templo) e acaba com o tempo', () => {
+  it('o PZ lock impede entrar em áreas protegidas (lojas, templo) e a caveira some junto com ele', () => {
     const { sim, w, human } = world();
     const door = w.map.doors.find((d) => d.buildingId === 'temple')!;
     sim.teleportPlayer(door.x, door.y + 2);
     expect(canEnter(w, door.x, door.y, false, human.id)).toBe(true);
     registerAggression(w, human.id, 'hero:boladex');
     expect(canEnter(w, door.x, door.y, false, human.id)).toBe(false);
-    advance(sim, 2 * 60000 + 500, 250);
+    advance(sim, PZ_LOCK_ATTACK_MS - 1000, 250);
+    expect(skullOf(w, human.id)?.kind).toBe('white'); // ainda marcado enquanto o PZ lock durar
+    advance(sim, 1500, 250);
+    updateSocial(w);
     expect(isPzLocked(w, human.id)).toBe(false);
+    expect(skullOf(w, human.id)).toBeNull(); // só some quando o PZ some
     expect(canEnter(w, door.x, door.y, false, human.id)).toBe(true);
   });
 
-  it('matar quem não tem caveira: PZ lock de 5 min; 3 mortes injustas viram caveira VERMELHA de 24 h', () => {
+  it('matar quem não tem caveira: PZ lock e caveira de 5 min, aviso na tela; 3 mortes injustas = VERMELHA de 24 h', () => {
     const { sim, w, h, human } = world();
-    for (let i = 0; i < 3; i++) {
+    const notices: { text: string; danger: boolean }[] = [];
+    sim.events.on('pkNotice', (e) => notices.push(e));
+    kill(sim, human, h);
+    respawnPlayer2(sim, h);
+    expect(notices.some((n) => n.danger && n.text.includes('MORTE INJUSTA'))).toBe(true);
+    expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
+    expect(skullOf(w, human.id)!.until - w.now).toBe(PZ_LOCK_KILL_MS); // a caveira acompanha o PZ lock
+    for (let i = 0; i < 2; i++) {
       kill(sim, human, h);
       respawnPlayer2(sim, h);
     }
     expect(skullOf(w, human.id)?.kind).toBe('red');
     expect(skullOf(w, human.id)!.until - w.now).toBe(RED_SKULL_MS);
-    expect(pzLockMs(w, human.id)).toBeGreaterThan(4 * 60000);
+    expect(notices.at(-1)!.text).toContain('VERMELHA');
   });
 
-  it('matar uma caveira branca/amarela não é morte injusta (só 5 min de PZ lock)', () => {
+  it('matar uma caveira branca/amarela não é morte injusta, mesmo repetido', () => {
     const { sim, w, h, human } = world();
-    // o herói é um agressor (caveira branca) e o humano o mata 3 vezes: nunca vira vermelho
     for (let i = 0; i < 3; i++) {
-      w.social.skulls.set(h.id, { kind: 'white', until: w.now + WHITE_SKULL_MS });
+      w.social.skulls.set(h.id, { kind: 'white', until: w.now + 120000 });
       kill(sim, human, h);
       respawnPlayer2(sim, h);
     }
     expect(skullOf(w, human.id)?.kind).not.toBe('red');
+    expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
     expect(pzLockMs(w, human.id)).toBeGreaterThan(4 * 60000);
-    // a caveira branca que mata uma amarela (retaliador) também não conta como injusta
-    const b = world();
-    b.w.social.skulls.set(b.human.id, { kind: 'white', until: b.w.now + WHITE_SKULL_MS });
-    b.w.social.skulls.set(b.h.id, { kind: 'yellow', until: b.w.now + YELLOW_SKULL_MS });
-    for (let i = 0; i < 3; i++) {
-      kill(b.sim, b.human, b.h);
-      respawnPlayer2(b.sim, b.h);
-      b.w.social.skulls.set(b.h.id, { kind: 'yellow', until: b.w.now + YELLOW_SKULL_MS });
-    }
-    expect(skullOf(b.w, b.human.id)?.kind).toBe('white');
   });
 
-  it('a caveira branca com menos de 30 s é renovada para 30 s por qualquer combate (inclusive com criaturas)', () => {
+  it('os DOIS últimos personagens que bateram na vítima contam a morte', () => {
+    const { sim, w, h, human } = world();
+    // dois outros personagens batem no herói e, por último, o humano dá o golpe final
+    registerAggression(w, 'hero:antigo', h.id);
+    advance(sim, 1000, 250);
+    registerAggression(w, 'hero:ajudante', h.id);
+    advance(sim, 1000, 250);
+    registerAggression(w, human.id, h.id);
+    expect(killCredits(w, h.id)).toEqual([human.id, 'hero:ajudante']); // o 1º ficou de fora
+    h.invulnerableUntil = 0;
+    asActor(w, h, () => damagePlayer(w, 999999, 'fire', actorSource(human), true));
+    expect(pzLockMs(w, human.id)).toBeGreaterThan(PZ_LOCK_ATTACK_MS); // 5 min de quem matou
+    expect(pzLockMs(w, 'hero:ajudante')).toBe(PZ_LOCK_KILL_MS); // o ajudante também contou a morte
+    expect(pzLockMs(w, 'hero:antigo')).toBeLessThan(PZ_LOCK_ATTACK_MS); // o primeiro só tinha o PZ do ataque
+    expect(w.social.unjust.get('hero:ajudante')).toHaveLength(1);
+    expect(w.social.unjust.get('hero:antigo') ?? []).toHaveLength(0);
+  });
+
+  it('com menos de 30 s de PZ lock/caveira, qualquer combate renova para 30 s; sem lutar por 30 s tudo acaba', () => {
     const { sim, w, human } = world();
     registerAggression(w, human.id, 'hero:boladex');
-    advance(sim, WHITE_SKULL_MS - 10000, 250); // faltam ~10 s
+    advance(sim, PZ_LOCK_ATTACK_MS - 10000, 250); // faltam ~10 s
     updateSocial(w);
     const left = () => skullOf(w, human.id)!.until - w.now;
     expect(left()).toBeLessThan(SKULL_RENEW_MS);
     touchCombat(w, human.id); // lutou (atacou ou foi atacado)
     expect(left()).toBe(SKULL_RENEW_MS);
-    // sem combate por 30 s a caveira acaba
+    expect(pzLockMs(w, human.id)).toBe(SKULL_RENEW_MS);
     advance(sim, SKULL_RENEW_MS + 500, 250);
     updateSocial(w);
     expect(skullOf(w, human.id)).toBeNull();
+    expect(isPzLocked(w, human.id)).toBe(false);
     // com mais de 30 s restantes nada é renovado; caveira vermelha nunca renova
     const b = world();
     registerAggression(b.w, b.human.id, 'hero:boladex');
-    const before = skullOf(b.w, b.human.id)!.until;
+    const before = pzLockMs(b.w, b.human.id);
     touchCombat(b.w, b.human.id);
-    expect(skullOf(b.w, b.human.id)!.until).toBe(before);
+    expect(pzLockMs(b.w, b.human.id)).toBe(before);
     b.w.social.skulls.set(b.human.id, { kind: 'red', until: b.w.now + 5000 });
     touchCombat(b.w, b.human.id);
     expect(skullOf(b.w, b.human.id)!.until - b.w.now).toBe(5000);
   });
 
-  it('ser atacado por uma criatura também renova a caveira que está acabando', () => {
+  it('ser atacado por uma criatura também renova o PZ lock/caveira que está acabando', () => {
     const { w, human } = world();
     w.social.skulls.set(human.id, { kind: 'white', until: w.now + 8000 });
+    w.social.pzLocks.set(human.id, w.now + 8000);
     human.invulnerableUntil = 0;
     damagePlayer(w, 1, 'physical', { id: 'mon:x', name: 'Slime', kind: 'monster' }, true);
     expect(skullOf(w, human.id)!.until - w.now).toBe(SKULL_RENEW_MS);
+    expect(pzLockMs(w, human.id)).toBe(SKULL_RENEW_MS);
   });
 });
 
@@ -242,7 +280,7 @@ describe('PK: persistência e interface', () => {
     registerAggression(w, human.id, h.id);
     const pk = buildSnapshot(sim, 1).pk;
     expect(pk.skull).toBe('white');
-    expect(pk.skullMs).toBeGreaterThan(14 * 60000);
+    expect(pk.skullMs).toBeGreaterThan(110000); // a caveira dura o PZ lock (2 min)
     expect(pk.pzLockMs).toBeGreaterThan(110000);
   });
 });

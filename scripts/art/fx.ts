@@ -228,24 +228,20 @@ aura('fx_buff_iron', P.steel);
 aura('fx_buff_focus', P.teal);
 aura('fx_haste', P.ice);
 
-// Escudo de Mana: bolha azul que envolve o personagem (aura em loop enquanto o escudo está ativo)
-seq('fx_mana_shield', 6, 28, 36, (c, t) => {
-  const cx = 14;
-  const cy = 19;
-  for (let y = 0; y < 36; y++)
-    for (let x = 0; x < 28; x++) {
-      const nx = (x + 0.5 - cx) / 12.5;
-      const ny = (y + 0.5 - cy) / 16.5;
+// Escudo de Mana: aura discreta (só um contorno azul bem fino e translúcido que pulsa devagar, sem miolo)
+seq('fx_mana_shield', 6, 26, 34, (c, t) => {
+  const cx = 13;
+  const cy = 18;
+  const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+  for (let y = 0; y < 34; y++)
+    for (let x = 0; x < 26; x++) {
+      const nx = (x + 0.5 - cx) / 11.5;
+      const ny = (y + 0.5 - cy) / 15.5;
       const d = Math.hypot(nx, ny);
-      if (d > 1 || d < 0.78) continue;
-      const rim = d > 0.9;
-      const sweep = Math.sin((Math.atan2(ny, nx) + t * Math.PI * 2) * 2) > 0.2;
-      c.set(x, y, withAlpha(rim ? (sweep ? P.water[5] ?? P.white : P.water[4]!) : P.blue[3]!, rim ? 230 : 95));
+      if (d > 1 || d < 0.9) continue;
+      const sweep = Math.sin((Math.atan2(ny, nx) + t * Math.PI * 2) * 2) > 0.55;
+      c.set(x, y, withAlpha(sweep ? P.water[4]! : P.blue[3]!, Math.round(46 + pulse * 26 + (sweep ? 22 : 0))));
     }
-  for (let k = 0; k < 3; k++) {
-    const a = (k / 3) * Math.PI * 2 + t * Math.PI * 2;
-    c.set(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 12), P.white);
-  }
 });
 
 seq('fx_levelup', 8, 32, 56, (c, t) => {

@@ -112,6 +112,8 @@ describe('Escudo de Mana', () => {
     expect(buildSnapshot(sim, 1).buffs.some((b) => b.kind === 'manaShield' && b.remainingMs > 290000)).toBe(true);
     p.invulnerableUntil = 0;
     p.character.mana = 100;
+    const hits: { amount: number; manaLoss?: number }[] = [];
+    sim.events.on('damage', (e) => e.targetId === p.id && hits.push({ amount: e.amount, manaLoss: e.manaLoss }));
     const hp = p.character.health;
     damagePlayer(w, 60, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true);
     expect(p.character.health).toBe(hp); // tudo da mana
@@ -119,6 +121,9 @@ describe('Escudo de Mana', () => {
     damagePlayer(w, 100, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true);
     expect(p.character.mana).toBe(0);
     expect(p.character.health).toBe(hp - 60); // 40 da mana, 60 da vida
+    // o texto de dano separa o que saiu da mana (azul) do que passou para a vida (vermelho)
+    expect(hits[0]).toEqual({ amount: 0, manaLoss: 60 });
+    expect(hits[1]).toEqual({ amount: 60, manaLoss: 40 });
     // depois dos 5 min o escudo acaba
     p.character.mana = 100;
     advance(sim, 301000, 250);

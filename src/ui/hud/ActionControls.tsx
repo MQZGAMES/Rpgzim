@@ -75,20 +75,24 @@ function InteractButton({ size = 56 }: { size?: number }) {
 }
 
 /**
- * Atalhos no celular: "pirâmide" colada ao botão de ataque (canto inferior direito). Cada fileira é um bloco
- * contínuo — tocar nos vãos entre botões da mesma fileira ou entre fileiras aciona a grade, nunca anda pelo
- * mapa; os cantos vazios em cima/à esquerda ficam livres para tocar no mapa.
- * Índices dos atalhos, da fileira de cima para a de baixo, da esquerda para a direita; o 1º fica ao lado do ataque.
+ * Atalhos no celular: um quadrado de 3x3 botões colado ao canto inferior direito. O botão de ataque (um pouco
+ * menor que antes) fica no canto e os 8 atalhos o cercam: o 1º ao lado, o 2º em cima, e assim por diante, do mais
+ * perto para o mais longe. O quadrado inteiro captura o toque (os vãos nunca andam pelo mapa).
+ * Célula de cada atalho: [linha, coluna] (1–3).
  */
-export const TOUCH_ROWS: readonly (readonly number[])[] = [
-  [7, 4], // atalhos 8 e 5
-  [5, 2, 1], // 6, 3 e 2
-  [6, 3, 0], // 7, 4 e 1 (+ botão de ataque)
+export const TOUCH_CELLS: readonly (readonly [number, number])[] = [
+  [3, 2], // 1
+  [2, 3], // 2
+  [2, 2], // 3
+  [3, 1], // 4
+  [1, 3], // 5
+  [2, 1], // 6
+  [1, 2], // 7
+  [1, 1], // 8
 ];
-export const TOUCH_SLOT = 42;
-export const TOUCH_ATTACK = 66;
-/** Quanto as fileiras de cima recuam à direita para ficarem alinhadas sobre o botão de ataque. */
-const ABOVE_ATTACK_INSET = Math.round((TOUCH_ATTACK - TOUCH_SLOT) / 2);
+export const TOUCH_SLOT = 44;
+export const TOUCH_ATTACK = 54;
+export const TOUCH_GAP = 5;
 
 /** Contador de flechas (só com arco equipado): ícone e quantidade por tipo, mais forte primeiro; vermelho quando acabando. */
 export function AmmoPill({ compact = false }: { compact?: boolean }) {
@@ -125,32 +129,7 @@ export function TouchActions() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
-  const row = (idxs: readonly number[], inset: number, last = false) => (
-    <div
-      className="pointer-events-auto flex items-center justify-end gap-[6px] px-[5px] py-[3px]"
-      style={{ marginRight: inset }}
-      data-testid="touch-row"
-    >
-      {idxs.map((i) => (hotbar[i] ? <HotbarSlot key={i} slot={hotbar[i]!} size={TOUCH_SLOT} /> : null))}
-      {last && (
-        <button
-          type="button"
-          aria-label={hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
-          onPointerDown={(e) => {
-            e.preventDefault();
-            session.audio.unlock();
-            session.cycleTarget();
-          }}
-          className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
-          style={{ width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
-          data-testid="attack-button"
-        >
-          <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={26} />
-          <span className="text-[10px] leading-none">{hasTarget ? 'Trocar' : 'Atacar'}</span>
-        </button>
-      )}
-    </div>
-  );
+  const track = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
       <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
@@ -158,9 +137,32 @@ export function TouchActions() {
           <AmmoPill compact />
           <InteractButton />
         </div>
-        {row(TOUCH_ROWS[0]!, ABOVE_ATTACK_INSET)}
-        {row(TOUCH_ROWS[1]!, ABOVE_ATTACK_INSET)}
-        {row(TOUCH_ROWS[2]!, 0, true)}
+        <div
+          className="pointer-events-auto grid items-center justify-items-center p-[4px]"
+          style={{ gridTemplateColumns: track, gridTemplateRows: track, gap: TOUCH_GAP }}
+          data-testid="touch-grid"
+        >
+          {hotbar.map((slot) => (
+            <div key={slot.index} style={{ gridRow: TOUCH_CELLS[slot.index]![0], gridColumn: TOUCH_CELLS[slot.index]![1] }}>
+              <HotbarSlot slot={slot} size={TOUCH_SLOT} />
+            </div>
+          ))}
+          <button
+            type="button"
+            aria-label={hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              session.audio.unlock();
+              session.cycleTarget();
+            }}
+            className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
+            style={{ gridRow: 3, gridColumn: 3, width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
+            data-testid="attack-button"
+          >
+            <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={24} />
+            <span className="text-[10px] leading-none">{hasTarget ? 'Trocar' : 'Atacar'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
