@@ -8,12 +8,15 @@ import { Panel, PixelButton } from '../common/primitives';
 
 type MiniState = ReturnType<GameSession['minimapState']>;
 
+const HERO_COLOR: Record<string, string> = { knight: '#c8483c', paladin: '#e8c95a', sorcerer: '#a17fe4', druid: '#71b84d' };
+
 const pct = (v: number, total: number) => `${((v + 0.5) / total) * 100}%`;
 
 export function MinimapPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const [st, setSt] = useState<MiniState>(() => session.minimapState());
   const [zoomed, setZoomed] = useState(true);
+  const [layers, setLayers] = useState({ heroes: true, npcs: true });
   const scroller = useRef<HTMLDivElement>(null);
   const down = useRef<{ x: number; y: number } | null>(null);
 
@@ -83,6 +86,39 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
                 title="Destino"
               />
             )}
+            {layers.npcs &&
+              st.npcs.map((n) => (
+                <span
+                  key={n.id}
+                  className="pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 border border-black bg-[#e8c95a]"
+                  style={{ left: pct(n.x, st.width), top: pct(n.y, st.height) }}
+                  title={n.name}
+                />
+              ))}
+            {layers.heroes &&
+              st.heroes.map((m) => (
+                <span
+                  key={m.id}
+                  className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                  style={{ left: pct(m.x, st.width), top: pct(m.y, st.height) }}
+                  title={`${m.name}${m.dead ? ' (morto)' : ''}`}
+                  data-testid="minimap-hero"
+                >
+                  <span className="h-[9px] w-[9px] rounded-full border-2 border-white shadow" style={{ background: m.dead ? '#777' : HERO_COLOR[m.vocation] ?? '#38a8e0', outline: m.inParty ? '2px solid #7fd8ff' : undefined }} />
+                  <span className="text-outline mt-[1px] text-[9px] leading-none text-white">{m.name}</span>
+                </span>
+              ))}
+            {st.bags.map((b) => (
+              <span
+                key={b.id}
+                className="text-outline pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 text-[13px] leading-none text-[#ff5a4a]"
+                style={{ left: pct(b.x, st.width), top: pct(b.y, st.height) }}
+                title="Seu saco de loot / morte"
+                data-testid="minimap-bag"
+              >
+                ✖
+              </span>
+            ))}
             {st.party.map((m) => (
               <span
                 key={m.id}
@@ -111,6 +147,13 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
           <span className="flex items-center gap-1">
             <span className="h-2 w-2 rotate-45 border border-gold" /> destino
           </span>
+          <button type="button" className={layers.heroes ? 'text-parchment' : 'line-through'} onClick={() => setLayers({ ...layers, heroes: !layers.heroes })} data-testid="minimap-toggle-heroes">
+            heróis
+          </button>
+          <button type="button" className={layers.npcs ? 'text-parchment' : 'line-through'} onClick={() => setLayers({ ...layers, npcs: !layers.npcs })}>
+            NPCs
+          </button>
+          <span className="flex items-center gap-1 text-[#ff5a4a]">✖ seu saco</span>
         </div>
       </div>
     </Panel>

@@ -37,8 +37,9 @@ import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
-import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
+import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, partyOf, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
+import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
@@ -61,8 +62,8 @@ export interface SimulationOptions {
 
 /** Membro que segue o líder (formação seguir/fila) e ficou para trás: passo 20–35% mais rápido até alcançar. */
 function followCatchUp(w: World, p: PlayerEntity): number {
-  const party = w.social.party;
-  if (!party || party.formation === 'free' || party.leaderId === p.id || !party.members.includes(p.id) || p.targetId) return 1;
+  const party = partyOf(w, p.id);
+  if (!party || party.formation === 'free' || party.leaderId === p.id || p.targetId) return 1;
   const leader = actorById(w, party.leaderId);
   if (!leader || leader.dead) return 1;
   const d = Math.max(Math.abs(leader.x - p.x), Math.abs(leader.y - p.y));
@@ -124,6 +125,7 @@ export class GameSimulation {
       player,
       human: player,
       heroes: new Map(),
+      auto: { ...DEFAULT_AUTO },
       social: Object.assign(newSocialState(c.flags.pvp === true), { clock: opts.clock }),
       monsters: new Map(),
       npcs: new Map(),
@@ -210,6 +212,7 @@ export class GameSimulation {
     const w = this.world;
     w.now += step;
     this.tickActor(step);
+    updateAutoPlay(w);
     // heróis: mesma sequência do jogador, cada um no próprio contexto, guiados pela IA
     for (const h of w.heroes.values())
       asActor(w, h, () => {
@@ -475,6 +478,10 @@ export class GameSimulation {
     return sellAllItems(this.world);
   }
   /** Trava/destrava a venda de um item (fica fora do "vender tudo"). */
+  setAuto(patch: Partial<AutoSettings>): void {
+    Object.assign(this.world.auto, patch);
+  }
+
   setSellLock(itemId: string, locked: boolean): void {
     const w = this.world;
     const def = w.data.items[itemId];

@@ -4,16 +4,15 @@ import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import type { ItemView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemDetails, statDiff } from '../inventory/InventoryPanel';
-import { ItemStats } from '../inventory/ItemCell';
+import { DiffParts, ItemStats } from '../inventory/ItemCell';
 
 /** Diferença de atributos do item da loja em relação ao que está equipado (ex.: "+1 def"). */
 function ShopDiff({ item, equipped }: { item: ItemView; equipped: ItemView | null }) {
   const diff = statDiff(item, equipped);
   if (!diff) return null;
-  const better = diff.startsWith('+');
   return (
-    <span className={`text-outline text-[11px] leading-none ${better ? 'text-heal' : 'text-hp-light'}`} data-testid="shop-diff">
-      {diff}
+    <span className="text-outline text-[11px] leading-none" data-testid="shop-diff">
+      <DiffParts diff={diff} />
     </span>
   );
 }

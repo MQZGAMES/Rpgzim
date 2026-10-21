@@ -13,12 +13,13 @@ import { canUseItem, isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
 import type { HeroEntity, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
+import { asActor } from '../simulation/World';
 import { isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
 import { AMMO_GOAL, isRanged, ROLES } from './heroRoles';
 import { countAmmo } from '../../domain/rules/ammo';
 import { stepAway } from '../movement/movement';
-import { assess, engagedOrJoining, fightMargin, monstersNear, RISKY_MARGIN, SAFE_MARGIN } from './heroThreat';
+import { alliesNear, assess, engagedOrJoining, fightMargin, monstersNear, RISKY_MARGIN, SAFE_MARGIN } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
 import { currentTarget, hasLineOfSight, respawnPlayer, setTarget } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
@@ -89,6 +90,10 @@ export interface HeroBrainState {
   avoid: Record<string, number>;
   /** Voltou machucado/morto: antes de caçar de novo passa na vila (cura, banco, poções). */
   prepare: boolean;
+  /** Grupos entre heróis: quando deixa o grupo atual e quando pode formar/entrar em outro. */
+  groupUntil: number;
+  nextGroupAt: number;
+  groupThinkAt?: number;
   /** Evita idas seguidas à vila só por munição quando não deu para comprar. */
   nextAmmoTripAt: number;
   /** Está sem recursos (poucas poções): caça só o que é folgado, com margem maior. */
@@ -120,6 +125,8 @@ export function newHeroBrain(): HeroBrainState {
     nextTownAt: 0,
     avoid: {},
     prepare: false,
+    groupUntil: 0,
+    nextGroupAt: 0,
     nextAmmoTripAt: 0,
     frugal: false,
     walkReq: null,
@@ -439,6 +446,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   }
   manageAmmoWeapon(w, h);
   survive(w, h);
+  heroGroupLife(w, h);
   handleInvites(w, h);
   if (b.mode !== 'retreat' && thinkPvp(w, h)) return;
   if (b.mode !== 'pk' && b.mode !== 'retreat' && b.mode !== 'town' && followingHuman(w, h) && b.mode !== 'follow') setMode(w, h, 'follow');
@@ -661,7 +669,7 @@ function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
   const t = h.hero.temperament;
   // sem poções escolhe uma caça mais tranquila (sem precisar voltar à vila)
   h.brain.frugal = potionHeal(w, h) < h.stats.maxHealth * 1.5;
-  const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood - (potionsOf(w, h) === 0 ? 4 : h.brain.frugal ? 3 : 0);
+  const lvl = h.character.level + (t.bravery - 0.5) * 3 + h.brain.mood - (potionsOf(w, h) === 0 ? 4 : h.brain.frugal ? 3 : 0) + alliesNear(w, h) * 1.5;
   const fits = Object.entries(huntLevels(w)).filter(([id, min]) => min <= lvl + 1 && w.map.spawns.some((s) => s.monsterId === id));
   // a régua de ameaça corta o que ele não aguenta (grupo da presa ou vizinho perigoso); sobrando nada, a caça mais fraca
   const options = fits.filter(([id]) => quarryOk(w, h, id));
@@ -881,7 +889,7 @@ function helpHuman(w: World, h: HeroEntity): void {
  * separates o grupo e ninguém mais ajuda ninguém.
  */
 function keepWithGroup(w: World, h: HeroEntity): void {
-  const leader = w.human;
+  const leader = groupLeader(w, h) ?? w.human;
   const members = nearbyPartyMembers(w, h, PARTY_SUPPORT_RANGE);
   // o herói já pegou um alvo que o grupo está combatendo: pode ir pra cima dele
   const t = currentTarget(w);
@@ -949,7 +957,7 @@ const PARTY_SUPPORT_RANGE = 6;
  * Retorna true quando o herói assumiu a isca (o turno dele é o de puxar o monstro).
  */
 function baitMonsters(w: World, h: HeroEntity): boolean {
-  const leader = w.human;
+  const leader = groupLeader(w, h) ?? w.human;
   const members = nearbyPartyMembers(w, h, BAIT_RANGE);
   if (!members.length) return false;
   // monstro que está perseguindo ou atacando um colega (e não o próprio herói), perto do grupo
@@ -1405,8 +1413,82 @@ function partyMembers(w: World, h: HeroEntity): string[] {
 
 /** Está num grupo em que o humano é o líder (formação seguir/fila): acompanha o líder em vez de seguir os próprios planos. */
 function followingHuman(w: World, h: HeroEntity): boolean {
+  const l = groupLeader(w, h);
   const p = partyOf(w, h.id);
-  return !!p && p.leaderId === w.human.id && p.formation !== 'free' && !w.human.dead;
+  return !!l && !!p && p.formation !== 'free' && !l.dead;
+}
+
+// ------------------------------------------------------------------ grupos entre heróis
+/** Sinergia de duas vocações no mesmo grupo (tanque + cura/dano de longe é o ideal). */
+function synergy(a: string, b: string): number {
+  const pair = [a, b].sort().join('+');
+  const table: Record<string, number> = {
+    'druid+knight': 1, 'knight+sorcerer': 0.9, 'knight+paladin': 0.8, 'druid+paladin': 0.7,
+    'druid+sorcerer': 0.7, 'paladin+sorcerer': 0.6, 'knight+knight': 0.2, 'druid+druid': 0.3, 'paladin+paladin': 0.3, 'sorcerer+sorcerer': 0.3,
+  };
+  return table[pair] ?? 0.4;
+}
+
+/** Quem lidera: o Knight (tanque) e, empatando, o de maior nível. */
+const leaderScore = (x: PlayerEntity): number => x.character.level + (x.character.vocation === 'knight' ? 4 : 0);
+
+function leaveHeroParty(w: World, h: HeroEntity, why: 'town' | 'time' | 'gap'): void {
+  if (!partyOf(w, h.id) || humanInParty(w, h)) return;
+  leaveParty(w, h.id);
+  h.brain.nextGroupAt = w.now + (why === 'town' ? 4 : 2 + w.rng.next() * 6) * 60000;
+  h.brain.groupUntil = 0;
+}
+
+/**
+ * Os heróis se juntam e se separam por conta própria: duplas, trios ou quartetos, quando quiserem. Grupos com o
+ * jogador humano são decididos por ele; os só de heróis duram alguns minutos e se desfazem quando um precisa da vila.
+ */
+function heroGroupLife(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  if (b.mode === 'dead' || b.mode === 'pk' || w.now < (b.groupThinkAt ?? 0)) return;
+  b.groupThinkAt = w.now + 4000 + w.rng.next() * 4000;
+  const party = partyOf(w, h.id);
+  if (party) {
+    if (humanInParty(w, h)) return;
+    const leader = actorById(w, party.leaderId);
+    if (!leader || leader.dead) return;
+    if (!b.groupUntil) b.groupUntil = w.now + (8 + w.rng.next() * 17) * 60000;
+    // cansou do grupo, nível muito diferente ou o líder foi para longe demais
+    if (w.now > b.groupUntil) return leaveHeroParty(w, h, 'time');
+    if (Math.abs(leader.character.level - h.character.level) > 10) return leaveHeroParty(w, h, 'gap');
+    if (leader.id !== h.id && chebyshev(leader, h) > 40) return leaveHeroParty(w, h, 'gap');
+    // o líder convida mais um enquanto o grupo tem menos de 4
+    if (party.leaderId !== h.id || party.members.length >= 4) return;
+  } else if (w.now < b.nextGroupAt || (b.mode !== 'hunt' && b.mode !== 'decide') || isPzLocked(w, h.id)) return;
+  else if (!w.rng.chance(0.12 + h.hero.temperament.sociability * 0.3)) return;
+  if (pendingInviteFor(w, h.id)) return;
+  const mine = partyOf(w, h.id);
+  // candidatos: heróis livres e por perto; o convite só parte de quem lideraria o grupo
+  const picks = [...w.heroes.values()]
+    .filter((o) => o.id !== h.id && !o.dead && !partyOf(w, o.id) && !pendingInviteFor(w, o.id) && w.now >= o.brain.nextGroupAt && o.brain.mode !== 'pk' && o.brain.mode !== 'town' && chebyshev(o, h) <= 25)
+    .filter((o) => Math.abs(o.character.level - h.character.level) <= 7 && affinityOf(h, o.id) > -0.3 && affinityOf(o, h.id) > -0.3)
+    .filter((o) => (mine ? true : leaderScore(h) > leaderScore(o) || (leaderScore(h) === leaderScore(o) && h.id < o.id)))
+    .map((o) => ({ o, score: synergy(h.character.vocation, o.character.vocation) - chebyshev(o, h) * 0.02 + affinityOf(h, o.id) * 0.3 }))
+    .sort((x, y) => y.score - x.score);
+  const pick = picks[0];
+  if (!pick || pick.score < 0.25) return;
+  if (invite(w, h.id, pick.o.id)) return;
+  if (!mine) b.groupUntil = w.now + (8 + w.rng.next() * 17) * 60000;
+  heroSay(w, h, 'invite', { player: pick.o.character.name }, 30000);
+  // o convidado responde logo (heróis não fazem o outro esperar)
+  asActor(w, pick.o, () => answerInviteNow(w, pick.o));
+}
+
+/** Líder do grupo do herói (jogador ou outro herói); null se não está num grupo ou ele mesmo é o líder. */
+function groupLeader(w: World, h: HeroEntity): PlayerEntity | null {
+  const p = partyOf(w, h.id);
+  if (!p || p.leaderId === h.id) return null;
+  return actorById(w, p.leaderId);
+}
+
+/** O grupo tem o jogador humano dentro? (grupos só de heróis se formam e se desfazem sozinhos) */
+function humanInParty(w: World, h: HeroEntity): boolean {
+  return !!partyOf(w, h.id)?.members.includes(w.human.id);
 }
 
 function canInviteHuman(w: World, h: HeroEntity): boolean {
@@ -1457,9 +1539,11 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
   const hostile = grudge || h.brain.pkTargetId === inv.fromId;
   const chance = hostile ? 0 : inv.fromId === w.human.id ? (aff < -0.3 ? 0.2 : 1) : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
   if (w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
-    acceptInvite(w, h.id, inv.fromId);
+    const wasFree = !partyOf(w, h.id);
+    if (acceptInvite(w, h.id, inv.fromId)) return declineInvite(w, h.id);
     changeAffinity(h, inv.fromId, 0.1);
-    heroSay(w, h, 'inviteAccept', { player: from?.character.name ?? '' }, 0);
+    h.brain.groupUntil = w.now + (8 + w.rng.next() * 17) * 60000;
+    if (wasFree || from?.id === w.human.id) heroSay(w, h, 'inviteAccept', { player: from?.character.name ?? '' }, 0);
     setMode(w, h, followingHuman(w, h) ? 'follow' : 'decide');
   } else {
     declineInvite(w, h.id);
@@ -1470,14 +1554,20 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
 /** Membro do grupo com o humano como líder: anda junto, ajuda nas lutas, pega loot e dá poção se ele precisar. */
 function follow(w: World, h: HeroEntity): void {
   const b = h.brain;
-  const leader = w.human;
-  if (!followingHuman(w, h)) return setMode(w, h, 'decide');
+  const leader = groupLeader(w, h);
+  if (!leader || !followingHuman(w, h)) return setMode(w, h, 'decide');
+  const heroLed = leader.id !== w.human.id;
+  // grupo só de heróis: precisa da vila, sai e resolve a vida; não segura ninguém
+  if (heroLed && !humanInParty(w, h) && needsTown(w, h)) {
+    leaveHeroParty(w, h, 'town');
+    return planTown(w, h);
+  }
   if (needsTown(w, h) && isPz(w.map, leader.x, leader.y)) return planTown(w, h, undefined, 'follow');
-  // líder parado há muito tempo (fora da vila): segue a vida, mas avisa
+  // líder parado há muito tempo (fora da vila): segue a vida, mas avisa (líder herói tem vida própria)
   if (leader.x !== b.leaderLastPos.x || leader.y !== b.leaderLastPos.y) {
     b.leaderLastPos = { x: leader.x, y: leader.y };
     b.leaderIdleSince = w.now;
-  } else if (w.now - b.leaderIdleSince > 4 * 60000 && !isPz(w.map, leader.x, leader.y)) {
+  } else if (!heroLed && w.now - b.leaderIdleSince > 4 * 60000 && !isPz(w.map, leader.x, leader.y)) {
     heroSay(w, h, 'partyLeave', { player: leader.character.name }, 0);
     leaveParty(w, h.id);
     return setMode(w, h, 'decide');
@@ -1527,7 +1617,7 @@ function follow(w: World, h: HeroEntity): void {
   // está agora (refeita quando ele se afasta do destino), então o herói anda junto sem parar e recomeçar.
   const spot = formationSpot(w, h.id);
   const far = chebyshev(leader, h) > 15;
-  const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: 2 };
+  const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: isRanged(h.character.vocation) ? 3 : 2 };
   walkToLeader(w, h, leader, goal, far);
 }
 

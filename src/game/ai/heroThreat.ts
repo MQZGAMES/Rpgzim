@@ -9,6 +9,7 @@ import { blockChance, maxWeaponDamage } from '../../domain/rules/damage';
 import { weaponSkillLevel } from '../../domain/rules/stats';
 import { chebyshev } from '../../domain/value-objects/position';
 import { ROLES } from './heroRoles';
+import { actorById, partyOf } from '../social/social';
 import type { HeroEntity, MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 
@@ -90,7 +91,20 @@ export function expectedDamage(w: World, h: HeroEntity, mons: readonly MonsterEn
 /** Margem da luta (vida efetiva ÷ dano esperado); Infinity sem criaturas. */
 export function fightMargin(w: World, h: HeroEntity, mons: readonly MonsterEntity[]): number {
   if (!mons.length) return Infinity;
-  return effectiveHp(w, h) / Math.max(1, expectedDamage(w, h, mons));
+  return (effectiveHp(w, h) / Math.max(1, expectedDamage(w, h, mons))) * (1 + ALLY_BONUS * alliesNear(w, h));
+}
+
+/** Cada colega de grupo vivo e por perto divide o dano e acelera a luta. */
+export const ALLY_BONUS = 0.45;
+export function alliesNear(w: World, h: HeroEntity): number {
+  const p = partyOf(w, h.id);
+  if (!p) return 0;
+  let n = 0;
+  for (const id of p.members) {
+    const a = actorById(w, id);
+    if (a && a !== h && !a.dead && chebyshev(a, h) <= 10) n++;
+  }
+  return n;
 }
 
 /** Criaturas vivas a até `radius` tiles do ponto (fora da área protegida). */

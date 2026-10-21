@@ -257,11 +257,14 @@ function killMonster(w: World, m: MonsterEntity): void {
     gainExperience(w, m.def.experience);
     return;
   }
-  const share = Math.max(1, Math.floor(m.def.experience / receivers.length));
+  // bônus de variedade: cada vocação diferente no grupo soma 25% à XP total (que então é dividida)
+  const variety = new Set(receivers.map((r) => r.character.vocation)).size;
+  const total = Math.round(m.def.experience * (1 + 0.25 * (variety - 1)));
+  const share = Math.max(1, Math.floor(total / receivers.length));
   message(w, `Você derrotou: ${m.def.name}.`, 'combat');
   for (const r of receivers)
     asActor(w, r, () => {
-      message(w, `+${share} XP (grupo: ${m.def.experience} ÷ ${receivers.length}).`, 'combat');
+      message(w, `+${share} XP (grupo: ${total} ÷ ${receivers.length}).`, 'combat');
       gainExperience(w, share);
     });
 }

@@ -87,10 +87,24 @@ export function ItemCell({
       {item?.better && <span className="text-outline pointer-events-none absolute bottom-[-5px] left-[-3px] text-[10px] leading-none text-heal">▲</span>}
       {item?.kept && <ItemIcon icon="ui_lock" size={11} className="pointer-events-none absolute right-[-3px] top-[-4px]" title="Venda travada" />}
       {diff && (
-        <span className="text-outline pointer-events-none absolute -bottom-[5px] right-[-3px] text-[9px] leading-none text-gold-light" data-testid="item-diff">
-          {diff}
+        <span className="text-outline pointer-events-none absolute -bottom-[5px] right-[-3px] whitespace-nowrap text-[9px] leading-none" data-testid="item-diff">
+          <DiffParts diff={diff} />
         </span>
       )}
     </button>
+  );
+}
+
+/** "+3 atq · -1 def": cada parte na própria cor (verde ganha, vermelho perde). */
+export function DiffParts({ diff }: { diff: string }) {
+  return (
+    <>
+      {diff.split(' · ').map((part, i) => (
+        <span key={i} className={part.startsWith('+') ? 'text-heal' : 'text-hp-light'}>
+          {i > 0 ? ' ' : ''}
+          {part.replace('-', '−')}
+        </span>
+      ))}
+    </>
   );
 }

@@ -111,3 +111,67 @@ describe('os outros heróis: cada vocação com a sua lógica', () => {
     void w;
   });
 });
+
+describe('grupos entre heróis e ajudas automáticas', () => {
+  const mk2 = () => {
+    const sim = makeSim('knight', { seed: 44 });
+    const w = sim.world;
+    const hs = ['boladex', 'maguim', 'mano_cura'].map((id) => {
+      const hero = GAME_DATA.heroes[id]!;
+      return sim.addHero(hero, createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart })) as HeroEntity;
+    });
+    return { sim, w, hs };
+  };
+
+  it('um herói convida outro: nasce um grupo só de heróis (sem avisar o jogador) e o convite do jogador tira o herói dele', async () => {
+    const { w, hs } = mk2();
+    const { invite, acceptInvite, partyOf, allParties } = await import('../../src/game/social/social');
+    const [a, b, c] = hs as [HeroEntity, HeroEntity, HeroEntity];
+    expect(invite(w, a.id, b.id)).toBeNull();
+    expect(acceptInvite(w, b.id, a.id)).toBeNull();
+    expect(partyOf(w, a.id)?.members).toEqual([a.id, b.id]);
+    expect(w.social.party).toBeNull(); // não é o grupo do jogador
+    expect(allParties(w)).toHaveLength(1);
+    // entre heróis, quem já tem grupo não troca por convite
+    invite(w, c.id, b.id);
+    expect(acceptInvite(w, b.id, c.id)).toBe('alreadyInParty');
+    // o jogador convida o herói: ele sai do outro grupo e fica com o líder do servidor
+    invite(w, w.human.id, b.id);
+    expect(acceptInvite(w, b.id, w.human.id)).toBeNull();
+    expect(partyOf(w, b.id)?.leaderId).toBe(w.human.id);
+    expect(partyOf(w, a.id)).toBeNull(); // o grupo de dois se desfez
+  });
+
+  it('os heróis se agrupam e se desfazem sozinhos ao longo do tempo', async () => {
+    const { sim, w, hs } = mk2();
+    const { allParties } = await import('../../src/game/social/social');
+    let seen = 0;
+    for (let s = 0; s < 20 * 60; s++) {
+      advance(sim, 1000, 50);
+      w.human.character.health = w.human.stats.maxHealth;
+      if (allParties(w).length) seen++;
+    }
+    expect(seen).toBeGreaterThan(60); // formaram algum grupo
+    expect(hs.every((h) => h.character.stats.deaths === 0)).toBe(true);
+  });
+
+  it('auto-poção bebe no limiar escolhido e auto-loot pega o que está ao alcance', async () => {
+    const sim = makeSim('knight', { seed: 7 });
+    const w = sim.world;
+    const p = w.human;
+    p.character.inventory = p.character.inventory.map(() => null);
+    p.character.inventory[5] = { itemId: 'potion_health', count: 3 };
+    p.character.health = Math.round(p.stats.maxHealth * 0.3);
+    sim.setAuto({ autoPotion: true, hpBelow: 0.5, prefer: 'fit' });
+    advance(sim, 1500, 50);
+    expect(p.character.health).toBeGreaterThan(p.stats.maxHealth * 0.3);
+    expect(p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count).toBeLessThan(3);
+    // desligado, não bebe
+    sim.setAuto({ autoPotion: false });
+    const hp = (p.character.health = Math.round(p.stats.maxHealth * 0.2));
+    const count = p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count;
+    advance(sim, 1500, 50);
+    expect(p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count).toBe(count);
+    expect(p.character.health).toBeGreaterThanOrEqual(hp);
+  });
+});

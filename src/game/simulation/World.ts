@@ -1,3 +1,4 @@
+import type { AutoSettings } from '../ai/autoPlay';
 // Estado completo do mundo simulado + serviços compartilhados pelos sistemas.
 // Nada aqui depende de Phaser ou React: a mesma estrutura poderia rodar num servidor autoritativo.
 import type { GameData } from '../../domain/entities/gameData';
@@ -22,6 +23,8 @@ export interface UiState {
 }
 
 export interface World {
+  /** Ajudas automáticas do jogador (loot e poção). */
+  auto: AutoSettings;
   readonly data: GameData;
   readonly map: GameMap;
   readonly rng: Rng;

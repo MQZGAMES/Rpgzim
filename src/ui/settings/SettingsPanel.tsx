@@ -53,6 +53,8 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
         <input type="checkbox" checked={showLog} onChange={(e) => setShowLog(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" data-testid="toggle-log" />
         Mostrar mensagens do jogo
       </label>
+      <h3 className="mb-1 mt-3 text-[13px] text-gold">Ajudas automáticas</h3>
+      <AutoOptions />
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Controles</h3>
       <div className="flex flex-wrap gap-2">
         <PixelButton onClick={() => session.setPanel('hotbar')} data-testid="settings-hotbar">
@@ -73,6 +75,47 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
       </div>
       <p className="mt-3 text-[11px] text-muted" data-testid="settings-version">Versão do jogo: {__APP_VERSION__}</p>
     </Panel>
+  );
+}
+
+function AutoOptions() {
+  const session = useSession();
+  const [a, setA] = useState(session.getAuto());
+  const set = (patch: Partial<typeof a>) => {
+    session.setAuto(patch);
+    setA(session.getAuto());
+  };
+  return (
+    <div data-testid="auto-options">
+      <label className="flex items-center gap-2 py-1 text-[13px]">
+        <input type="checkbox" checked={a.autoLoot} onChange={(e) => set({ autoLoot: e.target.checked })} className="h-5 w-5 accent-[#e0b03a]" data-testid="auto-loot" />
+        Pegar o loot ao alcance sozinho
+      </label>
+      <label className="flex items-center gap-2 py-1 text-[13px]">
+        <input type="checkbox" checked={a.autoPotion} onChange={(e) => set({ autoPotion: e.target.checked })} className="h-5 w-5 accent-[#e0b03a]" data-testid="auto-potion" />
+        Beber poção sozinho
+      </label>
+      {a.autoPotion && (
+        <>
+          <Slider label="Vida abaixo de" value={a.hpBelow} onChange={(v) => set({ hpBelow: Math.max(0.1, Math.min(0.9, v)) })} />
+          <Slider label="Mana abaixo de" value={a.manaBelow} onChange={(v) => set({ manaBelow: Math.min(0.9, v) })} />
+          <div className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
+            <span className="w-20 shrink-0">Poção</span>
+            {(
+              [
+                ['fit', 'Que se ajusta'],
+                ['small', 'Menor primeiro'],
+                ['large', 'Maior primeiro'],
+              ] as const
+            ).map(([v, l]) => (
+              <PixelButton key={v} variant={a.prefer === v ? 'gold' : 'stone'} onClick={() => set({ prefer: v })}>
+                {l}
+              </PixelButton>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

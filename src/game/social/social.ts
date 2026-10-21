@@ -36,7 +36,10 @@ export interface PartyInvite {
 export interface SocialState {
   /** Relógio de PK em ms. No jogo é o relógio real (Date.now): caveira e PZ lock passam mesmo com o jogo pausado ou fechado. */
   clock?: () => number;
+  /** Grupo do jogador humano (com ele dentro). */
   party: Party | null;
+  /** Grupos só de heróis (sem jogador): formam-se e desfazem-se sozinhos. */
+  heroParties: Party[];
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
@@ -53,7 +56,7 @@ export interface SocialState {
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
+  return { party: null, heroParties: [], invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
 }
 
 /** Hora usada pelas regras de PK: relógio real no jogo (a caveira vermelha de 24 h conta com o jogo fechado); nos testes, o tempo da simulação. */
@@ -95,18 +98,36 @@ export function actorName(w: World, id: string): string {
 }
 
 // ------------------------------------------------------------------ grupo
+export function allParties(w: World): Party[] {
+  return w.social.party ? [w.social.party, ...w.social.heroParties] : w.social.heroParties;
+}
+
 export function partyOf(w: World, id: string): Party | null {
-  const p = w.social.party;
-  return p && p.members.includes(id) ? p : null;
+  return allParties(w).find((p) => p.members.includes(id)) ?? null;
 }
 
 export function sameParty(w: World, a: string, b: string): boolean {
-  const p = w.social.party;
-  return !!p && p.members.includes(a) && p.members.includes(b);
+  const p = partyOf(w, a);
+  return !!p && p.members.includes(b);
 }
 
-function notify(w: World, text: string): void {
-  // mensagens de grupo vão para o registro do jogador humano (barramento principal)
+/** Remove o grupo do mundo (o do jogador ou um só de heróis). */
+function dropParty(w: World, p: Party): void {
+  if (w.social.party === p) w.social.party = null;
+  else w.social.heroParties = w.social.heroParties.filter((x) => x !== p);
+}
+
+/** Cria o grupo de dois: com o jogador humano vira o grupo dele; entre heróis, um grupo próprio. */
+function createParty(w: World, leaderId: string, memberId: string): Party {
+  const p: Party = { leaderId, members: [leaderId, memberId], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+  if (leaderId === w.human.id || memberId === w.human.id) w.social.party = p;
+  else w.social.heroParties.push(p);
+  return p;
+}
+
+function notify(w: World, text: string, party?: Party | null): void {
+  // mensagens de grupo vão para o registro do jogador humano; grupos só de heróis não o incomodam
+  if (party && party !== w.social.party) return;
   w.human.scope.events.emit('message', { text, kind: 'system' });
   w.human.scope.events.emit('partyChanged', {});
 }
@@ -126,13 +147,14 @@ export function invite(w: World, fromId: string, toId: string): PartyFail | null
   const from = actorById(w, fromId);
   const to = actorById(w, toId);
   if (!from || !to || from.dead || to.dead) return 'dead';
-  const party = w.social.party;
+  const party = partyOf(w, fromId);
   // o jogador humano convida mesmo sem ser o líder (os demais membros são heróis que seguem o que ele decide)
   if (party && party.members.includes(fromId) && party.leaderId !== fromId && fromId !== w.human.id) return 'notLeader';
   if (party && party.members.includes(toId)) return 'alreadyInParty';
   w.social.invites = w.social.invites.filter((i) => !(i.fromId === fromId && i.toId === toId) && i.expiresAt > w.now);
   w.social.invites.push({ fromId, toId, expiresAt: w.now + INVITE_MS });
-  w.human.scope.events.emit('partyInvite', { fromId, toId, fromName: from.character.name, toName: to.character.name });
+  // só convites que envolvem o jogador aparecem na interface
+  if (fromId === w.human.id || toId === w.human.id) w.human.scope.events.emit('partyInvite', { fromId, toId, fromName: from.character.name, toName: to.character.name });
   if (fromId === w.human.id) message(w, `Convite enviado para ${to.character.name}.`, 'system');
   return null;
 }
@@ -145,12 +167,20 @@ export function acceptInvite(w: World, toId: string, fromId?: string): PartyFail
   const inv = w.social.invites.find((i) => i.toId === toId && (!fromId || i.fromId === fromId) && i.expiresAt > w.now);
   if (!inv) return 'noInvite';
   w.social.invites = w.social.invites.filter((i) => i !== inv && i.toId !== toId);
-  const party = w.social.party;
-  if (party && party.members.includes(inv.fromId)) {
-    if (!party.members.includes(toId)) party.members.push(toId);
-  } else if (!party) w.social.party = { leaderId: inv.fromId, members: [inv.fromId, toId], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
-  else return 'alreadyInParty';
-  notify(w, `${actorName(w, toId)} entrou no grupo de ${actorName(w, w.social.party!.leaderId)}.`);
+  const into = partyOf(w, inv.fromId);
+  if (into?.members.includes(toId)) return null;
+  // convite do jogador humano vale mais: o herói sai de qualquer outro grupo e fica com o líder do servidor;
+  // entre heróis, quem já está num grupo não troca por convite
+  const current = partyOf(w, toId);
+  if (current) {
+    if (inv.fromId !== w.human.id) return 'alreadyInParty';
+    leaveParty(w, toId);
+  }
+  // o convidante pode ter ficado sem grupo ao sair do dele (ex.: o herói era o único outro membro)
+  const target = partyOf(w, inv.fromId);
+  const party = target ?? createParty(w, inv.fromId, toId);
+  if (target && !party.members.includes(toId)) party.members.push(toId);
+  notify(w, `${actorName(w, toId)} entrou no grupo de ${actorName(w, party.leaderId)}.`, party);
   return null;
 }
 
@@ -158,7 +188,7 @@ export function declineInvite(w: World, toId: string): void {
   const inv = pendingInviteFor(w, toId);
   if (!inv) return;
   w.social.invites = w.social.invites.filter((i) => i !== inv);
-  notify(w, `${actorName(w, toId)} recusou o convite de grupo.`);
+  if (inv.fromId === w.human.id || toId === w.human.id) notify(w, `${actorName(w, toId)} recusou o convite de grupo.`);
 }
 
 export function leaveParty(w: World, id: string): PartyFail | null {
@@ -167,12 +197,12 @@ export function leaveParty(w: World, id: string): PartyFail | null {
   p.members = p.members.filter((m) => m !== id);
   const name = actorName(w, id);
   if (p.members.length < 2) {
-    w.social.party = null;
-    notify(w, `${name} saiu. O grupo foi desfeito.`);
+    dropParty(w, p);
+    notify(w, `${name} saiu. O grupo foi desfeito.`, p);
     return null;
   }
   if (p.leaderId === id) p.leaderId = p.members[0]!;
-  notify(w, `${name} saiu do grupo.`);
+  notify(w, `${name} saiu do grupo.`, p);
   return null;
 }
 
@@ -219,7 +249,7 @@ export function canAttackActor(w: World, attacker: PlayerEntity, victim: PlayerE
   if (victim.dead || attacker.dead) return 'dead';
   const party = sameParty(w, attacker.id, victim.id);
   // membros só se atacam com o "ataque entre membros" ligado (treino); fora do grupo, só com PK
-  if (party && !w.social.party!.friendlyFire) return 'party';
+  if (party && !partyOf(w, attacker.id)!.friendlyFire) return 'party';
   if (!party && !w.social.pvp) return 'off';
   if (isPz(w.map, attacker.x, attacker.y) || isPz(w.map, victim.x, victim.y)) return 'pz';
   return null;
@@ -227,7 +257,7 @@ export function canAttackActor(w: World, attacker: PlayerEntity, victim: PlayerE
 
 /** Treino entre membros do grupo (ataque permitido, sem caveira e sem perda de ouro). */
 export function isSparring(w: World, a: string, b: string): boolean {
-  return sameParty(w, a, b) && !!w.social.party?.friendlyFire;
+  return sameParty(w, a, b) && !!partyOf(w, a)?.friendlyFire;
 }
 
 export type PartySetting = { formation?: PartyFormation; targeting?: PartyTargeting; friendlyFire?: boolean };
@@ -252,21 +282,21 @@ export function disbandParty(w: World, leaderId: string): PartyFail | null {
   const p = partyOf(w, leaderId);
   if (!p) return 'notMember';
   if (p.leaderId !== leaderId) return 'notLeader';
-  w.social.party = null;
-  notify(w, 'O grupo foi desfeito.');
+  dropParty(w, p);
+  notify(w, 'O grupo foi desfeito.', p);
   return null;
 }
 
 /** Registra o rastro do líder (formação em fila). */
 export function recordLeaderTrail(w: World): void {
-  const p = w.social.party;
-  if (!p) return;
-  const leader = actorById(w, p.leaderId);
-  if (!leader) return;
-  const last = p.trail[0];
-  if (!last || last.x !== leader.x || last.y !== leader.y) {
-    p.trail.unshift({ x: leader.x, y: leader.y });
-    if (p.trail.length > 24) p.trail.length = 24;
+  for (const p of allParties(w)) {
+    const leader = actorById(w, p.leaderId);
+    if (!leader) continue;
+    const last = p.trail[0];
+    if (!last || last.x !== leader.x || last.y !== leader.y) {
+      p.trail.unshift({ x: leader.x, y: leader.y });
+      if (p.trail.length > 24) p.trail.length = 24;
+    }
   }
 }
 
@@ -462,10 +492,10 @@ export function updateSocial(w: World): void {
   for (const [id, sk] of w.social.skulls) if (sk.until <= pkNow(w)) w.social.skulls.delete(id);
   for (const [id, until] of w.social.pzLocks) if (until <= pkNow(w)) w.social.pzLocks.delete(id);
   // membros que deixaram de existir saem do grupo
-  const p = w.social.party;
-  if (p && p.members.some((id) => !allActors(w).some((a) => a.id === id))) {
+  for (const p of [...allParties(w)]) {
+    if (!p.members.some((id) => !allActors(w).some((a) => a.id === id))) continue;
     p.members = p.members.filter((id) => allActors(w).some((a) => a.id === id));
-    if (p.members.length < 2) w.social.party = null;
+    if (p.members.length < 2) dropParty(w, p);
     else if (!p.members.includes(p.leaderId)) p.leaderId = p.members[0]!;
   }
 }

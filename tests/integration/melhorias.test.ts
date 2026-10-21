@@ -132,6 +132,7 @@ describe('herói em grupo: cura, poções e loot', () => {
     // monstro adjacente (vira o alvo do herói)
     const monster = [...w.monsters.values()].find((m) => m.alive)!;
     putAt(sim, monster, spot.x + 1, spot.y);
+    monster.hp = 1e6; // não morre durante o teste
     h.brain.mode = 'hunt';
     h.brain.quarry = monster.def.id;
     h.brain.spot = { x: monster.x, y: monster.y };

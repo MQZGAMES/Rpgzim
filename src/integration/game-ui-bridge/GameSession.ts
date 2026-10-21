@@ -1,3 +1,4 @@
+import type { AutoSettings } from '../../game/ai/autoPlay';
 // Sessão de jogo: liga simulação, persistência, áudio e interface. É a camada de integração explícita
 // entre React e Phaser: o Phaser chama `frame()` a cada quadro; o React lê as stores e envia comandos.
 import { parseHotbarEntry, type HotbarEntry } from '../../domain/rules/hotbar';
@@ -29,6 +30,8 @@ export interface SessionOptions {
   /** Callback ao sair para o menu. */
   onExit: () => void;
 }
+
+const AUTO_KEY = 'rpgzim:auto';
 
 export class GameSession {
   readonly sim: GameSimulation;
@@ -63,12 +66,31 @@ export class GameSession {
       character.health = this.sim.world.player.stats.maxHealth;
       character.mana = this.sim.world.player.stats.maxMana;
     }
+    try {
+      const saved = JSON.parse(localStorage.getItem(AUTO_KEY) ?? 'null') as Partial<AutoSettings> | null;
+      if (saved) this.sim.setAuto(saved);
+    } catch {
+      // sem armazenamento: usa os padrões
+    }
     this.saves = opts.saves;
     this.audio = opts.audio;
     this.onExit = opts.onExit;
     this.snapshot = createSnapshotStore(buildSnapshot(this.sim, 0));
     this.local = createLocalStore(opts.touch);
     this.wireEvents();
+  }
+
+  /** Ajudas automáticas (loot e poção): ficam no aparelho, valem para qualquer personagem. */
+  getAuto(): AutoSettings {
+    return { ...this.sim.world.auto };
+  }
+  setAuto(patch: Partial<AutoSettings>): void {
+    this.sim.setAuto(patch);
+    try {
+      localStorage.setItem(AUTO_KEY, JSON.stringify(this.sim.world.auto));
+    } catch {
+      // ignora
+    }
   }
 
   private wireEvents(): void {
@@ -241,7 +263,7 @@ export class GameSession {
   }
   private travelGoal: { x: number; y: number } | null = null;
   /** Posições para o mini mapa (lidas a cada poucos décimos de segundo, fora do snapshot). */
-  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[] } {
+  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[]; heroes: { id: string; name: string; x: number; y: number; vocation: string; inParty: boolean; dead: boolean }[]; npcs: { id: string; name: string; x: number; y: number }[]; bags: { id: string; x: number; y: number; mine: boolean }[] } {
     const w = this.sim.world;
     const p = w.human;
     const party = w.social.party;
@@ -255,6 +277,10 @@ export class GameSession {
         const a = w.heroes.get(id);
         return a ? [{ id, name: a.character.name, x: a.x, y: a.y, leader: party!.leaderId === id }] : [];
       }),
+      heroes: [...w.heroes.values()].map((a) => ({ id: a.id, name: a.character.name, x: a.x, y: a.y, vocation: a.character.vocation, inParty: !!party?.members.includes(a.id), dead: a.dead })),
+      npcs: [...w.npcs.values()].map((n) => ({ id: n.id, name: n.def.name, x: n.x, y: n.y })),
+      // saco de morte do jogador (ou o último loot largado por ele) em destaque; sacos de monstros não poluem o mapa
+      bags: [...w.lootBags.values()].filter((l) => l.ownerId === p.id).map((l) => ({ id: l.id, x: l.x, y: l.y, mine: true })),
       goal,
       regions: w.map.regions.filter((r) => r.priority >= 1 && r.w * r.h < w.map.width * w.map.height * 0.5).map((r) => ({ name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 })),
     };
