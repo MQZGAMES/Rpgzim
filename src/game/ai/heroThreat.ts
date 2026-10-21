@@ -69,7 +69,9 @@ export function healPotions(w: World, h: HeroEntity): number[] {
 /** Vida efetiva: vida atual + 80% da cura de até 8 poções (beber leva 1 s cada). */
 export function effectiveHp(w: World, h: HeroEntity): number {
   const pots = healPotions(w, h).slice(0, 8).reduce((s, v) => s + v, 0);
-  return h.character.health + 0.8 * pots;
+  // Escudo de Mana ativo: a mana também absorve dano (a vida só cai quando ela acaba)
+  const shield = h.buffs.some((b) => b.kind === 'manaShield') ? h.character.mana : 0;
+  return h.character.health + 0.8 * pots + shield;
 }
 
 /** Dano total esperado ao enfrentar o grupo (mata a mais fraca primeiro). */
@@ -140,4 +142,17 @@ export function assess(w: World, h: HeroEntity, extra: readonly MonsterEntity[] 
   const dps = mons.reduce((s, m) => s + monsterDps(w, h, m), 0);
   const maxHit = mons.reduce((mx, m) => Math.max(mx, monsterMaxHit(h, m)), 0);
   return { mons, dps, maxHit, secondsLeft: dps > 0 ? h.character.health / dps : Infinity, margin: fightMargin(w, h, mons) };
+}
+
+/**
+ * XP por minuto de caçar esta espécie, pelo tempo que o herói leva para matar cada criatura (dano dele contra a
+ * vida e a armadura dela) mais ~4 s de procurar e chegar até a próxima. É o que decide "onde rende mais".
+ */
+export function xpPerMinute(w: World, h: HeroEntity, id: string): number {
+  const def = w.data.monsters[id];
+  if (!def) return 0;
+  const proto = { def, hp: def.health } as unknown as MonsterEntity;
+  const dps = heroDpsVs(w, h, proto) * (def.attack.range > 2 ? 0.8 : 1);
+  const cycle = def.health / Math.max(0.5, dps) + 4 + (def.behavior === 'skirmisher' ? 2 : 0);
+  return (def.experience / cycle) * 60;
 }

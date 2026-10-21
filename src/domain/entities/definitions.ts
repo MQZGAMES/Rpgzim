@@ -232,13 +232,17 @@ export interface MonsterDef {
 }
 
 // ------------------------------------------------------------------ NPCs e lojas
-export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next';
+export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next' | 'travel';
 
 export interface DialogOption {
   label: string;
   action: DialogAction;
   /** Página seguinte (para action "next"). */
   goto?: string;
+  /** Viagem (action "travel"): id do NPC do portal de destino, preço em ouro e nível mínimo. */
+  travelTo?: string;
+  price?: number;
+  minLevel?: number;
 }
 
 export interface DialogPage {

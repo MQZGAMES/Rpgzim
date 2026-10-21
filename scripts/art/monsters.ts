@@ -71,9 +71,9 @@ export function buildSlimeFrames(): PixelCanvas[] {
 export const BOAR_W = 32;
 export const BOAR_H = 24;
 
-function boarFrame(step: number, dead = false): PixelCanvas {
+function boarFrame(step: number, dead = false, pal: readonly Color[] = P.leather): PixelCanvas {
   const c = new PixelCanvas(BOAR_W, BOAR_H);
-  const f = P.leather;
+  const f = pal;
   const fur = (x: number, y: number, nx: number, ny: number): Color => {
     const shade = nx * 0.25 + ny * 0.8;
     if (shade < -0.55) return f[4]!;
@@ -186,9 +186,9 @@ export function buildToadFrames(): PixelCanvas[] {
 }
 
 // ------------------------------------------------------------------ Aranha das Ruínas (quadros 28x24, "blob" com pernas animadas)
-function spiderFrame(step: number, dead = false): PixelCanvas {
+function spiderFrame(step: number, dead = false, pal: readonly Color[] = P.purple, mark: readonly Color[] = P.red): PixelCanvas {
   const c = new PixelCanvas(28, 24);
-  const b = P.purple;
+  const b = pal;
   const cx = 14;
   const legs = (phase: number) => {
     for (let i = 0; i < 4; i++) {
@@ -215,11 +215,11 @@ function spiderFrame(step: number, dead = false): PixelCanvas {
   c.ellipse(cx, 15, 6.5, 5, (x, y, nx, ny) => (nx + ny < -0.6 ? b[3]! : nx + ny < 0.4 ? b[2]! : b[1]!));
   c.ellipse(cx, 9.5, 4, 3.2, (x, y, nx, ny) => (nx + ny < -0.4 ? b[2]! : b[1]!));
   // marca vermelha nas costas e olhos
-  c.set(cx, 14, P.red[3]!);
-  c.set(cx - 1, 15, P.red[3]!);
-  c.set(cx + 1, 15, P.red[3]!);
-  c.set(cx, 16, P.red[2]!);
-  for (const ex of [cx - 2, cx - 1, cx + 1, cx + 2]) c.set(ex, 9, P.red[4]!);
+  c.set(cx, 14, mark[3]!);
+  c.set(cx - 1, 15, mark[3]!);
+  c.set(cx + 1, 15, mark[3]!);
+  c.set(cx, 16, mark[2]!);
+  for (const ex of [cx - 2, cx - 1, cx + 1, cx + 2]) c.set(ex, 9, mark[4]!);
   c.set(cx - 1, 11, P.bone[3]!);
   c.set(cx + 1, 11, P.bone[3]!);
   c.outline(sel);
@@ -288,9 +288,9 @@ export function buildIceWolfFrames(): PixelCanvas[] {
 }
 
 // ------------------------------------------------------------------ Urso Pardo (quadros 36x28, quadrúpede robusto)
-function bearFrame(step: number, dead = false): PixelCanvas {
+function bearFrame(step: number, dead = false, pal: readonly Color[] = P.leather): PixelCanvas {
   const c = new PixelCanvas(36, 28);
-  const f = P.leather;
+  const f = pal;
   const fur = (x: number, y: number, nx: number, ny: number): Color => {
     const shade = nx * 0.25 + ny * 0.8 + (hash2(x, y, 77) - 0.5) * 0.25;
     if (shade < -0.5) return f[4]!;
@@ -337,9 +337,9 @@ export function buildBearFrames(): PixelCanvas[] {
 }
 
 // ------------------------------------------------------------------ Escorpião Gigante (quadros 32x26, "blob" com cauda e pinças)
-function scorpionFrame(step: number, dead = false): PixelCanvas {
+function scorpionFrame(step: number, dead = false, pal: readonly Color[] = P.dirt): PixelCanvas {
   const c = new PixelCanvas(32, 26);
-  const b = P.dirt;
+  const b = pal;
   const cx = 16;
   const legs = (phase: number) => {
     for (let i = 0; i < 3; i++) {
@@ -374,9 +374,9 @@ export function buildScorpionFrames(): PixelCanvas[] {
 }
 
 // ------------------------------------------------------------------ Dragão Jovem (quadros 44x34, quadrúpede alado)
-function dragonFrame(step: number, dead = false): PixelCanvas {
+function dragonFrame(step: number, dead = false, pal: readonly Color[] = P.red): PixelCanvas {
   const c = new PixelCanvas(44, 34);
-  const r = P.red;
+  const r = pal;
   const scale = (x: number, y: number, nx: number, ny: number): Color => {
     const shade = nx * 0.3 + ny * 0.8;
     if ((x + y) % 5 === 0 && shade > -0.3) return r[2]!;
@@ -426,4 +426,47 @@ function dragonFrame(step: number, dead = false): PixelCanvas {
 }
 export function buildDragonFrames(): PixelCanvas[] {
   return [dragonFrame(0), dragonFrame(1), dragonFrame(2), dragonFrame(0, true)];
+}
+
+// ------------------------------------------------------------------ variantes de cor das faixas tardias (mesmos corpos, paletas novas)
+const frames4 = (fn: (step: number, dead?: boolean) => PixelCanvas): PixelCanvas[] => [fn(0), fn(1), fn(2), fn(0, true)];
+const frames5 = (fn: (step: number, dead?: boolean) => PixelCanvas): PixelCanvas[] => [fn(0), fn(1), fn(0), fn(1), fn(0, true)];
+const mixRamp = (a: readonly Color[], b: readonly Color[] | Color, t: number): Color[] => a.map((c, i) => mix(c, typeof b === 'number' ? b : b[Math.min(i, b.length - 1)]!, t));
+
+/** Lobo Atroz: pelagem vinho e olho incandescente. */
+export function buildDireWolfFrames(): PixelCanvas[] {
+  const fur = mixRamp(P.red, P.black, 0.35);
+  return [0, 1, 2].map((s) => wolfFrame(s, false, fur, P.gold[5]!)).concat(wolfFrame(0, true, fur, P.gold[5]!));
+}
+/** Urso Ancestral: pelagem branca-acinzentada. */
+export function buildElderBearFrames(): PixelCanvas[] {
+  const fur = [...P.stone].map((c) => mix(c, P.white, 0.25));
+  return frames4((s, d) => bearFrame(s, d, fur));
+}
+/** Escorpião Rubro. */
+export function buildRedScorpionFrames(): PixelCanvas[] {
+  return frames5((s, d) => scorpionFrame(s, d, P.red));
+}
+/** Behemoth: javali colossal de couro cinza-arroxeado. */
+export function buildBehemothFrames(): PixelCanvas[] {
+  const hide = mixRamp(P.stone, P.purple, 0.4);
+  return frames4((s, d) => boarFrame(s, d, hide));
+}
+/** Dragão de Gelo. */
+export function buildIceDragonFrames(): PixelCanvas[] {
+  return frames4((s, d) => dragonFrame(s, d, P.ice));
+}
+/** Draco Flamejante. */
+export function buildFireDrakeFrames(): PixelCanvas[] {
+  return frames4((s, d) => dragonFrame(s, d, P.fire));
+}
+/** Dragão Ancião: escamas violeta-escuras. */
+export function buildElderDragonFrames(): PixelCanvas[] {
+  const sc = mixRamp(P.purple, P.black, 0.3);
+  return frames4((s, d) => dragonFrame(s, d, sc));
+}
+/** Horror do Vazio: aranha negra com marcas azuis brilhantes. */
+export function buildVoidHorrorFrames(): PixelCanvas[] {
+  const body = mixRamp(P.purple, P.black, 0.65);
+  return frames5((s, d) => spiderFrame(s, d, body, P.blue));
 }

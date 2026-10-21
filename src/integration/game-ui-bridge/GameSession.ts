@@ -263,7 +263,7 @@ export class GameSession {
   }
   private travelGoal: { x: number; y: number } | null = null;
   /** Posições para o mini mapa (lidas a cada poucos décimos de segundo, fora do snapshot). */
-  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[]; heroes: { id: string; name: string; x: number; y: number; vocation: string; inParty: boolean; dead: boolean }[]; npcs: { id: string; name: string; x: number; y: number }[]; bags: { id: string; x: number; y: number; mine: boolean }[] } {
+  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[]; heroes: { id: string; name: string; x: number; y: number; vocation: string; inParty: boolean; dead: boolean }[]; npcs: { id: string; name: string; x: number; y: number; portal: boolean }[]; bags: { id: string; x: number; y: number; mine: boolean }[] } {
     const w = this.sim.world;
     const p = w.human;
     const party = w.social.party;
@@ -278,7 +278,7 @@ export class GameSession {
         return a ? [{ id, name: a.character.name, x: a.x, y: a.y, leader: party!.leaderId === id }] : [];
       }),
       heroes: [...w.heroes.values()].map((a) => ({ id: a.id, name: a.character.name, x: a.x, y: a.y, vocation: a.character.vocation, inParty: !!party?.members.includes(a.id), dead: a.dead })),
-      npcs: [...w.npcs.values()].map((n) => ({ id: n.id, name: n.def.name, x: n.x, y: n.y })),
+      npcs: [...w.npcs.values()].map((n) => ({ id: n.id, name: n.def.name, x: n.x, y: n.y, portal: n.def.id.endsWith('_portal') })),
       // saco de morte do jogador (ou o último loot largado por ele) em destaque; sacos de monstros não poluem o mapa
       bags: [...w.lootBags.values()].filter((l) => l.ownerId === p.id).map((l) => ({ id: l.id, x: l.x, y: l.y, mine: true })),
       goal,

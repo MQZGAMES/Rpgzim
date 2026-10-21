@@ -78,6 +78,15 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
+## Expansão: níveis 24 a 100
+- **Mapa** 330×200 com duas vilas novas a leste — **Forte Esperança** (equipamento do nível 24 ao 56) e **Cidadela Celeste** (64 ao 100) — e oito zonas de caça (Charneca das Presas, Montanha Branca, Lago Congelado, Dunas Rubras, Pântano Corrompido, Portal Infernal, Vulcão Adormecido e Abismo Primordial). Cada vila tem santuário, ferraria, arcana, alquimia e banco (o depósito é o mesmo de Pedraluz).
+- **Portais**: o Guardião do Portal de cada vila leva às outras (a ida para o Forte custa 300 de ouro e exige nível 24; para a Cidadela, 1500 e nível 56 — a volta é grátis). Os heróis também os usam, em vez de atravessar a pé o território das criaturas.
+- **Equipamentos**: 11 faixas de material (Obsidiana, Mitral, Adamante, Orichalco, Cristal, Ébano, Rubi, Estrela Cadente, Abismo, Luz Celeste e Primórdio) × 19 peças (armas, escudo, grimório, elmo, armaduras, mantos, calças, botas, anéis e amuletos), geradas por fórmula em `src/data/items.gear.ts`, mais flechas de cristal/abismo/celestes e poções espirituais e divinas.
+- **Criaturas**: 16 espécies novas (faixas 7 a 14, nível 44 a 100), cada uma com troféu próprio vendido pelo valor cheio na alquimia. As faixas tardias crescem mais devagar que as primeiras (vida ×1,2 e ataque ×1,17 por faixa) e o dano elemental pesa menos que o físico. `tests/tools/calibrate.test.ts` imprime a margem de luta de cada vocação contra cada espécie para recalibrar.
+- **Ajudas automáticas** (menu → "Ajudas automáticas"): pegar o loot ao alcance e beber poção de vida/mana no limiar escolhido, com preferência por poção menor, maior ou a que se ajusta.
+- **Mini mapa**: heróis (cor por vocação, contorno azul quando no seu grupo), NPCs, portais e o seu saco de loot/morte.
+- **Grupos entre heróis**: os heróis se juntam em duplas, trios ou quartetos por conta própria (o Knight lidera, o Druid cura, os de longe ficam atrás) e se desfazem quando um precisa da vila ou depois de alguns minutos. O convite do jogador sempre vence: o herói sai do outro grupo e fica com o líder do servidor. XP de grupo: +25% por vocação diferente (dividida entre os membros).
+
 ## Os quatro heróis com vida própria
 Além do **Boladex** (Knight), existem **Maguim** (Sorcerer), **Mano Cura** (Druid) e **Distanciado** (Paladin). Todos
 vivem sozinhos no mundo, aparecem na tela inicial como personagens jogáveis e podem ser convidados para grupos.

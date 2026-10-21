@@ -5,8 +5,9 @@
 import type { LootEntry, MonsterDef } from '../domain/entities/definitions';
 import type { Element } from '../domain/value-objects/element';
 import { BALANCE } from './balance';
+import { LATE_SPECIES } from './monsters.late';
 
-interface Species {
+export interface Species {
   id: string;
   name: string;
   description: string;
@@ -32,16 +33,38 @@ interface Species {
 }
 
 const STEP = [1, 1.25, 1.55] as const;
+/** Nas faixas tardias as espécies da mesma faixa diferem pouco (cada passo ≈ 3 níveis de poder do herói). */
+const STEP_LATE = [1, 1.1, 1.22] as const;
 /** Nível em que cada faixa começa a valer a caça. */
-const TIER_LEVEL = [1, 6, 12, 20, 30, 40] as const;
+const TIER_LEVEL = [1, 6, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100] as const;
+
+/** Crescimento por faixa a partir da 4ª (nível 20): o poder dos heróis (nível, skill, equipamento) cresce menos que o dobrado das primeiras faixas. */
+const LATE = { hp: 1.2, atk: 1.17, xp: 1.22, gold: 1.3 } as const;
+
+const LATE_ELEMENTAL = 0.62;
+
+/** Multiplicadores de vida, ataque, XP e ouro da faixa. */
+function tierPower(t: number): { hp: number; atk: number; xp: number; gold: number } {
+  const c = BALANCE.creatures;
+  const early = Math.min(t, 3);
+  const n = Math.max(0, t - 3);
+  return {
+    hp: c.tierRatio ** early * LATE.hp ** n,
+    atk: c.tierRatio ** early * LATE.atk ** n,
+    xp: c.xpRatio ** early * LATE.xp ** n,
+    gold: c.goldRatio ** early * LATE.gold ** n,
+  };
+}
 
 function build(s: Species): MonsterDef {
   const c = BALANCE.creatures;
-  const f = STEP[s.step] * (s.elite ?? 1);
-  const pow = c.tierRatio ** s.tier;
-  const hp = Math.round(c.baseHealth * pow * f);
-  const atk = c.baseAttack * pow * f;
-  const goldAvg = c.baseGold * c.goldRatio ** s.tier * STEP[s.step] * (s.elite ? 4 : 1);
+  const f = (s.tier >= 4 ? STEP_LATE : STEP)[s.step] * (s.elite ?? 1);
+  const pw = tierPower(s.tier);
+  const hp = Math.round(c.baseHealth * pw.hp * f);
+  // dano elemental ignora a armadura: nas faixas tardias (onde a armadura vale muito) ele é menor que o físico
+  const elemental = s.tier >= 4 && s.attack.element !== 'physical' ? LATE_ELEMENTAL : 1;
+  const atk = c.baseAttack * pw.atk * f * elemental;
+  const goldAvg = c.baseGold * pw.gold * (s.tier >= 4 ? STEP_LATE : STEP)[s.step] * (s.elite ? 4 : 1);
   return {
     id: s.id,
     name: s.name,
@@ -49,7 +72,7 @@ function build(s: Species): MonsterDef {
     sprite: s.sprite,
     directions: s.directions,
     health: hp,
-    experience: Math.round(c.baseExperience * c.xpRatio ** s.tier * f),
+    experience: Math.round(c.baseExperience * pw.xp * f),
     // ritmo de celular: criaturas um pouco mais lentas que o jogador (dá para fugir e se posicionar)
     speed: Math.round(s.speed * c.speedScale * 100) / 100,
     armor: Math.round(1 + s.tier * 3 + s.step),
@@ -201,7 +224,8 @@ const list: Species[] = [
   },
 ];
 
-export const MONSTERS: Readonly<Record<string, MonsterDef>> = Object.fromEntries(list.map((s) => [s.id, build(s)]));
+const all: Species[] = [...list, ...LATE_SPECIES];
+export const MONSTERS: Readonly<Record<string, MonsterDef>> = Object.fromEntries(all.map((s) => [s.id, build(s)]));
 
 /** Ordem da escada de força (mais fraco → mais forte) e a faixa de cada espécie. */
-export const CREATURE_LADDER: readonly { id: string; tier: number; step: number }[] = list.map((s) => ({ id: s.id, tier: s.tier, step: s.step }));
+export const CREATURE_LADDER: readonly { id: string; tier: number; step: number }[] = all.map((s) => ({ id: s.id, tier: s.tier, step: s.step }));

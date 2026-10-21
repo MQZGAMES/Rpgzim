@@ -1,5 +1,7 @@
 // Itens do jogo. IDs são estáveis: nunca renomeie um id existente (saves dependem dele).
 import type { ItemDef } from '../domain/entities/definitions';
+import { GEAR_ITEMS } from './items.gear';
+import { TROPHY_ITEMS } from './monsters.late';
 
 const MAGES = ['sorcerer', 'druid'] as const;
 const FIGHTERS = ['knight', 'paladin'] as const;
@@ -124,4 +126,4 @@ const list: ItemDef[] = [
   { id: 'goblin_charm', name: 'Amuleto Tosco', description: 'Talismã goblin de osso. Raro e cobiçado.', type: 'loot', icon: 'item_goblin_charm', value: 70, stackable: true, maxStack: 100 },
 ];
 
-export const ITEMS: Readonly<Record<string, ItemDef>> = Object.fromEntries(list.map((i) => [i.id, i]));
+export const ITEMS: Readonly<Record<string, ItemDef>> = Object.fromEntries([...list, ...GEAR_ITEMS, ...TROPHY_ITEMS].map((i) => [i.id, i]));

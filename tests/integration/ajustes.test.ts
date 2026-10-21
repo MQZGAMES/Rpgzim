@@ -90,10 +90,20 @@ describe('escada de criaturas', () => {
     const list = [...tiers.entries()].sort((a, b) => a[0] - b[0]);
     expect(list.length).toBeGreaterThanOrEqual(6);
     for (let i = 1; i < list.length; i++) {
-      expect(list[i]![1].hp / list[i - 1]![1].hp).toBeCloseTo(2, 0);
-      expect(list[i]![1].atk / list[i - 1]![1].atk).toBeCloseTo(2, 0);
+      const hp = list[i]![1].hp / list[i - 1]![1].hp;
+      const atk = list[i]![1].atk / list[i - 1]![1].atk;
+      // as 4 primeiras faixas dobram; as tardias (nível 28+) crescem mais devagar, sempre para cima
+      if (i <= 3) {
+        expect(hp).toBeCloseTo(2, 0);
+        expect(atk).toBeCloseTo(2, 0);
+      } else {
+        expect(hp).toBeGreaterThan(1.1);
+        expect(hp).toBeLessThan(1.6);
+        expect(atk).toBeGreaterThan(0.6); // dano elemental pesa menos (a armadura não o reduz)
+      }
     }
-    expect(CREATURE_LADDER.length).toBeGreaterThanOrEqual(18);
+    expect(list.length).toBeGreaterThanOrEqual(14); // até a faixa do nível 100
+    expect(CREATURE_LADDER.length).toBeGreaterThanOrEqual(34);
   });
 
   it('todas as áreas de caça novas têm criaturas no mapa', () => {

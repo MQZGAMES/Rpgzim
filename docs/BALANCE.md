@@ -141,3 +141,9 @@ Flechas: pedra +1 e metal +2 de ataque por disparo (somam ao ataque da arma e da
 
 ### Heróis por vocação (90 min, sem jogador)
 Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (as flechas pesam no ouro) · Boladex ≈ 18–19. Mortes: 0–1 por 90 min.
+
+## Expansão (níveis 24–100)
+- Faixas de criatura: 0–3 dobram vida e ataque (como antes); da 4ª em diante vida ×1,2, ataque ×1,17, XP ×1,22 e ouro ×1,3 por faixa. Passos dentro da faixa: ×1,0 / 1,1 / 1,22. Dano elemental ×0,62 nas faixas ≥ 4 (a armadura não o reduz).
+- Equipamentos: ataque ×1,15, armadura ×1,12, vida/mana de bônus ×1,2 e preço ×1,8 por faixa (11 faixas, nível 24 a 100). Mantos e peças de mago também dão vida.
+- Magos: `damage.magic` do Sorcerer 0,85 e do Druid 0,8 (antes 1,15 e 1,05) — os heróis magos chegavam ao nível 80 em 4 h contra 45 do Knight.
+- Medido em 4 h por herói (seeds 11 e 12): Boladex 45–47, Maguim 33–57, Mano Cura 32–33, Distanciado 24–28; 0 a 1 morte por herói.

@@ -1,5 +1,6 @@
 // NPCs, diálogos e lojas.
 import type { NpcDef, ShopDef } from '../domain/entities/definitions';
+import { EAST_NPCS, EAST_SHOPS } from './npcs.east';
 
 const close = { label: 'Até logo', action: 'close' } as const;
 
@@ -159,7 +160,7 @@ const list: NpcDef[] = [
   },
 ];
 
-export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries(list.map((n) => [n.id, n]));
+export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries([...list, ...EAST_NPCS].map((n) => [n.id, n]));
 
 const sellPct = (price: number) => Math.max(1, Math.round(price * 0.35));
 const equipmentSells: [string, number][] = [
@@ -301,4 +302,4 @@ const list2: ShopDef[] = [
   },
 ];
 
-export const SHOPS: Readonly<Record<string, ShopDef>> = Object.fromEntries(list2.map((s) => [s.id, s]));
+export const SHOPS: Readonly<Record<string, ShopDef>> = Object.fromEntries([...list2, ...EAST_SHOPS].map((s) => [s.id, s]));
