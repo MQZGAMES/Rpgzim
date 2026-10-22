@@ -147,3 +147,8 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - Equipamentos: ataque ×1,15, armadura ×1,12, vida/mana de bônus ×1,2 e preço ×1,8 por faixa (11 faixas, nível 24 a 100). Mantos e peças de mago também dão vida.
 - Magos: `damage.magic` do Sorcerer 0,85 e do Druid 0,8 (antes 1,15 e 1,05) — os heróis magos chegavam ao nível 80 em 4 h contra 45 do Knight.
 - Medido em 4 h por herói (seeds 11 e 12): Boladex 45–47, Maguim 33–57, Mano Cura 32–33, Distanciado 24–28; 0 a 1 morte por herói.
+
+### Revisão: arcos sem munição, Corrida renovável, uma cidade
+- Arcos: sem flechas (+1/+2 de ataque que elas davam foram embutidos: arcos antigos +3). O Paladino só equipa arcos.
+- Corrida: recarga 18 s → 8 s (= duração).
+- IA: fuga só com margem < ~0,75 e vida < 65% (antes 1,0 e 80%); "trem" de 3+ criaturas ao redor também. Em 4 h por herói: retiradas 4–6% do tempo (antes 8–11%), 0–1 morte por herói; níveis finais (seeds 11/12) Boladex 42–47, Maguim 50–58, Mano Cura 36–39, Distanciado 41–47.

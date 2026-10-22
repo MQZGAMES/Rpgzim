@@ -1,6 +1,6 @@
 // NPCs, diálogos e lojas.
 import type { NpcDef, ShopDef } from '../domain/entities/definitions';
-import { EAST_NPCS, EAST_SHOPS } from './npcs.east';
+import { withLateStock } from './npcs.gear';
 
 const close = { label: 'Até logo', action: 'close' } as const;
 
@@ -84,7 +84,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Presas, couros, orelhas de goblin... compro todo tipo de despojo. E vendo flechas e mantimentos.',
+        text: 'Presas, couros, orelhas de goblin... compro todo tipo de despojo. E vendo mantimentos.',
         options: [{ label: 'Negociar', action: 'openShop' }, close],
       },
     ],
@@ -108,7 +108,7 @@ const list: NpcDef[] = [
       },
       {
         id: 'help',
-        text: 'Toque num item da mochila para guardá-lo e num item do depósito para retirá-lo. "Guardar loot" leva tudo, menos poções e flechas. O ouro pode ser depositado e sacado quando quiser.',
+        text: 'Toque num item da mochila para guardá-lo e num item do depósito para retirá-lo. "Guardar loot" leva tudo, menos poções. O ouro pode ser depositado e sacado quando quiser.',
         options: [{ label: 'Abrir depósito', action: 'openDepot' }, close],
       },
     ],
@@ -160,7 +160,7 @@ const list: NpcDef[] = [
   },
 ];
 
-export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries([...list, ...EAST_NPCS].map((n) => [n.id, n]));
+export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries(list.map((n) => [n.id, n]));
 
 const sellPct = (price: number) => Math.max(1, Math.round(price * 0.35));
 const equipmentSells: [string, number][] = [
@@ -273,8 +273,6 @@ const list2: ShopDef[] = [
     id: 'general',
     name: 'Banca do Ilário',
     sells: [
-      { itemId: 'arrow', price: 2 },
-      { itemId: 'arrow_metal', price: 6 },
       { itemId: 'amulet_loss', price: 10000 },
       { itemId: 'meat', price: 8 },
       { itemId: 'potion_health', price: 45 },
@@ -302,4 +300,4 @@ const list2: ShopDef[] = [
   },
 ];
 
-export const SHOPS: Readonly<Record<string, ShopDef>> = Object.fromEntries([...list2, ...EAST_SHOPS].map((s) => [s.id, s]));
+export const SHOPS: Readonly<Record<string, ShopDef>> = Object.fromEntries(withLateStock(list2).map((s) => [s.id, s]));

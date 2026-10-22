@@ -41,7 +41,6 @@ export type ItemType =
   | 'boots'
   | 'ring'
   | 'amulet'
-  | 'ammo'
   | 'potion'
   | 'food'
   | 'loot';
@@ -55,7 +54,6 @@ export interface WeaponStats {
   range: number;
   element: Element;
   /** Tipo de munição exigida no slot de munição. */
-  ammo?: 'arrow';
   /** Dano fixo (varinhas e cajados). */
   damage?: readonly [number, number];
   /** Mana consumida por disparo (varinhas e cajados). */
@@ -105,9 +103,6 @@ export interface ItemDef {
   vocations?: readonly VocationId[];
   minLevel?: number;
   use?: ItemUse;
-  ammoType?: 'arrow';
-  /** Munição: bônus de ataque que cada flecha soma ao disparo. */
-  ammoAttack?: number;
   /** Amuleto que protege os itens, o dinheiro e a mochila na morte (e some quando o personagem morre). */
   protectsOnDeath?: boolean;
 }
@@ -159,7 +154,6 @@ export interface SpellDef {
   /** Ao conjurar, remove a lentidão de quem conjurou (Corrida). */
   cancelSlow?: boolean;
   /** Munição consumida (flechas). */
-  ammoCost?: number;
   /** Exige uma categoria de arma empunhada. */
   requiresWeapon?: 'melee' | 'distance';
   vfx: { projectile?: string; impact: string; sfx: string; color: string };
@@ -232,17 +226,13 @@ export interface MonsterDef {
 }
 
 // ------------------------------------------------------------------ NPCs e lojas
-export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next' | 'travel';
+export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next';
 
 export interface DialogOption {
   label: string;
   action: DialogAction;
   /** Página seguinte (para action "next"). */
   goto?: string;
-  /** Viagem (action "travel"): id do NPC do portal de destino, preço em ouro e nível mínimo. */
-  travelTo?: string;
-  price?: number;
-  minLevel?: number;
 }
 
 export interface DialogPage {

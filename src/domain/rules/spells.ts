@@ -14,7 +14,6 @@ export type CastFailReason =
   | 'outOfRange'
   | 'noLineOfSight'
   | 'protectionZone'
-  | 'noAmmo'
   | 'weapon';
 
 export interface CastContext {
@@ -28,7 +27,6 @@ export interface CastContext {
   inProtectionZone: boolean;
   /** Estado do alvo (para magias com alvo). */
   target: { exists: boolean; alive: boolean; hostile: boolean; distance: number; lineOfSight: boolean } | null;
-  ammoCount: number;
   weaponKind: 'melee' | 'distance' | 'wand';
 }
 
@@ -42,7 +40,6 @@ export function validateCast(spell: SpellDef, ctx: CastContext): CastCheck {
   if (ctx.cooldownRemaining > 0 || ctx.globalCooldownRemaining > 0) return { ok: false, reason: 'cooldown' };
   if (ctx.mana < spell.manaCost) return { ok: false, reason: 'noMana' };
   if (spell.requiresWeapon && spell.requiresWeapon !== ctx.weaponKind) return { ok: false, reason: 'weapon', detail: spell.requiresWeapon };
-  if (spell.ammoCost && ctx.ammoCount < spell.ammoCost) return { ok: false, reason: 'noAmmo' };
   const offensive = spell.effect === 'damage';
   if (offensive && ctx.inProtectionZone) return { ok: false, reason: 'protectionZone' };
   if (spell.target === 'target' || spell.target === 'areaTarget') {
@@ -79,8 +76,6 @@ export function castFailMessage(reason: CastFailReason, detail?: string): string
       return 'Sem linha de visão até o alvo.';
     case 'protectionZone':
       return 'Ações ofensivas não são permitidas em área protegida.';
-    case 'noAmmo':
-      return 'Sem munição.';
     case 'weapon':
       return detail === 'melee' ? 'Requer uma arma corpo a corpo.' : 'Requer uma arma de distância.';
   }

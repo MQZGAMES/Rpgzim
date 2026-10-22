@@ -87,19 +87,14 @@ describe('os outros heróis: cada vocação com a sua lógica', () => {
     }
   });
 
-  it('Paladino sem flechas troca o arco pela lança e volta ao arco quando repõe', () => {
-    const { sim, w, h } = mk('distanciado');
-    const c = h.character;
-    c.inventory = c.inventory.map((st) => (st && st.itemId === 'arrow' ? null : st));
+  it('o Paladino usa o arco (sem munição) e o arco de maior ataque é o melhor', () => {
+    const { sim, h } = mk('distanciado');
     advance(sim, 1000, 50);
-    expect(c.equipment.mainHand?.itemId).toBe('spear_throwing');
-    c.inventory[20] = { itemId: 'arrow', count: 60 };
-    advance(sim, 1000, 50);
-    expect(c.equipment.mainHand?.itemId).toBe('bow_hunting');
-    void w;
+    expect(h.character.equipment.mainHand?.itemId).toBe('bow_hunting');
+    expect(h.stats.weapon.kind).toBe('distance');
   });
 
-  it('o Maguim compra poções de mana e o Paladino, flechas', () => {
+  it('o Maguim compra poções de mana', () => {
     const { sim, w, h } = mk('maguim');
     h.character.gold = 400;
     h.brain.nextTownAt = 0;
@@ -173,5 +168,40 @@ describe('grupos entre heróis e ajudas automáticas', () => {
     advance(sim, 1500, 50);
     expect(p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count).toBe(count);
     expect(p.character.health).toBeGreaterThanOrEqual(hp);
+  });
+});
+
+describe('coragem aprendida e preparo', () => {
+  it('vitórias dão confiança, fugir tira; o consumo real de poções aumenta o estoque desejado', async () => {
+    const sim = makeSim('knight', { seed: 5 });
+    const w = sim.world;
+    const hero = GAME_DATA.heroes.boladex!;
+    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const h = sim.addHero(hero, c) as HeroEntity;
+    const { heroOnEvent } = await import('../../src/game/ai/heroBrain');
+    expect(h.brain.bold).toBe(0);
+    for (let i = 0; i < 20; i++) heroOnEvent(w, h, 'kill', {});
+    expect(h.brain.bold).toBeGreaterThan(0.25);
+    // consumo alto de cura nos últimos minutos pede um estoque maior
+    c.level = 40;
+    h.stats.maxHealth = 800;
+    const { healGoalFor } = await import('../../src/game/ai/heroBrain');
+    const base = healGoalFor(h, 0);
+    for (let i = 0; i < 30; i++) h.brain.drinkLog.push({ at: 60000 + i * 1000, heal: 500 });
+    expect(healGoalFor(h, 120000)).toBeGreaterThan(base);
+  });
+
+  it('o ataque do arco não depende de flechas: arco melhor, dano maior no cálculo da régua', async () => {
+    const sim = makeSim('paladin', { seed: 6 });
+    const w = sim.world;
+    const { heroDpsVs } = await import('../../src/game/ai/heroThreat');
+    const hero = GAME_DATA.heroes.distanciado!;
+    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const h = sim.addHero(hero, c) as HeroEntity;
+    const mon = { def: GAME_DATA.monsters.orc!, hp: 320 } as unknown as MonsterEntity;
+    const low = heroDpsVs(w, h, mon);
+    c.equipment.mainHand = { itemId: 'bow_royal', count: 1 };
+    h.stats = (await import('../../src/domain/rules/stats')).computeStats(GAME_DATA, c);
+    expect(heroDpsVs(w, h, mon)).toBeGreaterThan(low);
   });
 });

@@ -4,9 +4,7 @@ import { chebyshev } from '../../domain/value-objects/position';
 import { buildingAt, regionAt } from '../world/GameMap';
 import type { World } from '../simulation/World';
 import { allActors, message } from '../simulation/World';
-import { isMoving, pathTo, settle, teleport, tryStep } from '../movement/movement';
-import { freeCellNear } from '../movement/walk';
-import { setTarget } from '../combat/combat';
+import { isMoving, pathTo, settle, tryStep } from '../movement/movement';
 
 export const NPC_RANGE = 2;
 export const LOOT_RANGE = 1;
@@ -153,31 +151,6 @@ export function chooseDialogOption(w: World, index: number): void {
       w.ui.depot = { npcId: npc.id };
       w.events.emit('depotOpened', { npcId: npc.id });
       break;
-    case 'travel': {
-      const dest = opt.travelTo ? [...w.npcs.values()].find((n) => n.def.id === opt.travelTo) : undefined;
-      if (!dest) break;
-      const c = w.player.character;
-      if (opt.minLevel && c.level < opt.minLevel) {
-        message(w, `${npc.def.name}: "O caminho até lá é perigoso demais. Volte no nível ${opt.minLevel}."`, 'warning');
-        break;
-      }
-      const price = opt.price ?? 0;
-      if (price > c.gold) {
-        message(w, `${npc.def.name}: "A travessia custa ${price} de ouro."`, 'warning');
-        break;
-      }
-      c.gold -= price;
-      const spot = freeCellNear(w, dest.x, dest.y + 2, w.player.id, 4);
-      teleport(w, w.player, spot.x, spot.y);
-      w.player.path = null;
-      w.player.pathGoal = null;
-      w.player.following = false;
-      setTarget(w, null);
-      w.ui.dialog = null;
-      message(w, `Você atravessou o portal até ${dest.def.title}.`, 'system');
-      w.events.emit('actorFx', { entityId: w.player.id, text: 'PORTAL', tone: 'level' });
-      break;
-    }
     case 'heal': {
       const c = w.player.character;
       c.health = w.player.stats.maxHealth;

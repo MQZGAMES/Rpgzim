@@ -49,31 +49,25 @@ export function setSellLock(c: CharacterState, itemId: string, locked: boolean):
   else delete c.flags[sellLockKey(itemId)];
 }
 
-/** A munição que a arma equipada usa (flechas do arco) nunca entra no "vender tudo". */
-export function isOwnAmmo(data: GameData, c: CharacterState, itemId: string): boolean {
-  const def = data.items[itemId];
-  const weapon = c.equipment.mainHand ? data.items[c.equipment.mainHand.itemId]?.weapon : undefined;
-  return def?.type === 'ammo' && !!weapon?.ammo && def.ammoType === weapon.ammo;
-}
-/** Fica fora do "vender tudo": travado pelo jogador ou munição da própria arma. */
-export function keptFromSellAll(c: CharacterState, itemId: string, data?: GameData): boolean {
-  return isSellLocked(c, itemId) || (!!data && isOwnAmmo(data, c, itemId));
+/** Fica fora do "vender tudo": travado pelo jogador. */
+export function keptFromSellAll(c: CharacterState, itemId: string): boolean {
+  return isSellLocked(c, itemId);
 }
 
-/** O que "vender tudo" levaria: itens da mochila (nunca os equipados, os travados nem a munição da arma) que esta loja compra. */
-export function sellAllPreview(c: CharacterState, shop: ShopDef, data?: GameData): { itemId: string; count: number; total: number }[] {
+/** O que "vender tudo" levaria: itens da mochila (nunca os equipados nem os travados) que esta loja compra. */
+export function sellAllPreview(c: CharacterState, shop: ShopDef): { itemId: string; count: number; total: number }[] {
   return shop.buys
-    .filter((o) => !keptFromSellAll(c, o.itemId, data))
+    .filter((o) => !keptFromSellAll(c, o.itemId))
     .map((o) => ({ itemId: o.itemId, count: countItem(c.inventory, o.itemId), price: o.price }))
     .filter((o) => o.count > 0)
     .map((o) => ({ itemId: o.itemId, count: o.count, total: o.count * o.price }));
 }
 
 /** Vende de uma vez tudo da mochila que a loja compra. Retorna o ouro recebido e as unidades vendidas. */
-export function sellAll(c: CharacterState, shop: ShopDef, data?: GameData): { total: number; units: number } {
+export function sellAll(c: CharacterState, shop: ShopDef): { total: number; units: number } {
   let total = 0;
   let units = 0;
-  for (const o of sellAllPreview(c, shop, data)) {
+  for (const o of sellAllPreview(c, shop)) {
     const res = sell(c, shop, o.itemId, o.count);
     if (res.ok) {
       total += res.total;

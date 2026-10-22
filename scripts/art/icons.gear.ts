@@ -3,7 +3,7 @@
 import type { PixelCanvas} from './lib/canvas.ts';
 import { rgb } from './lib/canvas.ts';
 import { P, type Ramp } from './lib/palette.ts';
-import { GEAR_TIERS, ARROW_TIERS } from '../../src/data/gearTiers.ts';
+import { GEAR_TIERS } from '../../src/data/gearTiers.ts';
 import { TROPHIES, type TrophyShape } from '../../src/data/trophies.ts';
 
 type Draw = (c: PixelCanvas) => void;
@@ -113,7 +113,6 @@ export function gearIcons(fns: {
   ring: (gem: Ramp) => Draw;
   amulet: (gem: Ramp) => Draw;
   potion: (liquid: Ramp, big?: boolean) => Draw;
-  arrowOf: (head: Ramp, fletch: Ramp) => Draw;
 }): [string, Draw][] {
   const out: [string, Draw][] = [];
   const { rows } = fns;
@@ -142,7 +141,6 @@ export function gearIcons(fns: {
     );
   }
   const tier = (id: string) => rampOf(GEAR_TIERS.find((t) => t.id === id)!.ramp);
-  for (const a of ARROW_TIERS) out.push([a.id, fns.arrowOf(tier(a.ramp), tier(a.ramp))]);
   out.push(
     ['potion_health_spirit', fns.potion(tier('ruby'), true)],
     ['potion_health_divine', fns.potion(tier('celestial'), true)],

@@ -163,15 +163,11 @@ describe('Knight e Paladin', () => {
     expect(other.tauntUntil).toBe(0);
   });
 
-  it('Flecha Atordoante deixa o alvo lento, gasta 1 flecha e a mais forte vai primeiro', () => {
+  it('Flecha Atordoante deixa o alvo lento (sem gastar flechas)', () => {
     const sim = makeSim('paladin');
     clearMonsters(sim);
     levelUp(sim, 12, 0);
     const w = sim.world;
-    const c = w.player.character;
-    c.inventory.fill(null);
-    c.inventory[0] = { itemId: 'arrow', count: 10 };
-    c.inventory[1] = { itemId: 'arrow_metal', count: 3 };
     const spot = field(sim);
     sim.teleportPlayer(spot.x, spot.y);
     const m = [...w.monsters.values()][0]!;
@@ -181,8 +177,6 @@ describe('Knight e Paladin', () => {
     sim.setTarget(m.id);
     expect(sim.castSpell('stunning_arrow')).toBe(true);
     expect(m.slowUntil).toBeGreaterThan(w.now);
-    expect(countItem(c.inventory, 'arrow_metal')).toBe(2); // gastou a de metal primeiro
-    expect(countItem(c.inventory, 'arrow')).toBe(10);
   });
 });
 
@@ -224,13 +218,13 @@ describe('recargas e flechas', () => {
     expect(GAME_DATA.spells.holy_arrow?.cooldownMs).toBe(2000);
   });
 
-  it('não existe mais o slot de munição; o paladino gasta as flechas da mochila no ataque básico', () => {
+  it('o arco não usa munição: atira sem flechas e o snapshot não tem contador', () => {
     expect((GAME_DATA.vocations.paladin.startingEquipment as Record<string, unknown>).ammo).toBeUndefined();
     const sim = makeSim('paladin');
     clearMonsters(sim);
     const w = sim.world;
     const c = w.player.character;
-    expect(countItem(c.inventory, 'arrow')).toBe(80);
+    expect(countItem(c.inventory, 'arrow')).toBe(0);
     const spot = field(sim);
     sim.teleportPlayer(spot.x, spot.y);
     const m = [...w.monsters.values()][0]!;
@@ -240,43 +234,17 @@ describe('recargas e flechas', () => {
     m.def = { ...m.def, aggroRadius: 0 };
     sim.setStandAttack(true);
     sim.setTarget(m.id);
+    const hp = m.hp;
     advance(sim, 3000, 50);
-    expect(countItem(c.inventory, 'arrow')).toBeLessThan(80);
-    // o snapshot mostra as flechas disponíveis por tipo
-    const ammo = buildSnapshot(sim, 1).ammo!;
-    expect(ammo.total).toBe(countItem(c.inventory, 'arrow'));
-    expect(ammo.types[0]!.name).toBe('Flecha de Pedra');
-    // outras vocações não mostram contador
-    expect(buildSnapshot(makeSim('knight'), 1).ammo).toBeNull();
+    expect(m.hp).toBeLessThan(hp); // acertou sem nenhuma flecha na mochila
   });
 
-  it('o ataque soma o bônus da flecha (metal +2 > pedra +1)', () => {
-    const run = (itemId: string) => {
-      const sim = makeSim('paladin', { seed: 9 });
-      clearMonsters(sim);
-      const w = sim.world;
-      const c = w.player.character;
-      c.inventory.fill(null);
-      c.inventory[0] = { itemId, count: 100 };
-      const spot = field(sim);
-      sim.teleportPlayer(spot.x, spot.y);
-      const hero = GAME_DATA.heroes.boladex!;
-      const h = sim.addHero(hero, createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart }));
-      h.brain.nextThinkAt = Infinity;
-      sim.setPvp(true);
-      put(sim, h, spot.x + 4, spot.y);
-      sim.setStandAttack(true);
-      let total = 0;
-      sim.events.on('damage', (e) => e.targetId === h.id && e.sourceId === w.human.id && (total += e.amount));
-      sim.setTarget(h.id);
-      for (let t = 0; t < 40000; t += 500) {
-        h.character.health = h.stats.maxHealth;
-        h.invulnerableUntil = 0;
-        advance(sim, 500, 50);
-      }
-      return total;
-    };
-    expect(run('arrow_metal')).toBeGreaterThan(run('arrow'));
+  it('o dano do arco vem do ataque da arma: arco melhor bate mais forte', () => {
+    expect(GAME_DATA.items.bow_royal!.weapon!.attack).toBeGreaterThan(GAME_DATA.items.bow_hunting!.weapon!.attack);
+  });
+  it('Corrida: a recarga é igual à duração (dá para renovar sem pausa)', () => {
+    const s = GAME_DATA.spells.haste!;
+    expect(s.cooldownMs).toBe(s.buff!.durationMs);
   });
 });
 

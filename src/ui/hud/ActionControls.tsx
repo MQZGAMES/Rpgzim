@@ -94,37 +94,6 @@ export const TOUCH_SLOT = 44;
 export const TOUCH_ATTACK = 54;
 export const TOUCH_GAP = 5;
 
-/** Contador de flechas (só com arco equipado): ícone e quantidade por tipo, mais forte primeiro; vermelho quando acabando. */
-export function AmmoPill({ compact = false, fill = false }: { compact?: boolean; fill?: boolean }) {
-  const ammo = useSnap((s) => s.ammo);
-  if (!ammo) return null;
-  const low = ammo.total < 20;
-  return (
-    <div
-      className={`pointer-events-none flex items-center gap-2 rounded-sm border-2 px-[6px] text-[11px] leading-none ${fill ? 'w-full justify-center py-0' : 'py-[2px]'} ${
-        ammo.total === 0 ? 'anim-glow border-hp bg-[#3a0a12]/85 text-hp-light' : low ? 'border-[#c87a2a] bg-[#2a1608]/85 text-[#ffb35a]' : 'border-[#5b4a78] bg-[#140e1e]/80 text-parchment'
-      }`}
-      title="Flechas na mochila: as mais fortes são usadas primeiro"
-      data-testid="ammo-pill"
-    >
-      {ammo.types.length ? (
-        ammo.types.map((t) => (
-          <span key={t.itemId} className="inline-flex items-center gap-[2px]" title={`${t.name} (+${t.attack} de ataque)`}>
-            <ItemIcon icon={t.icon} size={compact ? 12 : 16} />
-            <b>{t.count}</b>
-          </span>
-        ))
-      ) : (
-        <span className="inline-flex items-center gap-[2px]">
-          <ItemIcon icon="item_arrow" size={compact ? 14 : 16} className="grayscale" />
-          <b>0</b>
-        </span>
-      )}
-      {ammo.total === 0 && <span>sem flechas!</span>}
-    </div>
-  );
-}
-
 export function TouchActions() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
@@ -133,12 +102,8 @@ export function TouchActions() {
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
       <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
-        {/* botões de ação (loot, falar...) ficam ACIMA do contador de flechas, que fica colado no quadrado de atalhos */}
         <div className="flex flex-col items-end pb-1">
           <InteractButton />
-        </div>
-        <div className="mb-[1px] px-[4px]" style={{ width: TOUCH_SLOT * 2 + TOUCH_ATTACK + TOUCH_GAP * 2 + 8 }}>
-          <AmmoPill compact fill />
         </div>
         <div
           className="pointer-events-auto grid items-center justify-items-center p-[4px]"
@@ -177,7 +142,6 @@ export function DesktopActionBar() {
   return (
     <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
       <div className="flex items-center gap-2">
-        <AmmoPill />
         <InteractButton size={44} />
       </div>
       <div className="frame-dark pointer-events-auto flex items-end gap-[6px] !border-[10px]">

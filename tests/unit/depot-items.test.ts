@@ -34,10 +34,10 @@ describe('banco e depósito', () => {
     c.inventory = c.inventory.map(() => null);
     c.inventory[0] = { itemId: 'potion_health', count: 3 };
     c.inventory[1] = { itemId: 'boar_hide', count: 2 };
-    c.inventory[2] = { itemId: 'arrow', count: 20 };
+    c.inventory[2] = { itemId: 'potion_mana', count: 20 };
     c.inventory[3] = { itemId: 'mace_iron', count: 1 };
     expect(depositAllLoot(D, c)).toBe(2);
-    expect(c.inventory.filter(Boolean).map((s) => s!.itemId)).toEqual(['potion_health', 'arrow']);
+    expect(c.inventory.filter(Boolean).map((s) => s!.itemId)).toEqual(['potion_health', 'potion_mana']);
   });
 
   it('deposita e saca ouro sem aceitar valores inválidos', () => {

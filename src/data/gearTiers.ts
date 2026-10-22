@@ -28,10 +28,3 @@ export const GEAR_TIERS: readonly GearTier[] = [
 /** Tipos de peça de cada faixa e como o ícone é desenhado (ver scripts/art/icons.ts). */
 export const GEAR_KINDS = ['sword', 'axe', 'bow', 'wand', 'rod', 'shield', 'spellbook', 'helmet', 'armor', 'armor_ranger', 'robe', 'hat', 'legs', 'legs_mage', 'boots', 'ring_power', 'ring_wisdom', 'amulet_guard', 'amulet_mage'] as const;
 export type GearKind = (typeof GEAR_KINDS)[number];
-
-/** Munição avançada (ícone de flecha com a rampa indicada). */
-export const ARROW_TIERS = [
-  { id: 'arrow_crystal', name: 'Flecha de Cristal', attack: 4, value: 14, ramp: 'crystal' },
-  { id: 'arrow_abyssal', name: 'Flecha do Abismo', attack: 7, value: 40, ramp: 'abyssal' },
-  { id: 'arrow_celestial', name: 'Flecha Celeste', attack: 11, value: 110, ramp: 'celestial' },
-] as const;

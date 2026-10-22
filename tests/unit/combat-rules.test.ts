@@ -72,7 +72,6 @@ describe('validação de magias', () => {
     globalCooldownRemaining: 0,
     inProtectionZone: false,
     target: { exists: true, alive: true, hostile: true, distance: 3, lineOfSight: true },
-    ammoCount: 0,
     weaponKind: 'wand',
   };
   const bolt = SPELLS['arcane_bolt']!;
@@ -105,11 +104,10 @@ describe('validação de magias', () => {
     const heal = SPELLS['light_heal']!;
     expect(validateCast(heal, { ...ctx, inProtectionZone: true, target: null })).toEqual({ ok: true });
   });
-  it('chuva de flechas exige arma de distância e munição', () => {
+  it('chuva de flechas exige arma de distância', () => {
     const rain = SPELLS['arrow_rain']!;
     const pal = { ...ctx, vocation: 'paladin' as const, weaponKind: 'distance' as const };
-    expect(validateCast(rain, { ...pal, ammoCount: 2 })).toMatchObject({ ok: false, reason: 'noAmmo' });
-    expect(validateCast(rain, { ...pal, ammoCount: 10, weaponKind: 'melee' })).toMatchObject({ ok: false, reason: 'weapon' });
-    expect(validateCast(rain, { ...pal, ammoCount: 10 })).toEqual({ ok: true });
+    expect(validateCast(rain, { ...pal, weaponKind: 'melee' })).toMatchObject({ ok: false, reason: 'weapon' });
+    expect(validateCast(rain, pal)).toEqual({ ok: true });
   });
 });

@@ -404,8 +404,8 @@ test('PK: caveira e PZ lock no HUD, nome menor no celular e 8 atalhos', async ({
   const isMobile = info.project.name === 'mobile';
   // 8 atalhos configuráveis (1–8)
   await expect(page.locator('[data-testid^=slot-], [data-testid^=spell-], [data-testid^=potion-]')).toHaveCount(8);
-  // contador de flechas do paladino com arco
-  await expect(page.getByTestId('ammo-pill')).toContainText('80');
+  // o arco não usa mais flechas: não há contador
+  await expect(page.getByTestId('ammo-pill')).toHaveCount(0);
   // caveira branca + PZ lock aparecem ao lado do painel de status
   await page.evaluate(() => (window.__RPGZIM__ as unknown as { setPk(k: string, ms: number): void }).setPk('white', 100_000));
   await expect(page.getByTestId('pk-skull')).toBeVisible();

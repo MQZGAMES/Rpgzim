@@ -68,24 +68,27 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
-- Lojas: o mercador também compra **flechas** (o Knight do Boladex vende as que caem dos goblins). Na venda, o que
-  você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado, a munição da arma equipada nem o
+- Lojas: o mercador compra o loot (inclusive as flechas antigas). Na venda, o que
+  você tem aparece primeiro; botão **Vender tudo** (só a mochila, nunca o equipado nem o
   **travado**: na mochila/equipamento, *Travar venda* põe um cadeado no item). Janela responsiva (lista com rolagem
   própria e barra de ações sempre visível, em retrato, paisagem e desktop).
 - **Área protegida** só dentro de casas, lojas e templo; as ruas da vila são livres para lutar (e ninguém atravessa ninguém: se travar, trocam de lugar).
 - Inventário, 9 slots de equipamento, ataque/defesa visíveis em cada item (verde ▲ quando é melhor que o
-  equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta) e flechas na mochila.
+  equipado), comparação de atributos, poções (o atalho escolhe a poção certa para a vida/mana que falta) e sem flechas (o arco só depende do ataque).
 - Save local versionado (IndexedDB → localStorage → memória) com validação e migração.
 - Áudio procedural (WebAudio): efeitos e música por região, respeitando autoplay/mute.
 
 ## Expansão: níveis 24 a 100
-- **Mapa** 330×200 com duas vilas novas a leste — **Forte Esperança** (equipamento do nível 24 ao 56) e **Cidadela Celeste** (64 ao 100) — e oito zonas de caça (Charneca das Presas, Montanha Branca, Lago Congelado, Dunas Rubras, Pântano Corrompido, Portal Infernal, Vulcão Adormecido e Abismo Primordial). Cada vila tem santuário, ferraria, arcana, alquimia e banco (o depósito é o mesmo de Pedraluz).
-- **Portais**: o Guardião do Portal de cada vila leva às outras (a ida para o Forte custa 300 de ouro e exige nível 24; para a Cidadela, 1500 e nível 56 — a volta é grátis). Os heróis também os usam, em vez de atravessar a pé o território das criaturas.
-- **Equipamentos**: 11 faixas de material (Obsidiana, Mitral, Adamante, Orichalco, Cristal, Ébano, Rubi, Estrela Cadente, Abismo, Luz Celeste e Primórdio) × 19 peças (armas, escudo, grimório, elmo, armaduras, mantos, calças, botas, anéis e amuletos), geradas por fórmula em `src/data/items.gear.ts`, mais flechas de cristal/abismo/celestes e poções espirituais e divinas.
-- **Criaturas**: 16 espécies novas (faixas 7 a 14, nível 44 a 100), cada uma com troféu próprio vendido pelo valor cheio na alquimia. As faixas tardias crescem mais devagar que as primeiras (vida ×1,2 e ataque ×1,17 por faixa) e o dano elemental pesa menos que o físico. `tests/tools/calibrate.test.ts` imprime a margem de luta de cada vocação contra cada espécie para recalibrar.
-- **Ajudas automáticas** (menu → "Ajudas automáticas"): pegar o loot ao alcance e beber poção de vida/mana no limiar escolhido, com preferência por poção menor, maior ou a que se ajusta.
-- **Mini mapa**: heróis (cor por vocação, contorno azul quando no seu grupo), NPCs, portais e o seu saco de loot/morte.
-- **Grupos entre heróis**: os heróis se juntam em duplas, trios ou quartetos por conta própria (o Knight lidera, o Druid cura, os de longe ficam atrás) e se desfazem quando um precisa da vila ou depois de alguns minutos. O convite do jogador sempre vence: o herói sai do outro grupo e fica com o líder do servidor. XP de grupo: +25% por vocação diferente (dividida entre os membros).
+- **Uma cidade só**: Pedraluz continua sendo a única cidade. Todo o equipamento do nível 24 ao 100 e as poções espirituais/divinas são vendidos lá (peças de luta na Ferraria, de mago na Alquimia) e os troféus das criaturas são comprados pelo valor cheio.
+- **Zonas de caça por distância**: o mapa (300×128) segue a leste das Terras Altas com oito zonas, cada uma mais difícil que a anterior quanto mais longe de Pedraluz — Charneca das Presas, Montanha Branca, Dunas Rubras, Lago Congelado, Pântano Corrompido, Vulcão Adormecido, Portal Infernal e Abismo Primordial. Dentro de cada zona a espécie mais fraca fica na borda oeste (perto da cidade) e a mais forte na borda leste.
+- **Equipamentos**: 11 faixas de material (Obsidiana a Primórdio) × 19 peças, geradas por fórmula em `src/data/items.gear.ts`.
+- **Criaturas**: 16 espécies novas (nível 44 a 100) com troféu próprio. As faixas tardias crescem mais devagar que as primeiras. `tests/tools/calibrate.test.ts` imprime a margem de luta de cada vocação contra cada espécie.
+- **Arcos sem munição**: não há mais flechas; o dano do Paladino vem do ataque do arco (e das magias). As flechas antigas viraram loot vendável.
+- **Corrida**: a recarga é igual à duração (8 s), então dá para renovar sem pausa.
+- **Ajudas automáticas** (menu): pegar o loot ao alcance e beber poção no limiar escolhido.
+- **Mini mapa**: heróis, NPCs e o seu saco de loot/morte.
+- **Grupos entre heróis**: se juntam e se desfazem sozinhos; o convite do jogador sempre vence. XP de grupo: +25% por vocação diferente.
+- **Heróis mais corajosos e preparados**: a coragem é aprendida (sobe a cada vitória, cai ao fugir ou morrer) e só fogem quando a régua diz que perdem mesmo bebendo as poções e a vida já caiu. O estoque de poções segue o consumo real dos últimos 12 minutos e cresce quando o grupo caça num lugar mais difícil.
 
 ## Os quatro heróis com vida própria
 Além do **Boladex** (Knight), existem **Maguim** (Sorcerer), **Mano Cura** (Druid) e **Distanciado** (Paladin). Todos
@@ -93,7 +96,7 @@ vivem sozinhos no mundo, aparecem na tela inicial como personagens jogáveis e p
 A lógica por vocação está em `src/game/ai/heroRoles.ts` (perfil) e `heroBrain.ts`:
 - **Maguim**: Faísca/Lança/Explosão Ígnea conforme a situação, Escudo de Mana quando cercado, fica a ~3 tiles de quem bate corpo a corpo (recua se a criatura for mais lenta), estoca poções de mana (2,5× a mana máxima) e prioriza varinhas.
 - **Mano Cura**: Espinhos/Rajada Glacial (lentidão), Bênção da Seiva em si e no grupo, Escudo de Mana, estoque de mana e cajados; o mais cuidadoso e sociável.
-- **Distanciado**: Foco do Caçador, Flecha Atordoante em quem se aproxima, Chuva de Flechas em grupos; compra flechas (pedra e, com folga, metal), troca o arco pela lança de arremesso quando as flechas acabam e volta ao arco ao repor; só usa arcos.
+- **Distanciado**: Foco do Caçador, Flecha Atordoante em quem se aproxima, Chuva de Flechas em grupos; só usa arcos (o ataque do arco é o dano dele).
 - Todos usam a régua de ameaça do Boladex (fuga antecipada, poções, escolha de área), com margem um pouco menor para quem luta de longe.
 - Cada um nasce num ponto próprio do templo, para não bloquear quem entra no jogo.
 
@@ -145,10 +148,8 @@ upgrade), treino com Espada de Treino nos slimes e ajuda ao jogador quando um mo
   (10.000, em todas as lojas) protege tudo e se desfaz. Morrendo, o PZ lock some; caveira branca/amarela também (renasce
   sem caveira); a vermelha continua contando as 24 h. O Boladex volta ao local da morte para recuperar seu saco.
 - **Grupo visível** (estilo Tibia): escudo à direita do nome — **amarelo com estrela = líder**, **azul = membro**.
-- **Flechas**: não há mais slot de munição; ficam na mochila e são gastas sozinhas, **das mais fortes para as mais fracas**
-  (*Flecha de Metal* +2 de ataque, *Flecha de Pedra* +1; vendidas no mercador). Com arco equipado, um contador mostra as
-  flechas por tipo perto do botão de ataque (laranja <20, vermelho piscando sem flechas).
-- **Magias novas**: *Corrida* (todas: velocidade por 8 s e desfaz lentidão), *Escudo de Mana* (Sorcerer/Druid: por 5 min o
+- **Arcos**: sem munição; o dano vem do ataque do arco. Flechas de saves antigos viram loot vendável.
+- **Magias novas**: *Corrida* (todas: velocidade por 8 s, recarga de 8 s, desfaz lentidão), *Escudo de Mana* (Sorcerer/Druid: por 5 min o
   dano sai da mana; ícone no HUD e contorno azul discreto no personagem; o dano que sai da mana aparece em azul), *Grito de Guerra* (Knight: atrai criaturas em 5 tiles, recarga de 2 s; o *Redemoinho de Aço* só causa dano) e
   *Flecha Atordoante* (Paladin: dano + lentidão). Lentidão de gelo (Rajada Glacial, Flecha Atordoante) vale também para
   jogadores e heróis. *Redemoinho de Aço* e *Flecha Sagrada* com 2 s de exaustão.

@@ -1,6 +1,5 @@
 // Sistema de combate: ataque automático do jogador, aplicação de dano, mortes, loot e penalidade.
 // O resultado (acerto, dano, bloqueio) é decidido aqui; a renderização apenas reage aos eventos.
-import { countAmmo, takeAmmo } from '../../domain/rules/ammo';
 import { EQUIP_SLOTS } from '../../domain/entities/definitions';
 import type { Element } from '../../domain/value-objects/element';
 import { chebyshev } from '../../domain/value-objects/position';
@@ -141,19 +140,7 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
   const weapon = p.stats.weapon;
   const from = { x: p.x, y: p.y };
   const to = { x: target.x, y: target.y };
-  // munição e mana são verificadas antes do ataque
-  // a flecha é gasta direto da mochila (as mais fortes primeiro) e soma o ataque dela ao disparo
-  let ammoAttack = 0;
-  if (weapon.ammo) {
-    const taken = takeAmmo(w.data, c.inventory, weapon.ammo, 1);
-    if (!taken.used) {
-      warnThrottled(w, 'ammo', 'Sem flechas na mochila! Compre mais no mercador.', 2500);
-      return;
-    }
-    ammoAttack = taken.attack;
-    w.events.emit('itemsChanged', {});
-    if (!countAmmo(w.data, c.inventory, weapon.ammo)) warnThrottled(w, 'ammo-last', 'Suas flechas acabaram!', 4000);
-  }
+  // a mana é verificada antes do ataque
   if (weapon.kind === 'wand') {
     const cost = weapon.manaCost ?? 0;
     if (c.mana < cost) {
@@ -187,7 +174,7 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
       else registerAggression(w, p.id, target.id);
       return;
     }
-    raw = rollWeaponDamage({ level: c.level, skill, weaponAttack: weapon.attack + ammoAttack, vocationModifier: mod }, w.rng);
+    raw = rollWeaponDamage({ level: c.level, skill, weaponAttack: weapon.attack, vocationModifier: mod }, w.rng);
   }
   applyHit(w, target, raw, weapon.element, false);
 }

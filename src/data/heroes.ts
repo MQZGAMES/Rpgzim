@@ -105,16 +105,16 @@ const distanciado: HeroDef = {
   name: 'Distanciado',
   title: 'Paladin caçador',
   vocation: 'paladin',
-  // frio e disciplinado: mantém distância, conta cada flecha e só luta quando está no controle
+  // frio e disciplinado: mantém distância e só luta quando está no controle
   temperament: { bravery: 0.5, greed: 0.5, discipline: 0.75, sociability: 0.5, caution: 0.65 },
   lines: {
     ...shared,
-    hunt: ['Mirando em {monster}.', '{area}: bom campo de tiro.', 'Flechas contadas, bora caçar.'],
+    hunt: ['Mirando em {monster}.', '{area}: bom campo de tiro.', 'Arco encordado, bora caçar.'],
     retreat: ['Muito perto! Reposicionando.', 'Sem espaço pra mirar, saindo daqui!'],
     death: ['{monster} furou minha guarda...', 'Errei a distância. Raro, mas acontece.', 'Da próxima, mais longe, {monster}.'],
     levelUp: ['Nível {level}! A mira melhora.', 'Nível {level}! Alvo travado.'],
     kill: ['Na mosca!', 'Um tiro, um acerto.', 'Próximo.'],
-    idle: ['Preciso reabastecer as flechas em breve.', 'Silêncio bom em Pedraluz.', 'Quem quiser caçar, eu cubro de longe.'],
+    idle: ['Preciso de um arco melhor em breve.', 'Silêncio bom em Pedraluz.', 'Quem quiser caçar, eu cubro de longe.'],
     greetPlayer: ['E aí, {player}! Fico atrás e dou cobertura.', 'Fala, {player}. Se um bicho chegar perto, eu abato.'],
     status: ['Nível {level}, {area}. {gold} de ouro, {potions} poções.'],
     pkWish: ['Liga o PK, {player}... minha mira anda afiada.', 'Se o PK estivesse ligado, {player}... só um tiro.'],

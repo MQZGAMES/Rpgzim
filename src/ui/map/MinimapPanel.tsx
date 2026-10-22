@@ -90,10 +90,9 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
               st.npcs.map((n) => (
                 <span
                   key={n.id}
-                  className={n.portal ? 'pointer-events-none absolute h-[11px] w-[11px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#9ae8ff] bg-[#3a7cc0]/70 shadow' : 'pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 border border-black bg-[#e8c95a]'}
+                  className='pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 border border-black bg-[#e8c95a]'
                   style={{ left: pct(n.x, st.width), top: pct(n.y, st.height) }}
-                  title={n.portal ? 'Portal' : n.name}
-                  data-testid={n.portal ? 'minimap-portal' : undefined}
+                  title={n.name}
                 />
               ))}
             {layers.heroes &&
@@ -154,9 +153,6 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
           <button type="button" className={layers.npcs ? 'text-parchment' : 'line-through'} onClick={() => setLayers({ ...layers, npcs: !layers.npcs })}>
             NPCs
           </button>
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full border border-[#9ae8ff] bg-[#3a7cc0]" /> portal
-          </span>
           <span className="flex items-center gap-1 text-[#ff5a4a]">✖ seu saco</span>
         </div>
       </div>

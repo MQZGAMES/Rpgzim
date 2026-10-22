@@ -45,7 +45,7 @@ export function depositAllLoot(data: GameData, c: CharacterState): number {
   c.inventory.forEach((st, i) => {
     if (!st) return;
     const def = data.items[st.itemId];
-    if (def?.type === 'potion' || def?.type === 'ammo') return;
+    if (def?.type === 'potion') return;
     if (move(data, c.inventory, i, c.depot).ok) n++;
   });
   return n;

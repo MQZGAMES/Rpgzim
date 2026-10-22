@@ -45,7 +45,7 @@ export function sellAllItems(w: World): boolean {
   const shop = openShop(w);
   if (!shop) return false;
   const c = w.player.character;
-  const res = sellAll(c, shop, w.data);
+  const res = sellAll(c, shop);
   if (res.units === 0) {
     warnThrottled(w, 'sell:none', 'Nada na mochila que esta loja compre.', 800);
     return false;

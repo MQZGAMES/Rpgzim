@@ -26,7 +26,7 @@ export function idealHero(vocation: 'knight' | 'paladin' | 'sorcerer' | 'druid',
   c.equipment = {};
   for (const slot of SLOTS) {
     const cands = Object.values(GAME_DATA.items).filter((d) => d.slot === slot && !d.weapon?.training && canUseItem(d, c));
-    const ok = cands.filter((d) => (slot === 'mainHand' ? (vocation === 'paladin' ? !!d.weapon?.ammo : !d.twoHanded) : true));
+    const ok = cands.filter((d) => (slot === 'mainHand' ? (vocation === 'paladin' ? d.weapon?.kind === 'distance' && !!d.twoHanded : !d.twoHanded) : true));
     if (slot === 'offHand' && vocation === 'paladin') continue;
     const best = ok.sort((a, b) => itemScore(b) - itemScore(a))[0];
     if (best) c.equipment[slot] = { itemId: best.id, count: 1 };

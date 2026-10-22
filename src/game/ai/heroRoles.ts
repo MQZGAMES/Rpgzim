@@ -9,20 +9,15 @@ export interface RoleProfile {
   manaStock: number;
   /** Multiplicador do dano por segundo na régua (magias e rajadas somam além do golpe básico). */
   dpsMul: number;
-  /** Usa munição (flechas) e precisa repor. */
-  ammo: boolean;
   /** Treina com a arma de treino quando está atrasado nas skills. */
   trains: boolean;
 }
 
 export const ROLES: Readonly<Record<VocationId, RoleProfile>> = {
-  knight: { keepDistance: 0, manaStock: 0, dpsMul: 1, ammo: false, trains: true },
-  paladin: { keepDistance: 3, manaStock: 0.6, dpsMul: 1.2, ammo: true, trains: false },
-  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.45, ammo: false, trains: false },
-  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.25, ammo: false, trains: false },
+  knight: { keepDistance: 0, manaStock: 0, dpsMul: 1, trains: true },
+  paladin: { keepDistance: 3, manaStock: 0.6, dpsMul: 1.2, trains: false },
+  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.45, trains: false },
+  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.25, trains: false },
 };
-
-/** Munição desejada na mochila. */
-export const AMMO_GOAL = 120;
 
 export const isRanged = (v: VocationId): boolean => ROLES[v].keepDistance > 0;

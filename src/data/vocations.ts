@@ -86,7 +86,6 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
       feet: { itemId: 'boots_leather' },
     },
     startingInventory: [
-      { itemId: 'arrow', count: 80 },
       { itemId: 'spear_throwing', count: 1 },
       { itemId: 'potion_health', count: 3 },
       { itemId: 'potion_mana', count: 1 },

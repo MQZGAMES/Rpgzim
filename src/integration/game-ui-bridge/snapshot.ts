@@ -1,6 +1,5 @@
 // Projeção do estado da simulação para a interface (somente leitura, dados prontos para exibir).
 // É uma função pura: a interface nunca acessa diretamente o estado mutável da simulação.
-import { ammoBreakdown } from '../../domain/rules/ammo';
 import { EQUIP_SLOTS, SKILL_IDS, SKILL_LABEL, SLOT_LABEL, type EquipSlot, type ItemDef, type SkillId } from '../../domain/entities/definitions';
 import type { ItemStack } from '../../domain/entities/character';
 import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
@@ -123,7 +122,6 @@ export interface UiSnapshot {
   slotLabels: Record<EquipSlot, string>;
   potions: { health: number; mana: number; cooldown: number };
   /** Flechas na mochila por tipo (mais forte primeiro); null quando a arma não usa munição. */
-  ammo: { total: number; types: { itemId: string; name: string; icon: string; attack: number; count: number }[] } | null;
   interaction: { kind: string; id: string; label: string } | null;
   dialog: { npcName: string; npcTitle: string; sprite: string; text: string; options: string[] } | null;
   shop: {
@@ -148,7 +146,6 @@ function itemLines(def: ItemDef): string[] {
     l.push(`Alcance: ${w.range} ${w.range === 1 ? 'tile' : 'tiles'}`);
     if (w.skill !== 'magic') l.push(`Skill: ${SKILL_LABEL[w.skill]}`);
     if (w.training) l.push(`Arma de treino: dano fixo ${w.damage?.[0]}–${w.damage?.[1]}, ignora armadura`);
-    if (w.ammo) l.push('Requer flechas');
     if (def.twoHanded) l.push('Duas mãos');
   }
   if (def.armor) l.push(`Armadura: +${def.armor}`);
@@ -190,7 +187,7 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     def: itemDefense(def),
     better: isUpgrade(w.data, c, def),
     locked: isSellLocked(c, def.id),
-    kept: keptFromSellAll(c, def.id, w.data),
+    kept: keptFromSellAll(c, def.id),
   };
 }
 
@@ -296,8 +293,6 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const bags = w.ui.lootId ? nearbyLootBags(w) : [];
   const region = regionAt(w.map, p.x, p.y);
   const building = buildingAt(w.map, p.x, p.y);
-  const ammoType = p.stats.weapon.ammo;
-  const ammoTypes = ammoType ? ammoBreakdown(w.data, c.inventory, ammoType).map((a) => ({ itemId: a.itemId, name: w.data.items[a.itemId]!.name, icon: w.data.items[a.itemId]!.icon, attack: a.attack, count: a.count })) : [];
   return {
     version,
     now: w.now,
@@ -379,7 +374,6 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     equipment,
     slotLabels: SLOT_LABEL,
     potions: { health: ['potion_health', 'potion_health_great', 'potion_health_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), mana: ['potion_mana', 'potion_mana_great', 'potion_mana_supreme'].reduce((s, id) => s + countItem(c.inventory, id), 0), cooldown: remaining(p.cooldowns, POTION, w.now) },
-    ammo: ammoType ? { total: ammoTypes.reduce((s, a) => s + a.count, 0), types: ammoTypes } : null,
     interaction: near ? { kind: near.kind, id: near.id, label: near.label } : null,
     dialog: dialogNpc && page ? { npcName: dialogNpc.def.name, npcTitle: dialogNpc.def.title, sprite: dialogNpc.def.sprite, text: page.text, options: page.options.map((o) => o.label) } : null,
     shop:

@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
 import { GEAR_KINDS, GEAR_TIERS } from '../../src/data/gearTiers';
 import { CREATURE_LADDER } from '../../src/data/monsters';
-import { createCharacter } from '../../src/domain/rules/character';
-import { chooseDialogOption, interactWith } from '../../src/game/interaction/interaction';
-import type { HeroEntity } from '../../src/game/entities/types';
-import { advance, makeSim } from '../helpers';
+import { makeSim } from '../helpers';
 import manifest from '../../src/assets/generated/manifest.json';
 import icons from '../../src/assets/generated/icons.json';
 
@@ -60,68 +57,32 @@ describe('criaturas tardias', () => {
   });
 });
 
-describe('vilas novas e portais', () => {
-  const portal = (w: ReturnType<typeof makeSim>['world'], id: string) => [...w.npcs.values()].find((n) => n.def.id === id)!;
+describe('uma cidade só: equipamento do nível 100 em Pedraluz e zonas por distância', () => {
+  it('as lojas de Pedraluz vendem todas as faixas e compram os troféus', () => {
+    expect(GAME_DATA.shops.equipment!.sells.some((o) => o.itemId === 'sword_primordial')).toBe(true);
+    expect(GAME_DATA.shops.equipment!.sells.some((o) => o.itemId === 'bow_celestial')).toBe(true);
+    expect(GAME_DATA.shops.potions!.sells.some((o) => o.itemId === 'wand_primordial')).toBe(true);
+    expect(GAME_DATA.shops.potions!.sells.some((o) => o.itemId === 'potion_health_divine')).toBe(true);
+    expect(GAME_DATA.shops.general!.buys.find((o) => o.itemId === 'dire_fang')?.price).toBe(GAME_DATA.items.dire_fang!.value);
+    expect(Object.keys(GAME_DATA.shops)).toEqual(['equipment', 'potions', 'general']);
+  });
 
-  it('as vilas têm lojas, banco, sacerdote e portal; as lojas vendem a faixa certa', () => {
+  it('quanto mais longe de Pedraluz, mais difícil: o nível da criatura sobe com a distância (por zona)', () => {
     const w = makeSim('knight').world;
-    for (const p of ['e', 'f'])
-      for (const k of ['priest', 'smith', 'arcana', 'alchemist', 'banker', 'portal']) expect(portal(w, `${p}_${k}`), `${p}_${k}`).toBeDefined();
-    expect(GAME_DATA.shops.e_smith!.sells.some((o) => o.itemId === 'sword_obsidian')).toBe(true);
-    expect(GAME_DATA.shops.e_smith!.sells.some((o) => o.itemId === 'sword_primordial')).toBe(false);
-    expect(GAME_DATA.shops.f_smith!.sells.some((o) => o.itemId === 'sword_primordial')).toBe(true);
-    expect(GAME_DATA.shops.f_alchemy!.sells.some((o) => o.itemId === 'potion_health_divine')).toBe(true);
-    // troféus são comprados pelo valor cheio
-    expect(GAME_DATA.shops.e_alchemy!.buys.find((o) => o.itemId === 'dire_fang')?.price).toBe(GAME_DATA.items.dire_fang!.value);
-  });
-
-  it('o portal leva ao Forte Esperança: exige nível e ouro; a volta é de graça', () => {
-    const sim = makeSim('knight', { seed: 9 });
-    const w = sim.world;
-    const p = w.player;
-    const from = portal(w, 'p_portal');
-    p.character.level = 10;
-    p.character.gold = 1000;
-    const open = (npc: typeof from) => {
-      w.ui.dialog = { npcId: npc.id, pageId: 'start' };
-    };
-    open(from);
-    chooseDialogOption(w, 0); // Forte Esperança (nível 24+)
-    expect(p.x).toBeLessThan(100); // nível baixo: não foi
-    p.character.level = 30;
-    p.character.gold = 100;
-    open(from);
-    chooseDialogOption(w, 0);
-    expect(p.x).toBeLessThan(100); // sem ouro: não foi
-    p.character.gold = 1000;
-    open(from);
-    chooseDialogOption(w, 0);
-    expect(p.x).toBeGreaterThan(170);
-    expect(p.character.gold).toBe(700);
-    // volta grátis
-    const back = portal(w, 'e_portal');
-    open(back);
-    chooseDialogOption(w, 0); // Pedraluz
-    expect(p.x).toBeLessThan(100);
-    expect(p.character.gold).toBe(700);
-    void interactWith;
-  });
-
-  it('um herói com nível e ouro atravessa o portal sozinho para comprar equipamento no Forte', () => {
-    const sim = makeSim('knight', { seed: 12 });
-    const w = sim.world;
-    const hero = GAME_DATA.heroes.boladex!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
-    const h = sim.addHero(hero, c) as HeroEntity;
-    c.level = 30;
-    c.gold = 6000;
-    c.bankGold = 20000;
-    let reached = false;
-    for (let s = 0; s < 6 * 60 && !reached; s++) {
-      advance(sim, 1000, 50);
-      w.human.character.health = w.human.stats.maxHealth;
-      reached = h.x > 170;
+    const home = w.map.playerStart;
+    const levelAt = new Map<string, { dist: number; level: number }[]>();
+    for (const s of w.map.spawns) {
+      const m = GAME_DATA.monsters[s.monsterId]!;
+      if ((m.level ?? 0) < 44) continue;
+      const arr = levelAt.get(m.id) ?? [];
+      arr.push({ dist: Math.hypot(s.x - home.x, s.y - home.y), level: m.level! });
+      levelAt.set(m.id, arr);
     }
-    expect(reached).toBe(true);
-  }, 60_000);
+    const rows = [...levelAt.entries()].map(([id, a]) => ({ id, d: a.reduce((s, x) => s + x.dist, 0) / a.length, level: a[0]!.level })).sort((a, b) => a.d - b.d);
+    const avg = (xs: typeof rows) => xs.reduce((s, r) => s + r.level, 0) / xs.length;
+    const half = rows.length / 2;
+    expect(avg(rows.slice(half))).toBeGreaterThan(avg(rows.slice(0, half)) + 25); // a metade mais longe é bem mais difícil
+    expect(rows.slice(0, 4).every((r) => r.level <= 60)).toBe(true);
+    expect(rows.slice(-4).every((r) => r.level >= 76)).toBe(true);
+  });
 });

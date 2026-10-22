@@ -395,20 +395,6 @@ function arrow(metal = false) {
   };
 }
 
-/** Flecha avançada: ponta e penas com a rampa de cor do material. */
-function arrowOf(head: Ramp, fletch: Ramp) {
-  return (c: PixelCanvas) => {
-    diag(c, 3, 12, 9, P.iron[3]!);
-    for (const [x, y, k] of [[12, 3, 5], [13, 2, 4], [12, 2, 3], [13, 3, 3], [14, 1, 5], [11, 4, 4], [13, 4, 3], [12, 1, 4]] as const) c.set(x, y, head[k] ?? head[4]!);
-    for (const [x, y] of [[2, 12], [3, 13], [1, 12]] as const) c.set(x, y, P.white);
-    c.set(1, 13, fletch[3]!);
-    c.set(2, 14, fletch[3]!);
-    c.set(2, 13, fletch[4]!);
-    diag(c, 6, 13, 7, P.iron[2]!);
-    c.set(13, 6, head[4]!);
-  };
-}
-
 function potion(liquid: Ramp, big = false) {
   return (c: PixelCanvas) => {
     const r = big ? 5.4 : 4.6;
@@ -639,7 +625,7 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     },
   ],
 ];
-ICONS_ITEMS.push(...gearIcons({ sword, axeDouble, bow, wand, kiteShield, book, shape, rows: { TORSO, ROBE, HELMET, HAT, LEGS, BOOTS }, ring, amulet, potion, arrowOf }));
+ICONS_ITEMS.push(...gearIcons({ sword, axeDouble, bow, wand, kiteShield, book, shape, rows: { TORSO, ROBE, HELMET, HAT, LEGS, BOOTS }, ring, amulet, potion }));
 for (const [name, draw] of ICONS_ITEMS) icon(`item_${name}`, draw);
 
 // ---------------------------------------------------------------- ícones de magia (fundo de runa + símbolo)

@@ -123,8 +123,6 @@ describe('vocações', () => {
       putAt(sim, h, spot.x + dist, spot.y);
       h.brain.nextThinkAt = Infinity; // boneco de treino parado
       sim.setStandAttack(true);
-      // flechas de sobra na mochila (o paladino gasta as da mochila)
-      for (let i = 10; i < 20; i++) w.human.character.inventory[i] = { itemId: 'arrow', count: 100 };
       let dmg = 0;
       sim.events.on('damage', (e) => e.targetId === h.id && e.sourceId === w.human.id && (dmg += e.amount));
       sim.setTarget(h.id);
@@ -372,15 +370,15 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
     expect(attacked).toBe(false);
   });
 
-  it('o mercador compra flechas; "vender tudo" não vende a munição do arco equipado', () => {
+  it('flechas viraram loot: o mercador compra e "vender tudo" vende', () => {
     const shop = GAME_DATA.shops.general!;
     expect(shop.buys.some((o) => o.itemId === 'arrow')).toBe(true);
     const knight = makeSim('knight').world.player.character;
     knight.inventory[7] = { itemId: 'arrow', count: 20 };
-    expect(sellAllPreview(knight, shop, GAME_DATA).some((r) => r.itemId === 'arrow')).toBe(true);
+    expect(sellAllPreview(knight, shop).some((r) => r.itemId === 'arrow')).toBe(true);
     const paladin = makeSim('paladin').world.player.character;
     paladin.inventory[7] = { itemId: 'arrow', count: 20 };
-    expect(sellAllPreview(paladin, shop, GAME_DATA).some((r) => r.itemId === 'arrow')).toBe(false);
+    expect(sellAllPreview(paladin, shop).some((r) => r.itemId === 'arrow')).toBe(true);
   });
 });
 

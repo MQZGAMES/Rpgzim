@@ -14,7 +14,7 @@ const list: SpellDef[] = [
   {
     id: 'haste', name: 'Corrida', words: 'cursus', icon: 'spell_haste',
     description: 'Acelera seus passos por 8 segundos e desfaz qualquer lentidão em você.', vocations: ALL, minLevel: 3, minMagicLevel: 0,
-    manaCost: 40, cooldownMs: 18000, range: 0, target: 'self', effect: 'buff', element: 'ice',
+    manaCost: 40, cooldownMs: 8000, range: 0, target: 'self', effect: 'buff', element: 'ice',
     buff: { kind: 'haste', value: 1.4, durationMs: 8000 }, cancelSlow: true,
     vfx: { impact: 'fx_haste', sfx: 'buff', color: '#a6dcfa' },
   },
@@ -81,10 +81,10 @@ const list: SpellDef[] = [
   },
   {
     id: 'arrow_rain', name: 'Chuva de Flechas', words: 'imber sagittae', icon: 'spell_arrow_rain',
-    description: 'Dispara uma saraivada sobre o alvo e vizinhos (raio 1). Gasta 3 flechas.', vocations: ['paladin'], minLevel: 2, minMagicLevel: 0,
+    description: 'Dispara uma saraivada sobre o alvo e vizinhos (raio 1).', vocations: ['paladin'], minLevel: 2, minMagicLevel: 0,
     manaCost: 30, cooldownMs: 6000, range: 6, radius: 1, target: 'areaTarget', effect: 'damage', element: 'physical',
     formula: { kind: 'distance', levelFactor: 0.3, powerFactor: 0.6, base: 6, min: 0.8, max: 1.2 },
-    ammoCost: 3, requiresWeapon: 'distance',
+    requiresWeapon: 'distance',
     vfx: { projectile: 'proj_arrow', impact: 'hit', sfx: 'bow', color: '#d4d9e2' },
   },
   {
@@ -96,9 +96,9 @@ const list: SpellDef[] = [
   },
   {
     id: 'stunning_arrow', name: 'Flecha Atordoante', words: 'sagitta torpor', icon: 'spell_stunning_arrow',
-    description: 'Disparo que atinge e deixa o alvo lento por 3,5 s: mantenha a distância. Gasta 1 flecha.', vocations: ['paladin'], minLevel: 4, minMagicLevel: 0,
+    description: 'Disparo que atinge e deixa o alvo lento por 3,5 s: mantenha a distância.', vocations: ['paladin'], minLevel: 4, minMagicLevel: 0,
     manaCost: 25, cooldownMs: 5000, range: 6, target: 'target', effect: 'damage', element: 'ice',
-    ammoCost: 1, requiresWeapon: 'distance',
+    requiresWeapon: 'distance',
     formula: { kind: 'distance', levelFactor: 0.3, powerFactor: 0.6, base: 6, min: 0.85, max: 1.15 },
     slow: { factor: 0.4, durationMs: 3500 },
     vfx: { projectile: 'proj_arrow', impact: 'fx_ice', sfx: 'ice', color: '#a6dcfa' },

@@ -2,7 +2,7 @@
 // A calibração (tests/tools/calibrate.test.ts) mantém a margem de luta parecida em todas as faixas.
 import type { ItemDef, StatBonuses } from '../domain/entities/definitions';
 import type { Element } from '../domain/value-objects/element';
-import { ARROW_TIERS, GEAR_TIERS } from './gearTiers';
+import { GEAR_TIERS } from './gearTiers';
 
 const MAGES = ['sorcerer', 'druid'] as const;
 const FIGHTERS = ['knight', 'paladin'] as const;
@@ -30,7 +30,7 @@ function build(): ItemDef[] {
     // ---- armas
     add({ id: `sword_${t.id}`, name: `Espada de ${t.name}`, description: 'Lâmina feita para a linha de frente.', type: 'weapon', icon: `item_sword_${t.id}`, value: r(5400 * V), slot: 'mainHand', vocations: ['knight'], weapon: { kind: 'melee', skill: 'sword', attack: r(34 * A), range: 1, element: 'physical' } });
     add({ id: `axe_${t.id}`, name: `Machado de ${t.name}`, description: 'Duas mãos: golpes lentos e devastadores.', type: 'weapon', icon: `item_axe_${t.id}`, value: r(5700 * V), slot: 'mainHand', twoHanded: true, vocations: ['knight'], weapon: { kind: 'melee', skill: 'axe', attack: r(43 * A), range: 1, element: 'physical', attackIntervalMs: 1700 } });
-    add({ id: `bow_${t.id}`, name: `Arco de ${t.name}`, description: 'Arco de longo alcance. Gasta flechas da mochila.', type: 'weapon', icon: `item_bow_${t.id}`, value: r(5400 * V), slot: 'mainHand', twoHanded: true, vocations: ['paladin'], weapon: { kind: 'distance', skill: 'distance', attack: r(33 * A), range: 7, element: 'physical', ammo: 'arrow', projectile: 'proj_arrow' } });
+    add({ id: `bow_${t.id}`, name: `Arco de ${t.name}`, description: 'Arco de longo alcance.', type: 'weapon', icon: `item_bow_${t.id}`, value: r(5400 * V), slot: 'mainHand', twoHanded: true, vocations: ['paladin'], weapon: { kind: 'distance', skill: 'distance', attack: r(33 * A), range: 7, element: 'physical', projectile: 'proj_arrow' } });
     add({ id: `wand_${t.id}`, name: `Varinha de ${t.name}`, description: `Dispara ${wand === 'fire' ? 'fogo' : 'energia'} concentrada. Consome ${manaCost} de mana por disparo.`, type: 'weapon', icon: `item_wand_${t.id}`, value: r(5400 * V), slot: 'mainHand', vocations: ['sorcerer'], weapon: { kind: 'wand', skill: 'magic', attack: 0, range: 4, element: wand, damage: [r(42 * A), r(60 * A)], manaCost, projectile: PROJECTILE[wand] } });
     add({ id: `rod_${t.id}`, name: `Cajado de ${t.name}`, description: `Canaliza ${rod === 'earth' ? 'a terra' : 'o gelo'}. Consome ${manaCost} de mana por disparo.`, type: 'weapon', icon: `item_rod_${t.id}`, value: r(5400 * V), slot: 'mainHand', vocations: ['druid'], weapon: { kind: 'wand', skill: 'magic', attack: 0, range: 4, element: rod, damage: [r(42 * A), r(60 * A)], manaCost, projectile: PROJECTILE[rod] } });
     // ---- mão secundária
@@ -51,8 +51,6 @@ function build(): ItemDef[] {
     add({ id: `amulet_guard_${t.id}`, name: `Amuleto Guardião (${t.name})`, description: 'Proteção abençoada.', type: 'amulet', icon: `item_amulet_guard_${t.id}`, value: r(3600 * V), slot: 'amulet', armor: r(3 * R), bonuses: { maxHealth: r(80 * H) } });
     add({ id: `amulet_mage_${t.id}`, name: `Amuleto Arcano (${t.name})`, description: 'Pulsa com energia arcana.', type: 'amulet', icon: `item_amulet_mage_${t.id}`, value: r(4200 * V), slot: 'amulet', vocations: MAGES, bonuses: { maxMana: r(150 * H), magicLevel: 2 + Math.floor(k / 3) } });
   });
-  // ---- munição avançada
-  for (const a of ARROW_TIERS) out.push({ id: a.id, name: a.name, description: `Munição para arcos (+${a.attack} de ataque). Gasta antes das mais fracas.`, type: 'ammo', icon: `item_${a.id}`, value: a.value, stackable: true, maxStack: 100, ammoType: 'arrow', ammoAttack: a.attack });
   // ---- poções de alto nível
   out.push(
     { id: 'potion_health_spirit', name: 'Poção de Vida Espiritual', description: 'Restaura 560 pontos de vida.', type: 'potion', icon: 'item_potion_health_spirit', value: 520, stackable: true, maxStack: 50, use: { heal: 560, cooldownMs: 1000 } },

@@ -34,7 +34,7 @@ function bestGear(voc: VocationId, L: number): Partial<Record<EquipSlot, string>
   const def = (i: ItemDef) => (i.armor ?? 0) * 10 + (i.defense ?? 0) * 10 + (i.bonuses?.maxHealth ?? 0) + (i.bonuses?.maxMana ?? 0) * (voc === 'sorcerer' || voc === 'druid' ? 3 : 0.2) + (i.bonuses?.magicLevel ?? 0) * (voc === 'sorcerer' || voc === 'druid' ? 40 : 0) + (i.bonuses?.speed ?? 0) * 10 + Object.values(i.bonuses?.skills ?? {}).reduce((s, v) => s + (v ?? 0), 0) * 8;
   const g: Partial<Record<EquipSlot, string>> = {};
   if (voc === 'knight') g.mainHand = pick('mainHand', (i) => i.weapon!.attack, (i) => i.weapon?.kind === 'melee' && !i.twoHanded);
-  if (voc === 'paladin') g.mainHand = pick('mainHand', (i) => i.weapon!.attack, (i) => i.weapon?.kind === 'distance' && !!i.weapon.ammo);
+  if (voc === 'paladin') g.mainHand = pick('mainHand', (i) => i.weapon!.attack, (i) => i.weapon?.kind === 'distance' && !!i.twoHanded);
   if (voc === 'sorcerer' || voc === 'druid') g.mainHand = pick('mainHand', (i) => (i.weapon!.damage?.[0] ?? 0) + (i.weapon!.damage?.[1] ?? 0), (i) => i.weapon?.kind === 'wand');
   const twoHanded = !!(g.mainHand && D.items[g.mainHand]!.twoHanded);
   for (const slot of ['head', 'amulet', 'body', 'legs', 'ring', 'feet'] as EquipSlot[]) g[slot] = pick(slot, def);

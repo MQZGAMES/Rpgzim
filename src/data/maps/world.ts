@@ -6,10 +6,10 @@ import { MapBuilder, Terrain } from '../../game/world/MapBuilder';
 import { buildExpansion } from './expansion';
 import type { GameMap } from '../../game/world/GameMap';
 
-export const WORLD_W = 330;
+export const WORLD_W = 300;
 /** Início das Terras Altas (expansão leste, faixas 3 a 6). */
 const EAST = 104;
-export const WORLD_H = 200;
+export const WORLD_H = 128;
 /** Altura da área original (vila, bosque, pântano, ruínas e Terras Altas). */
 const BASE_H = 118;
 /** Linha da cerca sul da vila: acima dela fica a área original (vila + bosque). */
@@ -114,9 +114,6 @@ export function buildWorld(): GameMap {
   b.prop('planter', 44, 24).prop('planter', 50, 24);
   b.prop('barrel', 37, 25).prop('crate', 37, 26).prop('sack', 58, 26);
   b.prop('well', 24, 25);
-  // portal para as vilas da expansão leste
-  b.prop('brazier', 45, 32).prop('brazier', 49, 32).prop('pillar', 44, 32).prop('pillar', 50, 32);
-  b.npc('p_portal', 47, 32, 'down');
 
   // ------------------------------------------------------------------ casas exploráveis (sem troca de tela)
   b.building({ id: 'house_rosa', sideWindows: [{ side: 'l', y: 42 }], name: 'Casa da Dona Rosa', x: 26, y: 38, w: 8, h: 9, wall: 'plaster', interior: 'wood', floor: 'wood', roof: 'blue', doorX: 29, windows: [27, 31], interiorWindows: [31], chimneyX: 31 });

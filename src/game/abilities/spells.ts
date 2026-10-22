@@ -1,6 +1,5 @@
 // Conjuração de magias: valida requisitos, consome mana/munição, inicia cooldowns, treina Magic Level
 // e aplica o efeito pelas regras centrais. Os efeitos visuais são apenas consequência do evento spellCast.
-import { countAmmo, takeAmmo } from '../../domain/rules/ammo';
 import type { SpellDef } from '../../domain/entities/definitions';
 import { chebyshev, type TilePos } from '../../domain/value-objects/position';
 import { GLOBAL_SPELL, remaining, startCooldown } from '../../domain/rules/cooldowns';
@@ -34,7 +33,6 @@ export function castCheck(w: World, spell: SpellDef) {
     globalCooldownRemaining: remaining(p.cooldowns, GLOBAL_SPELL, w.now),
     inProtectionZone: isPz(w.map, p.x, p.y),
     target: t ? { exists: true, alive: t.kind === 'monster' ? t.alive : !t.dead, hostile: t.kind === 'monster' || !canAttackActor(w, p, t), distance: chebyshev(p, t), lineOfSight: hasLineOfSight(w, p, t) } : null,
-    ammoCount: countAmmo(w.data, c.inventory, 'arrow'),
     weaponKind: p.stats.weapon.kind,
   });
 }
@@ -90,11 +88,6 @@ export function castSpell(w: World, spellId: string): boolean {
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
   startCooldown(p.cooldowns, GLOBAL_SPELL, w.now, w.data.balance.combat.globalSpellCooldownMs);
   trainPlayerSkill(w, 'magic', spell.manaCost);
-  let ammoAtk = 0;
-  if (spell.ammoCost) {
-    ammoAtk = takeAmmo(w.data, c.inventory, 'arrow', spell.ammoCost).attack;
-    w.events.emit('itemsChanged', {});
-  }
   if (spell.cancelSlow) {
     p.slowUntil = 0;
     p.slowFactor = 1;
@@ -128,7 +121,7 @@ export function castSpell(w: World, spellId: string): boolean {
   if (spell.effect === 'damage' && spell.formula) {
     const power = spell.formula.kind === 'magic' ? p.stats.magicLevel : spell.formula.kind === 'distance' ? p.stats.skills.distance : p.stats.skills[p.stats.weapon.skill === 'magic' ? 'club' : p.stats.weapon.skill];
     const mod = spell.formula.kind === 'magic' ? voc.damage.magic : spell.formula.kind === 'distance' ? voc.damage.distance : voc.damage.melee;
-    const range = spellRange(spell.formula, { level: c.level, power, weaponAttack: p.stats.weapon.attack + ammoAtk }, mod);
+    const range = spellRange(spell.formula, { level: c.level, power, weaponAttack: p.stats.weapon.attack }, mod);
     for (const m of victims) {
       const raw = rollRange(range, w.rng);
       const res = mitigate(raw, spell.element, { armor: m.def.armor, resistances: m.def.resistances }, w.rng);

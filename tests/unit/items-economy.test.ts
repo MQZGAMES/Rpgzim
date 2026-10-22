@@ -3,7 +3,6 @@ import { GAME_DATA } from '../../src/data';
 import { createCharacter } from '../../src/domain/rules/character';
 import { addItem, canFit, countItem, freeSlots, removeItem } from '../../src/domain/rules/inventory';
 import { equipFromInventory, unequip } from '../../src/domain/rules/equipment';
-import { ammoBreakdown, takeAmmo } from '../../src/domain/rules/ammo';
 import { parseSave, toSaveFile } from '../../src/game/persistence/saveSchema';
 import { buy, sell } from '../../src/domain/rules/economy';
 import { computeStats } from '../../src/domain/rules/stats';
@@ -96,22 +95,11 @@ describe('equipamentos e atributos', () => {
     expect(countItem(c.inventory, 'shield_wood')).toBe(1);
     expect(unequip(D, c, 'offHand')).toMatchObject({ ok: false, reason: 'empty' });
   });
-  it('flechas ficam na mochila e são gastas das mais fortes para as mais fracas', () => {
+  it('o paladino começa sem flechas: o arco não gasta munição', () => {
     const c = char('paladin');
     expect(c.equipment).not.toHaveProperty('ammo');
-    expect(countItem(c.inventory, 'arrow')).toBe(80); // iniciais: flechas de pedra na mochila
-    addItem(D, c.inventory, 'arrow_metal', 5);
-    expect(ammoBreakdown(D, c.inventory, 'arrow').map((a) => [a.itemId, a.attack, a.count])).toEqual([['arrow_metal', 2, 5], ['arrow', 1, 80]]);
-    // 1 flecha (metal), depois 6: as 4 de metal que sobraram e 2 de pedra
-    expect(takeAmmo(D, c.inventory, 'arrow', 1)).toEqual({ used: 1, attack: 2 });
-    expect(takeAmmo(D, c.inventory, 'arrow', 6)).toEqual({ used: 6, attack: 2 });
-    expect(countItem(c.inventory, 'arrow_metal')).toBe(0);
-    expect(countItem(c.inventory, 'arrow')).toBe(78); // 4 de metal + 2 de pedra
-    expect(takeAmmo(D, c.inventory, 'arrow', 1).attack).toBe(1); // acabaram as de metal: +1
-    // sem munição: nada é gasto
-    const empty = char('paladin');
-    empty.inventory.fill(null);
-    expect(takeAmmo(D, empty.inventory, 'arrow', 3)).toEqual({ used: 0, attack: 0 });
+    expect(countItem(c.inventory, 'arrow')).toBe(0);
+    expect(D.items.bow_hunting!.weapon).not.toHaveProperty('ammo');
   });
   it('o save antigo com flechas equipadas no slot de munição as devolve para a mochila', () => {
     const c = char('paladin');
