@@ -39,7 +39,6 @@ import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
 import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
-import { updateSparring } from '../social/sparring';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroFollowTick, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
@@ -218,7 +217,6 @@ export class GameSimulation {
     this.updateWorldTimers();
     updateDoors(w);
     updateSocial(w);
-    updateSparring(w);
   }
 
   /** Um passo do ator em execução (`w.player`): movimento, combate, regeneração, interações. */

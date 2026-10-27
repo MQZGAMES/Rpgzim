@@ -27,7 +27,6 @@ import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inv
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
 import { sparMode } from '../social/social';
-import { inTraining } from '../social/sparring';
 import { acceptInvite, actorById, attackedRecently, canAttackActor, declineInvite, formationSpot, hasSkull, invite, isPzLocked, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
 export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
@@ -373,7 +372,6 @@ function valueFor(h: HeroEntity, def: ItemDef): number {
 
 /** Equipa o que estiver na mochila e for melhor (ex.: item achado que agora já pode usar). */
 function equipBagUpgrades(w: World, h: HeroEntity): void {
-  if (inTraining(w, h.id)) return; // em treino ele usa a arma fraca
   const c = h.character;
   for (let i = 0; i < c.inventory.length; i++) {
     const st = c.inventory[i];

@@ -231,7 +231,7 @@ export function PartyPanel() {
             ]}
           />
         </Section>
-        <Section title="Ataque entre membros" hint="Treino: os dois trocam a arma pela de treino (ou a mais fraca da mochila) e param de bater com 50% de vida até o outro se curar. Duelo: vale até morrer. Sem caveira e sem perder ouro.">
+        <Section title="Ataque entre membros" hint="Treino: cada um usa a arma que tem e todos param de bater com 50% de vida até o outro se curar. Duelo: vale até morrer. Sem caveira e sem perder ouro.">
           <Segmented
             value={!party.friendlyFire ? 'off' : party.sparMode}
             disabled={false}
@@ -239,7 +239,7 @@ export function PartyPanel() {
             onChange={(v) => session.configureParty(v === 'off' ? { friendlyFire: false } : { friendlyFire: true, sparMode: v })}
             options={[
               { v: 'off', label: 'Bloqueado', hint: 'Membros não se atacam' },
-              { v: 'training', label: 'Treino', hint: 'Param com 50% de vida; arma de treino' },
+              { v: 'training', label: 'Treino', hint: 'Param com 50% de vida' },
               { v: 'duel', label: 'Duelo', hint: 'Até morrer' },
             ]}
           />

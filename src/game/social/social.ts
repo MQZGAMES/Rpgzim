@@ -42,8 +42,6 @@ export interface SocialState {
   party: Party | null;
   /** Grupos só de heróis (sem jogador): formam-se e desfazem-se sozinhos. */
   heroParties: Party[];
-  /** Arma/escudo de cada membro antes do treino (voltam quando o treino acaba). */
-  sparGear: Map<string, { main: string; off: string | null }>;
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
@@ -60,7 +58,7 @@ export interface SocialState {
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, heroParties: [], sparGear: new Map(), invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
+  return { party: null, heroParties: [], invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
 }
 
 /** Hora usada pelas regras de PK: relógio real no jogo (a caveira vermelha de 24 h conta com o jogo fechado); nos testes, o tempo da simulação. */

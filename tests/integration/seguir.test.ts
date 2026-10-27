@@ -238,20 +238,18 @@ describe('treino e duelo no grupo', () => {
     asActor(w, h, () => sim.teleportPlayer(spot.x + 1, spot.y));
     h.brain.nextThinkAt = Infinity;
     partyUp(w, h);
-    const strong = w.human;
-    strong.character.level = 40;
-    strong.character.inventory[10] = { itemId: 'training_sword', count: 1 };
-    h.character.inventory[10] = { itemId: 'training_sword', count: 1 };
+    w.human.character.level = 40;
     configureParty(w, w.human.id, { friendlyFire: true, sparMode: mode });
     return { sim, w, h, spot };
   };
 
-  it('treino: troca para a arma de treino, ninguém passa de 50% de vida e a arma de antes volta quando acaba', () => {
+  it('treino: cada um mantém a própria arma e ninguém passa de 50% de vida', () => {
     const { sim, w, h } = setup('training');
-    const mainBefore = w.human.character.equipment.mainHand!.itemId;
+    const mainH = w.human.character.equipment.mainHand!.itemId;
+    const mainHero = h.character.equipment.mainHand!.itemId;
     advance(sim, 1500, 50);
-    expect(w.human.character.equipment.mainHand!.itemId).toBe('training_sword');
-    expect(h.character.equipment.mainHand!.itemId).toBe('training_sword');
+    expect(w.human.character.equipment.mainHand!.itemId).toBe(mainH); // sem trocas de arma
+    expect(h.character.equipment.mainHand!.itemId).toBe(mainHero);
     // um golpe enorme do colega nunca leva a vida abaixo de 50% (nem uma magia ou área)
     const src = actorSource(w.human);
     asActor(w, h, () => damagePlayer(w, 10000, 'fire', src, true));
@@ -269,13 +267,9 @@ describe('treino e duelo no grupo', () => {
     h.character.health = h.stats.maxHealth;
     asActor(w, h, () => damagePlayer(w, 30, 'fire', src, true));
     expect(h.character.health).toBeLessThan(h.stats.maxHealth); // acima de 50% o golpe volta a valer
-    // fim do treino: arma de antes de volta
-    configureParty(w, w.human.id, { friendlyFire: false });
-    advance(sim, 1500, 50);
-    expect(w.human.character.equipment.mainHand!.itemId).toBe(mainBefore);
   });
 
-  it('duelo: vale até morrer, sem trocar de arma e sem perder o saco', () => {
+  it('duelo: vale até morrer e sem perder o saco', () => {
     const { sim, w, h } = setup('duel');
     const main = w.human.character.equipment.mainHand!.itemId;
     advance(sim, 1500, 50);
