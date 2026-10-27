@@ -21,6 +21,7 @@ export function ShopPanel() {
   const session = useSession();
   const shop = useSnap((s) => s.shop);
   const gold = useSnap((s) => s.player.gold);
+  const bank = useSnap((s) => s.shop?.bankGold ?? 0);
   const eq = useSnap((s) => s.equipment);
   const [tab, setTab] = useState<'buy' | 'sell'>('buy');
   const [selId, setSelId] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export function ShopPanel() {
   const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned * o.price), 0);
   const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned), 0);
   const sel = list.find((o) => o.item.itemId === selId) ?? null;
-  const maxQty = sel ? (tab === 'buy' ? Math.max(1, Math.min(100, Math.floor(gold / Math.max(1, sel.price)))) : Math.max(1, sel.owned)) : 1;
+  const maxQty = sel ? (tab === 'buy' ? Math.max(1, Math.min(100, Math.floor((gold + bank) / Math.max(1, sel.price)))) : Math.max(1, sel.owned)) : 1;
   const q = Math.min(qty, maxQty);
   return (
     <Panel title={shop.name} onClose={() => session.closeShop()} icon="ui_coin" wide scroll={false} fill>
@@ -58,8 +59,13 @@ export function ShopPanel() {
             Vender tudo ({sellAllTotal})
           </PixelButton>
         )}
-        <span className="ml-auto flex items-center gap-1 text-gold-light" data-testid="shop-gold">
-          <ItemIcon icon="ui_coin" size={16} /> {gold}
+        <span className="ml-auto flex items-center gap-2 text-gold-light" data-testid="shop-gold" title="A compra gasta o ouro da mochila primeiro e completa com o do banco">
+          <span className="flex items-center gap-1" data-testid="shop-gold-bag">
+            <ItemIcon icon="ui_coin" size={16} /> {gold}
+          </span>
+          <span className="text-[11px] text-muted" data-testid="shop-gold-bank">
+            banco {bank}
+          </span>
         </span>
       </div>
       {/* corpo: lista (rola) + coluna de detalhes (rola) com a barra de compra sempre visível embaixo */}

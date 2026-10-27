@@ -5,7 +5,8 @@ import type { GameData } from '../entities/gameData';
 import { addItem, canFit, countItem, removeItem } from './inventory';
 
 export type TradeFailReason = 'notSold' | 'notBought' | 'notEnoughGold' | 'inventoryFull' | 'notEnoughItems' | 'invalidQuantity';
-export type TradeResult = { ok: true; total: number } | { ok: false; reason: TradeFailReason };
+/** `fromBank`: parte da compra paga com o ouro depositado no banco (o da mochila é gasto primeiro). */
+export type TradeResult = { ok: true; total: number; fromBank?: number } | { ok: false; reason: TradeFailReason };
 
 export const TRADE_FAIL_MESSAGE: Record<TradeFailReason, string> = {
   notSold: 'Esta loja não vende este item.',
@@ -21,11 +22,15 @@ export function buy(data: GameData, c: CharacterState, shop: ShopDef, itemId: st
   const offer = shop.sells.find((o) => o.itemId === itemId);
   if (!offer) return { ok: false, reason: 'notSold' };
   const total = offer.price * quantity;
-  if (c.gold < total) return { ok: false, reason: 'notEnoughGold' };
+  // o ouro da mochila paga primeiro; o que faltar sai do banco
+  if (c.gold + c.bankGold < total) return { ok: false, reason: 'notEnoughGold' };
   if (!canFit(data, c.inventory, itemId, quantity)) return { ok: false, reason: 'inventoryFull' };
-  c.gold -= total;
+  const fromBag = Math.min(c.gold, total);
+  const fromBank = total - fromBag;
+  c.gold -= fromBag;
+  c.bankGold -= fromBank;
   addItem(data, c.inventory, itemId, quantity);
-  return { ok: true, total };
+  return fromBank > 0 ? { ok: true, total, fromBank } : { ok: true, total };
 }
 
 export function sell(c: CharacterState, shop: ShopDef, itemId: string, quantity: number): TradeResult {

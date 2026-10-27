@@ -95,6 +95,30 @@ describe('equipamentos e atributos', () => {
     expect(countItem(c.inventory, 'shield_wood')).toBe(1);
     expect(unequip(D, c, 'offHand')).toMatchObject({ ok: false, reason: 'empty' });
   });
+  it('compra com o ouro da mochila primeiro e completa com o do banco', () => {
+    const shop = D.shops.equipment!;
+    const price = shop.sells.find((o) => o.itemId === 'shield_wood')!.price;
+    const c = char('knight');
+    c.gold = price; // só dá para 1 na mochila
+    c.bankGold = price * 2;
+    // 3 escudos: a mochila paga 1 e o banco 2
+    expect(buy(D, c, shop, 'shield_wood', 3)).toEqual({ ok: true, total: price * 3, fromBank: price * 2 });
+    expect(c.gold).toBe(0);
+    expect(c.bankGold).toBe(0);
+    // só da mochila: nada sai do banco
+    const d = char('knight');
+    d.gold = price * 5;
+    d.bankGold = 999;
+    expect(buy(D, d, shop, 'shield_wood', 2)).toEqual({ ok: true, total: price * 2 });
+    expect(d.gold).toBe(price * 3);
+    expect(d.bankGold).toBe(999);
+    // mochila + banco insuficientes: recusa sem mexer em nada
+    const e = char('knight');
+    e.gold = price - 1;
+    e.bankGold = 0;
+    expect(buy(D, e, shop, 'shield_wood', 1)).toMatchObject({ ok: false, reason: 'notEnoughGold' });
+    expect(e.gold).toBe(price - 1);
+  });
   it('o paladino começa sem flechas: o arco não gasta munição', () => {
     const c = char('paladin');
     expect(c.equipment).not.toHaveProperty('ammo');

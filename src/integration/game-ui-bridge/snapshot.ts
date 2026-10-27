@@ -127,6 +127,8 @@ export interface UiSnapshot {
   shop: {
     name: string;
     npcName: string;
+    /** Ouro da mochila e do banco: a compra gasta o da mochila primeiro e completa com o do banco. */
+    bankGold: number;
     sells: { item: ItemView; price: number; canAfford: boolean }[];
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
@@ -382,7 +384,8 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
         ? {
             name: shopDef.name,
             npcName: shopNpc.def.name,
-            sells: shopDef.sells.map((o) => ({ item: itemView(sim, { itemId: o.itemId, count: 1 }), price: o.price, canAfford: c.gold >= o.price })),
+            bankGold: c.bankGold,
+            sells: shopDef.sells.map((o) => ({ item: itemView(sim, { itemId: o.itemId, count: 1 }), price: o.price, canAfford: c.gold + c.bankGold >= o.price })),
             buys: shopDef.buys.map((o) => ({ item: itemView(sim, { itemId: o.itemId, count: 1 }), price: o.price, owned: countItem(c.inventory, o.itemId) })),
           }
         : null,

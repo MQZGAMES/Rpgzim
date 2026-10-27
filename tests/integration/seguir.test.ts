@@ -284,3 +284,27 @@ describe('treino e duelo no grupo', () => {
     expect([...w.lootBags.values()].some((b) => b.ownerId === h.id)).toBe(false); // duelo: sem perder a mochila
   });
 });
+
+describe('banco nas lojas', () => {
+  it('a loja mostra mochila e banco, compra gasta a mochila primeiro e o aviso diz quanto veio do banco', async () => {
+    const sim = makeSim('knight', { seed: 2 });
+    const w = sim.world;
+    const { buildSnapshot } = await import('../../src/integration/game-ui-bridge/snapshot');
+    const npc = [...w.npcs.values()].find((n) => n.def.shopId === 'equipment')!;
+    w.ui.shop = { shopId: 'equipment', npcId: npc.id };
+    const c = w.player.character;
+    c.inventory.fill(null);
+    const price = GAME_DATA.shops.equipment!.sells.find((o) => o.itemId === 'shield_wood')!.price;
+    c.gold = price;
+    c.bankGold = price * 2;
+    const msgs: string[] = [];
+    sim.events.on('message', (m) => msgs.push(m.text));
+    const snap = buildSnapshot(sim, 1).shop!;
+    expect(snap.bankGold).toBe(price * 2);
+    expect(snap.sells.find((o) => o.item.itemId === 'shield_wood')!.canAfford).toBe(true);
+    expect(sim.buy('shield_wood', 3)).toBe(true);
+    expect(c.gold).toBe(0);
+    expect(c.bankGold).toBe(0);
+    expect(msgs.some((m) => m.includes('saiu do banco'))).toBe(true);
+  });
+});

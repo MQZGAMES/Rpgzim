@@ -90,6 +90,8 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Grupos entre heróis**: se juntam e se desfazem sozinhos; o convite do jogador sempre vence. XP de grupo: +25% por vocação diferente.
 - **Heróis mais corajosos e preparados**: a coragem é aprendida (sobe a cada vitória, cai ao fugir ou morrer) e só fogem quando a régua diz que perdem mesmo bebendo as poções e a vida já caiu. O estoque de poções segue o consumo real dos últimos 12 minutos e cresce quando o grupo caça num lugar mais difícil.
 
+- **Banco nas lojas**: o ouro depositado no banco também paga compras. A loja mostra o ouro da mochila e o do banco; a compra gasta o da mochila primeiro e completa com o do banco (o aviso da compra diz quanto saiu do banco).
+
 ## Grupo, perseguição e itens no chão
 - **Grupo segue o líder**: quem está num grupo não escolhe vítimas de PK sozinho; ataca os monstros **e os personagens** que o líder ataca (se o PK estiver ligado) e solta o alvo quando o líder solta.
 - **Ataque entre membros** (painel do grupo, só o líder muda): **Bloqueado**, **Treino** ou **Duelo**. No *treino* cada um usa a arma que tem (sem trocas); nenhum golpe (básico, magia ou área) leva um colega abaixo de 50% de vida e o ataque espera ele se curar acima disso. No *duelo* vale até morrer. Nos dois: sem caveira, sem PZ lock e sem perder a mochila.

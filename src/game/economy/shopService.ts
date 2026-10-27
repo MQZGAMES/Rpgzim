@@ -17,8 +17,9 @@ export function buyItem(w: World, itemId: string, quantity: number): boolean {
     warnThrottled(w, `buy:${res.reason}`, TRADE_FAIL_MESSAGE[res.reason], 500);
     return false;
   }
-  message(w, `Comprou ${quantity}x ${w.data.items[itemId]?.name} por ${res.total} de ouro.`, 'loot');
-  w.events.emit('goldChanged', { amount: c.gold, delta: -res.total });
+  const bank = res.fromBank ? ` (${res.fromBank} saiu do banco)` : '';
+  message(w, `Comprou ${quantity}x ${w.data.items[itemId]?.name} por ${res.total} de ouro${bank}.`, 'loot');
+  w.events.emit('goldChanged', { amount: c.gold, delta: -(res.total - (res.fromBank ?? 0)) });
   w.events.emit('itemsChanged', {});
   w.events.emit('saveRequested', { reason: 'trade' });
   return true;
