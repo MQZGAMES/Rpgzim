@@ -469,8 +469,8 @@ export class GameSession {
     if (this.sim.unequip(slot)) this.audio.play('equip');
     this.dirty = true;
   }
-  discard(index: number): void {
-    this.sim.discard(index);
+  drop(index: number): void {
+    this.sim.drop(index);
     this.dirty = true;
   }
   dialogChoose(i: number): void {

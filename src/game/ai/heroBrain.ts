@@ -16,16 +16,17 @@ import type { World } from '../simulation/World';
 import { asActor } from '../simulation/World';
 import { isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
+import { trailStep } from '../movement/follow';
 import { isRanged, ROLES } from './heroRoles';
 import { stepAway } from '../movement/movement';
 import { alliesNear, xpPerMinute, assess, engagedOrJoining, fightMargin, monstersNear, RISKY_MARGIN, SAFE_MARGIN } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
-import { currentTarget, hasLineOfSight, respawnPlayer, setTarget } from '../combat/combat';
+import { currentActorTarget, currentTarget, hasLineOfSight, respawnPlayer, setTarget } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
 import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
-import { acceptInvite, actorById, attackedRecently, declineInvite, formationSpot, hasSkull, invite, isPzLocked, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
+import { acceptInvite, actorById, attackedRecently, canAttackActor, declineInvite, formationSpot, hasSkull, invite, isPzLocked, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
 export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
 
@@ -456,7 +457,12 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   survive(w, h);
   heroGroupLife(w, h);
   handleInvites(w, h);
-  if (b.mode !== 'retreat' && thinkPvp(w, h)) return;
+  // em grupo o herói segue a dinâmica do líder: não escolhe vítimas de PK sozinho (só ataca as do líder, ver follow)
+  // (no treino entre membros, friendlyFire, ele continua revidando)
+  const group = partyOf(w, h.id);
+  const solo = !group || group.friendlyFire;
+  if (b.mode === 'pk' && !solo) setMode(w, h, 'decide');
+  if (b.mode !== 'retreat' && solo && thinkPvp(w, h)) return;
   if (b.mode !== 'pk' && b.mode !== 'retreat' && b.mode !== 'town' && followingHuman(w, h) && b.mode !== 'follow') setMode(w, h, 'follow');
   whims(w, h);
   switch (b.mode) {
@@ -1628,6 +1634,14 @@ function follow(w: World, h: HeroEntity): void {
   heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
   // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
   if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
+  // PK segue o líder: ataca o personagem que o líder ataca (se o PK do mundo permitir) e solta a vítima quando ele para
+  const leaderFoe = actorById(w, leader.targetId);
+  if (leaderFoe && !leaderFoe.dead && !sameParty(w, h.id, leaderFoe.id) && !canAttackActor(w, h, leaderFoe)) {
+    if (h.targetId !== leaderFoe.id) setTarget(w, leaderFoe.id);
+    if (chebyshev(leaderFoe, h) <= 1 && hpPct(h) > 0.4) tryCast(w, h, 'brutal_strike');
+    return;
+  }
+  if (currentActorTarget(w)) setTarget(w, null);
   // não sai do grupo para caçar longe: larga o alvo que está longe do time
   keepWithGroup(w, h);
   const members = partyMembers(w, h);
@@ -1669,6 +1683,11 @@ function follow(w: World, h: HeroEntity): void {
   // está agora (refeita quando ele se afasta do destino), então o herói anda junto sem parar e recomeçar.
   const spot = formationSpot(w, h.id);
   const far = chebyshev(leader, h) > 15;
+  // seguir pela trilha do líder: passo contínuo, sem refazer rota (formação em fila usa o ponto dela)
+  if (!(spot && party.formation === 'line' && !far) && !isMoving(h, w.now) && !h.path?.length) {
+    const r = trailStep(w, h, isRanged(h.character.vocation) ? 3 : 2);
+    if (r !== 'none') return;
+  }
   const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: isRanged(h.character.vocation) ? 3 : 2 };
   walkToLeader(w, h, leader, goal, far);
 }

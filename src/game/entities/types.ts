@@ -55,6 +55,8 @@ export interface PlayerEntity extends Mover {
   path: TilePos[] | null;
   pathGoal: TilePos | null;
   chaseRecalcAt: number;
+  /** Rota em cache da perseguição ao alvo (o próximo passo sai sem esperar um recálculo). */
+  chasePath: { goal: TilePos; path: TilePos[] } | null;
   /** O jogador andou por conta própria (toque/joystick): não persegue o alvo até escolher um alvo de novo. */
   chasePaused: boolean;
   /** Último comando de movimento do jogador (a formação do grupo só puxa quem está parado). */
@@ -129,6 +131,8 @@ export interface LootContainer {
   gold: number;
   expiresAt: number;
   sourceName: string;
+  /** Itens jogados no chão por um personagem: não dividem com o grupo e o pegar-tudo automático ignora. */
+  dropped?: boolean;
 }
 
 export interface Corpse {

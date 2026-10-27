@@ -65,6 +65,7 @@ export function setTarget(w: World, id: string | null): void {
   if (p.targetId === id) return;
   p.targetId = id;
   p.chaseRecalcAt = 0;
+  p.chasePath = null;
   w.events.emit('targetChanged', { targetId: id });
 }
 

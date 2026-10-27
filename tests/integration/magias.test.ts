@@ -65,7 +65,7 @@ describe('Corrida', () => {
     p.slowUntil = sim.world.now + 5000;
     p.slowFactor = 0.4;
     expect(sim.castSpell('haste')).toBe(true);
-    expect(p.stats.speed).toBeGreaterThan(base + 1);
+    expect(p.stats.speed).toBeGreaterThan(base + 0.5); // Corrida dá +0,7
     expect(p.slowUntil).toBe(0); // a lentidão acabou
     advance(sim, 8200, 100);
     expect(p.stats.speed).toBeCloseTo(base, 5);

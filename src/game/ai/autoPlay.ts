@@ -1,7 +1,6 @@
 // Ajudas automáticas do jogador humano (úteis no celular): pegar o loot ao alcance e beber poção no limiar escolhido.
 // São opções do jogador (guardadas no aparelho); os heróis têm a própria IA e não passam por aqui.
-import { takeAllNearbyLoot } from '../inventory/inventoryService';
-import { useInventoryItem } from '../inventory/inventoryService';
+import { nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import type { World } from '../simulation/World';
 
 export interface AutoSettings {
@@ -51,5 +50,6 @@ export function updateAutoPlay(w: World): void {
       if (idx >= 0) useInventoryItem(w, idx);
     }
   }
-  if (a.autoLoot) takeAllNearbyLoot(w);
+  // pega o loot ao alcance (menos o que você mesmo jogou no chão)
+  if (a.autoLoot) for (const bag of nearbyLootBags(w)) if (!bag.dropped) takeLoot(w, bag.id, 'all');
 }

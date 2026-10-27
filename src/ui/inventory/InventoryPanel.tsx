@@ -216,18 +216,14 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
           <LockButton item={selected} />
           <PixelButton
             className="!border-[5px] px-2 text-[12px]"
+            title="Deixa o item no chão embaixo de você (um saco de loot); jogar mais itens no mesmo lugar soma no mesmo saco"
+            data-testid="drop-item"
             onClick={() => {
-              if (
-                window.confirm(
-                  `Descartar ${selected.name}${selected.count > 1 ? ` x${selected.count}` : ''}?`,
-                )
-              ) {
-                session.discard(sel.index);
-                setSel(null);
-              }
+              session.drop(sel.index);
+              setSel(null);
             }}
           >
-            Descartar
+            Jogar no chão
           </PixelButton>
         </>
       ) : sel?.from === 'slot' ? (

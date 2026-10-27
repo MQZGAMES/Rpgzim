@@ -31,14 +31,15 @@ import {
   updateRegion,
   updateUiDistance,
 } from '../interaction/interaction';
-import { discardItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
+import { dropItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
-import { PARTY_FAIL_MESSAGE, acceptInvite, actorById, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, partyOf, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
+import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
+import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
@@ -58,16 +59,6 @@ export interface SimulationOptions {
   clock?: () => number;
   /** Heróis com vida própria presentes no mundo (personagens não controlados pelo jogador). */
   heroes?: { hero: HeroDef; character: CharacterState }[];
-}
-
-/** Membro que segue o líder (formação seguir/fila) e ficou para trás: passo 20–35% mais rápido até alcançar. */
-function followCatchUp(w: World, p: PlayerEntity): number {
-  const party = partyOf(w, p.id);
-  if (!party || party.formation === 'free' || party.leaderId === p.id || p.targetId) return 1;
-  const leader = actorById(w, party.leaderId);
-  if (!leader || leader.dead) return 1;
-  const d = Math.max(Math.abs(leader.x - p.x), Math.abs(leader.y - p.y));
-  return d > 6 ? 1.35 : d > 2 ? 1.2 : 1;
 }
 
 export class GameSimulation {
@@ -102,6 +93,7 @@ export class GameSimulation {
       path: null,
       pathGoal: null,
       chaseRecalcAt: 0,
+      chasePath: null,
       chasePaused: false,
       lastMoveCommandAt: -Infinity,
       following: false,
@@ -246,7 +238,7 @@ export class GameSimulation {
     const p = w.player;
     if (p.dead || isMoving(p, w.now)) return;
     // lentidão (gelo) reduz o passo; "seguir o líder" acelera um pouco quem ficou para trás
-    const speed = p.stats.speed * followCatchUp(w, p) * (w.now < p.slowUntil ? p.slowFactor : 1);
+    const speed = actorSpeed(w, p);
     const dir = p.heldDir;
     if (dir) {
       p.path = null;
@@ -269,6 +261,9 @@ export class GameSimulation {
           p.pathGoal = null;
           p.following = false;
         }
+      } else if (trailStep(w, p, spot.tolerance) === 'moved') {
+        p.following = true; // anda pela trilha do líder: sem recalcular rota a cada passo
+        return;
       } else if (w.now >= p.chaseRecalcAt) {
         p.chaseRecalcAt = w.now + 250;
         const path = pathTo(w, p, spot, false, { stopWithin: spot.tolerance, maxNodes: 4000 });
@@ -302,14 +297,9 @@ export class GameSimulation {
     // perseguição automática do alvo quando fora de alcance (desligada no modo "atacar parado")
     const t = currentTarget(w) ?? currentActorTarget(w);
     const stand = p.character.flags.standAttack === true;
-    if (t && !stand && !p.chasePaused && !weaponCanReach(w, t) && !isPz(w.map, p.x, p.y) && w.now >= p.chaseRecalcAt) {
-      p.chaseRecalcAt = w.now + 350;
+    if (t && !stand && !p.chasePaused && !weaponCanReach(w, t)) {
       const stop = p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
-      const path = pathTo(w, p, { x: t.x, y: t.y }, false, { stopWithin: stop, maxNodes: 1500 });
-      if (path && path.length) {
-        const next = path[0]!;
-        tryStep(w, p, next.x - p.x, next.y - p.y, speed, false);
-      }
+      chaseStep(w, p, t, stop);
     }
   }
 
@@ -423,8 +413,9 @@ export class GameSimulation {
   unequip(slot: EquipSlot): boolean {
     return unequipSlot(this.world, slot);
   }
-  discard(index: number): void {
-    discardItem(this.world, index);
+  /** Joga o item no chão, embaixo do personagem (vira um saco de loot). */
+  drop(index: number): void {
+    dropItem(this.world, index);
   }
   /** Compacta a mochila sem alterar a ordem relativa dos itens. */
   organizeInventory(): void {

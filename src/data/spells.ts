@@ -15,7 +15,7 @@ const list: SpellDef[] = [
     id: 'haste', name: 'Corrida', words: 'cursus', icon: 'spell_haste',
     description: 'Acelera seus passos por 8 segundos e desfaz qualquer lentidão em você.', vocations: ALL, minLevel: 3, minMagicLevel: 0,
     manaCost: 40, cooldownMs: 8000, range: 0, target: 'self', effect: 'buff', element: 'ice',
-    buff: { kind: 'haste', value: 1.4, durationMs: 8000 }, cancelSlow: true,
+    buff: { kind: 'haste', value: 0.7, durationMs: 8000 }, cancelSlow: true,
     vfx: { impact: 'fx_haste', sfx: 'buff', color: '#a6dcfa' },
   },
   // ---------------------------------------------------------------- Sorcerer

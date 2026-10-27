@@ -5,7 +5,7 @@ import { EQUIP_FAIL_MESSAGE, equipFromInventory, unequip } from '../../domain/ru
 import { addItem, removeAt } from '../../domain/rules/inventory';
 import type { World } from '../simulation/World';
 import type { LootContainer } from '../entities/types';
-import { message, warnThrottled } from '../simulation/World';
+import { message, nextId, warnThrottled } from '../simulation/World';
 import { xpReceivers } from '../social/social';
 import type { PlayerEntity } from '../entities/types';
 import { refreshStats } from '../progression/progression';
@@ -149,7 +149,7 @@ export function takeLoot(w: World, containerId: string, which: number | 'all'): 
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
   if (!bag) return;
-  splitWithParty(w, bag, which);
+  if (!bag.dropped) splitWithParty(w, bag, which); // o que você mesmo jogou não é dividido
   if (bag.gold > 0 && (which === 'all' || which === -1)) {
     c.gold += bag.gold;
     w.events.emit('goldChanged', { amount: c.gold, delta: bag.gold });
@@ -194,11 +194,39 @@ export function takeNearbyGold(w: World): void {
   for (const bag of nearbyLootBags(w)) if (bag.gold > 0) takeLoot(w, bag.id, -1);
 }
 
-/** Descarta itens da mochila (somem — sem itens no chão no MVP). */
-export function discardItem(w: World, index: number): void {
-  const st = w.player.character.inventory[index];
-  if (!st) return;
-  removeAt(w.player.character.inventory, index, st.count);
-  message(w, `Descartado: ${w.data.items[st.itemId]?.name}.`, 'info');
+/**
+ * Joga o item da mochila no chão, embaixo do personagem: vira (ou entra em) um saco no mesmo tile; jogar mais
+ * itens no mesmo lugar vai somando no mesmo saco. Dá para pegar de volta pela janela de loot.
+ */
+export function dropItem(w: World, index: number): void {
+  const p = w.player;
+  const st = p.character.inventory[index];
+  if (!st || p.dead) return;
+  const def = w.data.items[st.itemId];
+  let bag = [...w.lootBags.values()].find((b) => b.dropped && b.x === p.x && b.y === p.y);
+  if (!bag) {
+    const id = nextId(w, 'loot');
+    bag = { id, x: p.x, y: p.y, items: [], gold: 0, expiresAt: w.now + w.data.balance.world.lootDecayMs, sourceName: 'Item no chão', dropped: true };
+    w.lootBags.set(id, bag);
+    w.events.emit('lootDropped', { containerId: id, position: { x: p.x, y: p.y } });
+  }
+  let left = st.count;
+  const max = def?.maxStack ?? 1;
+  for (const s of bag.items) {
+    if (s.itemId !== st.itemId || s.count >= max) continue;
+    const room = Math.min(left, max - s.count);
+    s.count += room;
+    left -= room;
+  }
+  while (left > 0) {
+    const n = Math.min(left, max);
+    bag.items.push({ itemId: st.itemId, count: n });
+    left -= n;
+  }
+  bag.expiresAt = w.now + w.data.balance.world.lootDecayMs;
+  removeAt(p.character.inventory, index, st.count);
+  message(w, `Jogado no chão: ${st.count > 1 ? `${st.count}x ` : ''}${def?.name ?? st.itemId}.`, 'info');
+  w.events.emit('lootChanged', { containerId: bag.id });
   w.events.emit('itemsChanged', {});
+  w.events.emit('saveRequested', { reason: 'equipment' });
 }
