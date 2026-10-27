@@ -2,6 +2,7 @@
 // retarget ao segurar o atalho, recargas de 2 s e flechas consumidas da mochila.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
+import { levelSpeedBonus } from '../../src/domain/rules/stats';
 import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
 import { chebyshev } from '../../src/domain/value-objects/position';
@@ -55,7 +56,7 @@ function levelUp(sim: GameSimulation, level = 20, magic = 12) {
 }
 
 describe('Corrida', () => {
-  it('é de todas as vocações, acelera 8 s e desfaz a lentidão', () => {
+  it('é de todas as vocações, acelera 30 s e desfaz a lentidão', () => {
     for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells).toContain('haste');
     const sim = makeSim('knight');
     clearMonsters(sim);
@@ -67,8 +68,9 @@ describe('Corrida', () => {
     expect(sim.castSpell('haste')).toBe(true);
     expect(p.stats.speed).toBeGreaterThan(base + 0.5); // Corrida dá +0,7
     expect(p.slowUntil).toBe(0); // a lentidão acabou
-    advance(sim, 8200, 100);
-    expect(p.stats.speed).toBeCloseTo(base, 5);
+    advance(sim, 30200, 100);
+    expect(p.stats.speed).toBeCloseTo(GAME_DATA.vocations[p.character.vocation].baseSpeed + levelSpeedBonus(p.character.level), 5);
+    void base;
   });
 });
 
@@ -242,9 +244,10 @@ describe('recargas e flechas', () => {
   it('o dano do arco vem do ataque da arma: arco melhor bate mais forte', () => {
     expect(GAME_DATA.items.bow_royal!.weapon!.attack).toBeGreaterThan(GAME_DATA.items.bow_hunting!.weapon!.attack);
   });
-  it('Corrida: a recarga é igual à duração (dá para renovar sem pausa)', () => {
+  it('Corrida: dura 30 s e a exaustão é de só 2 s (dá para renovar sempre)', () => {
     const s = GAME_DATA.spells.haste!;
-    expect(s.cooldownMs).toBe(s.buff!.durationMs);
+    expect(s.buff!.durationMs).toBe(30000);
+    expect(s.cooldownMs).toBe(2000);
   });
 });
 

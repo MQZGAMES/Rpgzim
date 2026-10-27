@@ -263,7 +263,7 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   await page.getByTestId('actor-invite').click();
   await expect(page.getByTestId('party-panel')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('party-formation-line').click();
-  await page.getByTestId('party-ff-on').click();
+  await page.getByTestId('party-ff-training').click();
   await page.getByRole('button', { name: 'Fechar' }).first().click();
   await expect(page.getByTestId('party-panel')).toHaveCount(0);
   // o resumo do grupo fica no botão "grupo" do HUD (sem quadro ocupando a tela)

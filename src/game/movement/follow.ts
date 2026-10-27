@@ -24,10 +24,10 @@ export function followCatchUp(w: World, p: PlayerEntity): number {
   const leader = actorById(w, party.leaderId);
   if (!leader || leader.dead) return 1;
   const d = chebyshev(leader, p);
-  if (d <= 2) return 1;
+  if (d <= 1) return 1;
   // o fôlego cobre a diferença de velocidade do líder (Corrida, nível) e mais um pouco; nunca passa de +60%
   const ratio = (leader.stats.speed * (leader.slowUntil > w.now ? leader.slowFactor : 1)) / Math.max(0.5, p.stats.speed);
-  const need = Math.max(1.2, ratio * 1.12);
+  const need = Math.max(d > 2 ? 1.2 : 1.1, ratio * 1.12);
   return Math.min(d > 6 ? 1.6 : 1.4, need);
 }
 

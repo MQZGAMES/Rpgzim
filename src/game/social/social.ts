@@ -21,8 +21,10 @@ export interface Party {
   formation: PartyFormation;
   /** Cada um ataca o inimigo mais próximo ou todos atacam o alvo do líder. */
   targeting: PartyTargeting;
-  /** Membros podem se atacar (treino), sem caveira nem perda de ouro. */
+  /** Membros podem se atacar (treino ou duelo), sem caveira nem perda de ouro. */
   friendlyFire: boolean;
+  /** Com o ataque entre membros liberado: treino (param com 50% de vida e esperam o outro se curar) ou duelo (até morrer). */
+  sparMode?: 'training' | 'duel';
   /** Últimas posições do líder (para a formação em fila). */
   trail: { x: number; y: number }[];
 }
@@ -40,6 +42,8 @@ export interface SocialState {
   party: Party | null;
   /** Grupos só de heróis (sem jogador): formam-se e desfazem-se sozinhos. */
   heroParties: Party[];
+  /** Arma/escudo de cada membro antes do treino (voltam quando o treino acaba). */
+  sparGear: Map<string, { main: string; off: string | null }>;
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
@@ -56,7 +60,7 @@ export interface SocialState {
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, heroParties: [], invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
+  return { party: null, heroParties: [], sparGear: new Map(), invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
 }
 
 /** Hora usada pelas regras de PK: relógio real no jogo (a caveira vermelha de 24 h conta com o jogo fechado); nos testes, o tempo da simulação. */
@@ -255,12 +259,21 @@ export function canAttackActor(w: World, attacker: PlayerEntity, victim: PlayerE
   return null;
 }
 
-/** Treino entre membros do grupo (ataque permitido, sem caveira e sem perda de ouro). */
+/** Ataque entre membros do grupo liberado (treino ou duelo): sem caveira e sem perda de ouro. */
 export function isSparring(w: World, a: string, b: string): boolean {
   return sameParty(w, a, b) && !!partyOf(w, a)?.friendlyFire;
 }
 
-export type PartySetting = { formation?: PartyFormation; targeting?: PartyTargeting; friendlyFire?: boolean };
+/** Modo do ataque entre dois membros: 'training' (nunca passam de 50% da vida um do outro), 'duel' (até morrer) ou null. */
+export function sparMode(w: World, a: string, b: string): 'training' | 'duel' | null {
+  if (!isSparring(w, a, b)) return null;
+  return partyOf(w, a)?.sparMode === 'duel' ? 'duel' : 'training';
+}
+
+/** Em treino o ataque para quando a vida do alvo chega a 50% (ele se cura e, acima disso, volta a apanhar). */
+export const TRAINING_HP_FLOOR = 0.5;
+
+export type PartySetting = { formation?: PartyFormation; targeting?: PartyTargeting; friendlyFire?: boolean; sparMode?: 'training' | 'duel' };
 /** Só o líder muda as regras do grupo. */
 export function configureParty(w: World, leaderId: string, patch: PartySetting): PartyFail | null {
   const p = partyOf(w, leaderId);
@@ -272,7 +285,9 @@ export function configureParty(w: World, leaderId: string, patch: PartySetting):
       ? `Formação: ${patch.formation === 'free' ? 'livre' : patch.formation === 'follow' ? 'todos seguem o líder' : 'em fila atrás do líder'}.`
       : patch.targeting !== undefined
         ? `Alvo do grupo: ${patch.targeting === 'leader' ? 'o mesmo do líder' : 'cada um o mais próximo'}.`
-        : `Ataque entre membros: ${patch.friendlyFire ? 'permitido (treino)' : 'bloqueado'}.`;
+        : patch.friendlyFire === false
+          ? 'Ataque entre membros: bloqueado.'
+          : `Ataque entre membros: ${patch.sparMode === 'duel' ? 'duelo (até morrer)' : 'treino (param com 50% de vida)'}.`;
   notify(w, txt);
   return null;
 }
@@ -311,7 +326,7 @@ export function formationSpot(w: World, memberId: string): { x: number; y: numbe
     const spot = p.trail[Math.min(p.trail.length - 1, (order + 1) * 2)] ?? leader;
     return { x: spot.x, y: spot.y, tolerance: 0 };
   }
-  return { x: leader.x, y: leader.y, tolerance: 2 };
+  return { x: leader.x, y: leader.y, tolerance: 1 }; // colado: ao lado do líder
 }
 
 /** Caveira ativa do personagem (ou null). */

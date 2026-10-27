@@ -91,9 +91,11 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Heróis mais corajosos e preparados**: a coragem é aprendida (sobe a cada vitória, cai ao fugir ou morrer) e só fogem quando a régua diz que perdem mesmo bebendo as poções e a vida já caiu. O estoque de poções segue o consumo real dos últimos 12 minutos e cresce quando o grupo caça num lugar mais difícil.
 
 ## Grupo, perseguição e itens no chão
-- **Grupo segue o líder**: quem está num grupo não escolhe vítimas de PK sozinho; ataca os monstros **e os personagens** que o líder ataca (se o PK estiver ligado) e solta o alvo quando o líder solta. No treino entre membros (ataque entre membros liberado) continua revidando.
-- **Seguir sem travar**: os seguidores andam pela **trilha do líder** (os tiles que ele pisou), sem refazer rota a cada passo. A perseguição de alvo guarda a rota e dá o próximo passo assim que o anterior termina (antes esperava 350 ms por passo e quem tinha Corrida não alcançava). A velocidade usada é a real (vocação, Corrida, lentidão) e o seguidor ganha um fôlego proporcional à velocidade do líder, no máximo +40% (+60% longe); se o líder for rápido demais, fica para trás e alcança quando ele parar. Código em `src/game/movement/follow.ts`.
-- **Corrida** dá +0,7 de velocidade (metade do que dava).
+- **Grupo segue o líder**: quem está num grupo não escolhe vítimas de PK sozinho; ataca os monstros **e os personagens** que o líder ataca (se o PK estiver ligado) e solta o alvo quando o líder solta.
+- **Ataque entre membros** (painel do grupo, só o líder muda): **Bloqueado**, **Treino** ou **Duelo**. No *treino* cada membro troca a arma pela de treino (ou pela mais fraca da mochila) e volta à de antes quando acaba; nenhum golpe (básico, magia ou área) leva um colega abaixo de 50% de vida e o ataque espera ele se curar acima disso. No *duelo* vale até morrer. Nos dois: sem caveira, sem PZ lock e sem perder a mochila.
+- **Velocidade por nível**: cada nível soma +0,0125 tiles/s (teto +1,0), então o nível 60 anda ~0,5 tiles/s mais que o 18 — dá para fugir com Corrida, mas não de graça.
+- **Corrida**: +0,7 de velocidade por **30 s** e exaustão de **2 s**. Os heróis que seguem o grupo ou perseguem um alvo mantêm a Corrida ativa e a renovam antes de acabar.
+- **Seguir colado**: os seguidores andam pela **trilha do líder** (os tiles que ele pisou) a cada passo da simulação — a distância média medida é ~1 tile, mesmo com o líder de Corrida. A perseguição de alvo guarda a rota e dá o próximo passo assim que o anterior termina. O seguidor ganha um fôlego proporcional à velocidade do líder (até +40%, +60% longe). Código em `src/game/movement/follow.ts`.
 - **Jogar no chão**: na mochila, *Jogar no chão* deixa o item embaixo do personagem como um saco de loot; jogar mais itens no mesmo tile soma no mesmo saco. O que você mesmo jogou não é dividido com o grupo nem recolhido pelo pegar-tudo automático.
 
 ## Os quatro heróis com vida própria

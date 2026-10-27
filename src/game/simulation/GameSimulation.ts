@@ -39,9 +39,10 @@ import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
 import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
 import { addHero } from '../ai/heroes';
+import { updateSparring } from '../social/sparring';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
-import { answerInviteNow, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
+import { answerInviteNow, heroFollowTick, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -209,6 +210,7 @@ export class GameSimulation {
     for (const h of w.heroes.values())
       asActor(w, h, () => {
         updateHeroBrain(w, h);
+        heroFollowTick(w, h);
         this.tickActor(step);
       });
     for (const m of w.monsters.values()) updateMonster(w, m);
@@ -216,6 +218,7 @@ export class GameSimulation {
     this.updateWorldTimers();
     updateDoors(w);
     updateSocial(w);
+    updateSparring(w);
   }
 
   /** Um passo do ator em execução (`w.player`): movimento, combate, regeneração, interações. */

@@ -16,7 +16,7 @@ import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { asActor, message, nextId, warnThrottled } from '../simulation/World';
-import { PVP_FAIL_MESSAGE, actorById, canAttackActor, isSparring, killCredit, onPlayerDeath, recordDamage, registerAggression, registerPlayerKill, skullOf, touchCombat, xpReceivers } from '../social/social';
+import { PVP_FAIL_MESSAGE, TRAINING_HP_FLOOR, actorById, canAttackActor, isSparring, sparMode, killCredit, onPlayerDeath, recordDamage, registerAggression, registerPlayerKill, skullOf, touchCombat, xpReceivers } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
 
 export function hasLineOfSight(w: World, a: { x: number; y: number }, b: { x: number; y: number }): boolean {
@@ -116,6 +116,8 @@ export function updatePlayerCombat(w: World): void {
     return;
   }
   if (isPz(w.map, p.x, p.y)) return;
+  // treino: não bate em quem está com 50% de vida ou menos (espera ele se curar)
+  if (target.kind === 'player' && sparMode(w, p.id, target.id) === 'training' && target.character.health <= target.stats.maxHealth * TRAINING_HP_FLOOR) return;
   if (w.now < p.nextAttackAt || !weaponCanReach(w, target)) return;
   performBasicAttack(w, target);
   p.nextAttackAt = w.now + p.stats.attackIntervalMs;
@@ -282,6 +284,11 @@ export function damagePlayer(w: World, raw: number, element: Element, source: Da
     const absorbed = Math.min(toHealth, p.character.mana);
     p.character.mana -= absorbed;
     toHealth -= absorbed;
+  }
+  // treino no grupo: o golpe de um colega nunca leva a vida abaixo de 50% (nem magia nem área)
+  if (source.kind === 'player' && toHealth > 0 && sparMode(w, source.id, p.id) === 'training') {
+    const floor = Math.ceil(p.stats.maxHealth * TRAINING_HP_FLOOR);
+    toHealth = Math.max(0, Math.min(toHealth, p.character.health - floor));
   }
   recordDamage(w, p.id, source.id, res.damage); // de quem veio o dano (decide quem matou)
   const manaLoss = res.damage - toHealth;

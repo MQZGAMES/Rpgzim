@@ -26,6 +26,8 @@ import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/int
 import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
+import { sparMode } from '../social/social';
+import { inTraining } from '../social/sparring';
 import { acceptInvite, actorById, attackedRecently, canAttackActor, declineInvite, formationSpot, hasSkull, invite, isPzLocked, isSparring, leaveParty, partyOf, pendingInviteFor, sameParty } from '../social/social';
 
 export type HeroMode = 'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
@@ -371,6 +373,7 @@ function valueFor(h: HeroEntity, def: ItemDef): number {
 
 /** Equipa o que estiver na mochila e for melhor (ex.: item achado que agora já pode usar). */
 function equipBagUpgrades(w: World, h: HeroEntity): void {
+  if (inTraining(w, h.id)) return; // em treino ele usa a arma fraca
   const c = h.character;
   for (let i = 0; i < c.inventory.length; i++) {
     const st = c.inventory[i];
@@ -757,6 +760,8 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   supportParty(w, h);
   const target = currentTarget(w);
   if (target) {
+    // alvo fora do alcance: persegue com Corrida ativa (renovando sempre que possível)
+    if (chebyshev(target, h) > Math.max(1, h.stats.weapon.range)) keepHaste(w, h);
     // golpes especiais quando vale a pena
     const adjacent = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
     if (!training || assisting) {
@@ -1533,6 +1538,24 @@ function heroGroupLife(w: World, h: HeroEntity): void {
   asActor(w, pick.o, () => answerInviteNow(w, pick.o));
 }
 
+/** Distância (tiles) que o seguidor mantém do líder: colado; quem luta de longe fica um tile mais atrás. */
+const followGap = (h: HeroEntity): number => (isRanged(h.character.vocation) ? 2 : 1);
+
+/** Mantém a Corrida ativa (renova antes de acabar) enquanto segue ou persegue: usa sempre que possível. */
+function keepHaste(w: World, h: HeroEntity): void {
+  const buff = h.buffs.find((b) => b.kind === 'haste');
+  if (buff && buff.expiresAt - w.now > 4000) return;
+  if (h.character.mana < h.stats.maxMana * 0.15) return;
+  tryCast(w, h, 'haste');
+}
+
+/** Passo contínuo de quem segue o líder (a cada passo da simulação, não só a cada pensamento de 300 ms). */
+export function heroFollowTick(w: World, h: HeroEntity): void {
+  if (h.brain.mode !== 'follow' || h.dead || isMoving(h, w.now) || h.path?.length) return;
+  if (currentTarget(w) || currentActorTarget(w)) return;
+  trailStep(w, h, followGap(h));
+}
+
 /** Líder do grupo do herói (jogador ou outro herói); null se não está num grupo ou ele mesmo é o líder. */
 function groupLeader(w: World, h: HeroEntity): PlayerEntity | null {
   const p = partyOf(w, h.id);
@@ -1634,6 +1657,7 @@ function follow(w: World, h: HeroEntity): void {
   heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
   // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
   if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
+  keepHaste(w, h); // seguindo: Corrida sempre ativa (depois de proteger o grupo)
   // PK segue o líder: ataca o personagem que o líder ataca (se o PK do mundo permitir) e solta a vítima quando ele para
   const leaderFoe = actorById(w, leader.targetId);
   if (leaderFoe && !leaderFoe.dead && !sameParty(w, h.id, leaderFoe.id) && !canAttackActor(w, h, leaderFoe)) {
@@ -1685,10 +1709,10 @@ function follow(w: World, h: HeroEntity): void {
   const far = chebyshev(leader, h) > 15;
   // seguir pela trilha do líder: passo contínuo, sem refazer rota (formação em fila usa o ponto dela)
   if (!(spot && party.formation === 'line' && !far) && !isMoving(h, w.now) && !h.path?.length) {
-    const r = trailStep(w, h, isRanged(h.character.vocation) ? 3 : 2);
+    const r = trailStep(w, h, followGap(h));
     if (r !== 'none') return;
   }
-  const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: isRanged(h.character.vocation) ? 3 : 2 };
+  const goal = spot && party.formation === 'line' && !far ? { x: spot.x, y: spot.y, near: 0 } : { x: leader.x, y: leader.y, near: followGap(h) };
   walkToLeader(w, h, leader, goal, far);
 }
 
@@ -1749,7 +1773,8 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   if (b.mode === 'pk') return false;
   // treino no grupo: revida quem o atacou, mas para antes de se machucar demais
   if (isSparring(w, h.id, human.id) && !human.dead && !h.dead && attackedRecently(w, human.id, h.id, 6000)) {
-    if (hpPct(h) > 0.3) {
+    // treino: o combate já para com 50% de vida de quem apanha; duelo: revida até o fim (mas bebe poção e se cura no caminho)
+    if (sparMode(w, h.id, human.id) === 'duel' || hpPct(h) > 0.5) {
       if (h.targetId !== human.id) setTarget(w, human.id);
       return h.targetId === human.id;
     }

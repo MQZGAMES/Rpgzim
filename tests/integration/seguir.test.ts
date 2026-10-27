@@ -2,13 +2,16 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
 import { createCharacter } from '../../src/domain/rules/character';
+import { computeStats } from '../../src/domain/rules/stats';
 import { chebyshev } from '../../src/domain/value-objects/position';
 import type { HeroEntity } from '../../src/game/entities/types';
 import { canEnter } from '../../src/game/movement/movement';
 import { acceptInvite, configureParty, invite } from '../../src/game/social/social';
+import { levelSpeedBonus } from '../../src/domain/rules/stats';
 import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { isPz } from '../../src/game/world/GameMap';
 import { asActor } from '../../src/game/simulation/World';
+import { actorSource, damagePlayer } from '../../src/game/combat/combat';
 import { advance, makeSim } from '../helpers';
 
 function withHero(id = 'boladex', seed = 31) {
@@ -50,16 +53,16 @@ describe('Corrida pela metade', () => {
   it('a Corrida dá +0,7 de velocidade (era +1,4) e continua renovável', () => {
     expect(GAME_DATA.spells.haste!.buff!.value).toBeCloseTo(0.7);
     const sim = makeSim('knight');
-    const base = sim.world.player.stats.speed;
-    sim.world.player.character.level = 10;
-    sim.world.player.character.mana = 999;
+    const p = sim.world.player;
+    p.character.level = 10;
+    p.character.mana = 999;
     expect(sim.castSpell('haste')).toBe(true);
-    expect(sim.world.player.stats.speed - base).toBeCloseTo(0.7);
+    expect(p.stats.speed - computeStats(GAME_DATA, p.character).speed).toBeCloseTo(0.7);
   });
 });
 
 describe('seguir o líder sem travar', () => {
-  it('o herói acompanha o jogador andando em linha reta: nunca fica a mais de 4 tiles depois de alcançar', () => {
+  it('o herói acompanha o jogador andando em linha reta: fica colado (no máximo 3 tiles depois de alcançar)', () => {
     const { sim, w, h } = withHero();
     const spot = runway(sim);
     sim.teleportPlayer(spot.x, spot.y);
@@ -74,7 +77,7 @@ describe('seguir o líder sem travar', () => {
       if (t > 2000) worst = Math.max(worst, chebyshev(w.human, h));
     }
     expect(w.human.x - spot.x).toBeGreaterThan(15); // o jogador andou de verdade
-    expect(worst).toBeLessThanOrEqual(4);
+    expect(worst).toBeLessThanOrEqual(3); // colado: ao lado ou a um tile
   });
 
   it('com Corrida ativa no líder, o seguidor ainda acompanha (fôlego proporcional) sem se perder', () => {
@@ -192,5 +195,98 @@ describe('jogar o item no chão', () => {
     advance(sim, 2000, 50);
     expect([...w.lootBags.values()].some((b) => b.dropped)).toBe(true);
     expect(w.player.character.inventory[0]).toBeNull();
+  });
+});
+
+describe('velocidade por nível e Corrida do seguidor', () => {
+  it('cada nível soma um pouco: o nível 60 é mais rápido que o 18, sem exagero e com teto', () => {
+    const gap = levelSpeedBonus(60) - levelSpeedBonus(18);
+    expect(gap).toBeGreaterThan(0.3);
+    expect(gap).toBeLessThan(0.7); // ~15% de diferença: dá para alcançar com a Corrida
+    expect(levelSpeedBonus(1)).toBe(0);
+    expect(levelSpeedBonus(100)).toBeLessThanOrEqual(1);
+    for (let l = 2; l <= 100; l++) expect(levelSpeedBonus(l)).toBeGreaterThanOrEqual(levelSpeedBonus(l - 1));
+    // a Corrida (+0,7) alcança quem não está de Corrida mesmo com 40 níveis a menos
+    expect(GAME_DATA.spells.haste!.buff!.value + levelSpeedBonus(18)).toBeGreaterThan(levelSpeedBonus(60));
+  });
+
+  it('o herói que segue em grupo usa e renova a Corrida sozinho', () => {
+    const { sim, w, h } = withHero();
+    const spot = runway(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    asActor(w, h, () => sim.teleportPlayer(spot.x - 2, spot.y));
+    h.character.level = 10;
+    h.character.mana = 500;
+    h.stats = { ...h.stats, maxMana: 500 };
+    partyUp(w, h);
+    h.brain.nextThinkAt = 0;
+    advance(sim, 3000, 50);
+    expect(h.buffs.some((b) => b.kind === 'haste')).toBe(true);
+    const first = h.buffs.find((b) => b.kind === 'haste')!.expiresAt;
+    advance(sim, 28000, 100);
+    const now = h.buffs.find((b) => b.kind === 'haste');
+    expect(now).toBeDefined(); // renovou antes de acabar
+    expect(now!.expiresAt).toBeGreaterThan(first);
+  });
+});
+
+describe('treino e duelo no grupo', () => {
+  const setup = (mode: 'training' | 'duel') => {
+    const { sim, w, h } = withHero('boladex', 15);
+    const spot = runway(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    asActor(w, h, () => sim.teleportPlayer(spot.x + 1, spot.y));
+    h.brain.nextThinkAt = Infinity;
+    partyUp(w, h);
+    const strong = w.human;
+    strong.character.level = 40;
+    strong.character.inventory[10] = { itemId: 'training_sword', count: 1 };
+    h.character.inventory[10] = { itemId: 'training_sword', count: 1 };
+    configureParty(w, w.human.id, { friendlyFire: true, sparMode: mode });
+    return { sim, w, h, spot };
+  };
+
+  it('treino: troca para a arma de treino, ninguém passa de 50% de vida e a arma de antes volta quando acaba', () => {
+    const { sim, w, h } = setup('training');
+    const mainBefore = w.human.character.equipment.mainHand!.itemId;
+    advance(sim, 1500, 50);
+    expect(w.human.character.equipment.mainHand!.itemId).toBe('training_sword');
+    expect(h.character.equipment.mainHand!.itemId).toBe('training_sword');
+    // um golpe enorme do colega nunca leva a vida abaixo de 50% (nem uma magia ou área)
+    const src = actorSource(w.human);
+    asActor(w, h, () => damagePlayer(w, 10000, 'fire', src, true));
+    expect(h.dead).toBe(false);
+    expect(h.character.health).toBe(Math.ceil(h.stats.maxHealth * 0.5));
+    asActor(w, h, () => damagePlayer(w, 10000, 'fire', src, true));
+    expect(h.character.health).toBe(Math.ceil(h.stats.maxHealth * 0.5)); // com 50% o colega não tira mais nada
+    // o ataque básico também espera: com o alvo em 50% o jogador não bate
+    sim.setStandAttack(true);
+    sim.setTarget(h.id);
+    advance(sim, 4000, 50);
+    expect(h.character.health).toBeGreaterThanOrEqual(Math.ceil(h.stats.maxHealth * 0.5)); // só a regeneração mexeu
+    expect(h.character.health).toBeLessThan(Math.ceil(h.stats.maxHealth * 0.5) + 10);
+    // ele se cura acima de 50% e o golpe volta a valer
+    h.character.health = h.stats.maxHealth;
+    asActor(w, h, () => damagePlayer(w, 30, 'fire', src, true));
+    expect(h.character.health).toBeLessThan(h.stats.maxHealth); // acima de 50% o golpe volta a valer
+    // fim do treino: arma de antes de volta
+    configureParty(w, w.human.id, { friendlyFire: false });
+    advance(sim, 1500, 50);
+    expect(w.human.character.equipment.mainHand!.itemId).toBe(mainBefore);
+  });
+
+  it('duelo: vale até morrer, sem trocar de arma e sem perder o saco', () => {
+    const { sim, w, h } = setup('duel');
+    const main = w.human.character.equipment.mainHand!.itemId;
+    advance(sim, 1500, 50);
+    expect(w.human.character.equipment.mainHand!.itemId).toBe(main);
+    sim.setStandAttack(true);
+    sim.setTarget(h.id);
+    for (let t = 0; t < 90000 && !h.dead; t += 200) {
+      h.invulnerableUntil = 0;
+      advance(sim, 200, 50);
+    }
+    expect(h.dead).toBe(true);
+    expect([...w.lootBags.values()].some((b) => b.ownerId === h.id)).toBe(false); // duelo: sem perder a mochila
   });
 });

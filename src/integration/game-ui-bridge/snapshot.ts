@@ -105,7 +105,7 @@ export interface UiSnapshot {
   buffs: { kind: string; remainingMs: number }[];
   target: { id: string; name: string; hp: number; maxHp: number; distance: number; inRange: boolean; isPlayer: boolean } | null;
   /** Grupo atual (se o jogador estiver em um). */
-  party: { leaderId: string; youAreLeader: boolean; formation: 'free' | 'follow' | 'line'; targeting: 'nearest' | 'leader'; friendlyFire: boolean; members: { id: string; name: string; vocation: string; level: number; hp: number; maxHp: number; isYou: boolean; isLeader: boolean; near: boolean; dead: boolean }[] } | null;
+  party: { leaderId: string; youAreLeader: boolean; formation: 'free' | 'follow' | 'line'; targeting: 'nearest' | 'leader'; friendlyFire: boolean; sparMode: 'training' | 'duel'; members: { id: string; name: string; vocation: string; level: number; hp: number; maxHp: number; isYou: boolean; isLeader: boolean; near: boolean; dead: boolean }[] } | null;
   /** Convite de grupo recebido e ainda válido. */
   invite: { fromId: string; fromName: string } | null;
   pvp: boolean;
@@ -262,6 +262,7 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
     formation: party.formation,
     targeting: party.targeting,
     friendlyFire: party.friendlyFire,
+    sparMode: party.sparMode === 'duel' ? 'duel' : 'training',
     members: party.members.flatMap((id) => {
       const a = actorById(w, id);
       if (!a) return [];

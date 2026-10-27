@@ -38,6 +38,11 @@ export function baseMaxHealth(data: GameData, c: CharacterState): number {
   return v.base.health + (c.level - 1) * v.perLevel.health;
 }
 
+/** Bônus de velocidade por nível: pequeno e com teto, para o nível 60 não ser uma fuga impossível para o nível 18. */
+export function levelSpeedBonus(level: number): number {
+  return Math.min(1, 0.0125 * Math.max(0, level - 1));
+}
+
 export function baseMaxMana(data: GameData, c: CharacterState): number {
   const v = data.vocations[c.vocation];
   return v.base.mana + (c.level - 1) * v.perLevel.mana;
@@ -53,7 +58,8 @@ export function computeStats(data: GameData, c: CharacterState, buffs: readonly 
   let maxMana = baseMaxMana(data, c);
   let armor = 0;
   let shieldDefense = 0;
-  let speed = voc.baseSpeed;
+  // cada nível soma um pouquinho de velocidade (+0,0125 tiles/s, até +1,0 no nível 81): quem tem muito mais nível alcança quem tem pouco
+  let speed = voc.baseSpeed + levelSpeedBonus(c.level);
   const skills = {} as Record<SkillId, number>;
   for (const s of SKILL_IDS) skills[s] = c.skills[s].level;
   let weapon: ResolvedWeapon = UNARMED;
