@@ -8,7 +8,12 @@ import { Panel, PixelButton } from '../common/primitives';
 
 type MiniState = ReturnType<GameSession['minimapState']>;
 
-const HERO_COLOR: Record<string, string> = { knight: '#c8483c', paladin: '#e8c95a', sorcerer: '#a17fe4', druid: '#71b84d' };
+const HERO_COLOR: Record<string, string> = {
+  knight: '#c8483c',
+  paladin: '#e8c95a',
+  sorcerer: '#a17fe4',
+  druid: '#71b84d',
+};
 
 const pct = (v: number, total: number) => `${((v + 0.5) / total) * 100}%`;
 
@@ -18,7 +23,8 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
   const [zoomed, setZoomed] = useState(true);
   const [layers, setLayers] = useState({ heroes: true, npcs: true });
   const scroller = useRef<HTMLDivElement>(null);
-  const down = useRef<{ x: number; y: number } | null>(null);
+  // arrasto: o mapa acompanha o dedo (ou o mouse); um toque sem arrasto é um clique para caminhar
+  const down = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
 
   // posições ao vivo (fora do snapshot, para não redesenhar o HUD inteiro a cada passo)
   useEffect(() => {
@@ -42,18 +48,48 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
     <Panel title="Mini mapa" icon="ui_map" onClose={onClose} wide scroll={false} fill>
       <div className="flex min-h-0 flex-1 flex-col gap-2" data-testid="minimap-panel">
         <div className="flex items-center gap-2 text-[12px] text-muted">
-          <span className="flex-1">Toque num lugar para ir até lá{zoomed ? '; arraste para olhar em volta' : ''}.</span>
-          <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => setZoomed(!zoomed)} data-testid="minimap-zoom">
+          <span className="flex-1">
+            Toque num lugar para ir até lá{zoomed ? '; arraste o mapa para olhar em volta' : ''}.
+          </span>
+          <PixelButton
+            className="!border-[6px] px-1 text-[11px]"
+            onClick={() => setZoomed(!zoomed)}
+            data-testid="minimap-zoom"
+          >
             {zoomed ? 'Mundo inteiro' : 'Aproximar'}
           </PixelButton>
         </div>
-        <div ref={scroller} className="frame-slot relative min-h-0 flex-1 overflow-auto !border-[6px]" style={{ touchAction: 'pan-x pan-y' }}>
+        <div
+          ref={scroller}
+          className="frame-slot relative min-h-0 flex-1 overflow-auto !border-[6px]"
+          style={{ touchAction: 'none' }}
+        >
           <div
-            className="relative cursor-crosshair"
-            style={zoomed ? { width: st.width * px, height: st.height * px } : { width: '100%', aspectRatio: `${st.width} / ${st.height}` }}
+            className="relative cursor-crosshair touch-none select-none"
+            style={
+              zoomed
+                ? { width: st.width * px, height: st.height * px }
+                : { width: '100%', aspectRatio: `${st.width} / ${st.height}` }
+            }
             // toque (sem arrasto para rolar) ou clique: caminha até o ponto — no pointerup, sem depender do click
             onPointerDown={(e) => {
-              down.current = { x: e.clientX, y: e.clientY };
+              e.currentTarget.setPointerCapture?.(e.pointerId);
+              down.current = {
+                x: e.clientX,
+                y: e.clientY,
+                left: scroller.current?.scrollLeft ?? 0,
+                top: scroller.current?.scrollTop ?? 0,
+                moved: false,
+              };
+            }}
+            onPointerMove={(e) => {
+              const d = down.current;
+              const el = scroller.current;
+              if (!d || !el) return;
+              if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) d.moved = true;
+              if (!d.moved) return;
+              el.scrollLeft = d.left - (e.clientX - d.x);
+              el.scrollTop = d.top - (e.clientY - d.y);
             }}
             onPointerCancel={() => {
               down.current = null;
@@ -61,7 +97,7 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
             onPointerUp={(e) => {
               const d = down.current;
               down.current = null;
-              if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+              if (!d || d.moved) return;
               const r = e.currentTarget.getBoundingClientRect();
               const x = Math.floor(((e.clientX - r.left) / r.width) * st.width);
               const y = Math.floor(((e.clientY - r.top) / r.height) * st.height);
@@ -69,7 +105,12 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
             }}
             data-testid="minimap-image"
           >
-            <img src={ASSETS.minimap.url} alt="Mapa do mundo" draggable={false} className="pixelated pointer-events-none absolute inset-0 h-full w-full" />
+            <img
+              src={ASSETS.minimap.url}
+              alt="Mapa do mundo"
+              draggable={false}
+              className="pixelated pointer-events-none absolute inset-0 h-full w-full"
+            />
             {st.regions.map((r) => (
               <span
                 key={r.name}
@@ -90,7 +131,7 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
               st.npcs.map((n) => (
                 <span
                   key={n.id}
-                  className='pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 border border-black bg-[#e8c95a]'
+                  className="pointer-events-none absolute h-[6px] w-[6px] -translate-x-1/2 -translate-y-1/2 border border-black bg-[#e8c95a]"
                   style={{ left: pct(n.x, st.width), top: pct(n.y, st.height) }}
                   title={n.name}
                 />
@@ -104,7 +145,13 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
                   title={`${m.name}${m.dead ? ' (morto)' : ''}`}
                   data-testid="minimap-hero"
                 >
-                  <span className="h-[9px] w-[9px] rounded-full border-2 border-white shadow" style={{ background: m.dead ? '#777' : HERO_COLOR[m.vocation] ?? '#38a8e0', outline: m.inParty ? '2px solid #7fd8ff' : undefined }} />
+                  <span
+                    className="h-[9px] w-[9px] rounded-full border-2 border-white shadow"
+                    style={{
+                      background: m.dead ? '#777' : (HERO_COLOR[m.vocation] ?? '#38a8e0'),
+                      outline: m.inParty ? '2px solid #7fd8ff' : undefined,
+                    }}
+                  />
                   <span className="text-outline mt-[1px] text-[9px] leading-none text-white">{m.name}</span>
                 </span>
               ))}
@@ -147,10 +194,19 @@ export function MinimapPanel({ onClose }: { onClose: () => void }) {
           <span className="flex items-center gap-1">
             <span className="h-2 w-2 rotate-45 border border-gold" /> destino
           </span>
-          <button type="button" className={layers.heroes ? 'text-parchment' : 'line-through'} onClick={() => setLayers({ ...layers, heroes: !layers.heroes })} data-testid="minimap-toggle-heroes">
+          <button
+            type="button"
+            className={layers.heroes ? 'text-parchment' : 'line-through'}
+            onClick={() => setLayers({ ...layers, heroes: !layers.heroes })}
+            data-testid="minimap-toggle-heroes"
+          >
             heróis
           </button>
-          <button type="button" className={layers.npcs ? 'text-parchment' : 'line-through'} onClick={() => setLayers({ ...layers, npcs: !layers.npcs })}>
+          <button
+            type="button"
+            className={layers.npcs ? 'text-parchment' : 'line-through'}
+            onClick={() => setLayers({ ...layers, npcs: !layers.npcs })}
+          >
             NPCs
           </button>
           <span className="flex items-center gap-1 text-[#ff5a4a]">✖ seu saco</span>

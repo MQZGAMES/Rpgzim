@@ -17,7 +17,15 @@ import type { GameMap } from '../world/GameMap';
 import type { HeroDef } from '../../domain/entities/definitions';
 import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
-import { currentActorTarget, currentTarget, cycleTarget, respawnPlayer, setTarget, updatePlayerCombat, weaponCanReach } from '../combat/combat';
+import {
+  currentActorTarget,
+  currentTarget,
+  cycleTarget,
+  respawnPlayer,
+  setTarget,
+  updatePlayerCombat,
+  weaponCanReach,
+} from '../combat/combat';
 import { castSpell, updateQueuedSpell } from '../abilities/spells';
 import { bankGold, depotDeposit, depotDepositAll, depotWithdraw } from '../economy/depotService';
 import { createMonster, findSpawnCell, updateMonster } from '../ai/monsterAi';
@@ -31,13 +39,38 @@ import {
   updateRegion,
   updateUiDistance,
 } from '../interaction/interaction';
-import { dropItem, equipItem, takeAllNearbyLoot, takeLoot, takeNearbyGold, unequipSlot, useInventoryItem, useItemById } from '../inventory/inventoryService';
+import {
+  dropItem,
+  equipItem,
+  takeAllNearbyLoot,
+  takeLoot,
+  takeNearbyGold,
+  unequipSlot,
+  useInventoryItem,
+  useItemById,
+} from '../inventory/inventoryService';
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
-import { PARTY_FAIL_MESSAGE, acceptInvite, configureParty, declineInvite, disbandParty, formationSpot, invite, kickFromParty, leaveParty, loadPk, newSocialState, passLeadership, savePk, updateSocial, type PartySetting } from '../social/social';
+import {
+  PARTY_FAIL_MESSAGE,
+  acceptInvite,
+  configureParty,
+  declineInvite,
+  disbandParty,
+  formationSpot,
+  invite,
+  kickFromParty,
+  leaveParty,
+  loadPk,
+  newSocialState,
+  passLeadership,
+  savePk,
+  updateSocial,
+  type PartySetting,
+} from '../social/social';
 import { addHero } from '../ai/heroes';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
@@ -61,6 +94,9 @@ export interface SimulationOptions {
   heroes?: { hero: HeroDef; character: CharacterState }[];
 }
 
+/** Depois de atacar, quem segue o líder fica caçando em paz por este tempo antes de voltar a segui-lo. */
+const FOLLOW_COMBAT_PAUSE_MS = 6000;
+
 export class GameSimulation {
   readonly world: World;
   private paused = false;
@@ -68,7 +104,15 @@ export class GameSimulation {
   constructor(opts: SimulationOptions) {
     const rng = opts.rng ?? createRng();
     const c = opts.character;
-    const ui: UiState = { dialog: null, shop: null, depot: null, lootId: null, regionId: null, buildingId: null, pending: null };
+    const ui: UiState = {
+      dialog: null,
+      shop: null,
+      depot: null,
+      lootId: null,
+      regionId: null,
+      buildingId: null,
+      pending: null,
+    };
     const events = new EventBus<GameEventMap>();
     const player: PlayerEntity = {
       id: PLAYER_ID,
@@ -142,7 +186,19 @@ export class GameSimulation {
     for (const n of w.map.npcs) {
       const def = w.data.npcs[n.npcId];
       if (!def) continue;
-      const npc: NpcEntity = { id: `npc:${n.npcId}`, kind: 'npc', def, x: n.x, y: n.y, homeX: n.x, homeY: n.y, facing: n.facing, move: null, moveEnd: 0, nextWanderAt: 2000 };
+      const npc: NpcEntity = {
+        id: `npc:${n.npcId}`,
+        kind: 'npc',
+        def,
+        x: n.x,
+        y: n.y,
+        homeX: n.x,
+        homeY: n.y,
+        facing: n.facing,
+        move: null,
+        moveEnd: 0,
+        nextWanderAt: 2000,
+      };
       w.npcs.set(npc.id, npc);
       placeOccupant(w, npc);
     }
@@ -247,13 +303,30 @@ export class GameSimulation {
       w.ui.pending = null;
       if (tryStep(w, p, dir.dx, dir.dy, speed, false)) return;
       // deslizar ao encostar na diagonal (sensação de controle mais suave)
-      if (dir.dx && dir.dy && (tryStep(w, p, dir.dx, 0, speed, false) || tryStep(w, p, 0, dir.dy, speed, false))) return;
+      if (
+        dir.dx &&
+        dir.dy &&
+        (tryStep(w, p, dir.dx, 0, speed, false) || tryStep(w, p, 0, dir.dy, speed, false))
+      )
+        return;
       p.facing = dir.dx ? (dir.dx < 0 ? 'left' : 'right') : dir.dy < 0 ? 'up' : 'down';
       return;
     }
     // em grupo com outro líder (formação seguir/fila), sem alvo e sem caminho escolhido por você: anda junto do líder.
     // O caminho é refeito a cada ~0,25 s enquanto anda (sem parar entre recálculos) e para perto dele.
-    if (p === w.human && !p.targetId && (!p.path?.length || p.following) && w.now - p.lastMoveCommandAt > 1200) {
+    // atacar cancela o seguir: o caminho do seguir é largado ao mirar uma criatura e só volta depois de ~6 s sem combate
+    if (p === w.human && p.following && (p.targetId || w.now - p.lastAttackAt < FOLLOW_COMBAT_PAUSE_MS)) {
+      p.path = null;
+      p.pathGoal = null;
+      p.following = false;
+    }
+    if (
+      p === w.human &&
+      !p.targetId &&
+      w.now - p.lastAttackAt >= FOLLOW_COMBAT_PAUSE_MS &&
+      (!p.path?.length || p.following) &&
+      w.now - p.lastMoveCommandAt > 1200
+    ) {
       const spot = formationSpot(w, p.id);
       if (!spot) p.following = false;
       else if (Math.max(Math.abs(spot.x - p.x), Math.abs(spot.y - p.y)) <= spot.tolerance) {
@@ -291,7 +364,9 @@ export class GameSimulation {
       const goal = p.pathGoal;
       // viagem longa (mini mapa) replaneja com mais fôlego; caminho curto, barato
       const far = goal ? Math.max(Math.abs(goal.x - p.x), Math.abs(goal.y - p.y)) > 30 : false;
-      p.path = goal ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: far ? 120000 : 2500 }) : null;
+      p.path = goal
+        ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: far ? 120000 : 2500 })
+        : null;
       if (!p.path) p.pathGoal = null;
       return;
     }
@@ -299,7 +374,9 @@ export class GameSimulation {
     const t = currentTarget(w) ?? currentActorTarget(w);
     const stand = p.character.flags.standAttack === true;
     if (t && !stand && !p.chasePaused && !weaponCanReach(w, t)) {
-      const stop = p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
+      // sem arma (só magias): para a uns 4 tiles do alvo, no alcance dos feitiços
+      const spellOnly = !p.character.equipment.mainHand && p.character.vocation !== 'knight';
+      const stop = spellOnly ? 4 : p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
       chaseStep(w, p, t, stop);
     }
   }
@@ -337,7 +414,11 @@ export class GameSimulation {
     for (const [id, bag] of w.lootBags)
       if (bag.expiresAt <= w.now) {
         w.lootBags.delete(id);
-        for (const a of allActors(w)) if (a.scope.ui.lootId === id) a.scope.ui.lootId = [...w.lootBags.values()].find((b) => Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) <= 1)?.id ?? null;
+        for (const a of allActors(w))
+          if (a.scope.ui.lootId === id)
+            a.scope.ui.lootId =
+              [...w.lootBags.values()].find((b) => Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) <= 1)
+                ?.id ?? null;
         w.events.emit('lootChanged', { containerId: id });
       }
   }
@@ -479,7 +560,11 @@ export class GameSimulation {
     const def = w.data.items[itemId];
     if (!def) return;
     setSellLock(w.player.character, itemId, locked);
-    message(w, locked ? `${def.name}: venda travada (não entra no "Vender tudo").` : `${def.name}: venda destravada.`, 'system');
+    message(
+      w,
+      locked ? `${def.name}: venda travada (não entra no "Vender tudo").` : `${def.name}: venda destravada.`,
+      'system',
+    );
     w.events.emit('itemsChanged', {});
     w.events.emit('saveRequested', { reason: 'lock' });
   }
@@ -542,14 +627,22 @@ export class GameSimulation {
     w.social.pvp = on;
     w.human.character.flags.pvp = on;
     if (!on) for (const a of allActors(w)) if (a.targetId && !w.monsters.has(a.targetId)) a.targetId = null;
-    message(w, on ? 'PK ativado: personagens podem se atacar fora das áreas protegidas.' : 'PK desativado.', on ? 'warning' : 'system');
+    message(
+      w,
+      on ? 'PK ativado: personagens podem se atacar fora das áreas protegidas.' : 'PK desativado.',
+      on ? 'warning' : 'system',
+    );
     w.events.emit('socialChanged', {});
   }
   /** Modo de ataque: parado (não persegue o alvo) ou seguindo o alvo. */
   setStandAttack(stand: boolean): void {
     const c = this.world.player.character;
     c.flags.standAttack = stand;
-    message(this.world, stand ? 'Modo de ataque: parado (não persegue o alvo).' : 'Modo de ataque: seguir o alvo.', 'system');
+    message(
+      this.world,
+      stand ? 'Modo de ataque: parado (não persegue o alvo).' : 'Modo de ataque: seguir o alvo.',
+      'system',
+    );
     this.world.events.emit('socialChanged', {});
   }
   /** Fala do herói tocado (o que ele está fazendo). */

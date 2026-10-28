@@ -21,7 +21,8 @@ describe('itens', () => {
       expect(iconFrames[item.icon], `ícone de ${id}`).toBeDefined();
       if (item.weapon) expect(item.slot).toBe('mainHand');
       if (item.use) expect(item.slot).toBeUndefined();
-      if (item.weapon?.projectile) expect(fxFrames.some((f) => f.startsWith(item.weapon!.projectile!))).toBe(true);
+      if (item.weapon?.projectile)
+        expect(fxFrames.some((f) => f.startsWith(item.weapon!.projectile!))).toBe(true);
     }
   });
 });
@@ -42,11 +43,18 @@ describe('magias', () => {
       expect(s.manaCost).toBeGreaterThan(0);
       expect(s.cooldownMs).toBeGreaterThan(0);
       expect(s.words.length).toBeGreaterThan(3);
-      if (s.effect !== 'buff') expect(s.formula, s.id).toBeDefined();
+      if (s.effect === 'conjure') {
+        // custo = 4 vezes o que a poção criada recupera
+        const use = D.items[s.conjure!.itemId]!.use!;
+        expect(s.manaCost, s.id).toBe(4 * (use.heal ?? use.mana ?? 0) * s.conjure!.count);
+      } else if (s.effect !== 'buff') expect(s.formula, s.id).toBeDefined();
       if (s.effect === 'buff') expect(s.buff, s.id).toBeDefined();
       if (s.target === 'target' || s.target === 'areaTarget') expect(s.range).toBeGreaterThan(0);
       if (s.target.startsWith('area')) expect(s.radius).toBeGreaterThan(0);
-      expect(fxFrames.some((f) => f.startsWith(s.vfx.impact)), `impacto ${s.vfx.impact}`).toBe(true);
+      expect(
+        fxFrames.some((f) => f.startsWith(s.vfx.impact)),
+        `impacto ${s.vfx.impact}`,
+      ).toBe(true);
       for (const v of s.vocations) expect(D.vocations[v].spells).toContain(s.id);
     }
   });
@@ -93,7 +101,8 @@ describe('monstros, NPCs, lojas e objetos', () => {
     for (const n of Object.values(D.npcs)) {
       expect(manifest.sheets[n.sprite as keyof typeof manifest.sheets]).toBeDefined();
       const ids = new Set(n.dialog.map((p) => p.id));
-      for (const p of n.dialog) for (const o of p.options) if (o.action === 'next') expect(ids.has(o.goto!)).toBe(true);
+      for (const p of n.dialog)
+        for (const o of p.options) if (o.action === 'next') expect(ids.has(o.goto!)).toBe(true);
       if (n.shopId) expect(D.shops[n.shopId]).toBeDefined();
     }
   });
@@ -110,6 +119,7 @@ describe('monstros, NPCs, lojas e objetos', () => {
   });
   it('todos os objetos de cenário apontam para quadros existentes', () => {
     const frames = objects.frames as Record<string, unknown>;
-    for (const p of Object.values(PROPS)) for (const f of p.frames) expect(frames[f], `${p.id}:${f}`).toBeDefined();
+    for (const p of Object.values(PROPS))
+      for (const f of p.frames) expect(frames[f], `${p.id}:${f}`).toBeDefined();
   });
 });

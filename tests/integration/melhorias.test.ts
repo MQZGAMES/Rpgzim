@@ -18,6 +18,8 @@ function withHero(vocation: 'knight' | 'paladin' | 'druid' | 'sorcerer' = 'knigh
   const sim = makeSim(vocation, { seed });
   const hero = GAME_DATA.heroes.boladex!;
   const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+  // o Knight só arrisca, lura e puxa criaturas com bastante poção na mochila
+  c.inventory[0] = { itemId: 'potion_health', count: 40 };
   const h = sim.addHero(hero, c);
   return { sim, h, w: sim.world };
 }

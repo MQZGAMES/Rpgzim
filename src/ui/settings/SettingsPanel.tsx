@@ -6,13 +6,36 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   return (
     <label className="flex items-center gap-3 py-1 text-[13px]">
       <span className="w-20 shrink-0">{label}</span>
-      <input type="range" min={0} max={100} value={Math.round(value * 100)} onChange={(e) => onChange(Number(e.target.value) / 100)} className="flex-1 accent-[#e0b03a]" />
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={Math.round(value * 100)}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        className="flex-1 accent-[#e0b03a]"
+      />
       <span className="w-9 text-right text-muted">{Math.round(value * 100)}</span>
     </label>
   );
 }
 
-export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShowFps, showLog, setShowLog }: { onClose: () => void; zoomBias: number; setZoomBias: (v: number) => void; showFps: boolean; setShowFps: (v: boolean) => void; showLog: boolean; setShowLog: (v: boolean) => void }) {
+export function SettingsPanel({
+  onClose,
+  zoomBias,
+  setZoomBias,
+  showFps,
+  setShowFps,
+  showLog,
+  setShowLog,
+}: {
+  onClose: () => void;
+  zoomBias: number;
+  setZoomBias: (v: number) => void;
+  showFps: boolean;
+  setShowFps: (v: boolean) => void;
+  showLog: boolean;
+  setShowLog: (v: boolean) => void;
+}) {
   const session = useSession();
   const audio = session.audio;
   const [s, setS] = useState(audio.getSettings());
@@ -27,7 +50,12 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
     <Panel title="Menu (pausado)" onClose={onClose} icon="ui_gear">
       <h3 className="mb-1 text-[13px] text-gold">Áudio</h3>
       <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input type="checkbox" checked={!s.muted} onChange={(e) => audio.setSettings({ muted: !e.target.checked })} className="h-5 w-5 accent-[#e0b03a]" />
+        <input
+          type="checkbox"
+          checked={!s.muted}
+          onChange={(e) => audio.setSettings({ muted: !e.target.checked })}
+          className="h-5 w-5 accent-[#e0b03a]"
+        />
         Som ativado
       </label>
       <Slider label="Geral" value={s.master} onChange={(v) => audio.setSettings({ master: v })} />
@@ -40,17 +68,32 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
           [0, 'Normal'],
           [1, 'Longe'],
         ].map(([v, l]) => (
-          <PixelButton key={l} variant={zoomBias === v ? 'gold' : 'stone'} onClick={() => setZoomBias(v as number)}>
+          <PixelButton
+            key={l}
+            variant={zoomBias === v ? 'gold' : 'stone'}
+            onClick={() => setZoomBias(v as number)}
+          >
             {l}
           </PixelButton>
         ))}
       </div>
       <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input type="checkbox" checked={showFps} onChange={(e) => setShowFps(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" />
+        <input
+          type="checkbox"
+          checked={showFps}
+          onChange={(e) => setShowFps(e.target.checked)}
+          className="h-5 w-5 accent-[#e0b03a]"
+        />
         Mostrar FPS
       </label>
       <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input type="checkbox" checked={showLog} onChange={(e) => setShowLog(e.target.checked)} className="h-5 w-5 accent-[#e0b03a]" data-testid="toggle-log" />
+        <input
+          type="checkbox"
+          checked={showLog}
+          onChange={(e) => setShowLog(e.target.checked)}
+          className="h-5 w-5 accent-[#e0b03a]"
+          data-testid="toggle-log"
+        />
         Mostrar mensagens do jogo
       </label>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Ajudas automáticas</h3>
@@ -64,7 +107,8 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
       </div>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Progresso</h3>
       <p className="text-[12px] text-muted">
-        O jogo salva automaticamente neste navegador (ao subir de nível, trocar equipamento, negociar e a cada 1 min).
+        O jogo salva automaticamente neste navegador (ao subir de nível, trocar equipamento, negociar e a cada
+        1 min).
         {lastSaved ? ` Último salvamento: ${new Date(lastSaved).toLocaleTimeString()}.` : ''}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
@@ -73,7 +117,9 @@ export function SettingsPanel({ onClose, zoomBias, setZoomBias, showFps, setShow
         </PixelButton>
         <PixelButton onClick={() => void session.exitToMenu()}>Salvar e sair</PixelButton>
       </div>
-      <p className="mt-3 text-[11px] text-muted" data-testid="settings-version">Versão do jogo: {__APP_VERSION__}</p>
+      <p className="mt-3 text-[11px] text-muted" data-testid="settings-version">
+        Versão do jogo: {__APP_VERSION__}
+      </p>
     </Panel>
   );
 }
@@ -88,17 +134,54 @@ function AutoOptions() {
   return (
     <div data-testid="auto-options">
       <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input type="checkbox" checked={a.autoLoot} onChange={(e) => set({ autoLoot: e.target.checked })} className="h-5 w-5 accent-[#e0b03a]" data-testid="auto-loot" />
+        <input
+          type="checkbox"
+          checked={a.autoLoot}
+          onChange={(e) => set({ autoLoot: e.target.checked })}
+          className="h-5 w-5 accent-[#e0b03a]"
+          data-testid="auto-loot"
+        />
         Pegar o loot ao alcance sozinho
       </label>
       <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input type="checkbox" checked={a.autoPotion} onChange={(e) => set({ autoPotion: e.target.checked })} className="h-5 w-5 accent-[#e0b03a]" data-testid="auto-potion" />
+        <input
+          type="checkbox"
+          checked={a.autoPotion}
+          onChange={(e) => set({ autoPotion: e.target.checked })}
+          className="h-5 w-5 accent-[#e0b03a]"
+          data-testid="auto-potion"
+        />
         Beber poção sozinho
       </label>
+      <label className="flex items-center gap-2 py-1 text-[13px]">
+        <input
+          type="checkbox"
+          checked={a.autoHeal}
+          onChange={(e) => set({ autoHeal: e.target.checked })}
+          className="h-5 w-5 accent-[#e0b03a]"
+          data-testid="auto-heal"
+        />
+        Curar sozinho com magia (Druida: Bênção da Seiva no grupo)
+      </label>
+      {a.autoHeal && (
+        <Slider
+          label="Curar abaixo de"
+          value={a.healBelow}
+          onChange={(v) => set({ healBelow: Math.max(0.1, Math.min(0.95, v)) })}
+        />
+      )}
       {a.autoPotion && (
         <>
-          <Slider label="Vida abaixo de" value={a.hpBelow} onChange={(v) => set({ hpBelow: Math.max(0.1, Math.min(0.9, v)) })} />
-          <Slider label="Mana abaixo de" value={a.manaBelow} onChange={(v) => set({ manaBelow: Math.min(0.9, v) })} />
+          <Slider
+            label="Vida abaixo de"
+            value={a.hpBelow}
+            onChange={(v) => set({ hpBelow: Math.max(0.1, Math.min(0.9, v)) })}
+          />
+          <Slider
+            label="Mana abaixo de"
+            value={a.manaBelow}
+            onChange={(v) => set({ manaBelow: Math.min(0.9, v) })}
+          />
           <div className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
             <span className="w-20 shrink-0">Poção</span>
             {(
@@ -108,7 +191,11 @@ function AutoOptions() {
                 ['large', 'Maior primeiro'],
               ] as const
             ).map(([v, l]) => (
-              <PixelButton key={v} variant={a.prefer === v ? 'gold' : 'stone'} onClick={() => set({ prefer: v })}>
+              <PixelButton
+                key={v}
+                variant={a.prefer === v ? 'gold' : 'stone'}
+                onClick={() => set({ prefer: v })}
+              >
                 {l}
               </PixelButton>
             ))}
@@ -142,7 +229,11 @@ export function HelpPanel({ onClose, touch }: { onClose: () => void; touch: bool
       {line('E / Enter', 'Interagir')}
       {line('I · C · K', 'Mochila · Personagem · Grimório')}
       {line('Esc', 'Fechar janelas / menu')}
-      {!touch && <p className="mt-2 text-[12px] text-muted">Dica: o ataque básico é automático enquanto o alvo estiver ao alcance da sua arma.</p>}
+      {!touch && (
+        <p className="mt-2 text-[12px] text-muted">
+          Dica: o ataque básico é automático enquanto o alvo estiver ao alcance da sua arma.
+        </p>
+      )}
     </Panel>
   );
 }

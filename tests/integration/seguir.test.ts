@@ -17,7 +17,13 @@ import { advance, makeSim } from '../helpers';
 function withHero(id = 'boladex', seed = 31) {
   const sim = makeSim('knight', { seed });
   const hero = GAME_DATA.heroes[id]!;
-  const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+  const c = createCharacter(GAME_DATA, {
+    id: hero.slotId,
+    name: hero.name,
+    vocation: hero.vocation,
+    now: 0,
+    position: sim.world.map.playerStart,
+  });
   const h = sim.addHero(hero, c) as HeroEntity;
   return { sim, w: sim.world, h };
 }
@@ -37,7 +43,11 @@ function runway(sim: GameSimulation): { x: number; y: number } {
         const x = s0.x + dx;
         const y = s0.y + dy;
         let ok = true;
-        for (let k = -3; k <= 34 && ok; k++) ok = canEnter(w, x + k, y, false, 'x') && !isPz(w.map, x + k, y) && !w.map.city[y * w.map.width + x + k];
+        for (let k = -3; k <= 34 && ok; k++)
+          ok =
+            canEnter(w, x + k, y, false, 'x') &&
+            !isPz(w.map, x + k, y) &&
+            !w.map.city[y * w.map.width + x + k];
         if (ok) return { x, y };
       }
   throw new Error('sem pista');
@@ -133,7 +143,16 @@ describe('PK do grupo segue o líder', () => {
     const { sim, w, h } = withHero('boladex', 12);
     const hero2 = GAME_DATA.heroes.maguim!;
     const spot = runway(sim);
-    const foe = sim.addHero(hero2, createCharacter(GAME_DATA, { id: hero2.slotId, name: hero2.name, vocation: hero2.vocation, now: 0, position: w.map.playerStart })) as HeroEntity;
+    const foe = sim.addHero(
+      hero2,
+      createCharacter(GAME_DATA, {
+        id: hero2.slotId,
+        name: hero2.name,
+        vocation: hero2.vocation,
+        now: 0,
+        position: w.map.playerStart,
+      }),
+    ) as HeroEntity;
     foe.brain.nextThinkAt = Infinity;
     sim.teleportPlayer(spot.x, spot.y);
     asActor(w, h, () => sim.teleportPlayer(spot.x - 1, spot.y));
@@ -306,5 +325,80 @@ describe('banco nas lojas', () => {
     expect(c.gold).toBe(0);
     expect(c.bankGold).toBe(0);
     expect(msgs.some((m) => m.includes('saiu do banco'))).toBe(true);
+  });
+});
+
+describe('modo lurar', () => {
+  it('o Knight do grupo puxa as criaturas da tela até o grupo (e quem ataca é o grupo todo)', () => {
+    const { sim, w, h } = withHero('boladex');
+    const start = runway(sim);
+    sim.teleportPlayer(start.x, start.y);
+    h.x = start.x + 2;
+    h.y = start.y;
+    partyUp(w, h);
+    expect(configureParty(w, w.human.id, { targeting: 'lure' })).toBeNull();
+    // duas criaturas fracas e paradas a uns 6 tiles do Knight
+    const mons = [...w.monsters.values()].slice(0, 2);
+    mons.forEach((m, i) => {
+      m.def = GAME_DATA.monsters.slime!;
+      m.hp = m.def.health;
+      m.alive = true;
+      m.state = 'idle';
+      m.targetId = null;
+      m.x = start.x + 8 + i;
+      m.y = start.y;
+    });
+    h.character.level = 20;
+    h.character.inventory[0] = { itemId: 'potion_health', count: 40 };
+    h.brain.nextThinkAt = 0;
+    h.brain.mode = 'follow';
+    let pulled = false;
+    for (let t = 0; t < 4000 && !pulled; t += 50) {
+      advance(sim, 50, 50);
+      pulled = mons.some((m) => m.targetId === h.id);
+    }
+    expect(pulled).toBe(true);
+    expect(w.social.party?.targeting).toBe('lure');
+  });
+
+  it('o tanque é o Knight e, sem Knight, o Paladin', async () => {
+    const { lureTankId } = await import('../../src/game/social/social');
+    const { w, h } = withHero('boladex');
+    partyUp(w, h);
+    expect(lureTankId(w, w.social.party!)).toBe(w.human.id); // o jogador (Knight) é o tanque
+    expect(h.character.vocation).toBe('knight');
+  });
+});
+
+describe('atacar cancela o seguir do jogador', () => {
+  it('ao mirar uma criatura o jogador larga o caminho do seguir e só volta a seguir depois de um tempo sem combate', () => {
+    const { sim, w, h } = withHero('boladex');
+    const start = runway(sim);
+    sim.teleportPlayer(start.x, start.y);
+    h.x = start.x + 20;
+    h.y = start.y;
+    invite(w, h.id, w.human.id); // o herói lidera
+    acceptInvite(w, w.human.id, h.id);
+    configureParty(w, h.id, { formation: 'follow' });
+    const p = w.human;
+    p.lastMoveCommandAt = -Infinity;
+    advance(sim, 600, 50);
+    expect(p.following).toBe(true);
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    m.hp = 1e6;
+    m.x = p.x + 3;
+    m.y = p.y;
+    p.targetId = m.id;
+    advance(sim, 700, 50);
+    expect(p.following).toBe(false);
+    expect(p.path?.length ?? 0).toBe(0);
+    // sem alvo e sem combate por 6 s: volta a seguir
+    p.targetId = null;
+    p.lastAttackAt = w.now;
+    advance(sim, 3000, 50);
+    expect(p.following).toBe(false);
+    advance(sim, 4500, 50);
+    expect(p.following).toBe(true);
   });
 });

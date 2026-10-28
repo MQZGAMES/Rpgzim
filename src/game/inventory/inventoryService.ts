@@ -72,7 +72,12 @@ export function equipItem(w: World, index: number): boolean {
   const name = w.data.items[w.player.character.inventory[index]?.itemId ?? '']?.name;
   const res = equipFromInventory(w.data, w.player.character, index);
   if (!res.ok) {
-    warnThrottled(w, `equip:${res.reason}`, res.reason === 'level' ? `Requer nível ${res.detail}.` : EQUIP_FAIL_MESSAGE[res.reason], 600);
+    warnThrottled(
+      w,
+      `equip:${res.reason}`,
+      res.reason === 'level' ? `Requer nível ${res.detail}.` : EQUIP_FAIL_MESSAGE[res.reason],
+      600,
+    );
     return false;
   }
   if (name) message(w, `Equipado: ${name}.`, 'info');
@@ -114,7 +119,8 @@ function splitWithParty(w: World, bag: LootContainer, which: number | 'all'): vo
   const share = (total: number) => Math.floor(total / n);
   const give = (m: PlayerEntity, itemId: string, count: number) => {
     const got = addItem(w.data, m.character.inventory, itemId, count);
-    if (got > 0 && m === w.human) message(w, `Dividido do grupo: ${got}x ${w.data.items[itemId]?.name ?? itemId}.`, 'loot');
+    if (got > 0 && m === w.human)
+      message(w, `Dividido do grupo: ${got}x ${w.data.items[itemId]?.name ?? itemId}.`, 'loot');
     if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
     return got;
   };
@@ -149,7 +155,8 @@ export function takeLoot(w: World, containerId: string, which: number | 'all'): 
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
   if (!bag) return;
-  if (!bag.dropped) splitWithParty(w, bag, which); // o que você mesmo jogou não é dividido
+  // o que você mesmo jogou e o saco de morte (que é de quem morreu) não são divididos com o grupo
+  if (!bag.dropped && !bag.ownerId) splitWithParty(w, bag, which);
   if (bag.gold > 0 && (which === 'all' || which === -1)) {
     c.gold += bag.gold;
     w.events.emit('goldChanged', { amount: c.gold, delta: bag.gold });
@@ -206,7 +213,16 @@ export function dropItem(w: World, index: number): void {
   let bag = [...w.lootBags.values()].find((b) => b.dropped && b.x === p.x && b.y === p.y);
   if (!bag) {
     const id = nextId(w, 'loot');
-    bag = { id, x: p.x, y: p.y, items: [], gold: 0, expiresAt: w.now + w.data.balance.world.lootDecayMs, sourceName: 'Item no chão', dropped: true };
+    bag = {
+      id,
+      x: p.x,
+      y: p.y,
+      items: [],
+      gold: 0,
+      expiresAt: w.now + w.data.balance.world.lootDecayMs,
+      sourceName: 'Item no chão',
+      dropped: true,
+    };
     w.lootBags.set(id, bag);
     w.events.emit('lootDropped', { containerId: id, position: { x: p.x, y: p.y } });
   }

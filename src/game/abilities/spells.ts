@@ -9,13 +9,27 @@ import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import type { PlayerEntity } from '../entities/types';
-import { allActors, asActor, warnThrottled } from '../simulation/World';
-import { actorSource, aggro, currentActorTarget, currentTarget, damageMonster, damagePlayer, hasLineOfSight, setTarget, targetNearest } from '../combat/combat';
+import { allActors, asActor, message, warnThrottled } from '../simulation/World';
+import {
+  actorSource,
+  aggro,
+  currentActorTarget,
+  currentTarget,
+  damageMonster,
+  damagePlayer,
+  hasLineOfSight,
+  setTarget,
+  targetNearest,
+} from '../combat/combat';
 import { actorById, canAttackActor, partyOf, registerAggression } from '../social/social';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
+import { addItem } from '../../domain/rules/inventory';
 
 export function spellCooldownRemaining(w: World, spellId: string): number {
-  return Math.max(remaining(w.player.cooldowns, `spell:${spellId}`, w.now), remaining(w.player.cooldowns, GLOBAL_SPELL, w.now));
+  return Math.max(
+    remaining(w.player.cooldowns, `spell:${spellId}`, w.now),
+    remaining(w.player.cooldowns, GLOBAL_SPELL, w.now),
+  );
 }
 
 /** Contexto de validação a partir do estado atual (também usado pela interface para mostrar disponibilidade). */
@@ -32,8 +46,18 @@ export function castCheck(w: World, spell: SpellDef) {
     cooldownRemaining: remaining(p.cooldowns, `spell:${spell.id}`, w.now),
     globalCooldownRemaining: remaining(p.cooldowns, GLOBAL_SPELL, w.now),
     inProtectionZone: isPz(w.map, p.x, p.y),
-    target: t ? { exists: true, alive: t.kind === 'monster' ? t.alive : !t.dead, hostile: t.kind === 'monster' || !canAttackActor(w, p, t), distance: chebyshev(p, t), lineOfSight: hasLineOfSight(w, p, t) } : null,
+    target: t
+      ? {
+          exists: true,
+          alive: t.kind === 'monster' ? t.alive : !t.dead,
+          hostile: t.kind === 'monster' || !canAttackActor(w, p, t),
+          distance: chebyshev(p, t),
+          lineOfSight: hasLineOfSight(w, p, t),
+        }
+      : null,
+    // sem arma nas mãos (perdeu tudo numa morte de caveira vermelha) as magias valem do mesmo jeito
     weaponKind: p.stats.weapon.kind,
+    unarmed: !c.equipment.mainHand,
   });
 }
 
@@ -83,6 +107,20 @@ export function castSpell(w: World, spellId: string): boolean {
   }
   const voc = w.data.vocations[c.vocation];
   p.queuedSpell = null;
+  if (spell.conjure) {
+    // magia de criação: precisa caber na mochila (senão não gasta a mana)
+    const made = addItem(w.data, c.inventory, spell.conjure.itemId, spell.conjure.count);
+    if (made < spell.conjure.count) {
+      warnThrottled(w, 'conjure:full', 'Mochila cheia: não há espaço para a poção.', 1500);
+      return false;
+    }
+    message(
+      w,
+      `${spell.name}: ${w.data.items[spell.conjure.itemId]?.name ?? spell.conjure.itemId} criada.`,
+      'loot',
+    );
+    w.events.emit('itemsChanged', {});
+  }
   // custo, cooldowns e treino de Magic Level (mana gasta)
   c.mana -= spell.manaCost;
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
@@ -113,15 +151,43 @@ export function castSpell(w: World, spellId: string): boolean {
   }
   const aim = target ?? actorTarget;
   if (aim && (spell.target === 'target' || spell.target === 'areaTarget')) {
-    p.facing = Math.abs(aim.x - p.x) >= Math.abs(aim.y - p.y) ? (aim.x < p.x ? 'left' : 'right') : aim.y < p.y ? 'up' : 'down';
+    p.facing =
+      Math.abs(aim.x - p.x) >= Math.abs(aim.y - p.y)
+        ? aim.x < p.x
+          ? 'left'
+          : 'right'
+        : aim.y < p.y
+          ? 'up'
+          : 'down';
   }
-  w.events.emit('spellCast', { casterId: p.id, spellId: spell.id, words: spell.words, from: { x: p.x, y: p.y }, targetId: aim?.id ?? null, tiles });
+  w.events.emit('spellCast', {
+    casterId: p.id,
+    spellId: spell.id,
+    words: spell.words,
+    from: { x: p.x, y: p.y },
+    targetId: aim?.id ?? null,
+    tiles,
+  });
 
   if (spell.effect === 'damage' && victims.length) p.lastAttackAt = w.now;
   if (spell.effect === 'damage' && spell.formula) {
-    const power = spell.formula.kind === 'magic' ? p.stats.magicLevel : spell.formula.kind === 'distance' ? p.stats.skills.distance : p.stats.skills[p.stats.weapon.skill === 'magic' ? 'club' : p.stats.weapon.skill];
-    const mod = spell.formula.kind === 'magic' ? voc.damage.magic : spell.formula.kind === 'distance' ? voc.damage.distance : voc.damage.melee;
-    const range = spellRange(spell.formula, { level: c.level, power, weaponAttack: p.stats.weapon.attack }, mod);
+    const power =
+      spell.formula.kind === 'magic'
+        ? p.stats.magicLevel
+        : spell.formula.kind === 'distance'
+          ? p.stats.skills.distance
+          : p.stats.skills[p.stats.weapon.skill === 'magic' ? 'club' : p.stats.weapon.skill];
+    const mod =
+      spell.formula.kind === 'magic'
+        ? voc.damage.magic
+        : spell.formula.kind === 'distance'
+          ? voc.damage.distance
+          : voc.damage.melee;
+    const range = spellRange(
+      spell.formula,
+      { level: c.level, power, weaponAttack: p.stats.weapon.attack },
+      mod,
+    );
     for (const m of victims) {
       const raw = rollRange(range, w.rng);
       const res = mitigate(raw, spell.element, { armor: m.def.armor, resistances: m.def.resistances }, w.rng);
@@ -136,7 +202,12 @@ export function castSpell(w: World, spellId: string): boolean {
     // PK: o personagem mirado e, em magias de área, todos os atacáveis dentro dela também são atingidos
     // (a lentidão da magia vale para jogadores e personagens humanos, como para as criaturas)
     const inArea = (a: PlayerEntity) => tiles.some((t) => t.x === a.x && t.y === a.y);
-    const hitActors = spell.target === 'target' ? (actorTarget && inArea(actorTarget) ? [actorTarget] : []) : allActors(w).filter((a) => a.id !== p.id && !a.dead && inArea(a));
+    const hitActors =
+      spell.target === 'target'
+        ? actorTarget && inArea(actorTarget)
+          ? [actorTarget]
+          : []
+        : allActors(w).filter((a) => a.id !== p.id && !a.dead && inArea(a));
     for (const a of hitActors) {
       if (canAttackActor(w, p, a)) continue;
       registerAggression(w, p.id, a.id);
@@ -149,11 +220,20 @@ export function castSpell(w: World, spellId: string): boolean {
       }
     }
   } else if (spell.effect === 'heal' && spell.formula) {
-    const range = spellRange(spell.formula, { level: c.level, power: p.stats.magicLevel, weaponAttack: 0 }, voc.damage.healing);
+    const range = spellRange(
+      spell.formula,
+      { level: c.level, power: p.stats.magicLevel, weaponAttack: 0 },
+      voc.damage.healing,
+    );
     const amount = rollRange(range, w.rng);
     const before = c.health;
     c.health = Math.min(p.stats.maxHealth, c.health + amount);
-    w.events.emit('heal', { targetId: p.id, amount: c.health - before, mana: false, position: { x: p.x, y: p.y } });
+    w.events.emit('heal', {
+      targetId: p.id,
+      amount: c.health - before,
+      mana: false,
+      position: { x: p.x, y: p.y },
+    });
     // em grupo: cura (e abençoa) os membros por perto
     if (spell.partyRadius) {
       for (const id of partyOf(w, p.id)?.members ?? []) {
@@ -164,12 +244,26 @@ export function castSpell(w: World, spellId: string): boolean {
         asActor(w, m, () => {
           const b0 = m.character.health;
           m.character.health = Math.min(m.stats.maxHealth, m.character.health + healed);
-          w.events.emit('heal', { targetId: m.id, amount: m.character.health - b0, mana: false, position: { x: m.x, y: m.y } });
+          w.events.emit('heal', {
+            targetId: m.id,
+            amount: m.character.health - b0,
+            mana: false,
+            position: { x: m.x, y: m.y },
+          });
           if (spell.buff) {
             m.buffs = m.buffs.filter((b) => b.kind !== spell.buff!.kind);
-            m.buffs.push({ kind: spell.buff.kind, value: spell.buff.value, expiresAt: w.now + spell.buff.durationMs, sourceSpell: spell.id });
+            m.buffs.push({
+              kind: spell.buff.kind,
+              value: spell.buff.value,
+              expiresAt: w.now + spell.buff.durationMs,
+              sourceSpell: spell.id,
+            });
             refreshStats(w);
-            w.events.emit('buffApplied', { targetId: m.id, kind: spell.buff.kind, durationMs: spell.buff.durationMs });
+            w.events.emit('buffApplied', {
+              targetId: m.id,
+              kind: spell.buff.kind,
+              durationMs: spell.buff.durationMs,
+            });
           }
         });
       }
@@ -177,9 +271,18 @@ export function castSpell(w: World, spellId: string): boolean {
   }
   if (spell.buff) {
     p.buffs = p.buffs.filter((b) => b.kind !== spell.buff!.kind);
-    p.buffs.push({ kind: spell.buff.kind, value: spell.buff.value, expiresAt: w.now + spell.buff.durationMs, sourceSpell: spell.id });
+    p.buffs.push({
+      kind: spell.buff.kind,
+      value: spell.buff.value,
+      expiresAt: w.now + spell.buff.durationMs,
+      sourceSpell: spell.id,
+    });
     refreshStats(w);
-    w.events.emit('buffApplied', { targetId: p.id, kind: spell.buff.kind, durationMs: spell.buff.durationMs });
+    w.events.emit('buffApplied', {
+      targetId: p.id,
+      kind: spell.buff.kind,
+      durationMs: spell.buff.durationMs,
+    });
   }
   return true;
 }

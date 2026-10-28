@@ -26,8 +26,16 @@ export interface CastContext {
   globalCooldownRemaining: number;
   inProtectionZone: boolean;
   /** Estado do alvo (para magias com alvo). */
-  target: { exists: boolean; alive: boolean; hostile: boolean; distance: number; lineOfSight: boolean } | null;
+  target: {
+    exists: boolean;
+    alive: boolean;
+    hostile: boolean;
+    distance: number;
+    lineOfSight: boolean;
+  } | null;
   weaponKind: 'melee' | 'distance' | 'wand';
+  /** Sem arma principal equipada: magias que pedem arma valem mesmo assim. */
+  unarmed?: boolean;
 }
 
 export type CastCheck = { ok: true } | { ok: false; reason: CastFailReason; detail?: string };
@@ -36,10 +44,12 @@ export function validateCast(spell: SpellDef, ctx: CastContext): CastCheck {
   if (ctx.dead) return { ok: false, reason: 'dead' };
   if (!spell.vocations.includes(ctx.vocation)) return { ok: false, reason: 'vocation' };
   if (ctx.level < spell.minLevel) return { ok: false, reason: 'level', detail: String(spell.minLevel) };
-  if (ctx.magicLevel < spell.minMagicLevel) return { ok: false, reason: 'magicLevel', detail: String(spell.minMagicLevel) };
+  if (ctx.magicLevel < spell.minMagicLevel)
+    return { ok: false, reason: 'magicLevel', detail: String(spell.minMagicLevel) };
   if (ctx.cooldownRemaining > 0 || ctx.globalCooldownRemaining > 0) return { ok: false, reason: 'cooldown' };
   if (ctx.mana < spell.manaCost) return { ok: false, reason: 'noMana' };
-  if (spell.requiresWeapon && spell.requiresWeapon !== ctx.weaponKind) return { ok: false, reason: 'weapon', detail: spell.requiresWeapon };
+  if (spell.requiresWeapon && !ctx.unarmed && spell.requiresWeapon !== ctx.weaponKind)
+    return { ok: false, reason: 'weapon', detail: spell.requiresWeapon };
   const offensive = spell.effect === 'damage';
   if (offensive && ctx.inProtectionZone) return { ok: false, reason: 'protectionZone' };
   if (spell.target === 'target' || spell.target === 'areaTarget') {

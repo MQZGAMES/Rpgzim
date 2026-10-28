@@ -109,7 +109,7 @@ export interface ItemDef {
 
 // ------------------------------------------------------------------ magias
 export type SpellTargetType = 'target' | 'self' | 'areaSelf' | 'areaTarget';
-export type SpellEffectType = 'damage' | 'heal' | 'buff';
+export type SpellEffectType = 'damage' | 'heal' | 'buff' | 'conjure';
 export type BuffKind = 'defense' | 'attackSpeed' | 'haste' | 'regen' | 'distanceDamage' | 'manaShield';
 
 export interface SpellFormula {
@@ -147,6 +147,8 @@ export interface SpellDef {
   buff?: { kind: BuffKind; value: number; durationMs: number };
   /** Efeito adicional aplicado aos alvos atingidos. */
   slow?: { factor: number; durationMs: number };
+  /** Magia de criação: coloca este item na mochila (custo = 4× o que a poção recupera). */
+  conjure?: { itemId: string; count: number };
   /** Cura/bênção também alcança os membros do grupo neste raio (tiles). */
   partyRadius?: number;
   /** O golpe em área também vira a atenção dos monstros atingidos para quem conjurou (isca). */
@@ -205,7 +207,15 @@ export interface MonsterDef {
   speed: number;
   armor: number;
   defense: number;
-  attack: { kind: 'melee' | 'ranged'; min: number; max: number; range: number; intervalMs: number; element: Element; projectile?: string };
+  attack: {
+    kind: 'melee' | 'ranged';
+    min: number;
+    max: number;
+    range: number;
+    intervalMs: number;
+    element: Element;
+    projectile?: string;
+  };
   resistances?: Partial<Record<Element, number>>;
   aggroRadius: number;
   leashRadius: number;
@@ -290,7 +300,14 @@ export interface BalanceConfig {
     /** O personagem precisa ter atacado neste intervalo (ms) para o Shielding treinar. */
     shieldingAttackWindowMs: number;
   };
-  player: { inventorySlots: number; depotSlots: number; regenTickMs: number; deathXpPenalty: number; deathSkillPenalty: number; respawnInvulnerableMs: number };
+  player: {
+    inventorySlots: number;
+    depotSlots: number;
+    regenTickMs: number;
+    deathXpPenalty: number;
+    deathSkillPenalty: number;
+    respawnInvulnerableMs: number;
+  };
   world: { lootDecayMs: number; corpseDecayMs: number; aiSleepDistance: number };
   /** Escada de força das criaturas (ver data/monsters.ts). */
   creatures: {
@@ -359,6 +376,8 @@ export type HeroLineKey =
   | 'revenge'
   | 'flee'
   | 'pkWish'
+  | 'lowPotions'
+  | 'lure'
   | 'recover';
 
 export interface HeroDef {

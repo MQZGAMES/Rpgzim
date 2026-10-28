@@ -20,7 +20,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0,
     baseSpeed: 3,
     attackIntervalMs: 1600,
-    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal', 'mana_shield', 'haste'],
+    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal', 'mana_shield', 'haste', 'conjure_mana'],
     startingEquipment: {
       mainHand: { itemId: 'wand_ember' },
       body: { itemId: 'robe_apprentice' },
@@ -49,7 +49,15 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0,
     baseSpeed: 3,
     attackIntervalMs: 1600,
-    spells: ['earth_thorn', 'frost_burst', 'sap_blessing', 'light_heal', 'mana_shield', 'haste'],
+    spells: [
+      'earth_thorn',
+      'frost_burst',
+      'sap_blessing',
+      'light_heal',
+      'mana_shield',
+      'haste',
+      'conjure_health',
+    ],
     startingEquipment: {
       mainHand: { itemId: 'rod_sprout' },
       body: { itemId: 'robe_druid' },

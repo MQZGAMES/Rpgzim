@@ -92,6 +92,24 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 - **Banco nas lojas**: o ouro depositado no banco também paga compras. A loja mostra o ouro da mochila e o do banco; a compra gasta o da mochila primeiro e completa com o do banco (o aviso da compra diz quanto saiu do banco).
 
+## Morte, recomeço e novos recursos
+- **Recomeçar depois da morte**: o herói renasce com o ouro do banco e refaz a vida — saca, repõe as poções, caça e compra equipamento aos poucos. Antes de comprar tudo de novo ele **avalia o saco de morte**: se dá conta das criaturas ao redor (com o que tem agora, magias incluídas), volta e recupera o loot (reavalia a cada 20 s, até 3 tentativas).
+- **Caveira vermelha**: quem morre assim perde também o equipamento; a primeira compra é uma **arma** (a melhor que o banco paga), depois poções e, com o tempo, o resto. Sem arma o herói **ataca com magias** (as magias que pedem arco ou arma valem mesmo sem arma nas mãos, e a régua de ameaça conta o dano dos feitiços).
+- **Poções acabando**: com 2 poções de vida e dinheiro (bolsa + loot + banco) ele avisa, corre à vila, vende o loot, compra e volta à caça — em vez de ficar entre as criaturas até morrer. Sem dinheiro, só luta o que é bem folgado e foge cedo. Fugir sem rota livre vira luta. "Cercado" só faz fugir quando a luta não é folgada; depois de fugir ele evita a área e as criaturas por alguns minutos.
+- **Menos tempo na vila**: chegar vivo com poções de sobra não obriga mais a passada pelo templo; Sorcerer e Druid sacam o ouro do estoque de mana de uma vez (uma ida em vez de uma a cada 3 min).
+- **Sem flechas no loot**: goblins e bandidos não dropam mais flechas (as antigas continuam vendáveis).
+- **Criar poção**: *Criar Poção de Mana* (Sorcerer, nível 18) e *Criar Poção de Vida* (Druid, nível 22) transformam mana em uma poção forte na mochila. Custo = 4× o que a poção recupera (560 de mana → Poção de Mana Forte de 140; 640 → Poção de Vida Forte de 160). Sem espaço na mochila a magia não gasta mana. Heróis usam quando o estoque está baixo e sobra mana.
+- **Mini mapa por toque**: arraste o mapa (dedo ou mouse) para olhar em volta; um toque sem arrasto continua levando o personagem até o ponto.
+- **Modo de ataque "Lurar"** (grupo → Alvo): o Knight (e, sem Knight, o Paladin) puxa as criaturas paradas da tela — quantas a régua aprova para o grupo todo — e volta para o meio do grupo, onde Paladin, Sorcerer e Druid atacam de longe. Só puxa com o time saudável e depois de terminar a leva anterior. Se o tanque é o jogador, os heróis atacam o que vier.
+- **Seguir não trava a luta**: quem segue o líder (herói ou jogador) larga o caminho de seguir ao lutar; o jogador só volta a seguir depois de 6 s sem combate.
+- **Caça na medida do grupo**: a escolha da caça dá nota ao XP pela régua e **penaliza o que sobra com folga** (nada de 4 personagens nível 40+ em slime ou lobo); com colegas por perto a margem sobe e o líder se arrisca em criaturas mais fortes.
+- **Knight com estoque**: sem bastante poção o Knight exige mais folga, não lura e não puxa criaturas dos colegas.
+- **Na PZ os personagens se atravessam** (templo, lojas, portas); fora dela continuam ocupando um tile cada.
+- **Líder na cidade**: cada herói do grupo aproveita para vender o loot, guardar o ouro e comprar poções/itens.
+- **Cura automática** (Ajustes): liga a cura por magia com barra de limite; o Druida usa a Bênção da Seiva quando você **ou um aliado do grupo** cai abaixo do limite.
+- **Grupo mais dinâmico**: em grupo os heróis se curam e bebem poção mais cedo, recuam para trás dos colegas em vez de apanhar até o fim, e Druid/Paladin lançam a magia de área no meio do bolo de criaturas.
+- **Saco de morte protegido**: heróis não pegam o saco de morte de outro personagem nem itens jogados no chão, e o saco de morte não é dividido com o grupo (antes, em grupo, parte do seu loot ia para os heróis).
+
 ## Grupo, perseguição e itens no chão
 - **Grupo segue o líder**: quem está num grupo não escolhe vítimas de PK sozinho; ataca os monstros **e os personagens** que o líder ataca (se o PK estiver ligado) e solta o alvo quando o líder solta.
 - **Ataque entre membros** (painel do grupo, só o líder muda): **Bloqueado**, **Treino** ou **Duelo**. No *treino* cada um usa a arma que tem (sem trocas); nenhum golpe (básico, magia ou área) leva um colega abaixo de 50% de vida e o ataque espera ele se curar acima disso. No *duelo* vale até morrer. Nos dois: sem caveira, sem PZ lock e sem perder a mochila.

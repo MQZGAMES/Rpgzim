@@ -44,7 +44,9 @@ function axe(head: Ramp, big = false) {
     diag(c, 3, 14, 10, P.wood[2]!);
     const cx = 11;
     const cy = 4;
-    c.ellipse(cx + 1, cy, big ? 4 : 3, big ? 5 : 4, (x, y, nx) => (x < cx - 1 ? 0 : nx < -0.1 ? head[4]! : nx < 0.4 ? head[3]! : head[2]!));
+    c.ellipse(cx + 1, cy, big ? 4 : 3, big ? 5 : 4, (x, y, nx) =>
+      x < cx - 1 ? 0 : nx < -0.1 ? head[4]! : nx < 0.4 ? head[3]! : head[2]!,
+    );
     c.set(cx - 2, cy - 1, head[2]!);
     c.set(cx - 2, cy, head[2]!);
     c.set(cx + (big ? 4 : 3), cy, head[5] ?? head[4]!);
@@ -56,12 +58,25 @@ function mace(head: Ramp, wooden = false) {
     diag(c, 2, 14, 9, wooden ? P.wood[3]! : P.leather[3]!);
     diag(c, 3, 14, 8, wooden ? P.wood[2]! : P.leather[2]!);
     if (wooden) {
-      c.ellipse(11, 4.5, 3.6, 3.6, (x, y, nx, ny) => (nx + ny < -0.4 ? P.wood[4]! : nx + ny < 0.5 ? P.wood[3]! : P.wood[2]!));
+      c.ellipse(11, 4.5, 3.6, 3.6, (x, y, nx, ny) =>
+        nx + ny < -0.4 ? P.wood[4]! : nx + ny < 0.5 ? P.wood[3]! : P.wood[2]!,
+      );
       c.set(10, 3, P.wood[1]!);
       c.set(12, 6, P.wood[1]!);
     } else {
-      c.disc(11, 4.5, 3.2, (x, y, nx, ny) => (nx + ny < -0.4 ? head[4]! : nx + ny < 0.5 ? head[3]! : head[2]!));
-      for (const [x, y] of [[11, 0], [15, 4], [11, 8], [7, 4], [14, 1], [8, 1], [14, 7]] as const) c.set(x, y, head[4]!);
+      c.disc(11, 4.5, 3.2, (x, y, nx, ny) =>
+        nx + ny < -0.4 ? head[4]! : nx + ny < 0.5 ? head[3]! : head[2]!,
+      );
+      for (const [x, y] of [
+        [11, 0],
+        [15, 4],
+        [11, 8],
+        [7, 4],
+        [14, 1],
+        [8, 1],
+        [14, 7],
+      ] as const)
+        c.set(x, y, head[4]!);
     }
   };
 }
@@ -154,13 +169,17 @@ function book(cover: Ramp) {
     c.vline(4, 1, 14, cover[3]!);
     c.rect(5, 13, 9, 2, P.bone[3]!);
     c.hline(5, 13, 14, P.bone[2]!);
-    for (const [x, y] of [[13, 1], [13, 12], [5, 1]] as const) c.set(x, y, P.gold[4]!);
+    for (const [x, y] of [
+      [13, 1],
+      [13, 12],
+      [5, 1],
+    ] as const)
+      c.set(x, y, P.gold[4]!);
     c.disc(9.5, 6.5, 2.2, P.gold[3]!);
     c.set(9, 6, P.arcane[3]!);
     c.set(10, 7, P.arcane[2]!);
   };
 }
-
 
 // ---------------------------------------------------------------- rampas e formas dos equipamentos avançados
 const rampOf = (...hex: string[]): Ramp => hex.map((h) => rgb(h));
@@ -226,7 +245,13 @@ function towerShield(face: Ramp, emblem: Ramp) {
     c.hline(3, 12, 1, face[4]!);
     c.vline(12, 1, 14, face[2]!);
     c.hline(3, 12, 14, face[1]!);
-    for (const [x, y] of [[4, 2], [11, 2], [4, 13], [11, 13]] as const) c.set(x, y, emblem[4]!);
+    for (const [x, y] of [
+      [4, 2],
+      [11, 2],
+      [4, 13],
+      [11, 13],
+    ] as const)
+      c.set(x, y, emblem[4]!);
     c.rect(7, 3, 2, 10, emblem[3]!);
     c.rect(5, 6, 6, 2, emblem[3]!);
   };
@@ -342,12 +367,15 @@ const HAT = [
 ];
 
 function shape(rows: string[], main: Ramp, accent: Ramp) {
-  return (c: PixelCanvas) => c.ascii(rows, { a: main[4] ?? main[3]!, b: main[3]!, c: main[2]!, g: accent[3]! });
+  return (c: PixelCanvas) =>
+    c.ascii(rows, { a: main[4] ?? main[3]!, b: main[3]!, c: main[2]!, g: accent[3]! });
 }
 
 function ring(gem: Ramp) {
   return (c: PixelCanvas) => {
-    c.ellipse(8, 10, 5, 4, (x, y, nx, ny) => (Math.hypot(nx, ny) < 0.55 ? 0 : ny < 0 ? P.gold[4]! : P.gold[2]!));
+    c.ellipse(8, 10, 5, 4, (x, y, nx, ny) =>
+      Math.hypot(nx, ny) < 0.55 ? 0 : ny < 0 ? P.gold[4]! : P.gold[2]!,
+    );
     c.disc(8, 5, 2.4, gem[2]!);
     c.set(7, 4, gem[4]!);
     c.set(8, 5, gem[3]!);
@@ -495,7 +523,14 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     (c) => {
       amulet(P.red)(c);
       // cruz branca no centro da gema: protege contra a perda
-      for (const [x, y] of [[8, 9], [8, 11], [7, 10], [9, 10], [8, 10]] as const) c.set(x, y, P.white);
+      for (const [x, y] of [
+        [8, 9],
+        [8, 11],
+        [7, 10],
+        [9, 10],
+        [8, 10],
+      ] as const)
+        c.set(x, y, P.white);
     },
   ],
   ['potion_health', potion(P.red)],
@@ -505,7 +540,9 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   [
     'slime_gel',
     (c) => {
-      c.ellipse(8, 10, 5.5, 4.2, (x, y, nx, ny) => (nx + ny < -0.5 ? P.nature[4]! : nx + ny < 0.5 ? P.nature[3]! : P.nature[2]!));
+      c.ellipse(8, 10, 5.5, 4.2, (x, y, nx, ny) =>
+        nx + ny < -0.5 ? P.nature[4]! : nx + ny < 0.5 ? P.nature[3]! : P.nature[2]!,
+      );
       c.ellipse(8, 6, 2.5, 2.5, P.nature[3]!);
       c.set(7, 5, P.white);
       c.set(5, 9, P.nature[4]!);
@@ -529,7 +566,13 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     'boar_hide',
     (c) => {
       c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x + y) % 4 === 0 ? P.leather[2]! : P.leather[3]!));
-      for (const [x, y] of [[1, 3], [14, 3], [2, 13], [13, 13]] as const) c.set(x, y, P.leather[3]!);
+      for (const [x, y] of [
+        [1, 3],
+        [14, 3],
+        [2, 13],
+        [13, 13],
+      ] as const)
+        c.set(x, y, P.leather[3]!);
       c.line(5, 5, 11, 5, P.leather[1]!);
       c.line(4, 8, 12, 8, P.leather[4]!);
     },
@@ -562,7 +605,13 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     'wolf_pelt',
     (c) => {
       c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x + y) % 4 === 0 ? P.cloth[2]! : P.cloth[3]!));
-      for (const [x, y] of [[1, 3], [14, 3], [2, 13], [13, 13]] as const) c.set(x, y, P.cloth[3]!);
+      for (const [x, y] of [
+        [1, 3],
+        [14, 3],
+        [2, 13],
+        [13, 13],
+      ] as const)
+        c.set(x, y, P.cloth[3]!);
       c.line(4, 6, 12, 6, P.cloth[4]!);
       c.line(5, 10, 11, 10, P.cloth[1]!);
     },
@@ -580,33 +629,136 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     (c) => {
       c.line(4, 12, 11, 5, P.bone[3]!);
       c.line(5, 12, 12, 5, P.bone[2]!);
-      for (const [x, y] of [[3, 12], [4, 13], [12, 4], [11, 3]] as const) c.disc(x, y, 1.5, P.bone[3]!);
+      for (const [x, y] of [
+        [3, 12],
+        [4, 13],
+        [12, 4],
+        [11, 3],
+      ] as const)
+        c.disc(x, y, 1.5, P.bone[3]!);
     },
   ],
   [
     'toad_venom',
     (c) => {
       c.rect(6, 2, 4, 3, P.wood[3]!);
-      c.ellipse(8, 10, 4, 4.5, (x, y, nx, ny) => (ny < -0.3 ? P.ice[3]! : nx + ny < 0 ? P.nature[4]! : P.nature[2]!));
+      c.ellipse(8, 10, 4, 4.5, (x, y, nx, ny) =>
+        ny < -0.3 ? P.ice[3]! : nx + ny < 0 ? P.nature[4]! : P.nature[2]!,
+      );
       c.set(6, 9, P.white);
       c.set(9, 12, P.forest[1]!);
     },
   ],
   // loot das criaturas das faixas 3 a 6
-  ['bandit_mask', (c) => { c.rect(2, 6, 12, 4, P.cloth[1]!); c.rect(4, 7, 3, 2, P.black); c.rect(9, 7, 3, 2, P.black); c.line(14, 7, 15, 11, P.cloth[2]!); c.hline(2, 13, 6, P.cloth[3]!); }],
-  ['bear_claw', (c) => { for (const x of [4, 8, 12]) { c.line(x, 13, x + 2, 4, P.bone[3]!); c.set(x + 2, 3, P.bone[2]!); } c.rect(2, 12, 13, 3, P.leather[2]!); }],
-  ['orc_tooth', (c) => { c.ellipse(8, 8, 3, 6, (x, y, nx) => (nx < 0 ? P.bone[3]! : P.bone[2]!)); c.set(7, 4, P.white); c.hline(6, 10, 13, P.leather[2]!); }],
-  ['scorpion_stinger', (c) => { c.line(3, 13, 9, 7, P.dirt[3]!); c.line(4, 13, 10, 7, P.dirt[2]!); c.disc(11, 5, 2.4, P.dirt[4]!); c.set(13, 3, P.red[4]!); c.set(14, 2, P.red[3]!); }],
-  ['shaman_totem', (c) => { c.rect(6, 3, 4, 11, P.wood[3]!); c.rect(5, 4, 6, 3, P.red[3]!); c.set(6, 5, P.black); c.set(9, 5, P.black); c.rect(5, 9, 6, 2, P.bone[3]!); c.set(4, 2, P.gold[4]!); c.set(11, 2, P.gold[4]!); }],
-  ['ice_fang', (c) => { for (let i = 0; i < 10; i++) { const w2 = Math.max(0, 3 - Math.floor(i / 3)); c.hline(8 - w2, 8 + w2, 3 + i, i % 3 ? P.ice[3]! : P.ice[4]!); } c.set(7, 4, P.white); }],
-  ['dark_emblem', (c) => { c.disc(8, 8, 6, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.75 ? P.gold[3]! : P.purple[1]!)); c.disc(8, 8, 2.5, P.red[3]!); c.set(7, 7, P.red[4]!); }],
-  ['troll_hide', (c) => { c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x * 3 + y) % 5 === 0 ? P.teal[1]! : P.teal[2]!)); for (const [x, y] of [[1, 3], [14, 3], [2, 13], [13, 13]] as const) c.set(x, y, P.teal[2]!); c.line(4, 6, 12, 6, P.teal[3]!); }],
-  ['lich_dust', (c) => { c.rect(5, 3, 6, 2, P.wood[3]!); c.ellipse(8, 10, 5, 5, (x, y, nx, ny) => (ny < -0.4 ? P.ice[3]! : (x + y) % 3 ? P.purple[3]! : P.purple[4]!)); c.set(6, 8, P.white); }],
-  ['dragon_scale', (c) => { for (let y = 2; y < 15; y++) { const w2 = Math.round(Math.sin(((y - 2) / 12) * Math.PI) * 6); c.hline(8 - w2, 8 + w2, y, y < 7 ? P.red[4]! : y < 11 ? P.red[3]! : P.red[2]!); } c.line(8, 3, 8, 13, P.red[1]!); c.set(6, 5, P.gold[4]!); }],
+  [
+    'bandit_mask',
+    (c) => {
+      c.rect(2, 6, 12, 4, P.cloth[1]!);
+      c.rect(4, 7, 3, 2, P.black);
+      c.rect(9, 7, 3, 2, P.black);
+      c.line(14, 7, 15, 11, P.cloth[2]!);
+      c.hline(2, 13, 6, P.cloth[3]!);
+    },
+  ],
+  [
+    'bear_claw',
+    (c) => {
+      for (const x of [4, 8, 12]) {
+        c.line(x, 13, x + 2, 4, P.bone[3]!);
+        c.set(x + 2, 3, P.bone[2]!);
+      }
+      c.rect(2, 12, 13, 3, P.leather[2]!);
+    },
+  ],
+  [
+    'orc_tooth',
+    (c) => {
+      c.ellipse(8, 8, 3, 6, (x, y, nx) => (nx < 0 ? P.bone[3]! : P.bone[2]!));
+      c.set(7, 4, P.white);
+      c.hline(6, 10, 13, P.leather[2]!);
+    },
+  ],
+  [
+    'scorpion_stinger',
+    (c) => {
+      c.line(3, 13, 9, 7, P.dirt[3]!);
+      c.line(4, 13, 10, 7, P.dirt[2]!);
+      c.disc(11, 5, 2.4, P.dirt[4]!);
+      c.set(13, 3, P.red[4]!);
+      c.set(14, 2, P.red[3]!);
+    },
+  ],
+  [
+    'shaman_totem',
+    (c) => {
+      c.rect(6, 3, 4, 11, P.wood[3]!);
+      c.rect(5, 4, 6, 3, P.red[3]!);
+      c.set(6, 5, P.black);
+      c.set(9, 5, P.black);
+      c.rect(5, 9, 6, 2, P.bone[3]!);
+      c.set(4, 2, P.gold[4]!);
+      c.set(11, 2, P.gold[4]!);
+    },
+  ],
+  [
+    'ice_fang',
+    (c) => {
+      for (let i = 0; i < 10; i++) {
+        const w2 = Math.max(0, 3 - Math.floor(i / 3));
+        c.hline(8 - w2, 8 + w2, 3 + i, i % 3 ? P.ice[3]! : P.ice[4]!);
+      }
+      c.set(7, 4, P.white);
+    },
+  ],
+  [
+    'dark_emblem',
+    (c) => {
+      c.disc(8, 8, 6, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.75 ? P.gold[3]! : P.purple[1]!));
+      c.disc(8, 8, 2.5, P.red[3]!);
+      c.set(7, 7, P.red[4]!);
+    },
+  ],
+  [
+    'troll_hide',
+    (c) => {
+      c.ellipse(8, 8, 6.5, 5.5, (x, y) => ((x * 3 + y) % 5 === 0 ? P.teal[1]! : P.teal[2]!));
+      for (const [x, y] of [
+        [1, 3],
+        [14, 3],
+        [2, 13],
+        [13, 13],
+      ] as const)
+        c.set(x, y, P.teal[2]!);
+      c.line(4, 6, 12, 6, P.teal[3]!);
+    },
+  ],
+  [
+    'lich_dust',
+    (c) => {
+      c.rect(5, 3, 6, 2, P.wood[3]!);
+      c.ellipse(8, 10, 5, 5, (x, y, nx, ny) =>
+        ny < -0.4 ? P.ice[3]! : (x + y) % 3 ? P.purple[3]! : P.purple[4]!,
+      );
+      c.set(6, 8, P.white);
+    },
+  ],
+  [
+    'dragon_scale',
+    (c) => {
+      for (let y = 2; y < 15; y++) {
+        const w2 = Math.round(Math.sin(((y - 2) / 12) * Math.PI) * 6);
+        c.hline(8 - w2, 8 + w2, y, y < 7 ? P.red[4]! : y < 11 ? P.red[3]! : P.red[2]!);
+      }
+      c.line(8, 3, 8, 13, P.red[1]!);
+      c.set(6, 5, P.gold[4]!);
+    },
+  ],
   [
     'meat',
     (c) => {
-      c.ellipse(9, 7, 5, 4.5, (x, y, nx, ny) => (nx + ny < -0.4 ? P.red[4]! : nx + ny < 0.4 ? P.red[3]! : P.red[2]!));
+      c.ellipse(9, 7, 5, 4.5, (x, y, nx, ny) =>
+        nx + ny < -0.4 ? P.red[4]! : nx + ny < 0.4 ? P.red[3]! : P.red[2]!,
+      );
       c.ellipse(9, 7, 2.5, 2, P.dirt[4]!);
       c.line(5, 10, 2, 13, P.bone[3]!);
       c.set(1, 13, P.bone[3]!);
@@ -617,7 +769,12 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   [
     'gold',
     (c) => {
-      for (const [x, y] of [[5, 11], [10, 11], [7.5, 8], [5, 6]] as const) {
+      for (const [x, y] of [
+        [5, 11],
+        [10, 11],
+        [7.5, 8],
+        [5, 6],
+      ] as const) {
         c.ellipse(x + 0.5, y + 0.5, 3.4, 2.2, P.gold[3]!);
         c.ellipse(x + 0.5, y, 2.6, 1.4, P.gold[4]!);
         c.set(Math.floor(x), Math.floor(y), P.gold[5]!);
@@ -625,7 +782,21 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
     },
   ],
 ];
-ICONS_ITEMS.push(...gearIcons({ sword, axeDouble, bow, wand, kiteShield, book, shape, rows: { TORSO, ROBE, HELMET, HAT, LEGS, BOOTS }, ring, amulet, potion }));
+ICONS_ITEMS.push(
+  ...gearIcons({
+    sword,
+    axeDouble,
+    bow,
+    wand,
+    kiteShield,
+    book,
+    shape,
+    rows: { TORSO, ROBE, HELMET, HAT, LEGS, BOOTS },
+    ring,
+    amulet,
+    potion,
+  }),
+);
 for (const [name, draw] of ICONS_ITEMS) icon(`item_${name}`, draw);
 
 // ---------------------------------------------------------------- ícones de magia (fundo de runa + símbolo)
@@ -640,14 +811,43 @@ function spellFrame(c: PixelCanvas, ramp: Ramp) {
     }
 }
 
+// frasco de poção: corpo arredondado, gargalo e rolha, com um brilho (poções das magias de criação)
+function flaskSym(liquid: Ramp, glow: Color) {
+  return (c: PixelCanvas) => {
+    c.rect(7, 2, 2, 2, P.leather[3]!);
+    c.rect(7, 4, 2, 3, P.white);
+    c.ellipse(8, 10, 5, 4, (x, y, nx, ny) => (ny < -0.45 ? P.white : ny < -0.1 ? liquid[4]! : liquid[3]!));
+    c.ellipse(8, 11, 4, 3, (x, y, nx, ny) => (ny < 0 ? liquid[3]! : liquid[2]!));
+    c.set(5, 9, glow);
+    c.set(6, 8, P.white);
+    for (const [x, y] of [
+      [12, 3],
+      [3, 4],
+      [13, 8],
+    ] as const)
+      c.set(x, y, glow);
+  };
+}
 const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
+  ['conjure_mana', P.blue, flaskSym(P.blue, P.water[5] ?? P.white)],
+  ['conjure_health', P.heal, flaskSym(P.red, P.heal[3]!)],
   [
     'arcane_bolt',
     P.arcane,
     (c) => {
       c.disc(8, 8, 3.5, P.arcane[2]!);
       c.disc(8, 8, 2, P.arcane[4]!);
-      for (const [x, y] of [[8, 2], [8, 13], [2, 8], [13, 8], [4, 4], [12, 12], [12, 4], [4, 12]] as const) c.set(x, y, P.arcane[3]!);
+      for (const [x, y] of [
+        [8, 2],
+        [8, 13],
+        [2, 8],
+        [13, 8],
+        [4, 4],
+        [12, 12],
+        [12, 4],
+        [4, 12],
+      ] as const)
+        c.set(x, y, P.arcane[3]!);
       c.set(7, 7, P.white);
     },
   ],
@@ -674,14 +874,24 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
         const d = Math.hypot(nx, ny);
         return d > 0.62 ? P.fire[3]! : d > 0.42 ? P.fire[4]! : d < 0.2 ? P.fire[5]! : 0;
       });
-      for (const [x, y] of [[8, 1], [1, 8], [14, 8], [8, 14]] as const) c.set(x, y, P.fire[4]!);
+      for (const [x, y] of [
+        [8, 1],
+        [1, 8],
+        [14, 8],
+        [8, 14],
+      ] as const)
+        c.set(x, y, P.fire[4]!);
     },
   ],
   [
     'earth_thorn',
     P.nature,
     (c) => {
-      for (const [x, h] of [[4, 6], [8, 10], [12, 7]] as const) {
+      for (const [x, h] of [
+        [4, 6],
+        [8, 10],
+        [12, 7],
+      ] as const) {
         for (let k = 0; k < h; k++) {
           const w = Math.round((h - k) / 4);
           for (let dx = -w; dx <= w; dx++) c.set(x + dx, 13 - k, dx < 0 ? P.nature[3]! : P.nature[2]!);
@@ -703,7 +913,13 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
           c.set(8 + i, 8 - i, P.ice[2]!);
         }
       }
-      for (const [x, y] of [[8, 3], [8, 13], [3, 8], [13, 8]] as const) c.set(x, y, P.white);
+      for (const [x, y] of [
+        [8, 3],
+        [8, 13],
+        [3, 8],
+        [13, 8],
+      ] as const)
+        c.set(x, y, P.white);
       c.set(8, 8, P.white);
     },
   ],
@@ -713,7 +929,13 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
     (c) => {
       c.ellipse(8, 8, 3.2, 5.5, (x, y, nx) => (nx < 0 ? P.heal[3]! : P.heal[2]!));
       c.vline(8, 4, 13, P.heal[1]!);
-      for (const [x, y] of [[3, 4], [12, 3], [13, 11], [3, 12]] as const) c.set(x, y, P.heal[4]!);
+      for (const [x, y] of [
+        [3, 4],
+        [12, 3],
+        [13, 11],
+        [3, 12],
+      ] as const)
+        c.set(x, y, P.heal[4]!);
     },
   ],
   [
@@ -773,7 +995,11 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
       for (let i = 0; i < 36; i++) {
         const a = i * 0.35;
         const r = 1 + i * 0.16;
-        c.set(Math.round(8 + Math.cos(a) * r), Math.round(8 + Math.sin(a) * r), i > 24 ? P.steel[5]! : P.steel[4]!);
+        c.set(
+          Math.round(8 + Math.cos(a) * r),
+          Math.round(8 + Math.sin(a) * r),
+          i > 24 ? P.steel[5]! : P.steel[4]!,
+        );
       }
     },
   ],
@@ -806,7 +1032,12 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
           c.set(x0 + Math.min(i, 4 - i), 12 - i, P.white);
         }
       }
-      for (const [x, y, l] of [[1, 6, 3], [1, 9, 4], [2, 12, 3]] as const) c.hline(x, x + l, y, P.ice[3]!);
+      for (const [x, y, l] of [
+        [1, 6, 3],
+        [1, 9, 4],
+        [2, 12, 3],
+      ] as const)
+        c.hline(x, x + l, y, P.ice[3]!);
     },
   ],
   [
@@ -814,7 +1045,9 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
     P.blue,
     (c) => {
       // bolha de mana com uma gota dentro
-      c.ellipse(8, 8, 6, 6, (x, y, nx, ny) => (Math.hypot(nx, ny) > 0.72 ? (nx + ny < -0.2 ? P.blue[4]! : P.blue[3]!) : 0));
+      c.ellipse(8, 8, 6, 6, (x, y, nx, ny) =>
+        Math.hypot(nx, ny) > 0.72 ? (nx + ny < -0.2 ? P.blue[4]! : P.blue[3]!) : 0,
+      );
       c.ellipse(8, 8, 4, 4, P.blue[1]!);
       c.disc(8, 9, 2, P.water[4]!);
       c.set(8, 5, P.water[5] ?? P.white);
@@ -833,7 +1066,11 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
         for (let y = 8 - h; y <= 8 + h; y++) c.set(x, y, y < 8 ? P.gold[4]! : P.gold[2]!);
       }
       c.rect(2, 7, 2, 3, P.leather[3]!);
-      for (const [x, r] of [[10, 3], [12, 5]] as const) for (let y = 8 - r; y <= 8 + r; y++) if (Math.abs(y - 8) >= r - 1) c.set(x, y, P.white);
+      for (const [x, r] of [
+        [10, 3],
+        [12, 5],
+      ] as const)
+        for (let y = 8 - r; y <= 8 + r; y++) if (Math.abs(y - 8) >= r - 1) c.set(x, y, P.white);
     },
   ],
   [
@@ -847,7 +1084,17 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
       c.set(13, 3, P.ice[3]!);
       c.set(1, 13, P.red[3]!);
       c.set(2, 14, P.red[3]!);
-      for (const [x, y] of [[9, 9], [10, 9], [9, 10], [4, 4], [5, 4], [4, 5], [11, 12], [12, 12]] as const) c.set(x, y, P.ice[3]!);
+      for (const [x, y] of [
+        [9, 9],
+        [10, 9],
+        [9, 10],
+        [4, 4],
+        [5, 4],
+        [4, 5],
+        [11, 12],
+        [12, 12],
+      ] as const)
+        c.set(x, y, P.ice[3]!);
     },
   ],
 ];
@@ -884,8 +1131,27 @@ function shieldIcon(r: Ramp, star: boolean) {
       for (let x = 8 - half; x <= 7 + half; x++) c.set(x, y, x < 8 - half * 0.3 ? r[4]! : r[3]!);
     }
     c.hline(3, 12, 2, r[5] ?? r[4]!);
-    if (star) for (const [x, y] of [[8, 5], [7, 6], [8, 6], [9, 6], [8, 7], [6, 6], [10, 6]] as const) c.set(x, y, P.white);
-    else for (const [x, y] of [[8, 5], [8, 6], [8, 7], [8, 8], [7, 6], [9, 6]] as const) c.set(x, y, P.white);
+    if (star)
+      for (const [x, y] of [
+        [8, 5],
+        [7, 6],
+        [8, 6],
+        [9, 6],
+        [8, 7],
+        [6, 6],
+        [10, 6],
+      ] as const)
+        c.set(x, y, P.white);
+    else
+      for (const [x, y] of [
+        [8, 5],
+        [8, 6],
+        [8, 7],
+        [8, 8],
+        [7, 6],
+        [9, 6],
+      ] as const)
+        c.set(x, y, P.white);
   };
 }
 
@@ -894,7 +1160,9 @@ const UI: [string, (c: PixelCanvas) => void][] = [
   [
     'bag',
     (c) => {
-      c.ellipse(8, 9.5, 6, 5, (x, y, nx, ny) => (nx + ny < -0.4 ? P.leather[4]! : nx + ny < 0.5 ? P.leather[3]! : P.leather[2]!));
+      c.ellipse(8, 9.5, 6, 5, (x, y, nx, ny) =>
+        nx + ny < -0.4 ? P.leather[4]! : nx + ny < 0.5 ? P.leather[3]! : P.leather[2]!,
+      );
       c.rect(5, 2, 6, 3, P.leather[3]!);
       c.hline(4, 11, 5, P.gold[3]!);
       c.rect(7, 7, 2, 2, P.gold[4]!);
@@ -917,7 +1185,13 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.disc(8, 8, 5, P.iron[3]!);
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
-        c.rect(Math.round(8 + Math.cos(a) * 5.5) - 1, Math.round(8 + Math.sin(a) * 5.5) - 1, 2, 2, P.iron[3]!);
+        c.rect(
+          Math.round(8 + Math.cos(a) * 5.5) - 1,
+          Math.round(8 + Math.sin(a) * 5.5) - 1,
+          2,
+          2,
+          P.iron[3]!,
+        );
       }
       c.disc(8, 8, 2, P.iron[1]!);
       c.set(6, 6, P.iron[4] ?? P.white);
@@ -985,7 +1259,15 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.set(6, 10, P.white);
     },
   ],
-  ['coin', (c) => { c.disc(8, 8, 5.5, P.gold[3]!); c.disc(8, 8, 3.8, P.gold[4]!); c.vline(8, 5, 11, P.gold[2]!); c.set(6, 6, P.gold[5]!); }],
+  [
+    'coin',
+    (c) => {
+      c.disc(8, 8, 5.5, P.gold[3]!);
+      c.disc(8, 8, 3.8, P.gold[4]!);
+      c.vline(8, 5, 11, P.gold[2]!);
+      c.set(6, 6, P.gold[5]!);
+    },
+  ],
   [
     'star',
     (c) => {
@@ -1001,7 +1283,8 @@ const UI: [string, (c: PixelCanvas) => void][] = [
           for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
             const [xi, yi] = pts[i]!;
             const [xj, yj] = pts[j]!;
-            if (yi > y + 0.5 !== yj > y + 0.5 && x + 0.5 < ((xj - xi) * (y + 0.5 - yi)) / (yj - yi) + xi) inside = !inside;
+            if (yi > y + 0.5 !== yj > y + 0.5 && x + 0.5 < ((xj - xi) * (y + 0.5 - yi)) / (yj - yi) + xi)
+              inside = !inside;
           }
           if (inside) c.set(x, y, y < 8 ? P.gold[4]! : P.gold[3]!);
         }
@@ -1076,7 +1359,12 @@ const UI: [string, (c: PixelCanvas) => void][] = [
     'follow',
     (c) => {
       // pegadas indo para a direita
-      for (const [x, y] of [[2, 10], [6, 6], [10, 10], [13, 5]] as const) {
+      for (const [x, y] of [
+        [2, 10],
+        [6, 6],
+        [10, 10],
+        [13, 5],
+      ] as const) {
         c.ellipse(x + 1, y + 1, 1.6, 2.2, P.cloth[4]!);
         c.set(x + 1, y - 2, P.cloth[3]!);
       }
@@ -1113,7 +1401,12 @@ const UI: [string, (c: PixelCanvas) => void][] = [
     'crown',
     (c) => {
       c.rect(2, 8, 12, 5, P.gold[3]!);
-      for (const [x, h] of [[2, 4], [8, 6], [13, 4]] as const) for (let i = 0; i < h; i++) c.set(x + (x === 13 ? 0 : 0), 8 - i, P.gold[4]!);
+      for (const [x, h] of [
+        [2, 4],
+        [8, 6],
+        [13, 4],
+      ] as const)
+        for (let i = 0; i < h; i++) c.set(x + (x === 13 ? 0 : 0), 8 - i, P.gold[4]!);
       c.hline(3, 13, 12, P.gold[2]!);
       c.set(5, 10, P.red[3]!);
       c.set(8, 10, P.blue[4]!);
@@ -1146,7 +1439,14 @@ const UI: [string, (c: PixelCanvas) => void][] = [
       c.rect(11, 3, 4, 11, P.sand[3]!);
       c.ellipse(4, 10, 2, 1.4, P.green[3]!);
       c.ellipse(12, 6, 1.6, 1.2, P.water[4]!);
-      for (const [x, y] of [[3, 6], [5, 7], [7, 8], [9, 9], [11, 10]] as const) c.set(x, y, P.dirt[1]!);
+      for (const [x, y] of [
+        [3, 6],
+        [5, 7],
+        [7, 8],
+        [9, 9],
+        [11, 10],
+      ] as const)
+        c.set(x, y, P.dirt[1]!);
       c.disc(12, 10, 1.6, P.red[3]!);
       c.set(12, 12, P.red[2]!);
       c.hline(1, 14, 3, P.sand[1]!);

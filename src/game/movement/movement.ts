@@ -28,7 +28,6 @@ export function occupant(w: World, x: number, y: number): string | undefined {
   return w.occupancy.get(cellIndex(w.map, x, y));
 }
 
-
 export function canEnter(w: World, x: number, y: number, forMonster: boolean, selfId?: string): boolean {
   if (!inBounds(w.map, x, y) || isSolid(w.map, x, y)) return false;
   if (forMonster && isPz(w.map, x, y)) return false;
@@ -36,7 +35,9 @@ export function canEnter(w: World, x: number, y: number, forMonster: boolean, se
   if (!forMonster && selfId && isPz(w.map, x, y) && isPzLocked(w, selfId)) return false;
   const occ = occupant(w, x, y);
   if (occ === undefined || occ === selfId) return true;
-  // personagens nunca ocupam o mesmo tile (em lugar nenhum): o caminho contorna e, se um insistir por
+  // em área protegida (PZ) os personagens passam um por dentro do outro (nada de congestionar templo, lojas e portas)
+  if (!forMonster && selfId && isPz(w.map, x, y) && isActor(w, selfId) && isActor(w, occ)) return true;
+  // fora dela, personagens nunca ocupam o mesmo tile: o caminho contorna e, se um insistir por
   // `SWAP_AFTER_MS` contra o outro, os dois trocam de lugar (ver `resolveStuck`) — ninguém trava porta nem rua
   return false;
 }
@@ -123,13 +124,25 @@ export function removeOccupant(w: World, m: Mover): void {
 }
 
 /** Tenta iniciar um passo. `speed` em tiles por segundo. */
-export function tryStep(w: World, m: Mover, dx: number, dy: number, speed: number, forMonster: boolean): boolean {
+export function tryStep(
+  w: World,
+  m: Mover,
+  dx: number,
+  dy: number,
+  speed: number,
+  forMonster: boolean,
+): boolean {
   if (isMoving(m, w.now) || (dx === 0 && dy === 0)) return false;
   const nx = m.x + dx;
   const ny = m.y + dy;
   if (!canEnter(w, nx, ny, forMonster, m.id)) {
     if (!forMonster && m.id === w.human.id && isPz(w.map, nx, ny) && isPzLocked(w, m.id)) {
-      warnThrottled(w, 'pzlock', `PZ lock: você não pode entrar em áreas protegidas por mais ${Math.ceil(pzLockMs(w, m.id) / 1000)} s.`, 2500);
+      warnThrottled(
+        w,
+        'pzlock',
+        `PZ lock: você não pode entrar em áreas protegidas por mais ${Math.ceil(pzLockMs(w, m.id) / 1000)} s.`,
+        2500,
+      );
     }
     // barrado por outro personagem: conta a insistência (troca de lugar depois de alguns segundos)
     if (!forMonster && isPlayerEntity(m)) resolveStuck(w, m, occupant(w, nx, ny) ?? null);
@@ -173,20 +186,20 @@ export function pathTo(
   opts: { stopWithin?: number; maxNodes?: number; extraCost?: (x: number, y: number) => number } = {},
 ): TilePos[] | null {
   const extra = opts.extraCost;
-  return findPath(
-    { x: m.x, y: m.y },
-    goal,
-    {
-      width: w.map.width,
-      height: w.map.height,
-      // personagens contam como passagem (com custo): o passo contra eles gera a insistência que vira troca de lugar
-      passable: (x, y) => canEnter(w, x, y, forMonster, m.id) || (!forMonster && blockedOnlyByActor(w, x, y, m.id)),
-      staticFree: (x, y) => staticFree(w, x, y) && !(forMonster && isPz(w.map, x, y)),
-      stopWithin: opts.stopWithin,
-      maxNodes: opts.maxNodes,
-      costAt: (x, y) => (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0) + (extra ? extra(x, y) : 0) + (!forMonster && blockedOnlyByActor(w, x, y, m.id) ? ACTOR_PATH_COST : 0),
-    },
-  );
+  return findPath({ x: m.x, y: m.y }, goal, {
+    width: w.map.width,
+    height: w.map.height,
+    // personagens contam como passagem (com custo): o passo contra eles gera a insistência que vira troca de lugar
+    passable: (x, y) =>
+      canEnter(w, x, y, forMonster, m.id) || (!forMonster && blockedOnlyByActor(w, x, y, m.id)),
+    staticFree: (x, y) => staticFree(w, x, y) && !(forMonster && isPz(w.map, x, y)),
+    stopWithin: opts.stopWithin,
+    maxNodes: opts.maxNodes,
+    costAt: (x, y) =>
+      (doorCells(w).has(cellIndex(w.map, x, y)) ? 3 : 0) +
+      (extra ? extra(x, y) : 0) +
+      (!forMonster && blockedOnlyByActor(w, x, y, m.id) ? ACTOR_PATH_COST : 0),
+  });
 }
 
 const doorCache = new WeakMap<object, Set<number>>();
@@ -201,7 +214,14 @@ function doorCells(w: World): Set<number> {
 }
 
 /** Passo guloso em direção ao alvo (barato); retorna false se nenhum vizinho aproxima. */
-export function greedyStepToward(w: World, m: Mover, tx: number, ty: number, speed: number, forMonster: boolean): boolean {
+export function greedyStepToward(
+  w: World,
+  m: Mover,
+  tx: number,
+  ty: number,
+  speed: number,
+  forMonster: boolean,
+): boolean {
   const cur = Math.hypot(tx - m.x, ty - m.y);
   let best: [number, number] | null = null;
   let bestD = cur - 0.01;
@@ -222,7 +242,14 @@ export function greedyStepToward(w: World, m: Mover, tx: number, ty: number, spe
 }
 
 /** Passo que aumenta a distância (monstros que mantêm distância). */
-export function stepAway(w: World, m: Mover, fx: number, fy: number, speed: number, forMonster: boolean): boolean {
+export function stepAway(
+  w: World,
+  m: Mover,
+  fx: number,
+  fy: number,
+  speed: number,
+  forMonster: boolean,
+): boolean {
   let best: [number, number] | null = null;
   let bestD = Math.hypot(fx - m.x, fy - m.y) + 0.01;
   for (let dy = -1; dy <= 1; dy++)

@@ -24,7 +24,15 @@ export function monsterDps(w: World, h: HeroEntity, m: MonsterEntity): number {
   if (a.element === 'physical') {
     avg = Math.max(0, avg - h.stats.armor * 0.75) * (1 - h.stats.physicalReduction);
     const cfg = w.data.balance.combat;
-    avg *= 1 - blockChance(h.stats.skills.shielding, h.stats.shieldDefense, cfg.blockChanceBase, cfg.blockChancePerSkill, cfg.maxBlockChance);
+    avg *=
+      1 -
+      blockChance(
+        h.stats.skills.shielding,
+        h.stats.shieldDefense,
+        cfg.blockChanceBase,
+        cfg.blockChancePerSkill,
+        cfg.maxBlockChance,
+      );
   }
   avg *= 1 - h.stats.damageReduction;
   return Math.max(0.2, avg) / (a.intervalMs / 1000);
@@ -34,7 +42,8 @@ export function monsterDps(w: World, h: HeroEntity, m: MonsterEntity): number {
 export function monsterMaxHit(h: HeroEntity, m: MonsterEntity): number {
   const a = m.def.attack;
   let max = a.max;
-  if (a.element === 'physical') max = Math.max(0, max - h.stats.armor * 0.5) * (1 - h.stats.physicalReduction);
+  if (a.element === 'physical')
+    max = Math.max(0, max - h.stats.armor * 0.5) * (1 - h.stats.physicalReduction);
   return max * (1 - h.stats.damageReduction);
 }
 
@@ -43,15 +52,25 @@ export function heroDpsVs(w: World, h: HeroEntity, m: MonsterEntity): number {
   const voc = w.data.vocations[h.character.vocation];
   const weapon = h.stats.weapon;
   let avg: number;
-  if (weapon.kind === 'wand') avg = ((weapon.damage?.[0] ?? 4) + (weapon.damage?.[1] ?? 8)) / 2 + h.stats.magicLevel * 0.5;
+  if (weapon.kind === 'wand')
+    avg = ((weapon.damage?.[0] ?? 4) + (weapon.damage?.[1] ?? 8)) / 2 + h.stats.magicLevel * 0.5;
   else {
-    const mod = weapon.kind === 'distance' ? voc.damage.distance * (1 + h.stats.distanceDamageBonus) : voc.damage.melee;
-    const max = maxWeaponDamage({ level: h.character.level, skill: weaponSkillLevel(h.stats), weaponAttack: weapon.attack, vocationModifier: mod });
+    const mod =
+      weapon.kind === 'distance' ? voc.damage.distance * (1 + h.stats.distanceDamageBonus) : voc.damage.melee;
+    const max = maxWeaponDamage({
+      level: h.character.level,
+      skill: weaponSkillLevel(h.stats),
+      weaponAttack: weapon.attack,
+      vocationModifier: mod,
+    });
     avg = max * 0.675; // o golpe rola entre 35% e 100% do máximo
   }
   if (weapon.element === 'physical') avg = Math.max(1, avg - m.def.armor * 0.75);
   const res = m.def.resistances?.[weapon.element];
   if (res !== undefined) avg *= res;
+  // sem arma nas mãos os feitiços fazem o dano (a magia vale sem arma): estimativa pela fórmula das magias básicas
+  if (!h.character.equipment.mainHand && h.character.vocation !== 'knight')
+    avg = Math.max(avg, (10 + h.character.level * 0.4 + h.stats.magicLevel * 1.8) * 0.9);
   // magias de ataque somam um pouco mais que o golpe básico
   return Math.max(0.5, avg * 1.12 * ROLES[h.character.vocation].dpsMul) / (h.stats.attackIntervalMs / 1000);
 }
@@ -68,7 +87,9 @@ export function healPotions(w: World, h: HeroEntity): number[] {
 
 /** Vida efetiva: vida atual + 80% da cura de até 8 poções (beber leva 1 s cada). */
 export function effectiveHp(w: World, h: HeroEntity): number {
-  const pots = healPotions(w, h).slice(0, 8).reduce((s, v) => s + v, 0);
+  const pots = healPotions(w, h)
+    .slice(0, 8)
+    .reduce((s, v) => s + v, 0);
   // Escudo de Mana ativo: a mana também absorve dano (a vida só cai quando ela acaba)
   const shield = h.buffs.some((b) => b.kind === 'manaShield') ? h.character.mana : 0;
   return h.character.health + 0.8 * pots + shield;
@@ -110,7 +131,12 @@ export function alliesNear(w: World, h: HeroEntity): number {
 }
 
 /** Criaturas vivas a até `radius` tiles do ponto (fora da área protegida). */
-export function monstersNear(w: World, at: { x: number; y: number }, radius: number, except?: MonsterEntity): MonsterEntity[] {
+export function monstersNear(
+  w: World,
+  at: { x: number; y: number },
+  radius: number,
+  except?: MonsterEntity,
+): MonsterEntity[] {
   return [...w.monsters.values()].filter((m) => m.alive && m !== except && chebyshev(m, at) <= radius);
 }
 
@@ -141,7 +167,13 @@ export function assess(w: World, h: HeroEntity, extra: readonly MonsterEntity[] 
   const mons = [...set];
   const dps = mons.reduce((s, m) => s + monsterDps(w, h, m), 0);
   const maxHit = mons.reduce((mx, m) => Math.max(mx, monsterMaxHit(h, m)), 0);
-  return { mons, dps, maxHit, secondsLeft: dps > 0 ? h.character.health / dps : Infinity, margin: fightMargin(w, h, mons) };
+  return {
+    mons,
+    dps,
+    maxHit,
+    secondsLeft: dps > 0 ? h.character.health / dps : Infinity,
+    margin: fightMargin(w, h, mons),
+  };
 }
 
 /**

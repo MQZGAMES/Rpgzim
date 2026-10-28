@@ -12,14 +12,15 @@ import type { World } from '../simulation/World';
 import { allActors, message } from '../simulation/World';
 
 export type PartyFormation = 'free' | 'follow' | 'line';
-export type PartyTargeting = 'nearest' | 'leader';
+/** Alvo: cada um o mais próximo, o do líder, ou "lurar" (o Knight, ou o Paladin, puxa as criaturas da tela até o grupo). */
+export type PartyTargeting = 'nearest' | 'leader' | 'lure';
 
 export interface Party {
   leaderId: string;
   members: string[];
   /** Livre: cada um segue seu plano; seguir: todos andam perto do líder; fila: em fila atrás do líder. */
   formation: PartyFormation;
-  /** Cada um ataca o inimigo mais próximo ou todos atacam o alvo do líder. */
+  /** Cada um ataca o inimigo mais próximo, todos atacam o alvo do líder ou o tanque puxa as criaturas para o grupo atacar. */
   targeting: PartyTargeting;
   /** Membros podem se atacar (treino ou duelo), sem caveira nem perda de ouro. */
   friendlyFire: boolean;
@@ -58,7 +59,17 @@ export interface SocialState {
 }
 
 export function newSocialState(pvp = false): SocialState {
-  return { party: null, heroParties: [], invites: [], pvp, skulls: new Map(), pzLocks: new Map(), unjust: new Map(), damageLog: new Map(), aggressions: new Map() };
+  return {
+    party: null,
+    heroParties: [],
+    invites: [],
+    pvp,
+    skulls: new Map(),
+    pzLocks: new Map(),
+    unjust: new Map(),
+    damageLog: new Map(),
+    aggressions: new Map(),
+  };
 }
 
 /** Hora usada pelas regras de PK: relógio real no jogo (a caveira vermelha de 24 h conta com o jogo fechado); nos testes, o tempo da simulação. */
@@ -121,7 +132,14 @@ function dropParty(w: World, p: Party): void {
 
 /** Cria o grupo de dois: com o jogador humano vira o grupo dele; entre heróis, um grupo próprio. */
 function createParty(w: World, leaderId: string, memberId: string): Party {
-  const p: Party = { leaderId, members: [leaderId, memberId], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+  const p: Party = {
+    leaderId,
+    members: [leaderId, memberId],
+    formation: 'follow',
+    targeting: 'leader',
+    friendlyFire: false,
+    trail: [],
+  };
   if (leaderId === w.human.id || memberId === w.human.id) w.social.party = p;
   else w.social.heroParties.push(p);
   return p;
@@ -151,12 +169,21 @@ export function invite(w: World, fromId: string, toId: string): PartyFail | null
   if (!from || !to || from.dead || to.dead) return 'dead';
   const party = partyOf(w, fromId);
   // o jogador humano convida mesmo sem ser o líder (os demais membros são heróis que seguem o que ele decide)
-  if (party && party.members.includes(fromId) && party.leaderId !== fromId && fromId !== w.human.id) return 'notLeader';
+  if (party && party.members.includes(fromId) && party.leaderId !== fromId && fromId !== w.human.id)
+    return 'notLeader';
   if (party && party.members.includes(toId)) return 'alreadyInParty';
-  w.social.invites = w.social.invites.filter((i) => !(i.fromId === fromId && i.toId === toId) && i.expiresAt > w.now);
+  w.social.invites = w.social.invites.filter(
+    (i) => !(i.fromId === fromId && i.toId === toId) && i.expiresAt > w.now,
+  );
   w.social.invites.push({ fromId, toId, expiresAt: w.now + INVITE_MS });
   // só convites que envolvem o jogador aparecem na interface
-  if (fromId === w.human.id || toId === w.human.id) w.human.scope.events.emit('partyInvite', { fromId, toId, fromName: from.character.name, toName: to.character.name });
+  if (fromId === w.human.id || toId === w.human.id)
+    w.human.scope.events.emit('partyInvite', {
+      fromId,
+      toId,
+      fromName: from.character.name,
+      toName: to.character.name,
+    });
   if (fromId === w.human.id) message(w, `Convite enviado para ${to.character.name}.`, 'system');
   return null;
 }
@@ -166,7 +193,9 @@ export function pendingInviteFor(w: World, toId: string): PartyInvite | null {
 }
 
 export function acceptInvite(w: World, toId: string, fromId?: string): PartyFail | null {
-  const inv = w.social.invites.find((i) => i.toId === toId && (!fromId || i.fromId === fromId) && i.expiresAt > w.now);
+  const inv = w.social.invites.find(
+    (i) => i.toId === toId && (!fromId || i.fromId === fromId) && i.expiresAt > w.now,
+  );
   if (!inv) return 'noInvite';
   w.social.invites = w.social.invites.filter((i) => i !== inv && i.toId !== toId);
   const into = partyOf(w, inv.fromId);
@@ -190,7 +219,8 @@ export function declineInvite(w: World, toId: string): void {
   const inv = pendingInviteFor(w, toId);
   if (!inv) return;
   w.social.invites = w.social.invites.filter((i) => i !== inv);
-  if (inv.fromId === w.human.id || toId === w.human.id) notify(w, `${actorName(w, toId)} recusou o convite de grupo.`);
+  if (inv.fromId === w.human.id || toId === w.human.id)
+    notify(w, `${actorName(w, toId)} recusou o convite de grupo.`);
 }
 
 export function leaveParty(w: World, id: string): PartyFail | null {
@@ -223,7 +253,12 @@ export function passLeadership(w: World, leaderId: string, toId: string): PartyF
   if (!p.members.includes(toId)) return 'notMember';
   p.leaderId = toId;
   p.trail = []; // o rastro da fila passa a ser o do novo líder
-  notify(w, toId === w.human.id ? 'Você agora é o líder do grupo.' : `${actorName(w, toId)} agora é o líder do grupo.`);
+  notify(
+    w,
+    toId === w.human.id
+      ? 'Você agora é o líder do grupo.'
+      : `${actorName(w, toId)} agora é o líder do grupo.`,
+  );
   return null;
 }
 
@@ -233,7 +268,11 @@ export function xpReceivers(w: World, killerId: string, at: { x: number; y: numb
   if (!killer) return [];
   const p = partyOf(w, killerId);
   if (!p) return [killer];
-  return p.members.map((id) => actorById(w, id)).filter((a): a is PlayerEntity => !!a && !a.dead && (a === killer || chebyshev(a, at) <= PARTY_SHARE_RANGE));
+  return p.members
+    .map((id) => actorById(w, id))
+    .filter(
+      (a): a is PlayerEntity => !!a && !a.dead && (a === killer || chebyshev(a, at) <= PARTY_SHARE_RANGE),
+    );
 }
 
 // ------------------------------------------------------------------ PK
@@ -268,10 +307,30 @@ export function sparMode(w: World, a: string, b: string): 'training' | 'duel' | 
   return partyOf(w, a)?.sparMode === 'duel' ? 'duel' : 'training';
 }
 
+/**
+ * Quem faz o papel de tanque no modo "lurar": o Knight do grupo (o de maior nível) e, sem Knight, o Paladin.
+ * Pode ser o jogador: então os heróis só ajudam a atacar o que vier.
+ */
+export function lureTankId(w: World, party: Party): string | null {
+  const alive = party.members.map((id) => actorById(w, id)).filter((a): a is PlayerEntity => !!a && !a.dead);
+  for (const voc of ['knight', 'paladin'] as const) {
+    const pick = alive
+      .filter((a) => a.character.vocation === voc)
+      .sort((a, b) => b.character.level - a.character.level)[0];
+    if (pick) return pick.id;
+  }
+  return null;
+}
+
 /** Em treino o ataque para quando a vida do alvo chega a 50% (ele se cura e, acima disso, volta a apanhar). */
 export const TRAINING_HP_FLOOR = 0.5;
 
-export type PartySetting = { formation?: PartyFormation; targeting?: PartyTargeting; friendlyFire?: boolean; sparMode?: 'training' | 'duel' };
+export type PartySetting = {
+  formation?: PartyFormation;
+  targeting?: PartyTargeting;
+  friendlyFire?: boolean;
+  sparMode?: 'training' | 'duel';
+};
 /** Só o líder muda as regras do grupo. */
 export function configureParty(w: World, leaderId: string, patch: PartySetting): PartyFail | null {
   const p = partyOf(w, leaderId);
@@ -282,7 +341,7 @@ export function configureParty(w: World, leaderId: string, patch: PartySetting):
     patch.formation !== undefined
       ? `Formação: ${patch.formation === 'free' ? 'livre' : patch.formation === 'follow' ? 'todos seguem o líder' : 'em fila atrás do líder'}.`
       : patch.targeting !== undefined
-        ? `Alvo do grupo: ${patch.targeting === 'leader' ? 'o mesmo do líder' : 'cada um o mais próximo'}.`
+        ? `Alvo do grupo: ${patch.targeting === 'leader' ? 'o mesmo do líder' : patch.targeting === 'lure' ? 'lurar (o tanque puxa as criaturas)' : 'cada um o mais próximo'}.`
         : patch.friendlyFire === false
           ? 'Ataque entre membros: bloqueado.'
           : `Ataque entre membros: ${patch.sparMode === 'duel' ? 'duelo (até morrer)' : 'treino (param com 50% de vida)'}.`;
@@ -314,7 +373,10 @@ export function recordLeaderTrail(w: World): void {
 }
 
 /** Posição desejada de um membro conforme a formação (null = livre). */
-export function formationSpot(w: World, memberId: string): { x: number; y: number; tolerance: number } | null {
+export function formationSpot(
+  w: World,
+  memberId: string,
+): { x: number; y: number; tolerance: number } | null {
   const p = partyOf(w, memberId);
   if (!p || p.formation === 'free' || p.leaderId === memberId) return null;
   const leader = actorById(w, p.leaderId);
@@ -397,7 +459,8 @@ export function recordDamage(w: World, victimId: string, sourceId: string, amoun
 export function killCredit(w: World, victimId: string, finalSourceId: string | null): string | null {
   if (!finalSourceId || !actorById(w, finalSourceId)) return null;
   const sums = new Map<string, number>();
-  for (const d of w.social.damageLog.get(victimId) ?? []) if (pkNow(w) - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
+  for (const d of w.social.damageLog.get(victimId) ?? [])
+    if (pkNow(w) - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
   const mine = sums.get(finalSourceId) ?? 0;
   const top = Math.max(0, ...sums.values());
   return mine > 0 && mine >= top ? finalSourceId : null;
@@ -429,13 +492,19 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
     // revidar contra quem te atacou é defesa; já um terceiro que bate numa caveira branca fica amarelo
     if (!defending && !skullOf(w, attackerId)) {
       setSkull(w, attackerId, 'yellow');
-      pkNotice(w, attackerId, 'Você atacou uma caveira branca sem ser atacado por ela: caveira AMARELA.', false);
+      pkNotice(
+        w,
+        attackerId,
+        'Você atacou uma caveira branca sem ser atacado por ela: caveira AMARELA.',
+        false,
+      );
     }
   } else if (!defending) {
     // vítima sem caveira: o atacante vira agressor
     const had = skullOf(w, attackerId);
     setSkull(w, attackerId, 'white');
-    if (!had || had.kind === 'yellow') pkNotice(w, attackerId, 'Ataque injusto: você ficou com caveira BRANCA.', false);
+    if (!had || had.kind === 'yellow')
+      pkNotice(w, attackerId, 'Ataque injusto: você ficou com caveira BRANCA.', false);
   }
   touchCombat(w, attackerId);
   touchCombat(w, victimId);
@@ -446,7 +515,12 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
  * morte é injusta (aviso na tela); a 3ª em 24 h dá caveira vermelha por 24 h. Matar uma caveira
  * branca/amarela/vermelha é justo.
  */
-export function registerPlayerKill(w: World, killerId: string, victimSkull: SkullKind | null, victimName = 'o personagem'): void {
+export function registerPlayerKill(
+  w: World,
+  killerId: string,
+  victimSkull: SkullKind | null,
+  victimName = 'o personagem',
+): void {
   lockPz(w, killerId, PZ_LOCK_KILL_MS);
   if (victimSkull !== null) return;
   setSkull(w, killerId, 'white');
@@ -456,8 +530,19 @@ export function registerPlayerKill(w: World, killerId: string, victimSkull: Skul
   w.social.unjust.set(killerId, list);
   if (list.length >= UNJUST_KILLS_FOR_RED) {
     setSkull(w, killerId, 'red', RED_SKULL_MS);
-    pkNotice(w, killerId, `MORTE INJUSTA! (${list.length}/${UNJUST_KILLS_FOR_RED}) Você ficou com caveira VERMELHA por 24 horas!`, true);
-  } else pkNotice(w, killerId, `MORTE INJUSTA! Você matou ${victimName}, que não tinha caveira (${list.length}/${UNJUST_KILLS_FOR_RED} em 24 h; a 3ª dá caveira vermelha).`, true);
+    pkNotice(
+      w,
+      killerId,
+      `MORTE INJUSTA! (${list.length}/${UNJUST_KILLS_FOR_RED}) Você ficou com caveira VERMELHA por 24 horas!`,
+      true,
+    );
+  } else
+    pkNotice(
+      w,
+      killerId,
+      `MORTE INJUSTA! Você matou ${victimName}, que não tinha caveira (${list.length}/${UNJUST_KILLS_FOR_RED} em 24 h; a 3ª dá caveira vermelha).`,
+      true,
+    );
 }
 
 /** Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). */
@@ -473,7 +558,8 @@ export function loadPk(w: World, a: PlayerEntity): void {
   const pk = a.character.pk;
   if (!pk) return;
   const real = Date.now();
-  if (pk.skull && pk.skullUntil > real) w.social.skulls.set(a.id, { kind: pk.skull, until: pkNow(w) + (pk.skullUntil - real) });
+  if (pk.skull && pk.skullUntil > real)
+    w.social.skulls.set(a.id, { kind: pk.skull, until: pkNow(w) + (pk.skullUntil - real) });
   if (pk.pzLockUntil > real) w.social.pzLocks.set(a.id, pkNow(w) + (pk.pzLockUntil - real));
   w.social.unjust.set(
     a.id,
@@ -489,7 +575,9 @@ export function savePk(w: World, a: PlayerEntity): void {
     skull: s?.kind ?? null,
     skullUntil: s ? real + (s.until - pkNow(w)) : 0,
     pzLockUntil: isPzLocked(w, a.id) ? real + pzLockMs(w, a.id) : 0,
-    unjust: (w.social.unjust.get(a.id) ?? []).filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS).map((t) => real - (pkNow(w) - t)),
+    unjust: (w.social.unjust.get(a.id) ?? [])
+      .filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS)
+      .map((t) => real - (pkNow(w) - t)),
   };
 }
 
@@ -501,7 +589,8 @@ export function attackedRecently(w: World, a: string, b: string, ms = 30000): bo
 /** Limpa convites vencidos e a caveira expirada. */
 export function updateSocial(w: World): void {
   recordLeaderTrail(w);
-  if (w.social.invites.some((i) => i.expiresAt <= w.now)) w.social.invites = w.social.invites.filter((i) => i.expiresAt > w.now);
+  if (w.social.invites.some((i) => i.expiresAt <= w.now))
+    w.social.invites = w.social.invites.filter((i) => i.expiresAt > w.now);
   for (const [id, sk] of w.social.skulls) if (sk.until <= pkNow(w)) w.social.skulls.delete(id);
   for (const [id, until] of w.social.pzLocks) if (until <= pkNow(w)) w.social.pzLocks.delete(id);
   // membros que deixaram de existir saem do grupo

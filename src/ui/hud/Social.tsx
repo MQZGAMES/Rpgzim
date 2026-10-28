@@ -38,7 +38,13 @@ export function HudButton({
       data-testid={testId}
     >
       <ItemIcon icon={icon} size={20} className={dim ? 'opacity-40 grayscale' : ''} />
-      {pip && <span className={`pointer-events-none absolute -bottom-[5px] -right-[5px] rounded-sm px-[3px] text-[8px] font-bold leading-[11px] ${pipClass}`}>{pip}</span>}
+      {pip && (
+        <span
+          className={`pointer-events-none absolute -bottom-[5px] -right-[5px] rounded-sm px-[3px] text-[8px] font-bold leading-[11px] ${pipClass}`}
+        >
+          {pip}
+        </span>
+      )}
     </button>
   );
 }
@@ -53,7 +59,11 @@ export function QuickToggles() {
     <>
       <HudButton
         icon={stand ? 'ui_stand' : 'ui_follow'}
-        label={stand ? 'Atacar parado: não persegue o alvo (toque para seguir)' : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'}
+        label={
+          stand
+            ? 'Atacar parado: não persegue o alvo (toque para seguir)'
+            : 'Seguir o alvo: persegue até alcançar (toque para atacar parado)'
+        }
         onClick={() => session.setStandAttack(!stand)}
         testId="toggle-stand"
         pressed={stand}
@@ -61,7 +71,11 @@ export function QuickToggles() {
       />
       <HudButton
         icon="ui_skull"
-        label={pvp ? 'PK ligado: personagens podem se atacar fora das áreas protegidas' : 'PK desligado: ninguém ataca jogadores'}
+        label={
+          pvp
+            ? 'PK ligado: personagens podem se atacar fora das áreas protegidas'
+            : 'PK desligado: ninguém ataca jogadores'
+        }
         onClick={() => session.setPvp(!pvp)}
         testId="toggle-pvp"
         pressed={pvp}
@@ -70,7 +84,15 @@ export function QuickToggles() {
         pipClass="bg-hp text-white"
       />
       {partySize > 0 && (
-        <HudButton icon="ui_party" label="Grupo" hotkey="P" onClick={() => session.setPartyPanel(true)} testId="btn-party" pip={String(partySize)} pipClass="bg-[#2c6a8a] text-white" />
+        <HudButton
+          icon="ui_party"
+          label="Grupo"
+          hotkey="P"
+          onClick={() => session.setPartyPanel(true)}
+          testId="btn-party"
+          pip={String(partySize)}
+          pipClass="bg-[#2c6a8a] text-white"
+        />
       )}
     </>
   );
@@ -78,7 +100,8 @@ export function QuickToggles() {
 
 const SKULL_LABEL = { white: 'Caveira branca', yellow: 'Caveira amarela', red: 'Caveira vermelha' } as const;
 const SKULL_HINT = {
-  white: 'Você atacou alguém sem caveira. Dura o PZ lock (2 min; 5 min se matar) e é renovada se você lutar nos últimos 30 s.',
+  white:
+    'Você atacou alguém sem caveira. Dura o PZ lock (2 min; 5 min se matar) e é renovada se você lutar nos últimos 30 s.',
   yellow: 'Você atacou uma caveira branca sem ter sido atacado por ela. Dura o PZ lock.',
   red: 'Caveira vermelha (3 mortes injustas): dura 24 h. Se morrer, perde TODOS os itens e o ouro.',
 } as const;
@@ -98,19 +121,31 @@ export function PkBadge() {
   return (
     <div className="pointer-events-none mt-[2px] flex items-center gap-2" data-testid="pk-badge">
       {pk.skull && (
-        <span className="text-outline flex items-center gap-1 rounded-sm bg-[#120d18]/80 px-1 text-[11px] text-parchment" title={`${SKULL_LABEL[pk.skull]}: ${SKULL_HINT[pk.skull]}`} data-testid="pk-skull">
+        <span
+          className="text-outline flex items-center gap-1 rounded-sm bg-[#120d18]/80 px-1 text-[11px] text-parchment"
+          title={`${SKULL_LABEL[pk.skull]}: ${SKULL_HINT[pk.skull]}`}
+          data-testid="pk-skull"
+        >
           <ItemIcon icon={`ui_skull_${pk.skull}`} size={14} />
           {together && <ItemIcon icon="ui_lock" size={11} />}
           {formatPkTime(pk.skullMs)}
         </span>
       )}
       {pk.pzLockMs > 0 && !together && (
-        <span className="text-outline flex items-center gap-1 rounded-sm bg-[#3a0a12]/85 px-1 text-[11px] text-hp-light" title="PZ lock: você não pode entrar em áreas protegidas (lojas, templo, casas)" data-testid="pk-pzlock">
+        <span
+          className="text-outline flex items-center gap-1 rounded-sm bg-[#3a0a12]/85 px-1 text-[11px] text-hp-light"
+          title="PZ lock: você não pode entrar em áreas protegidas (lojas, templo, casas)"
+          data-testid="pk-pzlock"
+        >
           <ItemIcon icon="ui_lock" size={12} />
           PZ {formatPkTime(pk.pzLockMs)}
         </span>
       )}
-      {together && <span className="sr-only" data-testid="pk-pzlock">PZ lock {formatPkTime(pk.pzLockMs)}</span>}
+      {together && (
+        <span className="sr-only" data-testid="pk-pzlock">
+          PZ lock {formatPkTime(pk.pzLockMs)}
+        </span>
+      )}
     </div>
   );
 }
@@ -168,16 +203,32 @@ export function PartyPanel() {
     <Panel title="Grupo" icon="ui_party" onClose={() => session.setPartyPanel(false)}>
       <div data-testid="party-panel">
         <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.</div>
-        <Section title="Membros" hint={`Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}>
+        <Section
+          title="Membros"
+          hint={`Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}
+        >
           <div className="flex flex-col gap-1">
             {party.members.map((m) => (
-              <div key={m.id} className={`frame-slot flex items-center gap-2 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}>
-                {m.isLeader ? <ItemIcon icon="ui_crown" size={14} title="Líder" /> : <span className="w-[14px]" />}
+              <div
+                key={m.id}
+                className={`frame-slot flex items-center gap-2 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}
+              >
+                {m.isLeader ? (
+                  <ItemIcon icon="ui_crown" size={14} title="Líder" />
+                ) : (
+                  <span className="w-[14px]" />
+                )}
                 <span className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}>
                   {m.name}
                   {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
                 </span>
-                <Bar className="w-[60px]" value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
+                <Bar
+                  className="w-[60px]"
+                  value={m.dead ? 0 : m.hp}
+                  max={m.maxHp}
+                  color="var(--color-heal)"
+                  height={4}
+                />
                 {!m.isLeader && (
                   <TapButton
                     className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
@@ -219,7 +270,10 @@ export function PartyPanel() {
             ]}
           />
         </Section>
-        <Section title="Alvo" hint="Quem cada membro ataca em combate.">
+        <Section
+          title="Alvo"
+          hint="Quem cada membro ataca em combate. Lurar: o Knight (ou, sem Knight, o Paladin) puxa as criaturas da tela para perto do grupo, no espaço para os demais atacarem também."
+        >
           <Segmented
             value={party.targeting}
             disabled={false}
@@ -228,15 +282,27 @@ export function PartyPanel() {
             options={[
               { v: 'leader', label: 'Alvo do líder', hint: 'Todos focam o mesmo inimigo do líder' },
               { v: 'nearest', label: 'Mais próximo', hint: 'Cada um ataca o inimigo mais perto de si' },
+              {
+                v: 'lure',
+                label: 'Lurar',
+                hint: 'O Knight (ou o Paladin) puxa as criaturas da tela até o grupo, que ataca de longe',
+              },
             ]}
           />
         </Section>
-        <Section title="Ataque entre membros" hint="Treino: cada um usa a arma que tem e todos param de bater com 50% de vida até o outro se curar. Duelo: vale até morrer. Sem caveira e sem perder ouro.">
+        <Section
+          title="Ataque entre membros"
+          hint="Treino: cada um usa a arma que tem e todos param de bater com 50% de vida até o outro se curar. Duelo: vale até morrer. Sem caveira e sem perder ouro."
+        >
           <Segmented
             value={!party.friendlyFire ? 'off' : party.sparMode}
             disabled={false}
             testId="party-ff"
-            onChange={(v) => session.configureParty(v === 'off' ? { friendlyFire: false } : { friendlyFire: true, sparMode: v })}
+            onChange={(v) =>
+              session.configureParty(
+                v === 'off' ? { friendlyFire: false } : { friendlyFire: true, sparMode: v },
+              )
+            }
             options={[
               { v: 'off', label: 'Bloqueado', hint: 'Membros não se atacam' },
               { v: 'training', label: 'Treino', hint: 'Param com 50% de vida' },
@@ -249,7 +315,11 @@ export function PartyPanel() {
             Sair do grupo
           </PixelButton>
           {lead && (
-            <PixelButton className="flex-1" onClick={() => session.disbandParty()} data-testid="party-disband">
+            <PixelButton
+              className="flex-1"
+              onClick={() => session.disbandParty()}
+              data-testid="party-disband"
+            >
               Desfazer grupo
             </PixelButton>
           )}
@@ -265,12 +335,19 @@ export function InvitePrompt() {
   const invite = useSnap((s) => s.invite);
   if (!invite) return null;
   return (
-    <div className="frame-dark anim-pop pointer-events-auto w-[260px] !border-[10px] text-center text-[13px]" role="dialog" aria-label="Convite de grupo" data-testid="invite-prompt">
+    <div
+      className="frame-dark anim-pop pointer-events-auto w-[260px] !border-[10px] text-center text-[13px]"
+      role="dialog"
+      aria-label="Convite de grupo"
+      data-testid="invite-prompt"
+    >
       <div className="flex items-center justify-center gap-1">
         <ItemIcon icon="ui_party" size={16} />
         <b className="text-gold-light">{invite.fromName}</b> convidou você para o grupo.
       </div>
-      <div className="mt-1 text-[11px] text-muted">{invite.fromName} será o líder; a XP é dividida igualmente.</div>
+      <div className="mt-1 text-[11px] text-muted">
+        {invite.fromName} será o líder; a XP é dividida igualmente.
+      </div>
       <div className="mt-2 flex justify-center gap-2">
         <PixelButton variant="gold" className="px-2" onClick={() => session.partyAccept()}>
           Aceitar
@@ -283,7 +360,19 @@ export function InvitePrompt() {
   );
 }
 
-function MiniAction({ icon, label, onClick, testId, gold = false }: { icon: string; label: string; onClick: () => void; testId: string; gold?: boolean }) {
+function MiniAction({
+  icon,
+  label,
+  onClick,
+  testId,
+  gold = false,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  testId: string;
+  gold?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -308,11 +397,18 @@ export function ActorMenu() {
   const canInvite = !inParty;
   const canAttack = !hero.attackBlocked;
   return (
-    <div className="frame-dark anim-pop pointer-events-auto flex items-center gap-2 !border-[8px] text-[12px]" role="dialog" aria-label={hero.name} data-testid="actor-menu">
+    <div
+      className="frame-dark anim-pop pointer-events-auto flex items-center gap-2 !border-[8px] text-[12px]"
+      role="dialog"
+      aria-label={hero.name}
+      data-testid="actor-menu"
+    >
       <div className="w-[118px] min-w-0">
         <div className="flex items-center gap-1 truncate">
           {hero.isLeader && <ItemIcon icon="ui_crown" size={11} />}
-          {hero.skull && <ItemIcon icon={`ui_skull_${hero.skull}`} size={12} title={SKULL_LABEL[hero.skull]} />}
+          {hero.skull && (
+            <ItemIcon icon={`ui_skull_${hero.skull}`} size={12} title={SKULL_LABEL[hero.skull]} />
+          )}
           <b className={inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{hero.name}</b>
         </div>
         <div className="truncate text-[10px] text-muted">
@@ -320,10 +416,37 @@ export function ActorMenu() {
         </div>
         <Bar className="mt-[2px]" value={hero.hp} max={hero.maxHp} color="var(--color-heal)" height={3} />
       </div>
-      {canInvite && <MiniAction icon="ui_party" label={`Convidar ${hero.name} para o grupo`} onClick={() => session.partyInvite(hero.id)} testId="actor-invite" />}
-      {inParty && <MiniAction icon="ui_gear" label="Controles do grupo" onClick={() => session.setPartyPanel(true)} testId="actor-party" />}
-      {canAttack && <MiniAction icon="ui_attack" gold label={`Atacar ${hero.name} (ou toque 2x no personagem)`} onClick={() => session.attackActor(hero.id)} testId="actor-attack" />}
-      <MiniAction icon="ui_close" label="Fechar" onClick={() => session.closeActorMenu()} testId="actor-close" />
+      {canInvite && (
+        <MiniAction
+          icon="ui_party"
+          label={`Convidar ${hero.name} para o grupo`}
+          onClick={() => session.partyInvite(hero.id)}
+          testId="actor-invite"
+        />
+      )}
+      {inParty && (
+        <MiniAction
+          icon="ui_gear"
+          label="Controles do grupo"
+          onClick={() => session.setPartyPanel(true)}
+          testId="actor-party"
+        />
+      )}
+      {canAttack && (
+        <MiniAction
+          icon="ui_attack"
+          gold
+          label={`Atacar ${hero.name} (ou toque 2x no personagem)`}
+          onClick={() => session.attackActor(hero.id)}
+          testId="actor-attack"
+        />
+      )}
+      <MiniAction
+        icon="ui_close"
+        label="Fechar"
+        onClick={() => session.closeActorMenu()}
+        testId="actor-close"
+      />
     </div>
   );
 }

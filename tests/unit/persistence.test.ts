@@ -2,13 +2,19 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
 import { createCharacter } from '../../src/domain/rules/character';
-import { SAVE_VERSION, SaveValidationError, parseSave, toSaveFile } from '../../src/game/persistence/saveSchema';
+import {
+  SAVE_VERSION,
+  SaveValidationError,
+  parseSave,
+  toSaveFile,
+} from '../../src/game/persistence/saveSchema';
 import { IndexedDbSaveRepository, MemorySaveRepository } from '../../src/game/persistence/repositories';
 import { SaveService } from '../../src/game/persistence/SaveService';
 import type { SaveFile } from '../../src/game/persistence/saveSchema';
 
 const D = GAME_DATA;
-const make = () => createCharacter(D, { id: 'hero-1', name: 'Aria', vocation: 'druid', now: 0, position: { x: 47, y: 11 } });
+const make = () =>
+  createCharacter(D, { id: 'hero-1', name: 'Aria', vocation: 'druid', now: 0, position: { x: 47, y: 11 } });
 
 describe('formato de save', () => {
   it('ida e volta preserva o personagem', () => {
@@ -27,7 +33,11 @@ describe('formato de save', () => {
     delete c.stats;
     const parsed = parseSave(D, { version: 1, savedAt: 1, character: c });
     expect(parsed.version).toBe(SAVE_VERSION);
-    expect(parsed.character.hotbar).toEqual([...D.vocations.druid.spells.map((id) => `spell:${id}`), 'potion:health', 'potion:mana']);
+    expect(parsed.character.hotbar).toEqual([
+      ...D.vocations.druid.spells.slice(0, 6).map((id) => `spell:${id}`),
+      'potion:health',
+      'potion:mana',
+    ]);
     expect(parsed.character.stats.deaths).toBe(0);
   });
   it('migra saves da versão 2 (sem banco) com depósito vazio', () => {
@@ -52,10 +62,15 @@ describe('formato de save', () => {
   it('rejeita dados inválidos', () => {
     expect(() => parseSave(D, null)).toThrow(SaveValidationError);
     expect(() => parseSave(D, { version: 99, character: {} })).toThrow(SaveValidationError);
-    expect(() => parseSave(D, { version: SAVE_VERSION, character: { ...make(), vocation: 'pirate' } })).toThrow(/Vocação/);
+    expect(() =>
+      parseSave(D, { version: SAVE_VERSION, character: { ...make(), vocation: 'pirate' } }),
+    ).toThrow(/Vocação/);
   });
   it('sanitiza itens desconhecidos, quantidades e nível incoerente', () => {
-    const c = make() as unknown as Record<string, unknown> & { inventory: unknown[]; equipment: Record<string, unknown> };
+    const c = make() as unknown as Record<string, unknown> & {
+      inventory: unknown[];
+      equipment: Record<string, unknown>;
+    };
     c.inventory[0] = { itemId: 'hack_item', count: 5 };
     c.inventory[1] = { itemId: 'potion_health', count: 9999 };
     c.equipment.head = { itemId: 'sword_short', count: 1 }; // slot errado
@@ -73,7 +88,13 @@ describe('repositórios e serviço de save', () => {
   it('IndexedDB salva, lista, carrega e remove', async () => {
     const repo = new IndexedDbSaveRepository<SaveFile>(indexedDB);
     const c = make();
-    await repo.save(c.id, toSaveFile(c), { slotId: c.id, name: c.name, vocation: c.vocation, level: 1, updatedAt: 5 });
+    await repo.save(c.id, toSaveFile(c), {
+      slotId: c.id,
+      name: c.name,
+      vocation: c.vocation,
+      level: 1,
+      updatedAt: 5,
+    });
     expect((await repo.list()).map((s) => s.slotId)).toContain(c.id);
     const loaded = await repo.load(c.id);
     expect(loaded?.character.name).toBe('Aria');
