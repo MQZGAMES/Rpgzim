@@ -96,6 +96,8 @@ export interface SimulationOptions {
 
 /** Depois de atacar, quem segue o líder fica caçando em paz por este tempo antes de voltar a segui-lo. */
 const FOLLOW_COMBAT_PAUSE_MS = 6000;
+/** Fora da PZ a mana volta nesta proporção (a PZ não recupera mana, então o campo compensa). */
+const MANA_REGEN_OUTSIDE_PZ = 2;
 
 export class GameSimulation {
   readonly world: World;
@@ -391,10 +393,12 @@ export class GameSimulation {
       const voc = w.data.vocations[c.vocation];
       const pzMul = isPz(w.map, p.x, p.y) ? 2 : 1;
       let hp = (voc.regen.health + Math.floor(c.level / 5)) * pzMul;
-      let mp = (voc.regen.mana + Math.floor(c.level / 4)) * pzMul;
+      // área protegida: a vida volta em dobro, mas a mana não se recupera (poção ou fora dela)
+      const inPz = pzMul === 2;
+      let mp = inPz ? 0 : (voc.regen.mana + Math.floor(c.level / 4)) * MANA_REGEN_OUTSIDE_PZ;
       if (p.food && w.now < p.food.until) {
         hp += p.food.health;
-        mp += p.food.mana;
+        if (!inPz) mp += p.food.mana;
       } else p.food = null;
       for (const b of p.buffs) if (b.kind === 'regen' && b.expiresAt > w.now) hp += b.value;
       c.health = Math.min(p.stats.maxHealth, c.health + hp);

@@ -16,7 +16,8 @@ import { advance, makeSim } from '../helpers';
 
 function field(sim: GameSimulation): { x: number; y: number } {
   const w = sim.world;
-  const free = (x: number, y: number) => canEnter(w, x, y, false, 'x') && !isPz(w.map, x, y) && !w.map.city[y * w.map.width + x];
+  const free = (x: number, y: number) =>
+    canEnter(w, x, y, false, 'x') && !isPz(w.map, x, y) && !w.map.city[y * w.map.width + x];
   const s0 = w.map.playerStart;
   for (let r = 4; r < 60; r++)
     for (let dy = -r; dy <= r; dy++)
@@ -27,7 +28,8 @@ function field(sim: GameSimulation): { x: number; y: number } {
         let ok = true;
         for (let k = -9; k <= 9 && ok; k++) ok = free(x + k, y);
         for (let k = -4; k <= 4 && ok; k++) ok = free(x, y + k);
-        if (ok && [...w.monsters.values()].filter((m) => m.alive).every((m) => chebyshev(m, { x, y }) > 12)) return { x, y };
+        if (ok && [...w.monsters.values()].filter((m) => m.alive).every((m) => chebyshev(m, { x, y }) > 12))
+          return { x, y };
       }
   throw new Error('sem campo aberto');
 }
@@ -69,7 +71,10 @@ describe('Corrida', () => {
     expect(p.stats.speed).toBeGreaterThan(base + 0.5); // Corrida dá +0,7
     expect(p.slowUntil).toBe(0); // a lentidão acabou
     advance(sim, 30200, 100);
-    expect(p.stats.speed).toBeCloseTo(GAME_DATA.vocations[p.character.vocation].baseSpeed + levelSpeedBonus(p.character.level), 5);
+    expect(p.stats.speed).toBeCloseTo(
+      GAME_DATA.vocations[p.character.vocation].baseSpeed + levelSpeedBonus(p.character.level),
+      5,
+    );
     void base;
   });
 });
@@ -77,7 +82,7 @@ describe('Corrida', () => {
 describe('Rajada Glacial e lentidão em jogadores', () => {
   it('o raio voltou a ser 1 (o tamanho anterior)', () => {
     expect(GAME_DATA.spells.frost_burst?.radius).toBe(1);
-    expect(GAME_DATA.spells.frost_burst?.cooldownMs).toBe(4500);
+    expect(GAME_DATA.spells.frost_burst?.cooldownMs).toBe(4000);
   });
 
   it('um jogador/herói atingido (PK ligado) toma o dano e fica lento', () => {
@@ -85,7 +90,16 @@ describe('Rajada Glacial e lentidão em jogadores', () => {
     clearMonsters(sim);
     levelUp(sim);
     const hero = GAME_DATA.heroes.boladex!;
-    const h = sim.addHero(hero, createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart }));
+    const h = sim.addHero(
+      hero,
+      createCharacter(GAME_DATA, {
+        id: hero.slotId,
+        name: hero.name,
+        vocation: hero.vocation,
+        now: 0,
+        position: sim.world.map.playerStart,
+      }),
+    );
     h.brain.nextThinkAt = Infinity;
     sim.setPvp(true);
     const spot = field(sim);
@@ -111,11 +125,16 @@ describe('Escudo de Mana', () => {
     const w = sim.world;
     const p = w.player;
     expect(sim.castSpell('mana_shield')).toBe(true);
-    expect(buildSnapshot(sim, 1).buffs.some((b) => b.kind === 'manaShield' && b.remainingMs > 290000)).toBe(true);
+    expect(buildSnapshot(sim, 1).buffs.some((b) => b.kind === 'manaShield' && b.remainingMs > 290000)).toBe(
+      true,
+    );
     p.invulnerableUntil = 0;
     p.character.mana = 100;
     const hits: { amount: number; manaLoss?: number }[] = [];
-    sim.events.on('damage', (e) => e.targetId === p.id && hits.push({ amount: e.amount, manaLoss: e.manaLoss }));
+    sim.events.on(
+      'damage',
+      (e) => e.targetId === p.id && hits.push({ amount: e.amount, manaLoss: e.manaLoss }),
+    );
     const hp = p.character.health;
     damagePlayer(w, 60, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true);
     expect(p.character.health).toBe(hp); // tudo da mana
@@ -242,7 +261,9 @@ describe('recargas e flechas', () => {
   });
 
   it('o dano do arco vem do ataque da arma: arco melhor bate mais forte', () => {
-    expect(GAME_DATA.items.bow_royal!.weapon!.attack).toBeGreaterThan(GAME_DATA.items.bow_hunting!.weapon!.attack);
+    expect(GAME_DATA.items.bow_royal!.weapon!.attack).toBeGreaterThan(
+      GAME_DATA.items.bow_hunting!.weapon!.attack,
+    );
   });
   it('Corrida: dura 30 s e a exaustão é de só 2 s (dá para renovar sempre)', () => {
     const s = GAME_DATA.spells.haste!;

@@ -57,7 +57,8 @@ describe('cura automática', () => {
     h.y = w.human.y;
     h.character.inventory.fill(null);
     w.auto.autoHeal = true;
-    w.auto.healBelow = 0.5;
+    w.auto.healGroup = true;
+    w.auto.groupBelow = 0.5;
     sim.update(16);
     w.human.stats.magicLevel = 5;
     w.human.character.mana = 500;
@@ -79,6 +80,7 @@ describe('cura automática', () => {
     p.character.health = Math.round(p.stats.maxHealth * 0.3);
     p.character.mana = 100;
     w.auto.autoHeal = true;
+    w.auto.spellHeal = true;
     w.auto.healBelow = 0.6;
     advance(sim, 600, 50);
     expect(p.cooldowns['spell:light_heal'] ?? 0).toBeGreaterThan(0);
@@ -156,5 +158,66 @@ describe('saco de morte do jogador', () => {
     expect(w.lootBags.get('loot:morte')?.gold).toBe(500);
     expect(w.lootBags.has('loot:chao')).toBe(true);
     expect(h.character.gold).toBe(gold);
+  });
+});
+
+describe('migração das ajudas automáticas', () => {
+  it('configurações antigas viram a caixa Cura automática com as opções certas', async () => {
+    const { migrateAuto } = await import('../../src/game/ai/autoPlay');
+    const m = migrateAuto({ autoPotion: true, autoHeal: false, hpBelow: 0.5, manaBelow: 0.3 });
+    expect(m.autoHeal).toBe(true);
+    expect(m.potionHp).toBe(true);
+    expect(m.potionMana).toBe(true);
+    expect(m.spellHeal).toBe(false);
+    expect(migrateAuto({ autoLoot: true })).toEqual({ autoLoot: true });
+  });
+});
+
+describe('herói cercado longe do líder', () => {
+  it('seguindo o líder e cercado por criaturas, ele luta (não fica parado bebendo poção até morrer)', () => {
+    const { sim, w, h } = withHero();
+    invite(w, w.human.id, h.id);
+    acceptInvite(w, h.id, w.human.id);
+    configureParty(w, w.human.id, { formation: 'follow' });
+    for (const m of w.monsters.values()) {
+      m.alive = false;
+      m.respawnAt = Infinity;
+    }
+    // campo aberto a mais de 8 tiles do líder
+    const s = w.map.playerStart;
+    let spot = { x: s.x + 40, y: s.y };
+    for (let dx = 20; dx < 80; dx++)
+      if (
+        !isPz(w.map, s.x + dx, s.y) &&
+        canEnter(w, s.x + dx, s.y, false, h.id) &&
+        canEnter(w, s.x + dx + 1, s.y, false) &&
+        canEnter(w, s.x + dx, s.y + 1, false)
+      ) {
+        spot = { x: s.x + dx, y: s.y };
+        break;
+      }
+    h.x = spot.x;
+    h.y = spot.y;
+    h.brain.mode = 'follow';
+    h.brain.nextThinkAt = 0;
+    h.character.inventory[0] = { itemId: 'potion_health', count: 30 };
+    const mons = [...w.monsters.values()].slice(0, 3);
+    mons.forEach((m, i) => {
+      m.def = GAME_DATA.monsters.slime!;
+      m.hp = m.def.health * 4;
+      m.alive = true;
+      m.state = 'attacking';
+      m.targetId = h.id;
+      m.x = spot.x + (i === 0 ? 1 : 0);
+      m.y = spot.y + (i === 2 ? 1 : i === 1 ? 0 : 0);
+      if (i === 1) m.x = spot.x - 1;
+      if (i === 2) m.x = spot.x;
+    });
+    let fought = false;
+    for (let t = 0; t < 4000 && !fought; t += 100) {
+      advance(sim, 100, 50);
+      fought = !!h.targetId && w.monsters.get(h.targetId)?.alive === true;
+    }
+    expect(fought).toBe(true);
   });
 });

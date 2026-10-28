@@ -29,7 +29,13 @@ import { advance, makeSim } from '../helpers';
 function world() {
   const sim = makeSim('knight', { seed: 5 });
   const hero = GAME_DATA.heroes.boladex!;
-  const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+  const c = createCharacter(GAME_DATA, {
+    id: hero.slotId,
+    name: hero.name,
+    vocation: hero.vocation,
+    now: 0,
+    position: sim.world.map.playerStart,
+  });
   const h = sim.addHero(hero, c);
   h.brain.nextThinkAt = Infinity; // o herói não age sozinho nos testes
   sim.setPvp(true);
@@ -37,7 +43,11 @@ function world() {
 }
 
 /** O atacante mata a vítima com um golpe (a vítima toma o dano no próprio contexto). */
-function kill(sim: GameSimulation, killer: HeroEntity | GameSimulation['world']['human'], victim: HeroEntity | GameSimulation['world']['human']) {
+function kill(
+  sim: GameSimulation,
+  killer: HeroEntity | GameSimulation['world']['human'],
+  victim: HeroEntity | GameSimulation['world']['human'],
+) {
   const w = sim.world;
   victim.invulnerableUntil = 0;
   registerAggression(w, killer.id, victim.id);
@@ -131,7 +141,12 @@ describe('PK: caveiras e PZ lock', () => {
   });
 
   describe('quem matou: maior dano + último golpe', () => {
-    const hit = (w: ReturnType<typeof world>['w'], victim: HeroEntity, raw: number, src: { id: string; name: string; kind: 'player' | 'monster' }) => {
+    const hit = (
+      w: ReturnType<typeof world>['w'],
+      victim: HeroEntity,
+      raw: number,
+      src: { id: string; name: string; kind: 'player' | 'monster' },
+    ) => {
       victim.invulnerableUntil = 0;
       asActor(w, victim, () => damagePlayer(w, raw, 'fire', src, true));
     };
@@ -242,7 +257,10 @@ describe('morte: perdas, Amuleto da Perda e caveira', () => {
     t.human.invulnerableUntil = 0;
     return t;
   };
-  const die = (t: ReturnType<typeof world>) => asActor(t.w, t.human, () => damagePlayer(t.w, 999999, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true));
+  const die = (t: ReturnType<typeof world>) =>
+    asActor(t.w, t.human, () =>
+      damagePlayer(t.w, 999999, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true),
+    );
 
   it('perde TODA a mochila e o dinheiro (saco no chão, sem expirar) e cada equipado tem 10% de chance de cair', () => {
     const t = rig(false);
@@ -278,7 +296,8 @@ describe('morte: perdas, Amuleto da Perda e caveira', () => {
   });
 
   it('a loja vende o Amuleto da Perda por 10.000 em todas as lojas', () => {
-    for (const shop of Object.values(GAME_DATA.shops)) expect(shop.sells.find((o) => o.itemId === 'amulet_loss')?.price).toBe(10000);
+    for (const shop of Object.values(GAME_DATA.shops))
+      expect(shop.sells.find((o) => o.itemId === 'amulet_loss')?.price).toBe(10000);
   });
 
   it('caveira vermelha perde todos os equipados; branca/amarela renascem sem caveira e sem PZ lock', () => {

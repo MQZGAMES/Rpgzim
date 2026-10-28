@@ -11,11 +11,21 @@ function setup() {
   const sim = makeSim('knight', { seed: 21 });
   const w = sim.world;
   const hero = GAME_DATA.heroes.boladex!;
-  const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+  const c = createCharacter(GAME_DATA, {
+    id: hero.slotId,
+    name: hero.name,
+    vocation: hero.vocation,
+    now: 0,
+    position: w.map.playerStart,
+  });
   const h = sim.addHero(hero, c) as HeroEntity;
   return { sim, w, h };
 }
-const proto = (id: string, n: number) => Array.from({ length: n }, () => ({ def: GAME_DATA.monsters[id]!, hp: GAME_DATA.monsters[id]!.health }) as unknown as MonsterEntity);
+const proto = (id: string, n: number) =>
+  Array.from(
+    { length: n },
+    () => ({ def: GAME_DATA.monsters[id]!, hp: GAME_DATA.monsters[id]!.health }) as unknown as MonsterEntity,
+  );
 
 describe('régua de ameaça', () => {
   it('um slime é seguro; um grupo de trolls num herói fraco não é', () => {
@@ -63,12 +73,20 @@ describe('os outros heróis: cada vocação com a sua lógica', () => {
   const mk = (heroId: string) => {
     const sim = makeSim('knight', { seed: 33 });
     const hero = GAME_DATA.heroes[heroId]!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: sim.world.map.playerStart,
+    });
     return { sim, w: sim.world, h: sim.addHero(hero, c) as HeroEntity };
   };
 
   it('existem Boladex, Maguim, Mano Cura e Distanciado, um de cada vocação', () => {
-    const voc = Object.values(GAME_DATA.heroes).map((x) => x.vocation).sort();
+    const voc = Object.values(GAME_DATA.heroes)
+      .map((x) => x.vocation)
+      .sort();
     expect(voc).toEqual(['druid', 'knight', 'paladin', 'sorcerer']);
     expect(GAME_DATA.heroes.maguim?.name).toBe('Maguim');
     expect(GAME_DATA.heroes.mano_cura?.name).toBe('Mano Cura');
@@ -98,7 +116,9 @@ describe('os outros heróis: cada vocação com a sua lógica', () => {
     const { sim, w, h } = mk('maguim');
     h.character.gold = 400;
     h.brain.nextTownAt = 0;
-    h.character.inventory = h.character.inventory.map((st) => (st && st.itemId === 'potion_mana' ? null : st));
+    h.character.inventory = h.character.inventory.map((st) =>
+      st && st.itemId === 'potion_mana' ? null : st,
+    );
     h.character.level = 10;
     for (let t = 0; t < 240_000 && h.brain.mode !== 'town'; t += 100) advance(sim, 100, 50);
     for (let t = 0; t < 120_000 && h.brain.mode === 'town'; t += 100) advance(sim, 100, 50);
@@ -113,7 +133,16 @@ describe('grupos entre heróis e ajudas automáticas', () => {
     const w = sim.world;
     const hs = ['boladex', 'maguim', 'mano_cura'].map((id) => {
       const hero = GAME_DATA.heroes[id]!;
-      return sim.addHero(hero, createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart })) as HeroEntity;
+      return sim.addHero(
+        hero,
+        createCharacter(GAME_DATA, {
+          id: hero.slotId,
+          name: hero.name,
+          vocation: hero.vocation,
+          now: 0,
+          position: w.map.playerStart,
+        }),
+      ) as HeroEntity;
     });
     return { sim, w, hs };
   };
@@ -157,12 +186,12 @@ describe('grupos entre heróis e ajudas automáticas', () => {
     p.character.inventory = p.character.inventory.map(() => null);
     p.character.inventory[5] = { itemId: 'potion_health', count: 3 };
     p.character.health = Math.round(p.stats.maxHealth * 0.3);
-    sim.setAuto({ autoPotion: true, hpBelow: 0.5, prefer: 'fit' });
+    sim.setAuto({ autoHeal: true, potionHp: true, hpBelow: 0.5, prefer: 'fit' });
     advance(sim, 1500, 50);
     expect(p.character.health).toBeGreaterThan(p.stats.maxHealth * 0.3);
     expect(p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count).toBeLessThan(3);
     // desligado, não bebe
-    sim.setAuto({ autoPotion: false });
+    sim.setAuto({ autoHeal: false });
     const hp = (p.character.health = Math.round(p.stats.maxHealth * 0.2));
     const count = p.character.inventory.find((s) => s?.itemId === 'potion_health')!.count;
     advance(sim, 1500, 50);
@@ -176,7 +205,13 @@ describe('coragem aprendida e preparo', () => {
     const sim = makeSim('knight', { seed: 5 });
     const w = sim.world;
     const hero = GAME_DATA.heroes.boladex!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: w.map.playerStart,
+    });
     const h = sim.addHero(hero, c) as HeroEntity;
     const { heroOnEvent } = await import('../../src/game/ai/heroBrain');
     expect(h.brain.bold).toBe(0);
@@ -196,7 +231,13 @@ describe('coragem aprendida e preparo', () => {
     const w = sim.world;
     const { heroDpsVs } = await import('../../src/game/ai/heroThreat');
     const hero = GAME_DATA.heroes.distanciado!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: w.map.playerStart,
+    });
     const h = sim.addHero(hero, c) as HeroEntity;
     const mon = { def: GAME_DATA.monsters.orc!, hp: 320 } as unknown as MonsterEntity;
     const low = heroDpsVs(w, h, mon);

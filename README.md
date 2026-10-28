@@ -106,9 +106,19 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Knight com estoque**: sem bastante poção o Knight exige mais folga, não lura e não puxa criaturas dos colegas.
 - **Na PZ os personagens se atravessam** (templo, lojas, portas); fora dela continuam ocupando um tile cada.
 - **Líder na cidade**: cada herói do grupo aproveita para vender o loot, guardar o ouro e comprar poções/itens.
-- **Cura automática** (Ajustes): liga a cura por magia com barra de limite; o Druida usa a Bênção da Seiva quando você **ou um aliado do grupo** cai abaixo do limite.
+- **Cura automática** (Ajustes): uma caixa liga as opções, cada uma com a própria barra de percentual — *Usar Poção de Cura*, *Usar Poção de Mana*, *Usar Magia de Cura* e, no Druida, *Curar grupo* (Cura Intensa quando você **ou um aliado** a até 12 tiles cai abaixo da barra). Configurações antigas são convertidas.
 - **Grupo mais dinâmico**: em grupo os heróis se curam e bebem poção mais cedo, recuam para trás dos colegas em vez de apanhar até o fim, e Druid/Paladin lançam a magia de área no meio do bolo de criaturas.
 - **Saco de morte protegido**: heróis não pegam o saco de morte de outro personagem nem itens jogados no chão, e o saco de morte não é dividido com o grupo (antes, em grupo, parte do seu loot ia para os heróis).
+
+## Rodada de ajustes (exaustões, saco de morte, PZ)
+- **Cura Intensa** (antiga Bênção da Seiva, Druid): só cura, sem regeneração contínua; alcança o grupo a até **12 tiles** (3× o anterior), custa **80 de mana** e tem exaustão de **2 s**.
+- **Exaustões fechadas**: toda magia, cura e poção usa 2, 4, 6 ou 8 s conforme a força. Rajada Glacial 4 s; criar poção 2 s; poções: básica 2 s, forte 4 s, suprema 6 s, espiritual e divina 8 s. Magias de buff longo (Foco do Caçador, Brado de Ferro) ficaram com 4 s de duração para não ficarem sempre ativas.
+- **Saco de morte reservado**: morte por criaturas deixa o saco só para o dono por **5 minutos**; morte em PK, qualquer um pega a qualquer momento (e o herói nunca saqueia o jogador nem colegas de grupo).
+- **PZ**: a vida volta em dobro, mas a **mana não se recupera** (poção ou fora da PZ — lá ela volta em dobro para compensar) e a bênção do sacerdote só cura vida.
+- **Corrida**: o efeito visual ficou só na região dos pés.
+- **Jogador líder**: os heróis só saem do grupo e vão à vila quando as poções de cura estão no fim.
+- **Heróis cercados**: em qualquer atividade (seguindo, na vila, travados fugindo) eles escolhem o atacante mais fraco e lutam com as magias, em vez de beber todas as poções parados; "cercado" e "sem poção" só fazem fugir quando a luta é realmente ruim.
+- **Menos vila, mais caça**: bênção do sacerdote só com a vida baixa, banco só com ouro pesando, viagens de loot/upgrade mais espaçadas, estoque de poções maior, mana bebida antes de sair da cidade e mais vontade de caçar em grupo.
 
 ## Grupo, perseguição e itens no chão
 - **Grupo segue o líder**: quem está num grupo não escolhe vítimas de PK sozinho; ataca os monstros **e os personagens** que o líder ataca (se o PK estiver ligado) e solta o alvo quando o líder solta.
@@ -123,7 +133,7 @@ Além do **Boladex** (Knight), existem **Maguim** (Sorcerer), **Mano Cura** (Dru
 vivem sozinhos no mundo, aparecem na tela inicial como personagens jogáveis e podem ser convidados para grupos.
 A lógica por vocação está em `src/game/ai/heroRoles.ts` (perfil) e `heroBrain.ts`:
 - **Maguim**: Faísca/Lança/Explosão Ígnea conforme a situação, Escudo de Mana quando cercado, fica a ~3 tiles de quem bate corpo a corpo (recua se a criatura for mais lenta), estoca poções de mana (2,5× a mana máxima) e prioriza varinhas.
-- **Mano Cura**: Espinhos/Rajada Glacial (lentidão), Bênção da Seiva em si e no grupo, Escudo de Mana, estoque de mana e cajados; o mais cuidadoso e sociável.
+- **Mano Cura**: Espinhos/Rajada Glacial (lentidão), Cura Intensa em si e no grupo, Escudo de Mana, estoque de mana e cajados; o mais cuidadoso e sociável.
 - **Distanciado**: Foco do Caçador, Flecha Atordoante em quem se aproxima, Chuva de Flechas em grupos; só usa arcos (o ataque do arco é o dano dele).
 - Todos usam a régua de ameaça do Boladex (fuga antecipada, poções, escolha de área), com margem um pouco menor para quem luta de longe.
 - Cada um nasce num ponto próprio do templo, para não bloquear quem entra no jogo.

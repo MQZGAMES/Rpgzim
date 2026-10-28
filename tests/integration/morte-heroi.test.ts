@@ -172,3 +172,52 @@ describe('magias de criar poção', () => {
     expect(c.mana).toBe(2000);
   });
 });
+
+describe('delays fechados e Cura Intensa', () => {
+  it('todas as magias e poções usam recargas de 2, 4, 6 ou 8 s (as magias de buff longo também)', () => {
+    const allowed = new Set([2000, 4000, 6000, 8000]);
+    for (const s of Object.values(GAME_DATA.spells))
+      expect(allowed.has(s.cooldownMs), `${s.id} ${s.cooldownMs}`).toBe(true);
+    for (const i of Object.values(GAME_DATA.items))
+      if (i.type === 'potion')
+        expect(allowed.has(i.use!.cooldownMs), `${i.id} ${i.use!.cooldownMs}`).toBe(true);
+    const cura = GAME_DATA.spells.sap_blessing!;
+    expect(cura.name).toBe('Cura Intensa');
+    expect(cura.manaCost).toBe(80);
+    expect(cura.partyRadius).toBe(12);
+    expect(cura.buff).toBeUndefined();
+    expect(GAME_DATA.spells.frost_burst!.cooldownMs).toBe(4000);
+  });
+});
+
+describe('saco de morte reservado e mana na PZ', () => {
+  it('morte por criaturas: o saco é só do dono por 5 min; morte no PK: qualquer um pega', () => {
+    const { sim, w, h } = setup('boladex');
+    h.character.inventory[0] = { itemId: 'potion_health', count: 3 };
+    killHero(sim, h);
+    const bag = [...w.lootBags.values()].find((l) => l.ownerId === h.id)!;
+    expect(bag.lockedUntil).toBeGreaterThan(w.now + 4 * 60000);
+    // outro personagem (o jogador) não consegue pegar durante o bloqueio
+    w.human.x = bag.x;
+    w.human.y = bag.y;
+    const before = w.human.character.gold;
+    sim.takeLoot('all');
+    expect(w.lootBags.get(bag.id)!.gold + 0).toBe(bag.gold);
+    expect(w.human.character.gold).toBe(before);
+    advance(sim, 5 * 60000 + 1000, 250);
+    const still = w.lootBags.get(bag.id);
+    expect(still === undefined || (still.lockedUntil ?? 0) <= w.now).toBe(true);
+  });
+
+  it('a PZ não recupera mana e a bênção do sacerdote só cura vida', () => {
+    const sim = makeSim('sorcerer', { seed: 3 });
+    const w = sim.world;
+    const p = w.player;
+    sim.update(16);
+    p.character.mana = 10;
+    p.character.health = 10;
+    advance(sim, 8000, 50);
+    expect(p.character.mana).toBe(10);
+    expect(p.character.health).toBeGreaterThan(10);
+  });
+});

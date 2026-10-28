@@ -85,14 +85,14 @@ export function healPotions(w: World, h: HeroEntity): number[] {
   return out.sort((a, b) => b - a);
 }
 
-/** Vida efetiva: vida atual + 80% da cura de até 8 poções (beber leva 1 s cada). */
+/** Vida efetiva: vida atual + 70% da cura de até 5 poções (cada uma tem exaustão de 2 a 8 s conforme a força). */
 export function effectiveHp(w: World, h: HeroEntity): number {
   const pots = healPotions(w, h)
-    .slice(0, 8)
+    .slice(0, 5)
     .reduce((s, v) => s + v, 0);
   // Escudo de Mana ativo: a mana também absorve dano (a vida só cai quando ela acaba)
   const shield = h.buffs.some((b) => b.kind === 'manaShield') ? h.character.mana : 0;
-  return h.character.health + 0.8 * pots + shield;
+  return h.character.health + 0.7 * pots + shield;
 }
 
 /** Dano total esperado ao enfrentar o grupo (mata a mais fraca primeiro). */

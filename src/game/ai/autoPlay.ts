@@ -7,29 +7,53 @@ import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
 
 export interface AutoSettings {
+  /** Pegar o loot ao alcance sozinho. */
   autoLoot: boolean;
-  autoPotion: boolean;
-  /** Bebe poção de vida abaixo desta fração da vida máxima. */
+  /** Cura automática (caixa principal): liga as opções abaixo. */
+  autoHeal: boolean;
+  /** Usar poção de cura abaixo desta fração da vida máxima. */
+  potionHp: boolean;
   hpBelow: number;
-  /** Bebe poção de mana abaixo desta fração da mana máxima (0 = desligado). */
+  /** Usar poção de mana abaixo desta fração da mana máxima. */
+  potionMana: boolean;
   manaBelow: number;
+  /** Usar magia de cura (Respiro Vital) abaixo desta fração da vida. */
+  spellHeal: boolean;
+  healBelow: number;
+  /** Druida: Cura Intensa no grupo quando você ou um aliado a até 12 tiles cai abaixo desta fração. */
+  healGroup: boolean;
+  groupBelow: number;
   /** Qual poção usar primeiro: a que mais se ajusta ao que falta, a menor ou a maior. */
   prefer: 'fit' | 'small' | 'large';
-  /** Cura sozinho com magia (Respiro Vital; o Druida usa a Bênção da Seiva, que cura o grupo). */
-  autoHeal: boolean;
-  /** Cura quando a vida (a sua ou, no Druida, a de um aliado do grupo) cai abaixo desta fração. */
-  healBelow: number;
 }
 
 export const DEFAULT_AUTO: AutoSettings = {
   autoLoot: false,
-  autoPotion: false,
-  hpBelow: 0.4,
-  manaBelow: 0.25,
-  prefer: 'fit',
   autoHeal: false,
+  potionHp: true,
+  hpBelow: 0.4,
+  potionMana: true,
+  manaBelow: 0.25,
+  spellHeal: false,
   healBelow: 0.6,
+  healGroup: false,
+  groupBelow: 0.5,
+  prefer: 'fit',
 };
+
+/** Aceita o formato antigo das configurações (autoPotion/autoHeal avulsos) e completa o que falta com os padrões. */
+export function migrateAuto(saved: Record<string, unknown>): Partial<AutoSettings> {
+  if ('potionHp' in saved || !('autoPotion' in saved)) return saved as Partial<AutoSettings>;
+  const oldPotion = saved.autoPotion === true;
+  const oldSpell = saved.autoHeal === true;
+  return {
+    ...(saved as Partial<AutoSettings>),
+    autoHeal: oldPotion || oldSpell,
+    potionHp: oldPotion,
+    potionMana: oldPotion && Number(saved.manaBelow ?? 0) > 0,
+    spellHeal: oldSpell,
+  };
+}
 
 /** Índice da poção da mochila (de vida ou de mana) conforme a preferência; -1 se não houver. */
 export function choosePotion(
@@ -69,20 +93,21 @@ function weakestAround(w: World, radius: number): number {
   return lowest;
 }
 
-/** Cura sozinho com magia: o Druida abençoa o grupo quando alguém cai abaixo do limite; os demais curam a si mesmos. */
-function autoHealSpell(w: World, below: number): boolean {
+/** Cura sozinho com magia: Cura Intensa no grupo (Druida) e/ou Respiro Vital em si mesmo. */
+function autoHealSpell(w: World, a: AutoSettings): boolean {
   const p = w.player;
-  const mine = p.character.health / Math.max(1, p.stats.maxHealth);
   const sap = w.data.spells.sap_blessing;
   if (
+    a.healGroup &&
     p.character.vocation === 'druid' &&
     sap &&
-    weakestAround(w, sap.partyRadius ?? 4) < below &&
+    weakestAround(w, sap.partyRadius ?? 12) < a.groupBelow &&
     castCheck(w, sap).ok
   )
     return castSpell(w, sap.id);
   const light = w.data.spells.light_heal;
-  if (mine < below && light && castCheck(w, light).ok) return castSpell(w, light.id);
+  const mine = p.character.health / Math.max(1, p.stats.maxHealth);
+  if (a.spellHeal && mine < a.healBelow && light && castCheck(w, light).ok) return castSpell(w, light.id);
   return false;
 }
 
@@ -90,16 +115,16 @@ function autoHealSpell(w: World, below: number): boolean {
 export function updateAutoPlay(w: World): void {
   const a = w.auto;
   const p = w.player;
-  if ((!a.autoLoot && !a.autoPotion && !a.autoHeal) || p.dead || w.now < nextAt) return;
+  if ((!a.autoLoot && !a.autoHeal) || p.dead || w.now < nextAt) return;
   nextAt = w.now + 400;
-  const healed = a.autoHeal && autoHealSpell(w, a.healBelow);
-  if (a.autoPotion && !healed) {
+  if (a.autoHeal) {
+    const healed = autoHealSpell(w, a);
     const pct = p.character.health / Math.max(1, p.stats.maxHealth);
     const manaPct = p.character.mana / Math.max(1, p.stats.maxMana);
-    if (pct < a.hpBelow) {
+    if (!healed && a.potionHp && pct < a.hpBelow) {
       const idx = choosePotion(w, 'heal', p.stats.maxHealth - p.character.health, a.prefer);
       if (idx >= 0) useInventoryItem(w, idx);
-    } else if (a.manaBelow > 0 && manaPct < a.manaBelow) {
+    } else if (!healed && a.potionMana && a.manaBelow > 0 && manaPct < a.manaBelow) {
       const idx = choosePotion(w, 'mana', p.stats.maxMana - p.character.mana, a.prefer);
       if (idx >= 0) useInventoryItem(w, idx);
     }

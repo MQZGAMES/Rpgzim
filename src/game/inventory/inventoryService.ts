@@ -151,10 +151,28 @@ function splitWithParty(w: World, bag: LootContainer, which: number | 'all'): vo
   // (sem remover aqui: `takeLoot` usa os índices e apaga os sacos vazios)
 }
 
+/** O saco de morte ainda é só do dono (morte por criaturas, primeiros 5 minutos)? */
+export function bagLockedFor(
+  w: World,
+  bag: { ownerId?: string; lockedUntil?: number },
+  actorId: string,
+): boolean {
+  return !!bag.ownerId && bag.ownerId !== actorId && (bag.lockedUntil ?? 0) > w.now;
+}
+
 export function takeLoot(w: World, containerId: string, which: number | 'all'): void {
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
   if (!bag) return;
+  if (bagLockedFor(w, bag, w.player.id)) {
+    warnThrottled(
+      w,
+      'bag:locked',
+      `Este saco é de ${bag.sourceName.replace(' (morto)', '')} por mais ${Math.ceil(((bag.lockedUntil ?? 0) - w.now) / 1000)} s.`,
+      1500,
+    );
+    return;
+  }
   // o que você mesmo jogou e o saco de morte (que é de quem morreu) não são divididos com o grupo
   if (!bag.dropped && !bag.ownerId) splitWithParty(w, bag, which);
   if (bag.gold > 0 && (which === 'all' || which === -1)) {

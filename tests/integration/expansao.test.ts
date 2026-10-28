@@ -12,7 +12,8 @@ describe('equipamentos do nível 24 ao 100', () => {
     let lastAttack = 0;
     let lastArmor = 0;
     for (const t of GEAR_TIERS) {
-      for (const kind of GEAR_KINDS) expect(GAME_DATA.items[`${kind}_${t.id}`], `${kind}_${t.id}`).toBeDefined();
+      for (const kind of GEAR_KINDS)
+        expect(GAME_DATA.items[`${kind}_${t.id}`], `${kind}_${t.id}`).toBeDefined();
       const sword = GAME_DATA.items[`sword_${t.id}`]!;
       const armor = GAME_DATA.items[`armor_${t.id}`]!;
       expect(sword.minLevel).toBe(t.level);
@@ -26,7 +27,8 @@ describe('equipamentos do nível 24 ao 100', () => {
 
   it('todos os itens novos têm ícone no atlas', () => {
     const frames = icons.frames as Record<string, unknown>;
-    for (const i of Object.values(GAME_DATA.items)) expect(frames[i.icon], `${i.id} → ${i.icon}`).toBeDefined();
+    for (const i of Object.values(GAME_DATA.items))
+      expect(frames[i.icon], `${i.id} → ${i.icon}`).toBeDefined();
   });
 });
 
@@ -37,7 +39,9 @@ describe('criaturas tardias', () => {
     const sheets = new Set(Object.keys(manifest.sheets));
     const late = CREATURE_LADDER.filter((r) => r.tier >= 6);
     expect(late.length).toBe(16);
-    expect(Math.max(...Object.values(GAME_DATA.monsters).map((m) => m.level ?? 0))).toBeGreaterThanOrEqual(100);
+    expect(Math.max(...Object.values(GAME_DATA.monsters).map((m) => m.level ?? 0))).toBeGreaterThanOrEqual(
+      100,
+    );
     for (const r of late) {
       const m = GAME_DATA.monsters[r.id]!;
       expect(sheets.has(m.sprite), `${r.id} sprite`).toBe(true);
@@ -48,7 +52,12 @@ describe('criaturas tardias', () => {
 
   it('XP e vida crescem de faixa em faixa (sem buracos nem saltos absurdos)', () => {
     const byTier = new Map<number, { xp: number; hp: number }>();
-    for (const r of CREATURE_LADDER) if (r.step === 0) byTier.set(r.tier, { xp: GAME_DATA.monsters[r.id]!.experience, hp: GAME_DATA.monsters[r.id]!.health });
+    for (const r of CREATURE_LADDER)
+      if (r.step === 0)
+        byTier.set(r.tier, {
+          xp: GAME_DATA.monsters[r.id]!.experience,
+          hp: GAME_DATA.monsters[r.id]!.health,
+        });
     const tiers = [...byTier.entries()].sort((a, b) => a[0] - b[0]);
     for (let i = 1; i < tiers.length; i++) {
       expect(tiers[i]![1].hp).toBeGreaterThan(tiers[i - 1]![1].hp);
@@ -63,7 +72,9 @@ describe('uma cidade só: equipamento do nível 100 em Pedraluz e zonas por dist
     expect(GAME_DATA.shops.equipment!.sells.some((o) => o.itemId === 'bow_celestial')).toBe(true);
     expect(GAME_DATA.shops.potions!.sells.some((o) => o.itemId === 'wand_primordial')).toBe(true);
     expect(GAME_DATA.shops.potions!.sells.some((o) => o.itemId === 'potion_health_divine')).toBe(true);
-    expect(GAME_DATA.shops.general!.buys.find((o) => o.itemId === 'dire_fang')?.price).toBe(GAME_DATA.items.dire_fang!.value);
+    expect(GAME_DATA.shops.general!.buys.find((o) => o.itemId === 'dire_fang')?.price).toBe(
+      GAME_DATA.items.dire_fang!.value,
+    );
     expect(Object.keys(GAME_DATA.shops)).toEqual(['equipment', 'potions', 'general']);
   });
 
@@ -78,7 +89,9 @@ describe('uma cidade só: equipamento do nível 100 em Pedraluz e zonas por dist
       arr.push({ dist: Math.hypot(s.x - home.x, s.y - home.y), level: m.level! });
       levelAt.set(m.id, arr);
     }
-    const rows = [...levelAt.entries()].map(([id, a]) => ({ id, d: a.reduce((s, x) => s + x.dist, 0) / a.length, level: a[0]!.level })).sort((a, b) => a.d - b.d);
+    const rows = [...levelAt.entries()]
+      .map(([id, a]) => ({ id, d: a.reduce((s, x) => s + x.dist, 0) / a.length, level: a[0]!.level }))
+      .sort((a, b) => a.d - b.d);
     const avg = (xs: typeof rows) => xs.reduce((s, r) => s + r.level, 0) / xs.length;
     const half = rows.length / 2;
     expect(avg(rows.slice(half))).toBeGreaterThan(avg(rows.slice(0, half)) + 25); // a metade mais longe é bem mais difícil

@@ -1,4 +1,4 @@
-import type { AutoSettings } from '../../game/ai/autoPlay';
+import { migrateAuto, type AutoSettings } from '../../game/ai/autoPlay';
 // Sessão de jogo: liga simulação, persistência, áudio e interface. É a camada de integração explícita
 // entre React e Phaser: o Phaser chama `frame()` a cada quadro; o React lê as stores e envia comandos.
 import { parseHotbarEntry, type HotbarEntry } from '../../domain/rules/hotbar';
@@ -60,15 +60,22 @@ export class GameSession {
       const hero = Object.values(opts.data.heroes).find((d) => d.slotId === hc.id);
       return hero && hc.id !== character.id ? [{ hero, character: hc }] : [];
     });
-    this.sim = new GameSimulation({ data: opts.data, map: opts.map, character, restorePosition: restore, heroes, clock: Date.now });
+    this.sim = new GameSimulation({
+      data: opts.data,
+      map: opts.map,
+      character,
+      restorePosition: restore,
+      heroes,
+      clock: Date.now,
+    });
     character = this.sim.world.player.character;
     if (!restore) {
       character.health = this.sim.world.player.stats.maxHealth;
       character.mana = this.sim.world.player.stats.maxMana;
     }
     try {
-      const saved = JSON.parse(localStorage.getItem(AUTO_KEY) ?? 'null') as Partial<AutoSettings> | null;
-      if (saved) this.sim.setAuto(saved);
+      const saved = JSON.parse(localStorage.getItem(AUTO_KEY) ?? 'null') as Record<string, unknown> | null;
+      if (saved) this.sim.setAuto(migrateAuto(saved));
     } catch {
       // sem armazenamento: usa os padrões
     }
@@ -96,7 +103,30 @@ export class GameSession {
   private wireEvents(): void {
     const ev = this.sim.events;
     const markDirty = () => (this.dirty = true);
-    for (const type of ['damage', 'heal', 'itemsChanged', 'goldChanged', 'targetChanged', 'lootChanged', 'lootDropped', 'dialogOpened', 'shopOpened', 'depotOpened', 'partyInvite', 'partyChanged', 'socialChanged', 'levelUp', 'skillUp', 'playerDied', 'playerRespawned', 'buffApplied', 'spellCast', 'regionEntered', 'buildingChanged', 'xpGained'] as const) {
+    for (const type of [
+      'damage',
+      'heal',
+      'itemsChanged',
+      'goldChanged',
+      'targetChanged',
+      'lootChanged',
+      'lootDropped',
+      'dialogOpened',
+      'shopOpened',
+      'depotOpened',
+      'partyInvite',
+      'partyChanged',
+      'socialChanged',
+      'levelUp',
+      'skillUp',
+      'playerDied',
+      'playerRespawned',
+      'buffApplied',
+      'spellCast',
+      'regionEntered',
+      'buildingChanged',
+      'xpGained',
+    ] as const) {
       this.disposers.push(ev.on(type, markDirty));
     }
     this.disposers.push(
@@ -107,32 +137,43 @@ export class GameSession {
       }),
       ev.on('regionEntered', (r) => {
         const reg0 = this.sim.world.map.regions.find((x) => x.id === r.regionId);
-        const sub = reg0?.pz ? 'Área protegida' : reg0?.city ? 'Cidade — protegido só dentro das construções' : 'Área de caça — cuidado!';
+        const sub = reg0?.pz
+          ? 'Área protegida'
+          : reg0?.city
+            ? 'Cidade — protegido só dentro das construções'
+            : 'Área de caça — cuidado!';
         this.local.update({ banner: { id: ++this.msgSeq, title: r.name, subtitle: sub } });
         const reg = this.sim.world.map.regions.find((x) => x.id === r.regionId);
         if (reg) this.audio.setMusic(reg.music);
       }),
       ev.on('levelUp', (e) => this.local.update({ levelUp: { id: ++this.msgSeq, level: e.level } })),
-      ev.on('pkNotice', (e) => this.local.update({ pkToast: { id: ++this.msgSeq, text: e.text, danger: e.danger } })),
+      ev.on('pkNotice', (e) =>
+        this.local.update({ pkToast: { id: ++this.msgSeq, text: e.text, danger: e.danger } }),
+      ),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
       ev.on('partyChanged', () => {
         const has = !!this.sim.world.social.party;
         // grupo formado pelo menu do personagem: abre os controles (pela lista de online, só avisa)
-        if (has && !this.hadParty && !this.local.get().panel) this.local.update({ partyPanel: true, actorMenu: null });
+        if (has && !this.hadParty && !this.local.get().panel)
+          this.local.update({ partyPanel: true, actorMenu: null });
         if (!has) this.local.update({ partyPanel: false });
         this.hadParty = has;
       }),
       // falas de heróis próximos aparecem no registro de mensagens
       ev.on('speech', (e) => {
         const p = this.sim.world.human;
-        if (Math.max(Math.abs(e.position.x - p.x), Math.abs(e.position.y - p.y)) <= 12) this.pushMessage(`${e.name}: ${e.text}`, 'chat');
+        if (Math.max(Math.abs(e.position.x - p.x), Math.abs(e.position.y - p.y)) <= 12)
+          this.pushMessage(`${e.name}: ${e.text}`, 'chat');
       }),
     );
   }
 
   pushMessage(text: string, kind: UiLocalState['messages'][number]['kind']): void {
-    const msgs = [...this.local.get().messages, { id: ++this.msgSeq, text, kind, at: performance.now() }].slice(-30);
+    const msgs = [
+      ...this.local.get().messages,
+      { id: ++this.msgSeq, text, kind, at: performance.now() },
+    ].slice(-30);
     this.local.update({ messages: msgs });
   }
 
@@ -158,7 +199,10 @@ export class GameSession {
 
   start(): void {
     // roda no tempo ocioso do navegador (entre quadros) para nunca competir com a renderização
-    const idle = (fn: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 0));
+    const idle = (fn: () => void) =>
+      typeof requestIdleCallback === 'function'
+        ? requestIdleCallback(fn, { timeout: 2000 })
+        : setTimeout(fn, 0);
     this.autosaveTimer = setInterval(() => idle(() => void this.saveNow()), AUTOSAVE_MS);
     const onHide = () => {
       if (document.visibilityState === 'hidden') {
@@ -170,9 +214,14 @@ export class GameSession {
     const onPageHide = () => void this.saveNow().then(() => this.saves.flushRemote(true));
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
-    this.disposers.push(() => document.removeEventListener('visibilitychange', onHide), () => window.removeEventListener('pagehide', onPageHide));
+    this.disposers.push(
+      () => document.removeEventListener('visibilitychange', onHide),
+      () => window.removeEventListener('pagehide', onPageHide),
+    );
     this.local.update({ ready: true });
-    this.audio.setMusic(this.sim.world.map.regions.find((r) => r.id === this.sim.world.ui.regionId)?.music ?? 'town');
+    this.audio.setMusic(
+      this.sim.world.map.regions.find((r) => r.id === this.sim.world.ui.regionId)?.music ?? 'town',
+    );
   }
 
   private heroSavedAt = new Map<string, number>();
@@ -188,7 +237,9 @@ export class GameSession {
     return this.saves.save(heroSnapshot(this.sim.world, h)).catch(() => undefined);
   }
   private saveHeroes(): Promise<void> {
-    return Promise.all([...this.sim.world.heroes.values()].map((h) => this.saveHero(h.hero.id, true))).then(() => undefined);
+    return Promise.all([...this.sim.world.heroes.values()].map((h) => this.saveHero(h.hero.id, true))).then(
+      () => undefined,
+    );
   }
 
   async saveNow(): Promise<void> {
@@ -263,26 +314,58 @@ export class GameSession {
   }
   private travelGoal: { x: number; y: number } | null = null;
   /** Posições para o mini mapa (lidas a cada poucos décimos de segundo, fora do snapshot). */
-  minimapState(): { width: number; height: number; you: { x: number; y: number }; party: { id: string; name: string; x: number; y: number; leader: boolean }[]; goal: { x: number; y: number } | null; regions: { name: string; x: number; y: number }[]; heroes: { id: string; name: string; x: number; y: number; vocation: string; inParty: boolean; dead: boolean }[]; npcs: { id: string; name: string; x: number; y: number}[]; bags: { id: string; x: number; y: number; mine: boolean }[] } {
+  minimapState(): {
+    width: number;
+    height: number;
+    you: { x: number; y: number };
+    party: { id: string; name: string; x: number; y: number; leader: boolean }[];
+    goal: { x: number; y: number } | null;
+    regions: { name: string; x: number; y: number }[];
+    heroes: {
+      id: string;
+      name: string;
+      x: number;
+      y: number;
+      vocation: string;
+      inParty: boolean;
+      dead: boolean;
+    }[];
+    npcs: { id: string; name: string; x: number; y: number }[];
+    bags: { id: string; x: number; y: number; mine: boolean }[];
+  } {
     const w = this.sim.world;
     const p = w.human;
     const party = w.social.party;
-    const goal = p.path?.length ? this.travelGoal ?? p.pathGoal : null;
+    const goal = p.path?.length ? (this.travelGoal ?? p.pathGoal) : null;
     if (!p.path?.length) this.travelGoal = null;
     return {
       width: w.map.width,
       height: w.map.height,
       you: { x: p.x, y: p.y },
-      party: (party?.members ?? []).filter((id) => id !== p.id).flatMap((id) => {
-        const a = w.heroes.get(id);
-        return a ? [{ id, name: a.character.name, x: a.x, y: a.y, leader: party!.leaderId === id }] : [];
-      }),
-      heroes: [...w.heroes.values()].map((a) => ({ id: a.id, name: a.character.name, x: a.x, y: a.y, vocation: a.character.vocation, inParty: !!party?.members.includes(a.id), dead: a.dead })),
+      party: (party?.members ?? [])
+        .filter((id) => id !== p.id)
+        .flatMap((id) => {
+          const a = w.heroes.get(id);
+          return a ? [{ id, name: a.character.name, x: a.x, y: a.y, leader: party!.leaderId === id }] : [];
+        }),
+      heroes: [...w.heroes.values()].map((a) => ({
+        id: a.id,
+        name: a.character.name,
+        x: a.x,
+        y: a.y,
+        vocation: a.character.vocation,
+        inParty: !!party?.members.includes(a.id),
+        dead: a.dead,
+      })),
       npcs: [...w.npcs.values()].map((n) => ({ id: n.id, name: n.def.name, x: n.x, y: n.y })),
       // saco de morte do jogador (ou o último loot largado por ele) em destaque; sacos de monstros não poluem o mapa
-      bags: [...w.lootBags.values()].filter((l) => l.ownerId === p.id).map((l) => ({ id: l.id, x: l.x, y: l.y, mine: true })),
+      bags: [...w.lootBags.values()]
+        .filter((l) => l.ownerId === p.id)
+        .map((l) => ({ id: l.id, x: l.x, y: l.y, mine: true })),
       goal,
-      regions: w.map.regions.filter((r) => r.priority >= 1 && r.w * r.h < w.map.width * w.map.height * 0.5).map((r) => ({ name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 })),
+      regions: w.map.regions
+        .filter((r) => r.priority >= 1 && r.w * r.h < w.map.width * w.map.height * 0.5)
+        .map((r) => ({ name: r.name, x: r.x + r.w / 2, y: r.y + r.h / 2 })),
     };
   }
   /** Toque/clique no mapa (camada de entrada da interface), em coordenadas da janela. */
@@ -450,7 +533,11 @@ export class GameSession {
     const c = w.player.character;
     const missing = kind === 'health' ? w.player.stats.maxHealth - c.health : w.player.stats.maxMana - c.mana;
     const owned = [...new Set(c.inventory.filter((s) => s).map((s) => s!.itemId))]
-      .map((id) => ({ id, v: (kind === 'health' ? w.data.items[id]?.use?.heal : w.data.items[id]?.use?.mana) ?? 0, other: kind === 'health' ? w.data.items[id]?.use?.mana : w.data.items[id]?.use?.heal }))
+      .map((id) => ({
+        id,
+        v: (kind === 'health' ? w.data.items[id]?.use?.heal : w.data.items[id]?.use?.mana) ?? 0,
+        other: kind === 'health' ? w.data.items[id]?.use?.mana : w.data.items[id]?.use?.heal,
+      }))
       .filter((p) => p.v > 0 && !p.other && w.data.items[p.id]?.type === 'potion')
       .sort((a, b) => a.v - b.v);
     return (owned.find((p) => p.v >= missing * 0.8) ?? owned[owned.length - 1])?.id;

@@ -17,7 +17,13 @@ import { statDiff } from '../../src/ui/inventory/InventoryPanel';
 function withHero(vocation: 'knight' | 'paladin' | 'druid' | 'sorcerer' = 'knight', seed = 21) {
   const sim = makeSim(vocation, { seed });
   const hero = GAME_DATA.heroes.boladex!;
-  const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+  const c = createCharacter(GAME_DATA, {
+    id: hero.slotId,
+    name: hero.name,
+    vocation: hero.vocation,
+    now: 0,
+    position: sim.world.map.playerStart,
+  });
   // o Knight só arrisca, lura e puxa criaturas com bastante poção na mochila
   c.inventory[0] = { itemId: 'potion_health', count: 40 };
   const h = sim.addHero(hero, c);
@@ -35,7 +41,8 @@ function putAt(sim: GameSimulation, a: { x: number; y: number; id: string }, x: 
 /** Tile livre fora da área protegida, longe dos monstros (campo aberto ao sul da vila). */
 function openField(sim: GameSimulation): { x: number; y: number } {
   const w = sim.world;
-  const free = (xx: number, yy: number) => canEnter(w, xx, yy, false, 'x') && !isPz(w.map, xx, yy) && !w.map.city[yy * w.map.width + xx];
+  const free = (xx: number, yy: number) =>
+    canEnter(w, xx, yy, false, 'x') && !isPz(w.map, xx, yy) && !w.map.city[yy * w.map.width + xx];
   const s0 = w.map.playerStart;
   for (let r = 4; r < 60; r++)
     for (let dy = -r; dy <= r; dy++)
@@ -141,7 +148,15 @@ describe('herói em grupo: cura, poções e loot', () => {
     h.brain.modeUntil = w.now + 600000;
     asActor(w, h, () => sim.setTarget(monster.id));
     // um saco de loot no mesmo tile do herói
-    w.lootBags.set('bag-test', { id: 'bag-test', x: spot.x, y: spot.y, items: [{ itemId: 'slime_gel', count: 2 }], gold: 7, expiresAt: w.now + 60000, sourceName: 'Slime' });
+    w.lootBags.set('bag-test', {
+      id: 'bag-test',
+      x: spot.x,
+      y: spot.y,
+      items: [{ itemId: 'slime_gel', count: 2 }],
+      gold: 7,
+      expiresAt: w.now + 60000,
+      sourceName: 'Slime',
+    });
     advance(sim, 1500, 50);
     // pegou o loot E continua com o mesmo alvo
     expect(countItem(h.character.inventory, 'slime_gel')).toBeGreaterThan(0);
@@ -209,7 +224,14 @@ describe('herói em grupo: isca, poção para o colega e loot à distância', ()
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
-    w.social.party = { leaderId: w.human.id, members: [w.human.id, h.id], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+    w.social.party = {
+      leaderId: w.human.id,
+      members: [w.human.id, h.id],
+      formation: 'follow',
+      targeting: 'leader',
+      friendlyFire: false,
+      trail: [],
+    };
     h.brain.mode = 'follow';
     h.character.level = 10;
     h.character.mana = 999;
@@ -231,7 +253,14 @@ describe('herói em grupo: isca, poção para o colega e loot à distância', ()
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
-    w.social.party = { leaderId: w.human.id, members: [w.human.id, h.id], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+    w.social.party = {
+      leaderId: w.human.id,
+      members: [w.human.id, h.id],
+      formation: 'follow',
+      targeting: 'leader',
+      friendlyFire: false,
+      trail: [],
+    };
     h.brain.mode = 'hunt';
     h.brain.modeUntil = w.now + 600000;
     h.brain.quarry = 'slime';
@@ -253,7 +282,15 @@ describe('herói em grupo: isca, poção para o colega e loot à distância', ()
     h.brain.quarry = 'slime';
     h.brain.spot = { x: spot.x, y: spot.y };
     h.brain.modeUntil = w.now + 600000;
-    w.lootBags.set('far-bag', { id: 'far-bag', x: spot.x + 8, y: spot.y, items: [{ itemId: 'slime_gel', count: 3 }], gold: 0, expiresAt: w.now + 120000, sourceName: 'Slime' });
+    w.lootBags.set('far-bag', {
+      id: 'far-bag',
+      x: spot.x + 8,
+      y: spot.y,
+      items: [{ itemId: 'slime_gel', count: 3 }],
+      gold: 0,
+      expiresAt: w.now + 120000,
+      sourceName: 'Slime',
+    });
     advance(sim, 8000, 50);
     expect(countItem(h.character.inventory, 'slime_gel')).toBeGreaterThanOrEqual(3);
   });
@@ -274,7 +311,15 @@ describe('herói em grupo: isca, poção para o colega e loot à distância', ()
     h.brain.spot = { x: monster.x, y: monster.y };
     h.brain.modeUntil = w.now + 600000;
     asActor(w, h, () => sim.setTarget(monster.id));
-    w.lootBags.set('near-bag', { id: 'near-bag', x: spot.x + 4, y: spot.y, items: [{ itemId: 'slime_gel', count: 2 }], gold: 0, expiresAt: w.now + 120000, sourceName: 'Slime' });
+    w.lootBags.set('near-bag', {
+      id: 'near-bag',
+      x: spot.x + 4,
+      y: spot.y,
+      items: [{ itemId: 'slime_gel', count: 2 }],
+      gold: 0,
+      expiresAt: w.now + 120000,
+      sourceName: 'Slime',
+    });
     // pega o loot no caminho e, no instante da coleta, continua com o alvo selecionado (as duas coisas juntas)
     let got = false;
     for (let t = 0; t < 6000 && !got; t += 50) {
@@ -333,7 +378,14 @@ describe('Knight em grupo "lura" criaturas', () => {
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
-    w.social.party = { leaderId: w.human.id, members: [w.human.id, h.id], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+    w.social.party = {
+      leaderId: w.human.id,
+      members: [w.human.id, h.id],
+      formation: 'follow',
+      targeting: 'leader',
+      friendlyFire: false,
+      trail: [],
+    };
     h.brain.mode = 'follow';
     const monster = [...w.monsters.values()][0]!;
     monster.alive = true;

@@ -96,7 +96,7 @@ espécies sobem ×1 / ×1,25 / ×1,55. XP ×3 e ouro ×2,2 por patamar. Dobrar a
   teleporte com a vida cheia (evita "puxar e curar").
 - **Paladin colado no alvo** (`pointBlankHitMultiplier`/`pointBlankDamageMultiplier` = 0,5): arco/lança a 1 tile
   acerta metade das vezes e causa metade do dano; o ideal é ficar a 2+ tiles.
-- **Bênção da Seiva** (Druid): em grupo, cura e dá regeneração aos membros a até 4 tiles.
+- **Cura Intensa** (Druid, antiga Bênção da Seiva): cura em si e nos membros do grupo a até 12 tiles; 80 de mana, exaustão de 2 s, sem regeneração.
 - **Magias de alvo** (inclusive o Golpe Brutal do Knight): sem alvo, miram o inimigo mais próximo (até 7 tiles) e
   ficam na fila por 4 s, saindo assim que o alvo entra no alcance.
 

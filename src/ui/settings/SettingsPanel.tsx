@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocal, useSession } from '../../integration/game-ui-bridge/hooks';
+import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { Panel, PixelButton } from '../common/primitives';
 
 function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
@@ -124,83 +124,116 @@ export function SettingsPanel({
   );
 }
 
+function Check({
+  label,
+  checked,
+  onChange,
+  testId,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  testId: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 py-1 text-[13px]">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-5 w-5 accent-[#e0b03a]"
+        data-testid={testId}
+      />
+      {label}
+    </label>
+  );
+}
+
 function AutoOptions() {
   const session = useSession();
+  const druid = useSnap((s) => s.player.vocation) === 'druid';
   const [a, setA] = useState(session.getAuto());
   const set = (patch: Partial<typeof a>) => {
     session.setAuto(patch);
     setA(session.getAuto());
   };
+  const bar = (
+    key: 'hpBelow' | 'manaBelow' | 'healBelow' | 'groupBelow',
+    label: string,
+    min = 0.1,
+    max = 0.95,
+  ) => (
+    <Slider label={label} value={a[key]} onChange={(v) => set({ [key]: Math.max(min, Math.min(max, v)) })} />
+  );
   return (
     <div data-testid="auto-options">
-      <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input
-          type="checkbox"
-          checked={a.autoLoot}
-          onChange={(e) => set({ autoLoot: e.target.checked })}
-          className="h-5 w-5 accent-[#e0b03a]"
-          data-testid="auto-loot"
-        />
-        Pegar o loot ao alcance sozinho
-      </label>
-      <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input
-          type="checkbox"
-          checked={a.autoPotion}
-          onChange={(e) => set({ autoPotion: e.target.checked })}
-          className="h-5 w-5 accent-[#e0b03a]"
-          data-testid="auto-potion"
-        />
-        Beber poção sozinho
-      </label>
-      <label className="flex items-center gap-2 py-1 text-[13px]">
-        <input
-          type="checkbox"
-          checked={a.autoHeal}
-          onChange={(e) => set({ autoHeal: e.target.checked })}
-          className="h-5 w-5 accent-[#e0b03a]"
-          data-testid="auto-heal"
-        />
-        Curar sozinho com magia (Druida: Bênção da Seiva no grupo)
-      </label>
+      <Check
+        label="Pegar o loot ao alcance sozinho"
+        checked={a.autoLoot}
+        onChange={(v) => set({ autoLoot: v })}
+        testId="auto-loot"
+      />
+      <Check
+        label="Cura automática"
+        checked={a.autoHeal}
+        onChange={(v) => set({ autoHeal: v })}
+        testId="auto-heal"
+      />
       {a.autoHeal && (
-        <Slider
-          label="Curar abaixo de"
-          value={a.healBelow}
-          onChange={(v) => set({ healBelow: Math.max(0.1, Math.min(0.95, v)) })}
-        />
-      )}
-      {a.autoPotion && (
-        <>
-          <Slider
-            label="Vida abaixo de"
-            value={a.hpBelow}
-            onChange={(v) => set({ hpBelow: Math.max(0.1, Math.min(0.9, v)) })}
+        <div className="ml-4 border-l-2 border-dusk pl-3" data-testid="auto-heal-options">
+          <Check
+            label="Usar Poção de Cura"
+            checked={a.potionHp}
+            onChange={(v) => set({ potionHp: v })}
+            testId="auto-potion-hp"
           />
-          <Slider
-            label="Mana abaixo de"
-            value={a.manaBelow}
-            onChange={(v) => set({ manaBelow: Math.min(0.9, v) })}
+          {a.potionHp && bar('hpBelow', 'Vida abaixo de')}
+          <Check
+            label="Usar Poção de Mana"
+            checked={a.potionMana}
+            onChange={(v) => set({ potionMana: v })}
+            testId="auto-potion-mana"
           />
-          <div className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
-            <span className="w-20 shrink-0">Poção</span>
-            {(
-              [
-                ['fit', 'Que se ajusta'],
-                ['small', 'Menor primeiro'],
-                ['large', 'Maior primeiro'],
-              ] as const
-            ).map(([v, l]) => (
-              <PixelButton
-                key={v}
-                variant={a.prefer === v ? 'gold' : 'stone'}
-                onClick={() => set({ prefer: v })}
-              >
-                {l}
-              </PixelButton>
-            ))}
-          </div>
-        </>
+          {a.potionMana && bar('manaBelow', 'Mana abaixo de')}
+          <Check
+            label="Usar Magia de Cura"
+            checked={a.spellHeal}
+            onChange={(v) => set({ spellHeal: v })}
+            testId="auto-spell-heal"
+          />
+          {a.spellHeal && bar('healBelow', 'Vida abaixo de')}
+          {druid && (
+            <>
+              <Check
+                label="Curar grupo (Cura Intensa)"
+                checked={a.healGroup}
+                onChange={(v) => set({ healGroup: v })}
+                testId="auto-heal-group"
+              />
+              {a.healGroup && bar('groupBelow', 'Alguém abaixo de')}
+            </>
+          )}
+          {(a.potionHp || a.potionMana) && (
+            <div className="flex flex-wrap items-center gap-2 py-1 text-[13px]">
+              <span className="w-20 shrink-0">Poção</span>
+              {(
+                [
+                  ['fit', 'Que se ajusta'],
+                  ['small', 'Menor primeiro'],
+                  ['large', 'Maior primeiro'],
+                ] as const
+              ).map(([v, l]) => (
+                <PixelButton
+                  key={v}
+                  variant={a.prefer === v ? 'gold' : 'stone'}
+                  onClick={() => set({ prefer: v })}
+                >
+                  {l}
+                </PixelButton>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

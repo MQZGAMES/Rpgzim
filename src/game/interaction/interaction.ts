@@ -37,7 +37,8 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
     const n = w.npcs.get(target.id);
     if (!n) return;
     if (chebyshev(n, p) > NPC_RANGE) return walkThenInteract(w, n, target);
-    n.facing = Math.abs(p.x - n.x) >= Math.abs(p.y - n.y) ? (p.x < n.x ? 'left' : 'right') : p.y < n.y ? 'up' : 'down';
+    n.facing =
+      Math.abs(p.x - n.x) >= Math.abs(p.y - n.y) ? (p.x < n.x ? 'left' : 'right') : p.y < n.y ? 'up' : 'down';
     w.ui.dialog = { npcId: n.id, pageId: n.def.dialog[0]!.id };
     w.ui.shop = null;
     w.ui.depot = null;
@@ -60,12 +61,17 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
   }
 }
 
-function walkThenInteract(w: World, pos: { x: number; y: number }, target: { kind: 'npc' | 'loot' | 'sign'; id: string }): void {
+function walkThenInteract(
+  w: World,
+  pos: { x: number; y: number },
+  target: { kind: 'npc' | 'loot' | 'sign'; id: string },
+): void {
   const p = w.player;
   // NPCs atrás de balcões: basta chegar ao alcance da conversa (2 tiles); tenta antes o tile colado
   const path =
     target.kind === 'npc'
-      ? (pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: 1, maxNodes: 1500 }) ?? pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: NPC_RANGE }))
+      ? (pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: 1, maxNodes: 1500 }) ??
+        pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: NPC_RANGE }))
       : pathTo(w, p, { x: pos.x, y: pos.y }, false, { stopWithin: 1 });
   if (!path) {
     message(w, 'Não há caminho até lá.', 'warning');
@@ -89,7 +95,12 @@ export function updatePendingInteraction(w: World): void {
   const pend = w.ui.pending;
   if (!pend) return;
   const p = w.player;
-  const pos = pend.kind === 'npc' ? w.npcs.get(pend.id) : pend.kind === 'loot' ? w.lootBags.get(pend.id) : w.map.signs[Number(pend.id)];
+  const pos =
+    pend.kind === 'npc'
+      ? w.npcs.get(pend.id)
+      : pend.kind === 'loot'
+        ? w.lootBags.get(pend.id)
+        : w.map.signs[Number(pend.id)];
   if (!pos) {
     w.ui.pending = null;
     return;
@@ -153,9 +164,13 @@ export function chooseDialogOption(w: World, index: number): void {
       break;
     case 'heal': {
       const c = w.player.character;
-      c.health = w.player.stats.maxHealth;
-      c.mana = w.player.stats.maxMana;
-      w.events.emit('heal', { targetId: w.player.id, amount: 0, mana: false, position: { x: w.player.x, y: w.player.y } });
+      c.health = w.player.stats.maxHealth; // a bênção só recupera a vida (a mana não)
+      w.events.emit('heal', {
+        targetId: w.player.id,
+        amount: 0,
+        mana: false,
+        position: { x: w.player.x, y: w.player.y },
+      });
       message(w, `${npc.def.name}: "Que a luz da Aurora o restaure."`, 'system');
       w.ui.dialog = null;
       break;
@@ -202,7 +217,15 @@ export function updateNpcs(w: World): void {
   for (const n of w.npcs.values()) {
     settle(n, w.now);
     if (n.def.wanderRadius <= 0 || isMoving(n, w.now) || w.now < n.nextWanderAt) continue;
-    if (allActors(w).some((a) => a.scope.ui.dialog?.npcId === n.id || a.scope.ui.shop?.npcId === n.id || a.scope.ui.depot?.npcId === n.id)) continue;
+    if (
+      allActors(w).some(
+        (a) =>
+          a.scope.ui.dialog?.npcId === n.id ||
+          a.scope.ui.shop?.npcId === n.id ||
+          a.scope.ui.depot?.npcId === n.id,
+      )
+    )
+      continue;
     n.nextWanderAt = w.now + 2500 + w.rng.next() * 4000;
     const dx = w.rng.int(-1, 1);
     const dy = w.rng.int(-1, 1);

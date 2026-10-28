@@ -21,7 +21,9 @@ import type { MonsterEntity } from '../../src/game/entities/types';
 
 function nearestMonster(sim: GameSimulation, monsterId: string): MonsterEntity {
   const p = sim.world.player;
-  return [...sim.world.monsters.values()].filter((m) => m.def.id === monsterId && m.alive).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0]!;
+  return [...sim.world.monsters.values()]
+    .filter((m) => m.def.id === monsterId && m.alive)
+    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0]!;
 }
 
 /** Coloca o jogador num tile livre, fora da zona protegida e com linha de visão, à distância `dist` do monstro. */
@@ -123,7 +125,9 @@ describe('combate e progressão', () => {
     sim.setTarget(slime.id);
     expect(runUntil(sim, () => !slime.alive, 30000)).toBe(true);
     expect(p.character.experience).toBe(xpBefore + slime.def.experience);
-    expect(p.character.skills.sword.tries + p.character.skills.sword.level * 1000).toBeGreaterThan(triesBefore);
+    expect(p.character.skills.sword.tries + p.character.skills.sword.level * 1000).toBeGreaterThan(
+      triesBefore,
+    );
     expect(dropped).not.toBeNull();
     // coleta o loot (ouro + itens)
     const gold = p.character.gold;
@@ -266,7 +270,12 @@ describe('magias', () => {
   });
 
   it('as quatro vocações conseguem conjurar sua magia inicial', () => {
-    for (const [voc, spell] of [['sorcerer', 'arcane_bolt'], ['druid', 'earth_thorn'], ['paladin', 'holy_arrow'], ['knight', 'brutal_strike']] as const) {
+    for (const [voc, spell] of [
+      ['sorcerer', 'arcane_bolt'],
+      ['druid', 'earth_thorn'],
+      ['paladin', 'holy_arrow'],
+      ['knight', 'brutal_strike'],
+    ] as const) {
       const sim = makeSim(voc);
       const slime = nearestMonster(sim, 'slime');
       placeNear(sim, slime, 1);
@@ -285,7 +294,7 @@ describe('inventário, lojas e save', () => {
     expect(p.character.health).toBe(120);
     p.character.health = 50;
     expect(sim.useItemById('potion_health')).toBe(false);
-    advance(sim, 1100);
+    advance(sim, 2100); // exaustão da poção básica: 2 s
     expect(sim.useItemById('potion_health')).toBe(true);
   });
 
@@ -328,7 +337,13 @@ describe('inventário, lojas e save', () => {
     await svc.save(sim.snapshotCharacter());
     const loaded = await svc.load(p.character.id);
     expect(loaded).not.toBeNull();
-    const sim2 = new GameSimulation({ data: GAME_DATA, map: worldMap(), character: loaded!, rng: createRng(1), restorePosition: true });
+    const sim2 = new GameSimulation({
+      data: GAME_DATA,
+      map: worldMap(),
+      character: loaded!,
+      rng: createRng(1),
+      restorePosition: true,
+    });
     expect(sim2.world.player.x).toBe(30);
     expect(sim2.world.player.y).toBe(23);
     expect(sim2.world.player.character.gold).toBe(999);
@@ -343,7 +358,15 @@ describe('ajustes de jogabilidade', () => {
     sim.teleportPlayer(80, 22);
     const p = w.player;
     const mk = (id: string, x: number, y: number, itemId: string, count: number, gold: number) =>
-      w.lootBags.set(id, { id, x, y, items: [{ itemId, count }], gold, expiresAt: w.now + 60000, sourceName: 'Teste' });
+      w.lootBags.set(id, {
+        id,
+        x,
+        y,
+        items: [{ itemId, count }],
+        gold,
+        expiresAt: w.now + 60000,
+        sourceName: 'Teste',
+      });
     mk('b1', p.x, p.y, 'slime_gel', 2, 3);
     mk('b2', p.x + 1, p.y, 'boar_tusk', 1, 4);
     mk('b3', p.x, p.y + 1, 'meat', 1, 0);
@@ -373,8 +396,24 @@ describe('ajustes de jogabilidade', () => {
     const p = w.player;
     sim.teleportPlayer(80, 22);
     p.character.inventory.fill({ itemId: 'dagger', count: 1 });
-    w.lootBags.set('a', { id: 'a', x: p.x, y: p.y, items: [{ itemId: 'meat', count: 1 }], gold: 2, expiresAt: w.now + 60000, sourceName: 'A' });
-    w.lootBags.set('b', { id: 'b', x: p.x + 1, y: p.y, items: [{ itemId: 'boar_hide', count: 1 }], gold: 0, expiresAt: w.now + 60000, sourceName: 'B' });
+    w.lootBags.set('a', {
+      id: 'a',
+      x: p.x,
+      y: p.y,
+      items: [{ itemId: 'meat', count: 1 }],
+      gold: 2,
+      expiresAt: w.now + 60000,
+      sourceName: 'A',
+    });
+    w.lootBags.set('b', {
+      id: 'b',
+      x: p.x + 1,
+      y: p.y,
+      items: [{ itemId: 'boar_hide', count: 1 }],
+      gold: 0,
+      expiresAt: w.now + 60000,
+      sourceName: 'B',
+    });
     sim.tapLoot('a');
     sim.takeLoot('all');
     expect(w.lootBags.get('a')?.items[0]?.itemId).toBe('meat');
@@ -463,12 +502,19 @@ describe('banco e melhorias de controle', () => {
 
 describe('Shielding e armas de treino', () => {
   /** Dois slimes batendo enquanto o jogador ataca: mede quanto o Shielding sobe em `ms`. */
-  function shieldingAfter(voc: 'knight' | 'paladin' | 'sorcerer', ms: number, attack = true): { level: number; tries: number } {
+  function shieldingAfter(
+    voc: 'knight' | 'paladin' | 'sorcerer',
+    ms: number,
+    attack = true,
+  ): { level: number; tries: number } {
     const sim = makeSim(voc, { seed: 7 });
     const w = sim.world;
     const p = w.player;
     // escudo de madeira na mão secundária e arma de treino (monstros vivem bastante)
-    p.character.equipment.mainHand = { itemId: voc === 'sorcerer' ? 'training_wand' : voc === 'paladin' ? 'training_spear' : 'training_sword', count: 1 };
+    p.character.equipment.mainHand = {
+      itemId: voc === 'sorcerer' ? 'training_wand' : voc === 'paladin' ? 'training_spear' : 'training_sword',
+      count: 1,
+    };
     p.character.equipment.offHand = { itemId: 'shield_wood', count: 1 };
     p.character.mana = 10_000;
     refreshStats(w);
@@ -531,42 +577,52 @@ describe('herói com vida própria (Boladex)', () => {
   function withBoladex(seed = 11) {
     const sim = makeSim('druid', { seed });
     const hero = GAME_DATA.heroes.boladex!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: sim.world.map.playerStart,
+    });
     const h = sim.addHero(hero, c);
     return { sim, h };
   }
 
-  it('é um Knight com as mesmas regras do jogador: caça, sobe de nível, treina skills, vende, compra e guarda no banco', { timeout: 60_000 }, () => {
-    const { sim, h } = withBoladex();
-    const w = sim.world;
-    const speech: string[] = [];
-    const humanMessages: string[] = [];
-    sim.events.on('speech', (e) => speech.push(e.text));
-    sim.events.on('message', (m) => humanMessages.push(m.text));
-    let sold = false;
-    const start = { gold: h.character.gold, sword: h.character.skills.sword.level };
-    let huntTicks = 0;
-    for (let s = 0; s < 40 * 60; s++) {
-      advance(sim, 1000, 50);
-      w.human.character.health = w.human.stats.maxHealth;
-      if (h.character.stats.monstersKilled > 0 && h.brain.mode === 'town') sold = true;
-      if (h.brain.mode === 'hunt') huntTicks++;
-    }
-    // passa a maior parte do tempo caçando (viagens à vila só quando valem a pena)
-    expect(huntTicks / (40 * 60)).toBeGreaterThan(0.7);
-    const c = h.character;
-    expect(c.vocation).toBe('knight');
-    expect(c.level).toBeGreaterThanOrEqual(6);
-    expect(c.stats.monstersKilled).toBeGreaterThan(30);
-    expect(c.skills.sword.level).toBeGreaterThan(start.sword);
-    expect(c.skills.shielding.level).toBeGreaterThan(10);
-    expect(sold).toBe(true);
-    expect(c.bankGold).toBeGreaterThan(0);
-    expect(potionsCount(c)).toBeGreaterThan(0);
-    expect(speech.length).toBeGreaterThan(5);
-    // as mensagens do herói não vão para o registro do jogador humano
-    expect(humanMessages.some((m) => m.startsWith('Você derrotou'))).toBe(false);
-  });
+  it(
+    'é um Knight com as mesmas regras do jogador: caça, sobe de nível, treina skills, vende, compra e guarda no banco',
+    { timeout: 60_000 },
+    () => {
+      const { sim, h } = withBoladex();
+      const w = sim.world;
+      const speech: string[] = [];
+      const humanMessages: string[] = [];
+      sim.events.on('speech', (e) => speech.push(e.text));
+      sim.events.on('message', (m) => humanMessages.push(m.text));
+      let sold = false;
+      const start = { gold: h.character.gold, sword: h.character.skills.sword.level };
+      let huntTicks = 0;
+      for (let s = 0; s < 40 * 60; s++) {
+        advance(sim, 1000, 50);
+        w.human.character.health = w.human.stats.maxHealth;
+        if (h.character.stats.monstersKilled > 0 && h.brain.mode === 'town') sold = true;
+        if (h.brain.mode === 'hunt') huntTicks++;
+      }
+      // passa a maior parte do tempo caçando (viagens à vila só quando valem a pena)
+      expect(huntTicks / (40 * 60)).toBeGreaterThan(0.7);
+      const c = h.character;
+      expect(c.vocation).toBe('knight');
+      expect(c.level).toBeGreaterThanOrEqual(6);
+      expect(c.stats.monstersKilled).toBeGreaterThan(30);
+      expect(c.skills.sword.level).toBeGreaterThan(start.sword);
+      expect(c.skills.shielding.level).toBeGreaterThan(10);
+      expect(sold).toBe(true);
+      expect(c.bankGold).toBeGreaterThan(0);
+      expect(potionsCount(c)).toBeGreaterThan(0);
+      expect(speech.length).toBeGreaterThan(5);
+      // as mensagens do herói não vão para o registro do jogador humano
+      expect(humanMessages.some((m) => m.startsWith('Você derrotou'))).toBe(false);
+    },
+  );
 
   it('monstros escolhem o herói como alvo e ele pode morrer e renascer no templo', () => {
     const { sim, h } = withBoladex(3);
@@ -608,7 +664,13 @@ describe('grupo, PK e modo de ataque', () => {
   function world(seed = 21) {
     const sim = makeSim('knight', { seed });
     const hero = GAME_DATA.heroes.boladex!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: sim.world.map.playerStart,
+    });
     const h = sim.addHero(hero, c);
     return { sim, h, w: sim.world };
   }
@@ -632,7 +694,9 @@ describe('grupo, PK e modo de ataque', () => {
     placeNear(sim, slime, 1);
     putAt(sim, h, w.human.x, w.human.y + 1 <= w.map.height ? w.human.y : w.human.y);
     h.brain.nextThinkAt = Infinity;
-    const hx = [...Array(5).keys()].map((d) => ({ x: w.human.x + d - 2, y: w.human.y - 2 })).find((c) => canEnter(w, c.x, c.y, false, h.id))!;
+    const hx = [...Array(5).keys()]
+      .map((d) => ({ x: w.human.x + d - 2, y: w.human.y - 2 }))
+      .find((c) => canEnter(w, c.x, c.y, false, h.id))!;
     putAt(sim, h, hx.x, hx.y);
     const before = { human: w.human.character.experience, hero: h.character.experience };
     sim.setTarget(slime.id);
@@ -674,7 +738,14 @@ describe('grupo, PK e modo de ataque', () => {
     const { sim, h, w } = world();
     const slime = nearestMonster(sim, 'slime');
     placeNear(sim, slime, 3); // fora da área protegida
-    const spot = [...Array(9).keys()].map((i) => ({ x: w.human.x + (i % 3) - 1, y: w.human.y + Math.floor(i / 3) - 1 })).find((c) => (c.x !== w.human.x || c.y !== w.human.y) && canEnter(w, c.x, c.y, false, h.id) && !isPz(w.map, c.x, c.y))!;
+    const spot = [...Array(9).keys()]
+      .map((i) => ({ x: w.human.x + (i % 3) - 1, y: w.human.y + Math.floor(i / 3) - 1 }))
+      .find(
+        (c) =>
+          (c.x !== w.human.x || c.y !== w.human.y) &&
+          canEnter(w, c.x, c.y, false, h.id) &&
+          !isPz(w.map, c.x, c.y),
+      )!;
     putAt(sim, h, spot.x, spot.y);
     h.brain.nextThinkAt = w.now + 2500; // o herói "demora" a reagir
     sim.setTarget(h.id);
@@ -700,7 +771,14 @@ describe('grupo, PK e modo de ataque', () => {
     h.brain.affinity[w.human.id] = 0;
     const slime = nearestMonster(sim, 'slime');
     placeNear(sim, slime, 3);
-    const spot = [...Array(25).keys()].map((i) => ({ x: w.human.x + (i % 5) - 2, y: w.human.y + Math.floor(i / 5) - 2 })).find((c) => (c.x !== w.human.x || c.y !== w.human.y) && canEnter(w, c.x, c.y, false, h.id) && !isPz(w.map, c.x, c.y))!;
+    const spot = [...Array(25).keys()]
+      .map((i) => ({ x: w.human.x + (i % 5) - 2, y: w.human.y + Math.floor(i / 5) - 2 }))
+      .find(
+        (c) =>
+          (c.x !== w.human.x || c.y !== w.human.y) &&
+          canEnter(w, c.x, c.y, false, h.id) &&
+          !isPz(w.map, c.x, c.y),
+      )!;
     putAt(sim, h, spot.x, spot.y);
     h.character.level = 30;
     let attacked = false;
@@ -724,7 +802,14 @@ describe('grupo, PK e modo de ataque', () => {
     h.character.health = 600;
     const slime = nearestMonster(sim, 'slime');
     placeNear(sim, slime, 3);
-    const spot = [...Array(25).keys()].map((i) => ({ x: w.human.x + (i % 5) - 2, y: w.human.y + Math.floor(i / 5) - 2 })).find((c) => (c.x !== w.human.x || c.y !== w.human.y) && canEnter(w, c.x, c.y, false, h.id) && !isPz(w.map, c.x, c.y))!;
+    const spot = [...Array(25).keys()]
+      .map((i) => ({ x: w.human.x + (i % 5) - 2, y: w.human.y + Math.floor(i / 5) - 2 }))
+      .find(
+        (c) =>
+          (c.x !== w.human.x || c.y !== w.human.y) &&
+          canEnter(w, c.x, c.y, false, h.id) &&
+          !isPz(w.map, c.x, c.y),
+      )!;
     putAt(sim, h, spot.x, spot.y);
     // caçando slimes ali mesmo (fora da área protegida, perto do jogador)
     h.brain.mode = 'hunt';
@@ -736,7 +821,14 @@ describe('grupo, PK e modo de ataque', () => {
       sim,
       () => {
         if (Math.max(Math.abs(h.x - w.human.x), Math.abs(h.y - w.human.y)) > 5) {
-          const c = [...Array(25).keys()].map((i) => ({ x: h.x + (i % 5) - 2, y: h.y + Math.floor(i / 5) - 2 })).find((t) => (t.x !== h.x || t.y !== h.y) && canEnter(w, t.x, t.y, false, w.human.id) && !isPz(w.map, t.x, t.y));
+          const c = [...Array(25).keys()]
+            .map((i) => ({ x: h.x + (i % 5) - 2, y: h.y + Math.floor(i / 5) - 2 }))
+            .find(
+              (t) =>
+                (t.x !== h.x || t.y !== h.y) &&
+                canEnter(w, t.x, t.y, false, w.human.id) &&
+                !isPz(w.map, t.x, t.y),
+            );
           if (c) sim.teleportPlayer(c.x, c.y);
         }
         w.human.character.health = Math.floor(w.human.stats.maxHealth * 0.3);
@@ -754,7 +846,13 @@ describe('Boladex não trava no jogador', () => {
     const sim = makeSim('knight', { seed: 4 });
     const w = sim.world;
     const hero = GAME_DATA.heroes.boladex!;
-    const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: w.map.playerStart });
+    const c = createCharacter(GAME_DATA, {
+      id: hero.slotId,
+      name: hero.name,
+      vocation: hero.vocation,
+      now: 0,
+      position: w.map.playerStart,
+    });
     const h = sim.addHero(hero, c);
     const door = w.map.doors.find((d) => d.buildingId === 'temple')!;
     sim.teleportPlayer(door.x, door.y); // em pé na porta

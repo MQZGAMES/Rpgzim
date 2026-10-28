@@ -19,7 +19,13 @@ import { planWalk } from '../../src/game/movement/walk';
 function withHero(vocation: 'knight' | 'paladin' | 'druid' | 'sorcerer' = 'knight', seed = 21) {
   const sim = makeSim(vocation, { seed });
   const hero = GAME_DATA.heroes.boladex!;
-  const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation: hero.vocation, now: 0, position: sim.world.map.playerStart });
+  const c = createCharacter(GAME_DATA, {
+    id: hero.slotId,
+    name: hero.name,
+    vocation: hero.vocation,
+    now: 0,
+    position: sim.world.map.playerStart,
+  });
   const h = sim.addHero(hero, c);
   return { sim, h, w: sim.world };
 }
@@ -35,7 +41,8 @@ function putAt(sim: GameSimulation, a: { x: number; y: number; id: string }, x: 
 /** Tile livre fora da área protegida, longe dos monstros (campo aberto ao sul da vila). */
 function openField(sim: GameSimulation): { x: number; y: number } {
   const w = sim.world;
-  const free = (xx: number, yy: number) => canEnter(w, xx, yy, false, 'x') && !isPz(w.map, xx, yy) && !w.map.city[yy * w.map.width + xx];
+  const free = (xx: number, yy: number) =>
+    canEnter(w, xx, yy, false, 'x') && !isPz(w.map, xx, yy) && !w.map.city[yy * w.map.width + xx];
   const s0 = w.map.playerStart;
   for (let r = 4; r < 60; r++)
     for (let dy = -r; dy <= r; dy++)
@@ -60,7 +67,14 @@ const clearMonsters = (sim: GameSimulation) => {
 };
 
 const party = (sim: GameSimulation, leaderId: string, ids: string[]) => {
-  sim.world.social.party = { leaderId, members: ids, formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] };
+  sim.world.social.party = {
+    leaderId,
+    members: ids,
+    formation: 'follow',
+    targeting: 'leader',
+    friendlyFire: false,
+    trail: [],
+  };
 };
 
 describe('trava de venda', () => {
@@ -141,11 +155,16 @@ describe('vocações', () => {
   it('Golpe Brutal do Knight sem alvo mira o inimigo mais próximo e sai ao chegar nele', () => {
     const sim = makeSim('knight', { seed: 3 });
     const w = sim.world;
-    const slime = [...w.monsters.values()].filter((m) => m.def.id === 'slime').sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
+    const slime = [...w.monsters.values()]
+      .filter((m) => m.def.id === 'slime')
+      .sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
     // 3 tiles do slime, fora da área protegida
     const spot = [...Array(49).keys()]
       .map((i) => ({ x: slime.x + (i % 7) - 3, y: slime.y + Math.floor(i / 7) - 3 }))
-      .find((c) => chebyshev(c, slime) === 3 && canEnter(w, c.x, c.y, false, w.player.id) && !isPz(w.map, c.x, c.y))!;
+      .find(
+        (c) =>
+          chebyshev(c, slime) === 3 && canEnter(w, c.x, c.y, false, w.player.id) && !isPz(w.map, c.x, c.y),
+      )!;
     sim.teleportPlayer(spot.x, spot.y);
     slime.state = 'idle';
     w.player.character.mana = 999;
@@ -157,7 +176,7 @@ describe('vocações', () => {
     expect(cast).toBe(true);
   });
 
-  it('Bênção da Seiva cura os membros do grupo por perto (raio médio), não quem está longe', () => {
+  it('Cura Intensa cura os membros do grupo a até 12 tiles, não quem está mais longe', () => {
     const { sim, h, w } = withHero('druid');
     const p = w.player;
     p.character.level = 6;
@@ -172,11 +191,10 @@ describe('vocações', () => {
     h.character.health = 10;
     expect(sim.castSpell('sap_blessing')).toBe(true);
     expect(h.character.health).toBeGreaterThan(10);
-    expect(h.buffs.some((b) => b.kind === 'regen')).toBe(true);
+    expect(h.buffs.some((b) => b.kind === 'regen')).toBe(false); // só a cura, sem regeneração contínua
     // longe (fora do raio): não cura
-    advance(sim, 7000, 50);
-    putAt(sim, h, spot.x + 4, spot.y + 4);
-    putAt(sim, h, spot.x + 8, spot.y);
+    advance(sim, 2100, 50); // exaustão de 2 s
+    putAt(sim, h, spot.x + 14, spot.y);
     h.character.health = 10;
     h.buffs = [];
     p.character.mana = 999;
@@ -250,10 +268,15 @@ describe('controle no celular e ritmo', () => {
   it('andar por conta própria (toque no mapa) pausa a perseguição do alvo até escolher o alvo de novo', () => {
     const sim = makeSim('knight', { seed: 3 });
     const w = sim.world;
-    const slime = [...w.monsters.values()].filter((m) => m.def.id === 'slime').sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
+    const slime = [...w.monsters.values()]
+      .filter((m) => m.def.id === 'slime')
+      .sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
     const spot = [...Array(81).keys()]
       .map((i) => ({ x: slime.x + (i % 9) - 4, y: slime.y + Math.floor(i / 9) - 4 }))
-      .find((c) => chebyshev(c, slime) === 4 && canEnter(w, c.x, c.y, false, w.player.id) && !isPz(w.map, c.x, c.y))!;
+      .find(
+        (c) =>
+          chebyshev(c, slime) === 4 && canEnter(w, c.x, c.y, false, w.player.id) && !isPz(w.map, c.x, c.y),
+      )!;
     sim.teleportPlayer(spot.x, spot.y);
     slime.state = 'idle';
     sim.setTarget(slime.id);
@@ -294,7 +317,9 @@ describe('controle no celular e ritmo', () => {
     expect(snap[0]).toMatchObject({ kind: 'item', itemId: 'meat', count: 2 });
     expect(snap.find((s) => s.kind === 'potion' && s.itemId === 'health')).toBeTruthy();
     // o atalho 1 foi trocado pela carne: ficam as outras 5 magias da barra
-    expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(GAME_DATA.vocations.druid.spells.slice(0, 6).length - 1);
+    expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(
+      GAME_DATA.vocations.druid.spells.slice(0, 6).length - 1,
+    );
     expect(sim.useItemById('meat')).toBe(true);
     expect(buildSnapshot(sim, 2).hotbar[0]!.count).toBe(1);
   });
@@ -303,7 +328,10 @@ describe('controle no celular e ritmo', () => {
 describe('Boladex resolve a vila rápido', () => {
   it('a visita à vila tem limite de tempo e depois ele não volta tão cedo sem motivo urgente', () => {
     const { sim, h, w } = withHero();
-    h.brain.town = [{ kind: 'shop', npcId: 'npc:inexistente', buyPotions: true, upgrades: false }, { kind: 'heal' }];
+    h.brain.town = [
+      { kind: 'shop', npcId: 'npc:inexistente', buyPotions: true, upgrades: false },
+      { kind: 'heal' },
+    ];
     h.brain.mode = 'town';
     h.brain.townStartedAt = w.now - 80000;
     h.brain.after = 'decide';
@@ -321,7 +349,8 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
     // procura um tile sólido (árvore, muro, água) perto
     let solid: { x: number; y: number } | null = null;
     for (let r = 2; r < 12 && !solid; r++)
-      for (let dx = -r; dx <= r && !solid; dx++) if (w.map.solid[(23 + r) * w.map.width + 30 + dx]) solid = { x: 30 + dx, y: 23 + r };
+      for (let dx = -r; dx <= r && !solid; dx++)
+        if (w.map.solid[(23 + r) * w.map.width + 30 + dx]) solid = { x: 30 + dx, y: 23 + r };
     expect(solid).not.toBeNull();
     expect(sim.walkTo(solid!.x, solid!.y)).toBe(true);
     const goal = w.player.pathGoal!;
@@ -475,7 +504,9 @@ describe('mini mapa: toque em lugar sem acesso', () => {
       const x = i % w.map.width;
       const y = Math.floor(i / w.map.width);
       let all = true;
-      for (let dy = -2; dy <= 2 && all; dy++) for (let dx = -2; dx <= 2 && all; dx++) all = (w.map.layers.water[(y + dy) * w.map.width + x + dx] ?? -1) >= 0;
+      for (let dy = -2; dy <= 2 && all; dy++)
+        for (let dx = -2; dx <= 2 && all; dx++)
+          all = (w.map.layers.water[(y + dy) * w.map.width + x + dx] ?? -1) >= 0;
       if (all) lake = { x, y };
     }
     expect(lake).not.toBeNull();
@@ -490,10 +521,21 @@ describe('loot do chão no grupo', () => {
     const { sim, h, w } = withHero();
     party(sim, w.human.id, [w.human.id, h.id]);
     // saco com 7 de ouro e 5 gelatinas: 2 pessoas -> cada um leva 3 de ouro e 2 gelatinas; o resto vai para o humano
-    w.lootBags.set('test-bag', { id: 'test-bag', x: w.human.x, y: w.human.y, gold: 7, items: [{ itemId: 'slime_gel', count: 5 }], sourceName: 'Teste', expiresAt: Infinity });
+    w.lootBags.set('test-bag', {
+      id: 'test-bag',
+      x: w.human.x,
+      y: w.human.y,
+      gold: 7,
+      items: [{ itemId: 'slime_gel', count: 5 }],
+      sourceName: 'Teste',
+      expiresAt: Infinity,
+    });
     w.ui.lootId = 'test-bag';
     const gold = { human: w.human.character.gold, hero: h.character.gold };
-    const gel = { human: countItem(w.human.character.inventory, 'slime_gel'), hero: countItem(h.character.inventory, 'slime_gel') };
+    const gel = {
+      human: countItem(w.human.character.inventory, 'slime_gel'),
+      hero: countItem(h.character.inventory, 'slime_gel'),
+    };
     sim.takeLoot('all');
     expect(w.human.character.gold - gold.human).toBe(4);
     expect(h.character.gold - gold.hero).toBe(3);
