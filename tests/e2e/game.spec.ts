@@ -405,7 +405,6 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
   // logo depois de outro toque (o navegador descartaria o "click" como toque duplo): o botão responde mesmo assim
   await page.getByTestId('btn-minimap').tap();
   await expect(page.getByTestId('minimap-panel')).toBeVisible();
-  await page.getByTestId('minimap-zoom').tap();
   // arrastar o mapa (sem soltar num ponto) só olha em volta: o painel continua aberto e o mapa rolou
   const box = (await page.getByTestId('minimap-panel').boundingBox())!;
   const scrollOf = () =>
@@ -420,6 +419,7 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
   await page.mouse.up();
   expect(await scrollOf()).not.toBe(before);
   await expect(page.getByTestId('minimap-panel')).toBeVisible();
+  await page.getByTestId('minimap-zoom').tap();
   const img = (await page.getByTestId('minimap-image').boundingBox())!;
   await page.touchscreen.tap(img.x + img.width * 0.6, img.y + img.height * 0.3);
   await expect(page.getByTestId('minimap-panel')).toHaveCount(0);
