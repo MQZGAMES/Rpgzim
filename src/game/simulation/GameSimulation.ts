@@ -21,6 +21,7 @@ import {
   currentActorTarget,
   currentTarget,
   cycleTarget,
+  cycleActorSelection,
   respawnPlayer,
   setTarget,
   updatePlayerCombat,
@@ -468,6 +469,10 @@ export class GameSimulation {
   }
   cycleTarget(): void {
     cycleTarget(this.world);
+  }
+  /** Botão de seleção de personagem (jogador ou herói): marca o próximo por perto; depois do último, desmarca. */
+  cycleActorSelection(): void {
+    cycleActorSelection(this.world);
   }
   /** Toque numa entidade: alvo (monstro) ou interação (NPC). */
   tapEntity(id: string): void {

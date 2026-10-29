@@ -16,8 +16,9 @@ export interface RoleProfile {
 export const ROLES: Readonly<Record<VocationId, RoleProfile>> = {
   knight: { keepDistance: 0, manaStock: 0, dpsMul: 1, trains: true },
   paladin: { keepDistance: 3, manaStock: 0.6, dpsMul: 1.2, trains: false },
-  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.45, trains: false },
-  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.25, trains: false },
+  // as magias dos magos crescem com a varinha: somam bem mais que o golpe básico (ver tests/tools/vocation-dps)
+  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 2, trains: false },
+  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.75, trains: false },
 };
 
 export const isRanged = (v: VocationId): boolean => ROLES[v].keepDistance > 0;

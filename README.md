@@ -110,10 +110,25 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Grupo mais dinâmico**: em grupo os heróis se curam e bebem poção mais cedo, recuam para trás dos colegas em vez de apanhar até o fim, e Druid/Paladin lançam a magia de área no meio do bolo de criaturas.
 - **Saco de morte protegido**: heróis não pegam o saco de morte de outro personagem nem itens jogados no chão, e o saco de morte não é dividido com o grupo (antes, em grupo, parte do seu loot ia para os heróis).
 
+## IA mais esperta, PK revisado e balanceamento das vocações
+- **Nada de herói parado apanhando**: um vigia percebe quando ele toma dano por ~2,5 s sem atacar nem andar (alvo do outro lado de um obstáculo, varinha sem mana, rota travada) e troca para quem dá para acertar ou foge. Na fuga, cercado, ele atravessa as criaturas em vez de ficar parado "revidando" (era um travamento sem fim). Mago sem mana não fica "lutando" parado.
+- **Legítima defesa sempre**: em grupo (de heróis ou com o jogador) quem é atacado no PK revida ou foge — antes só reagia sozinho. No PK todas as vocações usam as magias de ataque.
+- **Caça pelo custo-benefício**: XP por minuto do **grupo** (o dano de todos mata mais rápido, a XP é dividida) × segurança da régua contra o puxão típico (2–3 criaturas sozinho, uma a mais por colega). A régua agora conta a cura que dá para beber no tempo da luta, quem leva o dano (o Knight segura, os de longe pouco) e, em grupo, vale para o membro mais frágil. Sem opção segura, fica com a mais tranquila — nunca mais cai automaticamente no slime. Nível 30 caça criaturas de nível ~18–34; nível 80, de ~55–85.
+- **Estratégia de grupo**: o líder não puxa a próxima leva com um colega ferido (<55%) ou mago sem mana (<25%); a ordem de abate começa por quem mais machuca por vida restante.
+- **Convite do jogador nunca é recusado** (nem com rixa): o herói sai de qualquer outro grupo.
+- **Morte injusta**: conta para até **2 personagens** — o último que bateu e o que deu mais dano no último minuto. O dano das criaturas não tira o crédito: matar alguém junto com monstros é morte injusta.
+- **Caveira amarela de vingança**: quem foi morto injustamente vê o assassino com caveira amarela por 15 min e pode atacá-lo e matá-lo **sem caveira nem morte injusta** (só o PZ lock).
+- **Loot sem trava**: qualquer um pega qualquer saco a qualquer momento. O saco do **seu próprio corpo** não é dividido com o grupo; o saco de morte de outro personagem é dividido como um loot comum.
+- **Poções vendidas pela metade do preço** na Alquimia (o "vender tudo" não leva poções).
+- **Botão de seleção de jogador/herói** (acima do botão de ataque no celular; ao lado do Tab no computador): cada toque marca o próximo personagem por perto (nome em laranja) e, depois do último, desmarca. Com alguém marcado, o botão de ataque e as magias de ataque vão nele.
+- **Ninguém é empurrado nem puxado para dentro da PZ** (a troca de lugar não acontece na borda da área protegida).
+- **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
+- **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
+
 ## Rodada de ajustes (exaustões, saco de morte, PZ)
 - **Cura Intensa** (antiga Bênção da Seiva, Druid): só cura, sem regeneração contínua; alcança o grupo a até **12 tiles** (3× o anterior), custa **80 de mana** e tem exaustão de **2 s**.
 - **Exaustões fechadas**: toda magia, cura e poção usa 2, 4, 6 ou 8 s conforme a força. Rajada Glacial 4 s; criar poção 2 s; poções: básica 2 s, forte 4 s, suprema 6 s, espiritual e divina 8 s. Magias de buff longo (Foco do Caçador, Brado de Ferro) ficaram com 4 s de duração para não ficarem sempre ativas.
-- **Saco de morte reservado**: morte por criaturas deixa o saco só para o dono por **5 minutos**; morte em PK, qualquer um pega a qualquer momento (e o herói nunca saqueia o jogador nem colegas de grupo).
+- ~~Saco de morte reservado~~ (substituído: agora não há trava; o herói continua sem saquear o jogador e os colegas de grupo).
 - **PZ**: a vida volta em dobro, mas a **mana não se recupera** (poção ou fora da PZ — lá ela volta em dobro para compensar) e a bênção do sacerdote só cura vida.
 - **Corrida**: o efeito visual ficou só na região dos pés.
 - **Jogador líder**: os heróis só saem do grupo e vão à vila quando as poções de cura estão no fim.

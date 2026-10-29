@@ -54,9 +54,9 @@ export function setSellLock(c: CharacterState, itemId: string, locked: boolean):
   else delete c.flags[sellLockKey(itemId)];
 }
 
-/** Fica fora do "vender tudo": travado pelo jogador. */
+/** Fica fora do "vender tudo": travado pelo jogador, e as poções (vendê-las é sempre de propósito, uma a uma). */
 export function keptFromSellAll(c: CharacterState, itemId: string): boolean {
-  return isSellLocked(c, itemId);
+  return isSellLocked(c, itemId) || itemId.startsWith('potion_');
 }
 
 /** O que "vender tudo" levaria: itens da mochila (nunca os equipados nem os travados) que esta loja compra. */

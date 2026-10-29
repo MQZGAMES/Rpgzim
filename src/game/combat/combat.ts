@@ -22,7 +22,7 @@ import { removeOccupant, teleport } from '../movement/movement';
 import { freeCellNear } from '../movement/walk';
 import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { asActor, message, nextId, warnThrottled } from '../simulation/World';
+import { allActors, asActor, message, nextId, warnThrottled } from '../simulation/World';
 import {
   PVP_FAIL_MESSAGE,
   TRAINING_HP_FLOOR,
@@ -30,7 +30,7 @@ import {
   canAttackActor,
   isSparring,
   sparMode,
-  killCredit,
+  killCredits,
   onPlayerDeath,
   recordDamage,
   registerAggression,
@@ -115,9 +115,37 @@ export function targetNearest(w: World, maxDistance: number): boolean {
   return !!best;
 }
 
-/** Seleciona o próximo monstro vivo mais próximo (ciclo). */
+/** Personagem (jogador ou herói) marcado no botão de seleção, se ainda estiver vivo e por perto. */
+export function selectedActor(w: World): PlayerEntity | null {
+  const a = actorById(w, w.ui.selectedActor);
+  return a && a !== w.player && !a.dead && chebyshev(a, w.player) <= 14 ? a : null;
+}
+
+/**
+ * Botão de seleção: passa pelos personagens por perto (do mais perto ao mais longe) e, depois do último, desmarca.
+ * Só marca — quem ataca é o botão de ataque ou uma magia de ataque, que vão no marcado (evita PK sem querer).
+ */
+export function cycleActorSelection(w: World, maxDistance = 9): void {
+  const p = w.player;
+  const list = allActors(w)
+    .filter((a) => a !== p && !a.dead && chebyshev(a, p) <= maxDistance)
+    .sort((a, b) => chebyshev(a, p) - chebyshev(b, p) || Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+  const idx = list.findIndex((a) => a.id === w.ui.selectedActor);
+  const next = !list.length || idx === list.length - 1 ? null : list[idx + 1]!;
+  w.ui.selectedActor = next?.id ?? null;
+  if (!list.length) warnThrottled(w, 'noactor', 'Nenhum personagem por perto.', 800);
+  else if (next) message(w, `Selecionado: ${next.character.name}. Toque em atacar (ou numa magia de ataque) para atacá-lo.`, 'system');
+  else message(w, 'Seleção de personagem desfeita.', 'system');
+}
+
+/** Seleciona o próximo monstro vivo mais próximo (ciclo); com um personagem selecionado, ataca ele. */
 export function cycleTarget(w: World, maxDistance = 9): void {
   const p = w.player;
+  const sel = selectedActor(w);
+  if (sel) {
+    if (p.targetId !== sel.id) setTarget(w, sel.id);
+    return;
+  }
   const list = [...w.monsters.values()]
     .filter((m) => m.alive && chebyshev(m, p) <= maxDistance && !isPz(w.map, m.x, m.y))
     .sort(
@@ -448,6 +476,7 @@ function killPlayer(w: World, killer: DamageSource): void {
   p.path = null;
   p.pathGoal = null;
   p.heldDir = null;
+  p.buffs = []; // a morte encerra Corrida, Escudo de Mana e os demais efeitos (e a aura deles some)
   setTarget(w, null);
   w.ui.pending = null;
   w.ui.shop = null;
@@ -497,16 +526,13 @@ function killPlayer(w: World, killer: DamageSource): void {
   });
   message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
   const sparring = killer.kind === 'player' && isSparring(w, killer.id, p.id);
-  // a morte conta para quem deu o MAIOR dano e o ÚLTIMO golpe, e só se for personagem: se uma criatura causou mais
-  // dano (ou deu o golpe final), quem matou foi a criatura e ninguém pega morte injusta
-  let pkKill = false;
-  if (!sparring) {
-    const killerId = killCredit(w, p.id, killer.kind === 'player' ? killer.id : null);
-    pkKill = !!killerId && killerId !== p.id;
-    if (killerId && killerId !== p.id) registerPlayerKill(w, killerId, skullBefore, c.name);
-  }
+  // a morte conta para até 2 personagens: o último que bateu e o que deu mais dano no último minuto (o dano das
+  // criaturas não tira o crédito de ninguém — matar alguém junto com monstros também é morte injusta)
+  if (!sparring)
+    for (const killerId of killCredits(w, p.id))
+      registerPlayerKill(w, killerId, skullBefore, c.name, p.id);
   onPlayerDeath(w, p.id);
-  if (!sparring) dropDeathLoot(w, p, skullBefore === 'red', pkKill);
+  if (!sparring) dropDeathLoot(w, p, skullBefore === 'red');
 }
 
 /**
@@ -514,10 +540,7 @@ function killPlayer(w: World, killer: DamageSource): void {
  * some quando alguém pegar); cada item equipado tem 10% de chance de cair (caveira vermelha perde todos).
  * O Amuleto da Perda protege tudo — e se desfaz.
  */
-/** Tempo em que o saco de morte (morte por criaturas) só pode ser aberto pelo dono. */
-export const DEATH_BAG_LOCK_MS = 5 * 60000;
-
-function dropDeathLoot(w: World, victim: PlayerEntity, redSkull: boolean, pkKill = false): void {
+function dropDeathLoot(w: World, victim: PlayerEntity, redSkull: boolean): void {
   const c = victim.character;
   const amulet = c.equipment.amulet;
   if (amulet && w.data.items[amulet.itemId]?.protectsOnDeath) {
@@ -557,15 +580,12 @@ function dropDeathLoot(w: World, victim: PlayerEntity, redSkull: boolean, pkKill
     gold,
     expiresAt: Infinity,
     sourceName: `${c.name} (morto)`,
-    lockedUntil: pkKill ? 0 : w.now + DEATH_BAG_LOCK_MS,
   });
   w.events.emit('lootDropped', { containerId: id, position: { x: victim.x, y: victim.y } });
   w.events.emit('itemsChanged', {});
   message(
     w,
-    pkKill
-      ? `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu (morte em PK: qualquer um pode pegar).`
-      : `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu e só você pode pegar nos próximos 5 minutos.`,
+    `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu (qualquer um pode pegar; o que você mesmo recuperar não é dividido com o grupo).`,
     'warning',
   );
   if (lostEquip.length) message(w, `Também caiu equipamento: ${lostEquip.join(', ')}.`, 'warning');

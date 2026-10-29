@@ -56,6 +56,8 @@ export interface SocialState {
   damageLog: Map<string, { id: string; amount: number; at: number }[]>;
   /** Último ataque de A em B: chave `${atacante}>${vitima}` -> instante. */
   aggressions: Map<string, number>;
+  /** Vingança: `${vitima}>${assassino}` -> até quando a vítima de uma morte injusta pode revidar sem caveira. */
+  revenge: Map<string, number>;
 }
 
 export function newSocialState(pvp = false): SocialState {
@@ -69,6 +71,7 @@ export function newSocialState(pvp = false): SocialState {
     unjust: new Map(),
     damageLog: new Map(),
     aggressions: new Map(),
+    revenge: new Map(),
   };
 }
 
@@ -452,18 +455,39 @@ export function recordDamage(w: World, victimId: string, sourceId: string, amoun
 }
 
 /**
- * Quem matou a vítima, para a regra de PK: só conta quem deu o ÚLTIMO golpe e também o MAIOR dano (nos últimos
- * 60 s) e for um personagem. Se uma criatura causou mais dano, ou o golpe final foi de uma criatura, ou outro
- * personagem deu mais dano, ninguém "matou" para a regra de PK (a morte é da criatura).
+ * Quem matou a vítima, para a regra de PK: até 2 personagens — o ÚLTIMO personagem que a feriu e o que deu o MAIOR
+ * dano nos últimos 60 s (podem ser o mesmo). Só personagens contam: o dano das criaturas é ignorado, então quem mata
+ * alguém junto com monstros (ou deixa o monstro dar o golpe final) leva a morte do mesmo jeito.
  */
-export function killCredit(w: World, victimId: string, finalSourceId: string | null): string | null {
-  if (!finalSourceId || !actorById(w, finalSourceId)) return null;
+export function killCredits(w: World, victimId: string): string[] {
   const sums = new Map<string, number>();
-  for (const d of w.social.damageLog.get(victimId) ?? [])
-    if (pkNow(w) - d.at < KILL_CREDIT_MS) sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
-  const mine = sums.get(finalSourceId) ?? 0;
-  const top = Math.max(0, ...sums.values());
-  return mine > 0 && mine >= top ? finalSourceId : null;
+  let last: { id: string; at: number } | null = null;
+  for (const d of w.social.damageLog.get(victimId) ?? []) {
+    if (d.id === victimId || pkNow(w) - d.at >= KILL_CREDIT_MS || !actorById(w, d.id)) continue;
+    sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
+    if (!last || d.at >= last.at) last = d;
+  }
+  if (!last) return [];
+  const top = [...sums].sort((a, b) => b[1] - a[1])[0]![0];
+  return top === last.id ? [top] : [last.id, top];
+}
+
+/** Por quanto tempo quem foi morto injustamente pode se vingar do assassino (caveira amarela só para ele). */
+export const REVENGE_MS = 15 * 60000;
+
+/** `avenger` pode se vingar de `killerId` (foi morto injustamente por ele há pouco)? */
+export function hasRevenge(w: World, avengerId: string, killerId: string): boolean {
+  return (w.social.revenge.get(`${avengerId}>${killerId}`) ?? -Infinity) > pkNow(w);
+}
+
+/**
+ * Caveira de `id` como `viewerId` a vê: a caveira real ou, se o viewer foi morto injustamente por ele há pouco e ele
+ * não tem caveira pior, a amarela da vingança (só o viewer a enxerga).
+ */
+export function skullSeenBy(w: World, viewerId: string, id: string): SkullKind | null {
+  const s = skullOf(w, id)?.kind ?? null;
+  if (s === 'red' || s === 'white') return s;
+  return hasRevenge(w, viewerId, id) ? 'yellow' : s;
 }
 
 /** Aviso na tela (e no registro) para o jogador humano sobre PK. */
@@ -486,7 +510,9 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
   const victim = skullOf(w, victimId)?.kind ?? null;
-  if (victim === 'red') {
+  if (hasRevenge(w, attackerId, victimId)) {
+    // vingança contra quem o matou injustamente: só o PZ lock, sem caveira
+  } else if (victim === 'red') {
     // atacar um caveira vermelha é justo: nada muda
   } else if (victim === 'white') {
     // revidar contra quem te atacou é defesa; já um terceiro que bate numa caveira branca fica amarelo
@@ -520,9 +546,27 @@ export function registerPlayerKill(
   killerId: string,
   victimSkull: SkullKind | null,
   victimName = 'o personagem',
+  victimId?: string,
 ): void {
+  if (killerId === victimId) return;
   lockPz(w, killerId, PZ_LOCK_KILL_MS);
+  // a vingança (a vítima tinha matado o killer injustamente há pouco) é justa: só o PZ lock
+  if (victimId && hasRevenge(w, killerId, victimId)) {
+    w.social.revenge.delete(`${killerId}>${victimId}`);
+    pkNotice(w, killerId, `Vingança cumprida contra ${victimName}: sem caveira, só o PZ lock.`, false);
+    return;
+  }
   if (victimSkull !== null) return;
+  // a vítima vê o assassino com caveira amarela e pode se vingar sem caveira nem morte injusta
+  if (victimId) {
+    w.social.revenge.set(`${victimId}>${killerId}`, pkNow(w) + REVENGE_MS);
+    pkNotice(
+      w,
+      victimId,
+      `${actorName(w, killerId)} te matou injustamente: para você ele está com caveira AMARELA por 15 min — pode atacá-lo e matá-lo sem caveira nem morte injusta (só o PZ lock).`,
+      false,
+    );
+  }
   setSkull(w, killerId, 'white');
   syncSkull(w, killerId);
   const list = (w.social.unjust.get(killerId) ?? []).filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS);
@@ -593,6 +637,7 @@ export function updateSocial(w: World): void {
     w.social.invites = w.social.invites.filter((i) => i.expiresAt > w.now);
   for (const [id, sk] of w.social.skulls) if (sk.until <= pkNow(w)) w.social.skulls.delete(id);
   for (const [id, until] of w.social.pzLocks) if (until <= pkNow(w)) w.social.pzLocks.delete(id);
+  for (const [k, until] of w.social.revenge) if (until <= pkNow(w)) w.social.revenge.delete(k);
   // membros que deixaram de existir saem do grupo
   for (const p of [...allParties(w)]) {
     if (!p.members.some((id) => !allActors(w).some((a) => a.id === id))) continue;

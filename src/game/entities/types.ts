@@ -125,8 +125,6 @@ export interface LootContainer {
   id: string;
   /** Dono original (saco de morte): o herói volta para recuperar o que perdeu. */
   ownerId?: string;
-  /** Saco de morte por criaturas: só o dono pega até este instante (morte no PK: qualquer um, a qualquer momento). */
-  lockedUntil?: number;
   x: number;
   y: number;
   items: ItemStack[];

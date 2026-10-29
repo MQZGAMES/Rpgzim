@@ -10,7 +10,7 @@ import { weaponSkillLevel } from '../../domain/rules/stats';
 import { chebyshev } from '../../domain/value-objects/position';
 import { ROLES } from './heroRoles';
 import { actorById, partyOf } from '../social/social';
-import type { HeroEntity, MonsterEntity } from '../entities/types';
+import type { HeroEntity, MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 
 /** Margem para considerar a luta segura / aceitável. */
@@ -47,8 +47,8 @@ export function monsterMaxHit(h: HeroEntity, m: MonsterEntity): number {
   return max * (1 - h.stats.damageReduction);
 }
 
-/** Dano médio por segundo do herói contra esta criatura (armadura e resistência dela descontadas). */
-export function heroDpsVs(w: World, h: HeroEntity, m: MonsterEntity): number {
+/** Dano médio por segundo do personagem contra esta criatura (armadura e resistência dela descontadas). */
+export function heroDpsVs(w: World, h: PlayerEntity, m: MonsterEntity): number {
   const voc = w.data.vocations[h.character.vocation];
   const weapon = h.stats.weapon;
   let avg: number;
@@ -95,39 +95,105 @@ export function effectiveHp(w: World, h: HeroEntity): number {
   return h.character.health + 0.7 * pots + shield;
 }
 
-/** Dano total esperado ao enfrentar o grupo (mata a mais fraca primeiro). */
-export function expectedDamage(w: World, h: HeroEntity, mons: readonly MonsterEntity[]): number {
+/** Colegas de grupo vivos a até 10 tiles (lutam junto). */
+export function alliesAround(w: World, h: PlayerEntity): PlayerEntity[] {
+  const p = partyOf(w, h.id);
+  if (!p) return [];
+  const out: PlayerEntity[] = [];
+  for (const id of p.members) {
+    const a = actorById(w, id);
+    if (a && a !== h && !a.dead && chebyshev(a, h) <= 10) out.push(a);
+  }
+  return out;
+}
+
+/** Dano por segundo do grupo (ele + colegas por perto) contra a criatura: com mais gente ela morre mais rápido. */
+export function partyDpsVs(w: World, h: HeroEntity, m: MonsterEntity, allies = alliesAround(w, h)): number {
+  return allies.reduce((s, a) => s + heroDpsVs(w, a, m) * 0.85, heroDpsVs(w, h, m));
+}
+
+/**
+ * Quanto do dano das criaturas cai nele no grupo: o Knight segura quase tudo; os demais, com um Knight junto, pouco;
+ * sem tanque, o dano se espalha entre os membros.
+ */
+export function damageShare(w: World, h: HeroEntity, allies = alliesAround(w, h)): number {
+  if (!allies.length) return 1;
+  const knightMate = allies.some((a) => a.character.vocation === 'knight');
+  if (h.character.vocation === 'knight') return 0.8;
+  if (knightMate) return 0.3;
+  return Math.max(0.35, 1 / (1 + allies.length * 0.7));
+}
+
+/** Dano total esperado e duração (s) da luta contra o grupo (mata a mais fraca primeiro), com a ajuda dos colegas. */
+export function fightPlan(
+  w: World,
+  h: HeroEntity,
+  mons: readonly MonsterEntity[],
+): { damage: number; seconds: number } {
+  const allies = alliesAround(w, h);
+  const share = damageShare(w, h, allies);
   const rows = mons.map((m) => {
-    const out = heroDpsVs(w, h, m) * (m.def.attack.range > 2 ? 0.8 : 1); // atiradores fogem/recuam: demora mais
-    return { hp: m.hp, dpsIn: monsterDps(w, h, m), ttk: m.hp / out };
+    const out = partyDpsVs(w, h, m, allies) * (m.def.attack.range > 2 ? 0.8 : 1); // atiradores fogem/recuam: demora mais
+    return { hp: m.hp, dpsIn: monsterDps(w, h, m) * share, ttk: m.hp / out };
   });
   rows.sort((a, b) => a.ttk - b.ttk);
   let incoming = rows.reduce((s, r) => s + r.dpsIn, 0);
-  let total = 0;
+  let damage = 0;
+  let seconds = 0;
   for (const r of rows) {
-    total += r.ttk * incoming;
+    damage += r.ttk * incoming;
+    seconds += r.ttk;
     incoming -= r.dpsIn;
   }
-  return total;
+  return { damage, seconds };
 }
 
-/** Margem da luta (vida efetiva ÷ dano esperado); Infinity sem criaturas. */
+export function expectedDamage(w: World, h: HeroEntity, mons: readonly MonsterEntity[]): number {
+  return fightPlan(w, h, mons).damage;
+}
+
+/**
+ * Vida que ele consegue gastar numa luta de `seconds`: a vida atual, o Escudo de Mana e a cura que dá para beber no
+ * tempo da luta (a melhor poção, no ritmo da exaustão dela, até acabar o estoque) — antes só contava 5 poções, e
+ * uma caça longa e tranquila de poção em poção parecia perigosa. Magos ainda curam um pouco com a magia.
+ */
+export function sustainHp(w: World, h: HeroEntity, seconds: number): number {
+  let stock = 0;
+  let rate = 0;
+  for (const st of h.character.inventory) {
+    const use = st && w.data.items[st.itemId]?.use;
+    if (!st || !use?.heal || use.mana) continue;
+    stock += use.heal * st.count;
+    rate = Math.max(rate, use.heal / (Math.max(1000, use.cooldownMs ?? 2000) / 1000));
+  }
+  const top5 = healPotions(w, h)
+    .slice(0, 5)
+    .reduce((s, v) => s + v, 0);
+  const drink = Math.max(top5, Math.min(stock, rate * seconds)) * 0.7;
+  const shield = h.buffs.some((b) => b.kind === 'manaShield') ? h.character.mana : 0;
+  const voc = h.character.vocation;
+  const spell =
+    voc === 'druid' || voc === 'sorcerer'
+      ? Math.min(
+          (h.character.mana / 20) * (22 + h.character.level * 0.6 + h.stats.magicLevel * 2),
+          ((22 + h.character.level * 0.6 + h.stats.magicLevel * 2) / 2) * seconds,
+        ) * (voc === 'druid' ? 0.35 : 0.2)
+      : 0;
+  return h.character.health + drink + shield + spell;
+}
+
+/** Margem da luta (vida que dá para gastar ÷ dano esperado); Infinity sem criaturas. */
 export function fightMargin(w: World, h: HeroEntity, mons: readonly MonsterEntity[]): number {
   if (!mons.length) return Infinity;
-  return (effectiveHp(w, h) / Math.max(1, expectedDamage(w, h, mons))) * (1 + ALLY_BONUS * alliesNear(w, h));
+  const { damage, seconds } = fightPlan(w, h, mons);
+  // os colegas também curam e puxam a atenção quando a coisa aperta: uma folga pequena por colega
+  const allies = alliesAround(w, h).length;
+  return (sustainHp(w, h, seconds) / Math.max(1, damage)) * (1 + 0.1 * allies);
 }
 
-/** Cada colega de grupo vivo e por perto divide o dano e acelera a luta. */
-export const ALLY_BONUS = 0.45;
+/** Quantos colegas de grupo vivos estão por perto. */
 export function alliesNear(w: World, h: HeroEntity): number {
-  const p = partyOf(w, h.id);
-  if (!p) return 0;
-  let n = 0;
-  for (const id of p.members) {
-    const a = actorById(w, id);
-    if (a && a !== h && !a.dead && chebyshev(a, h) <= 10) n++;
-  }
-  return n;
+  return alliesAround(w, h).length;
 }
 
 /** Criaturas vivas a até `radius` tiles do ponto (fora da área protegida). */
@@ -184,7 +250,11 @@ export function xpPerMinute(w: World, h: HeroEntity, id: string): number {
   const def = w.data.monsters[id];
   if (!def) return 0;
   const proto = { def, hp: def.health } as unknown as MonsterEntity;
-  const dps = heroDpsVs(w, h, proto) * (def.attack.range > 2 ? 0.8 : 1);
+  // em grupo: o dano de todos mata mais rápido, mas a XP (com o bônus de vocações diferentes) é dividida
+  const allies = alliesAround(w, h);
+  const dps = partyDpsVs(w, h, proto, allies) * (def.attack.range > 2 ? 0.8 : 1);
   const cycle = def.health / Math.max(0.5, dps) + 4 + (def.behavior === 'skirmisher' ? 2 : 0);
-  return (def.experience / cycle) * 60;
+  const variety = new Set([h, ...allies].map((a) => a.character.vocation)).size;
+  const share = allies.length ? (1 + 0.25 * (variety - 1)) / (allies.length + 1) : 1;
+  return (def.experience * share / cycle) * 60;
 }

@@ -17,7 +17,7 @@ export function withLateStock(shops: ShopDef[]): ShopDef[] {
   return shops.map((s) => {
     if (s.id === 'equipment') return { ...s, sells: [...s.sells, ...fighter.map((i) => ({ itemId: i.id, price: i.value }))], buys: [...s.buys, ...GEAR_ITEMS.map((i) => ({ itemId: i.id, price: sellPct(i.value) }))] };
     if (s.id === 'potions')
-      return { ...s, sells: [...s.sells, ...mage.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price }))], buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value }))] };
+      return { ...s, sells: [...s.sells, ...mage.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price }))], buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price: Math.floor(price / 2) }))] };
     if (s.id === 'general') return { ...s, buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value }))] };
     return s;
   });

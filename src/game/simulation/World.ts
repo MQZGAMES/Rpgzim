@@ -20,6 +20,8 @@ export interface UiState {
   buildingId: string | null;
   /** Interação pendente: o jogador caminha até o alvo e interage ao chegar. */
   pending: { kind: 'npc' | 'loot' | 'sign'; id: string } | null;
+  /** Personagem marcado no botão de seleção: o botão de ataque e as magias de ataque vão nele. */
+  selectedActor?: string | null;
 }
 
 export interface World {

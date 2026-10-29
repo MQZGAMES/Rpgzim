@@ -17,6 +17,7 @@ import {
   registerAggression,
   savePk,
   skullOf,
+  skullSeenBy,
   touchCombat,
   updateSocial,
 } from '../../src/game/social/social';
@@ -140,7 +141,7 @@ describe('PK: caveiras e PZ lock', () => {
     expect(pzLockMs(w, human.id)).toBeGreaterThan(4 * 60000);
   });
 
-  describe('quem matou: maior dano + último golpe', () => {
+  describe('quem matou: o último personagem que bateu e o de maior dano (até 2)', () => {
     const hit = (
       w: ReturnType<typeof world>['w'],
       victim: HeroEntity,
@@ -151,30 +152,80 @@ describe('PK: caveiras e PZ lock', () => {
       asActor(w, victim, () => damagePlayer(w, raw, 'fire', src, true));
     };
     const monster = { id: 'mon:troll', name: 'Troll', kind: 'monster' as const };
+    const second = (sim: GameSimulation) => {
+      const def = GAME_DATA.heroes.maguim!;
+      const c = createCharacter(GAME_DATA, {
+        id: def.slotId,
+        name: def.name,
+        vocation: def.vocation,
+        now: 0,
+        position: sim.world.map.playerStart,
+      });
+      const m = sim.addHero(def, c);
+      m.brain.nextThinkAt = Infinity;
+      return m;
+    };
 
-    it('o jogador que atacou uma vez, mas a morte veio de criaturas, NÃO pega morte injusta', () => {
+    it('matar junto com criaturas também é morte injusta (o dano dos monstros não tira o crédito)', () => {
       const { w, h, human } = world();
       h.character.health = h.stats.maxHealth = 400;
-      registerAggression(w, human.id, h.id); // atacou uma vez (caveira branca e PZ lock de 2 min)
+      registerAggression(w, human.id, h.id);
       hit(w, h, 10, actorSource(human));
       hit(w, h, 150, monster);
       hit(w, h, 150, monster);
       hit(w, h, 999, monster); // golpe final de uma criatura
       expect(h.dead).toBe(true);
-      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
-      expect(pzLockMs(w, human.id)).toBeLessThanOrEqual(PZ_LOCK_ATTACK_MS); // sem os 5 min de quem mata
+      expect(w.social.unjust.get(human.id)).toHaveLength(1);
+      expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
     });
 
-    it('mesmo com o último golpe, se uma criatura causou mais dano a morte é da criatura', () => {
-      const { w, h, human } = world();
-      h.character.health = h.stats.maxHealth = 400;
-      registerAggression(w, human.id, h.id);
-      hit(w, h, 300, monster);
-      hit(w, h, 50, actorSource(human)); // o jogador dá o último golpe, mas com muito menos dano
-      expect(h.dead).toBe(false);
+    it('o último que bateu e o que deu mais dano pegam os dois; um terceiro que só raspou, não', () => {
+      const { sim, w, h, human } = world();
+      const m = second(sim);
+      const third = { id: 'hero:longe', name: 'Longe', kind: 'player' as const }; // não é personagem do mundo
+      h.character.health = h.stats.maxHealth = 700;
+      hit(w, h, 600, actorSource(m)); // maior dano
+      hit(w, h, 50, third);
+      hit(w, h, 60, actorSource(human)); // último golpe
+      expect(h.dead).toBe(true);
+      expect(w.social.unjust.get(human.id)).toHaveLength(1);
+      expect(w.social.unjust.get(m.id)).toHaveLength(1);
+    });
+
+    it('com três personagens, quem não foi o último nem o de maior dano escapa da morte injusta', () => {
+      const { sim, w, h, human } = world();
+      const m = second(sim);
+      h.character.health = h.stats.maxHealth = 1000;
       hit(w, h, 100, actorSource(human));
+      hit(w, h, 700, monster);
+      hit(w, h, 150, actorSource(m)); // maior dano entre personagens
+      hit(w, h, 999, monster);
+      expect(h.dead).toBe(true);
+      // o último PERSONAGEM a bater também foi o de maior dano: só ele
+      expect(w.social.unjust.get(m.id)).toHaveLength(1);
+      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    });
+
+    it('quem foi morto injustamente vê o assassino com caveira amarela e se vinga sem caveira (só PZ lock)', () => {
+      const { sim, w, h, human } = world();
+      kill(sim, h, human); // o herói mata o jogador injustamente
+      expect(w.social.unjust.get(h.id)).toHaveLength(1);
+      expect(skullSeenBy(w, human.id, h.id)).toBe('white'); // enquanto tiver a branca, aparece a branca
+      // passa a caveira branca do herói: para o jogador ele continua amarelo
+      w.social.skulls.delete(h.id);
+      w.social.pzLocks.delete(h.id);
+      respawnPlayer2(sim, human as unknown as HeroEntity);
+      expect(skullSeenBy(w, human.id, h.id)).toBe('yellow');
+      expect(skullSeenBy(w, 'outro', h.id)).toBeNull();
+      expect(buildSnapshot(sim, 1).heroes.find((x) => x.id === h.id)!.skull).toBe('yellow');
+      registerAggression(w, human.id, h.id);
+      expect(skullOf(w, human.id)).toBeNull();
+      expect(isPzLocked(w, human.id)).toBe(true);
+      kill(sim, human, h);
       expect(h.dead).toBe(true);
       expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+      expect(skullOf(w, human.id)).toBeNull();
+      expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
     });
 
     it('quem dá o MAIOR dano e o último golpe pega a morte (injusta se a vítima não tinha caveira)', () => {
@@ -190,17 +241,6 @@ describe('PK: caveiras e PZ lock', () => {
       expect(w.social.unjust.get(human.id)).toHaveLength(1);
       expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
       expect(notices.some((t) => t.includes('MORTE INJUSTA'))).toBe(true);
-    });
-
-    it('se OUTRO personagem deu mais dano, quem só deu o último golpe também não pega', () => {
-      const { w, h, human } = world();
-      h.character.health = h.stats.maxHealth = 400;
-      registerAggression(w, 'hero:forte', h.id);
-      hit(w, h, 300, { id: 'hero:forte', name: 'Forte', kind: 'player' });
-      registerAggression(w, human.id, h.id);
-      hit(w, h, 120, actorSource(human)); // último golpe, mas menos dano que o outro
-      expect(h.dead).toBe(true);
-      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
     });
   });
 

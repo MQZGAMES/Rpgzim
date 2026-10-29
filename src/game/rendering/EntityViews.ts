@@ -4,7 +4,7 @@ import type Phaser from 'phaser';
 import { renderPos, isMoving } from '../movement/movement';
 import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { skullOf } from '../social/social';
+import { skullSeenBy } from '../social/social';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
 import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
@@ -255,9 +255,11 @@ export class EntityViews {
     const inParty = !!party && party.members.includes(a.id) && party.members.includes(w.human.id);
     const badges: string[] = [];
     if (inParty) badges.push(party!.leaderId === a.id ? 'ui_shield_leader' : 'ui_shield_member');
-    const skull = skullOf(w, a.id);
-    if (skull) badges.push(`ui_skull_${skull.kind}`);
-    const color = inParty && a.id !== w.human.id ? '#7fd8ff' : base;
+    // a caveira como o jogador a vê (inclui a amarela de vingança de quem o matou injustamente)
+    const skull = skullSeenBy(w, w.human.id, a.id);
+    if (skull) badges.push(`ui_skull_${skull}`);
+    // marcado no botão de seleção: nome em laranja (o ataque vai nele)
+    const color = w.ui.selectedActor === a.id ? '#ffb347' : inParty && a.id !== w.human.id ? '#7fd8ff' : base;
     return { text: a.character.name, color, badges };
   }
 

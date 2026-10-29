@@ -7,6 +7,7 @@ import type { TilePos } from '../../domain/value-objects/position';
 import type { GameSession } from '../../integration/game-ui-bridge/GameSession';
 import type { SfxName } from '../audio/AudioService';
 import type { EntityViews } from './EntityViews';
+import { actorById } from '../social/social';
 import { DEPTH, ySort } from './depth';
 import { worldText } from './text';
 
@@ -39,7 +40,7 @@ export class EffectsView {
   private readonly bags = new Map<string, Phaser.GameObjects.Sprite>();
   private readonly target: Phaser.GameObjects.Sprite;
   private readonly marker: Phaser.GameObjects.Sprite;
-  private auras: { sprite: Phaser.GameObjects.Sprite; until: number; targetId: string }[] = [];
+  private auras: { sprite: Phaser.GameObjects.Sprite; until: number; targetId: string; kind: string }[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -368,7 +369,7 @@ export class EffectsView {
     if (kind === 'manaShield') s.setAlpha(0.7); // aura discreta: o personagem continua em evidência
     // Corrida: só um rastro na região dos pés (o corpo inteiro fica à vista)
     if (kind === 'haste') s.setCrop(0, Math.round(s.height * 0.72), s.width, Math.ceil(s.height * 0.28));
-    this.auras.push({ sprite: s, until: this.session.sim.now + durationMs, targetId });
+    this.auras.push({ sprite: s, until: this.session.sim.now + durationMs, targetId, kind });
     if (this.audible(targetId)) this.session.audio.play('buff');
   }
 
@@ -504,9 +505,12 @@ export class EffectsView {
       this.target.setFrame(Math.floor(now / 300) % 2 ? 'target_1' : 'target_0');
     } else this.target.setVisible(false);
     // auras de buff acompanham quem recebeu
+    // (some junto com o buff: morrer, renascer ou perder o efeito apaga a aura — antes ela ficava no chão)
     this.auras = this.auras.filter((a) => {
       const v = this.views.get(a.targetId);
-      if (now >= a.until || !v) {
+      const actor = actorById(w, a.targetId);
+      const gone = !!actor && (actor.dead || !actor.buffs.some((b) => b.kind === a.kind && b.expiresAt > w.now));
+      if (now >= a.until || !v || gone) {
         a.sprite.destroy();
         return false;
       }

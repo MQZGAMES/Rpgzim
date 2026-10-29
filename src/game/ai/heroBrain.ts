@@ -13,14 +13,16 @@ import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
 import { isPz } from '../world/GameMap';
 import type { HeroEntity, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { asActor } from '../simulation/World';
+import { allActors, asActor } from '../simulation/World';
 import { canEnter, isMoving, tryStep } from '../movement/movement';
 import { planWalk } from '../movement/walk';
 import { actorSpeed, trailStep } from '../movement/follow';
 import { isRanged, ROLES } from './heroRoles';
 import { stepAway } from '../movement/movement';
 import {
+  alliesAround,
   alliesNear,
+  monsterDps,
   xpPerMinute,
   assess,
   engagedOrJoining,
@@ -40,7 +42,6 @@ import {
 } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
 import {
-  bagLockedFor,
   equipItem,
   nearbyLootBags,
   takeLoot,
@@ -161,6 +162,11 @@ export interface HeroBrainState {
   lurePostUntil: number;
   /** Até quando a fuga está suspensa porque ele travou e precisa lutar para sobreviver. */
   fightBackUntil: number;
+  /** Último dano recebido e desde quando ele apanha sem atacar nem andar (vigia contra o "parado apanhando"). */
+  lastHurtAt?: number;
+  passiveSince?: number;
+  /** Última vez que não achou rota nenhuma até o abrigo na fuga (aí sim revidar faz sentido). */
+  routeFailedAt?: number;
 }
 
 export function newHeroBrain(): HeroBrainState {
@@ -397,7 +403,7 @@ function needMargin(w: World, h: HeroEntity): number {
     h.brain.bold * 0.35 +
     (h.brain.frugal ? 0.3 : 0) +
     scarce -
-    (isRanged(h.character.vocation) ? 0.15 : 0)
+    (isRanged(h.character.vocation) ? 0.05 : 0)
   );
 }
 
@@ -405,21 +411,6 @@ function needMargin(w: World, h: HeroEntity): number {
 function protoMonsters(w: World, id: string, n: number): MonsterEntity[] {
   const def = w.data.monsters[id];
   return def ? Array.from({ length: n }, () => ({ def, hp: def.health }) as unknown as MonsterEntity) : [];
-}
-
-/** Uma área serve se ele aguenta um grupo de 3 da presa e nenhuma espécie vizinha é perigosa demais sozinha. */
-function quarryOk(w: World, h: HeroEntity, id: string): boolean {
-  if ((h.brain.avoid[id] ?? 0) > w.now) return false;
-  const need = needMargin(w, h);
-  if (fightMargin(w, h, protoMonsters(w, id, 3)) < need) return false;
-  // espécies que dividem a região (até 12 tiles de um ponto de surgimento da presa)
-  const spawns = w.map.spawns.filter((s) => s.monsterId === id);
-  const neighbours = new Set<string>();
-  for (const sp of w.map.spawns)
-    if (sp.monsterId !== id && spawns.some((q) => chebyshev(q, sp) <= 12)) neighbours.add(sp.monsterId);
-  for (const nid of neighbours)
-    if (fightMargin(w, h, protoMonsters(w, nid, 1)) < RISKY_MARGIN + 0.3) return false;
-  return true;
 }
 
 /** Id da espécie pelo nome (o que o evento de dano informa). */
@@ -621,13 +612,16 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   }
   survive(w, h);
   fightBack(w, h);
+  unstick(w, h);
   heroGroupLife(w, h);
   handleInvites(w, h);
   // em grupo o herói segue a dinâmica do líder: não escolhe vítimas de PK sozinho (só ataca as do líder, ver follow)
   // (no treino entre membros, friendlyFire, ele continua revidando)
   const group = partyOf(w, h.id);
   const solo = !group || group.friendlyFire;
-  if (b.mode === 'pk' && !solo) setMode(w, h, 'decide');
+  // em grupo o PK é o do líder, mas a legítima defesa vale sempre
+  if (b.mode === 'pk' && !solo && !attackedRecently(w, b.pkTargetId ?? '', h.id, 10000)) setMode(w, h, 'decide');
+  if (b.mode !== 'retreat' && selfDefense(w, h)) return;
   if (b.mode !== 'retreat' && solo && thinkPvp(w, h)) return;
   if (
     b.mode !== 'pk' &&
@@ -673,7 +667,69 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   }
 }
 
-/** Reflexos de sobrevivência válidos em qualquer atividade: poção, cura, defesa, fuga. */
+/** Consegue atacar agora? Arma corpo a corpo/distância sempre; varinha só com mana para o disparo ou para uma magia. */
+function canHitNow(w: World, h: HeroEntity): boolean {
+  const weapon = h.stats.weapon;
+  if (weapon.kind !== 'wand' || !h.character.equipment.mainHand) return true;
+  const mana = h.character.mana;
+  if (mana >= (weapon.manaCost ?? 0)) return true;
+  return w.data.vocations[h.character.vocation].spells.some((id) => {
+    const s = w.data.spells[id];
+    return !!s && s.effect === 'damage' && s.manaCost <= mana;
+  });
+}
+
+/**
+ * Vigia contra o "parado apanhando": se ele toma dano há ~2,5 s sem atacar nem sair do lugar (alvo inalcançável do
+ * outro lado de um obstáculo, atirador fora do alcance, caminho travado, PK que não revida), ele troca para quem dá
+ * para acertar daqui ou, sem ninguém ao alcance, foge — em vez de beber poção até morrer.
+ */
+function unstick(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const hurt = w.now - (b.lastHurtAt ?? -Infinity) < 1500;
+  const acting = w.now - h.lastAttackAt < 2500 || isMoving(h, w.now) || w.now - b.lastPos.at < 1500;
+  if (!hurt || acting || isPz(w.map, h.x, h.y)) {
+    b.passiveSince = 0;
+    return;
+  }
+  if (!b.passiveSince) {
+    b.passiveSince = w.now;
+    return;
+  }
+  if (w.now - b.passiveSince < 2500) return;
+  b.passiveSince = 0;
+  const range = Math.max(1, h.stats.weapon.range);
+  const reachable = [...w.monsters.values()]
+    .filter(
+      (m) =>
+        m.alive &&
+        m.targetId === h.id &&
+        chebyshev(m, h) <= range &&
+        (range <= 1 || hasLineOfSight(w, h, m)),
+    )
+    .sort((a, c) => a.hp - c.hp)[0];
+  // já mirava quem está ao alcance e mesmo assim não atacou (sem mana para a varinha, arma inútil): não adianta
+  // trocar de alvo — sai dali
+  if (reachable && h.targetId !== reachable.id) {
+    setTarget(w, reachable.id);
+    return;
+  }
+  // personagem batendo nele (PK): revida se der
+  const foe = allActors(w).find(
+    (a) => a !== h && !a.dead && attackedRecently(w, a.id, h.id, 4000) && !canAttackActor(w, h, a),
+  );
+  if (foe && hpPct(h) > 0.4) {
+    startPk(w, h, foe.id, 'revenge');
+    return;
+  }
+  // ninguém ao alcance: sai dali (e, se o caminho estiver travado, dá um passo para o lado)
+  setTarget(w, null);
+  h.path = null;
+  sidestep(w, h);
+  b.retreatWhy = 'travado apanhando sem alcançar ninguém';
+  if (b.mode !== 'retreat') setMode(w, h, 'retreat');
+}
+
 /** Bebe a poção de vida e anota a cura (o consumo real define o estoque). */
 function drinkHealth(w: World, h: HeroEntity, idx: number): void {
   const st = h.character.inventory[idx];
@@ -693,6 +749,8 @@ function drinkHealth(w: World, h: HeroEntity, idx: number): void {
 function fightBack(w: World, h: HeroEntity): void {
   const b = h.brain;
   if (b.mode === 'pk' || b.mode === 'dead' || isPz(w.map, h.x, h.y)) return;
+  // sem como bater (varinha sem mana e sem mana para magia): ficar "lutando" é ficar parado apanhando — melhor fugir
+  if (!canHitNow(w, h)) return;
   const attackers = [...w.monsters.values()].filter(
     (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.max(2, Math.min(5, m.def.attack.range)),
   );
@@ -700,9 +758,10 @@ function fightBack(w: World, h: HeroEntity): void {
   const adjacent = attackers.filter((m) => chebyshev(m, h) <= 1).length;
   const stuckMs = w.now - b.lastPos.at;
   const moving = isMoving(h, w.now) || !!h.path?.length;
-  // fugindo/andando com caminho livre: continua; parado (travado) ou cercado: luta
-  if ((b.mode === 'retreat' || b.mode === 'town') && !(stuckMs > 1200 && !isMoving(h, w.now)) && adjacent < 3)
-    return;
+  // fugindo/andando: continua; só luta se a rota de fuga falhou de verdade (sem caminho nenhum) ou se está cercado.
+  // (antes "parado" bastava — e era justamente o revidar que o deixava parado: travava para sempre na fuga)
+  const routeFailed = w.now - (b.routeFailedAt ?? -Infinity) < 3000;
+  if ((b.mode === 'retreat' || b.mode === 'town') && !(routeFailed && stuckMs > 1200) && adjacent < 3) return;
   if (b.mode === 'retreat' || b.mode === 'town') b.fightBackUntil = w.now + 2500;
   if (
     moving &&
@@ -715,8 +774,15 @@ function fightBack(w: World, h: HeroEntity): void {
     return;
   let target = currentTarget(w);
   if (!target || !target.alive || target.targetId !== h.id) {
+    // primeiro quem dá para acertar daqui (à vista e ao alcance da arma), depois o mais ferido e mais perto
+    const range = Math.max(1, h.stats.weapon.range);
+    const hittable = (m: MonsterEntity) =>
+      chebyshev(m, h) <= range && (range <= 1 || hasLineOfSight(w, h, m)) ? 0 : 1;
     target = attackers.sort(
-      (a, c) => a.hp / a.def.health - c.hp / c.def.health || chebyshev(a, h) - chebyshev(c, h),
+      (a, c) =>
+        hittable(a) - hittable(c) ||
+        a.hp / a.def.health - c.hp / c.def.health ||
+        chebyshev(a, h) - chebyshev(c, h),
     )[0]!;
     setTarget(w, target.id);
   }
@@ -1023,7 +1089,22 @@ function expectedRate(w: World, h: HeroEntity, id: string): number {
   return learned * 0.7 + prior * 0.3;
 }
 
-function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
+interface QuarryScore {
+  id: string;
+  level: number;
+  margin: number;
+  rate: number;
+  safety: number;
+  score: number;
+}
+
+/**
+ * Custo-benefício de cada caça possível: XP por minuto (com o dano do grupo matando mais rápido e a XP dividida) vezes
+ * a segurança (margem da régua contra 3 da presa, com os colegas por perto). Vizinhos perigosos, morte recente lá e
+ * viagem longa descontam. Nada de cortar tudo e cair na caça mais fraca: sem opção "segura", fica com a menos arriscada
+ * que ainda rende.
+ */
+function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] {
   const t = h.hero.temperament;
   // sem poções escolhe uma caça mais tranquila (sem precisar voltar à vila)
   h.brain.frugal = potionHeal(w, h) < h.stats.maxHealth * 1.5;
@@ -1032,32 +1113,61 @@ function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
     (t.bravery - 0.5) * 3 +
     h.brain.mood -
     (potionsOf(w, h) === 0 ? 4 : h.brain.frugal ? 3 : 0) +
-    alliesNear(w, h) * 1.5;
-  const nearestSpawn = (id: string) =>
-    w.map.spawns.filter((s) => s.monsterId === id).sort((a, b) => chebyshev(a, h) - chebyshev(b, h))[0];
-  const fits = Object.entries(huntLevels(w)).filter(([id, min]) => min <= lvl + 2 && !!nearestSpawn(id));
-  // a régua de ameaça corta o que ele não aguenta (grupo da presa ou vizinho perigoso); sobrando nada, a caça mais fraca
-  const options = fits.filter(([id]) => quarryOk(w, h, id));
-  if (!options.length) {
-    const weakest = fits.sort((a, c) => a[1] - c[1]).find(([id]) => (h.brain.avoid[id] ?? 0) <= w.now);
-    return weakest?.[0] ?? 'slime';
-  }
-  const scored = options.map(([id, min]) => {
+    alliesNear(w, h) * 2;
+  const need = needMargin(w, h);
+  // quantas da presa ele puxa de uma vez: sozinho 2-3 (o corajoso puxa mais); em grupo, mais uma por colega
+  const pull = Math.min(6, Math.round(2 + t.bravery + alliesNear(w, h)));
+  const out: QuarryScore[] = [];
+  for (const [id, min] of Object.entries(huntLevels(w))) {
+    if (min > lvl + 4 || (h.brain.avoid[id] ?? 0) > w.now) continue;
+    const spawns = w.map.spawns.filter((s) => s.monsterId === id);
+    if (!spawns.length) continue;
+    // em grupo, a régua vale para o membro mais frágil (o mago não pode morrer para o Knight upar)
+    let margin = fightMargin(w, h, protoMonsters(w, id, pull));
+    for (const a of alliesAround(w, h))
+      if ('brain' in a) margin = Math.min(margin, fightMargin(w, a as HeroEntity, protoMonsters(w, id, pull)));
+    // segurança: 0 abaixo da margem de risco, sobe até 1 na margem exigida pelo temperamento
+    let safety = Math.max(0, Math.min(1, (margin - RISKY_MARGIN * 0.9) / Math.max(0.2, need - RISKY_MARGIN * 0.9)));
+    // espécies que dividem a região (até 12 tiles de um ponto de surgimento): uma perigosa sozinha estraga a área
+    for (const sp of w.map.spawns)
+      if (
+        sp.monsterId !== id &&
+        spawns.some((q) => chebyshev(q, sp) <= 12) &&
+        fightMargin(w, h, protoMonsters(w, sp.monsterId, 1)) < RISKY_MARGIN + 0.3
+      ) {
+        safety *= 0.25;
+        break;
+      }
     const st = h.brain.areaStats[id];
-    let score = expectedRate(w, h, id);
-    if (min > lvl) score *= 0.5; // um pouco acima do nível: arriscado
-    // desafio na medida: a caça tem que ser a mais forte que a régua aprova (com o grupo por perto a margem sobe e ele
-    // se arrisca mais). Quem sobra com folga demais (slime para quem tem 4 nível 40) perde nota em vez de render "fácil".
-    const margin = fightMargin(w, h, protoMonsters(w, id, 3));
-    const sweet = needMargin(w, h) + 1;
-    if (margin > sweet) score /= 1 + (margin - sweet) * 0.6;
-    if (st && w.now - st.lastDeathAt < 15 * 60000) score *= 0.25; // morreu lá há pouco
-    if (explore && !st) score *= 3; // vontade de conhecer uma área nova
-    return { id, score: Math.max(0.1, score) };
-  });
-  // não perde tempo com presa fraca: só entra na disputa quem rende pelo menos ~60% da melhor (ou a que quer conhecer)
-  const best = Math.max(...scored.map((o) => o.score));
-  const worthy = scored.filter((o) => o.score >= best * 0.6 || (explore && !h.brain.areaStats[o.id]));
+    let rate = expectedRate(w, h, id);
+    // poucos pontos de surgimento: a área esvazia e ele fica esperando a criatura renascer
+    if (spawns.length < 3) rate *= 0.6 + spawns.length * 0.13;
+    if (st && w.now - st.lastDeathAt < 15 * 60000) safety *= 0.3; // morreu lá há pouco
+    let score = rate * safety ** 1.5;
+    if (explore && !st) score *= 2.5; // vontade de conhecer uma área nova
+    out.push({ id, level: min, margin, rate, safety, score });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
+/** Resumo das melhores caças (ferramentas de diagnóstico). */
+export function huntChoiceDebug(w: World, h: HeroEntity): string {
+  return scoreQuarries(w, h)
+    .slice(0, 6)
+    .map((q) => `${q.id}(n${q.level} m${q.margin.toFixed(2)} xp${q.rate.toFixed(0)} s${q.safety.toFixed(2)})`)
+    .join(' > ');
+}
+
+function chooseQuarry(w: World, h: HeroEntity, explore = false): string {
+  const scored = scoreQuarries(w, h, explore).filter((o) => o.score > 0);
+  if (!scored.length) {
+    // nada aprovado pela régua: a caça com a maior margem (a mais tranquila) que exista
+    const calm = scoreQuarries(w, h, explore).sort((a, b) => b.margin - a.margin)[0];
+    return calm?.id ?? 'slime';
+  }
+  // não perde tempo com presa fraca: só entra na disputa quem rende pelo menos ~70% da melhor (ou a que quer conhecer)
+  const best = scored[0]!.score;
+  const worthy = scored.filter((o) => o.score >= best * 0.7 || (explore && !h.brain.areaStats[o.id]));
   // escolha ponderada: geralmente a melhor, mas às vezes improvisa
   const total = worthy.reduce((s2, o) => s2 + o.score * o.score, 0);
   let roll = w.rng.next() * total;
@@ -1154,11 +1264,16 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     training ||
     m.targetId === h.id ||
     fightMargin(w, h, [...new Set([m, ...monstersNear(w, m, 3), ...engaged])]) >= needMargin(w, h);
+  // ordem de abate: entre as que já batem nele, primeiro a que mais machuca por vida restante (some mais dano
+  // que chega por segundo de luta); para puxar, a mais perto e sem vizinhas
   const near = candidates
     .filter(approve)
     .map((m) => ({
       m,
-      score: chebyshev(m, h) + monstersNear(w, m, 3).length * 1.5 - (m.targetId === h.id ? 100 : 0),
+      score:
+        chebyshev(m, h) +
+        monstersNear(w, m, 3).length * 1.5 -
+        (m.targetId === h.id ? 100 + (60 * monsterDps(w, h, m)) / Math.max(1, m.hp) : 0),
     }))
     .sort((a, c) => a.score - c.score)
     .map((o) => o.m);
@@ -1173,6 +1288,9 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
       return startHunt(w, h, chooseQuarry(w, h));
     }
   }
+  // líder (ou membro) de grupo: não puxa a próxima enquanto um colega por perto está ferido ou sem mana — espera ele
+  // se recompor (o time inteiro entra inteiro na próxima luta)
+  if (next && !training && next.targetId !== h.id && !engaged.length && partyNeedsBreath(w, h)) return;
   // só puxa criatura nova com a vida em dia: bebe uma poção sobrando ou vai se curar
   if (next && !training && next.targetId !== h.id && !engaged.length && hpPct(h) < 0.75) {
     if (potionsOf(w, h) > 3) {
@@ -1203,6 +1321,17 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   if (chebyshev(b.spot ?? spot, h) > 4) goTo(w, h, (b.spot ?? spot).x, (b.spot ?? spot).y);
   else if (w.rng.chance(0.3))
     goTo(w, h, (b.spot ?? spot).x + w.rng.int(-3, 3), (b.spot ?? spot).y + w.rng.int(-3, 3));
+}
+
+/** Algum colega de grupo por perto precisa respirar (vida abaixo de 55% ou mago com menos de 25% de mana)? */
+function partyNeedsBreath(w: World, h: HeroEntity): boolean {
+  return alliesAround(w, h).some((a) => {
+    const mage = a.character.vocation === 'sorcerer' || a.character.vocation === 'druid';
+    return (
+      a.character.health < a.stats.maxHealth * 0.55 ||
+      (mage && a.character.mana < a.stats.maxMana * 0.25)
+    );
+  });
 }
 
 /** Magias de combate de cada vocação (o Knight nos golpes corpo a corpo; os de longe nos projéteis e rajadas). */
@@ -1556,12 +1685,11 @@ const LOOT_SCAN = 10;
 function heroMayLoot(
   w: World,
   h: HeroEntity,
-  l: { ownerId?: string; dropped?: boolean; lockedUntil?: number },
+  l: { ownerId?: string; dropped?: boolean },
 ): boolean {
   if (l.dropped) return false;
   if (!l.ownerId || l.ownerId === h.id) return true;
-  if (bagLockedFor(w, l, h.id)) return false;
-  // aberto a todos (PK ou passados os 5 minutos): ainda assim ele não saqueia o jogador nem colegas de grupo
+  // o saco de morte é aberto a todos: ainda assim ele não saqueia o jogador nem colegas de grupo
   if (l.ownerId === w.human.id || sameParty(w, h.id, l.ownerId)) return false;
   return true;
 }
@@ -2041,16 +2169,19 @@ function retreat(w: World, h: HeroEntity): void {
   if (
     !isMoving(h, w.now) &&
     !h.path?.length &&
-    !planWalk(w, goal.x, goal.y, { quiet: true, avoidMonsters: true, maxNodes: 60000 })
+    !planWalk(w, goal.x, goal.y, { quiet: true, avoidMonsters: true, maxNodes: 60000 }) &&
+    // cercado, a rota "desviando das criaturas" não existe: passa no meio delas mesmo (parado ele só apanha)
+    !planWalk(w, goal.x, goal.y, { quiet: true, maxNodes: 60000 })
   ) {
-    // sem rota livre até o abrigo: fugir sem rota é entregar as costas — luta contra quem está em cima dele (poção e magias)
+    // sem rota nenhuma até o abrigo: luta contra quem está em cima dele (poção e magias); sem como lutar, dá um passo
+    h.brain.routeFailedAt = w.now;
     const foe = [...w.monsters.values()]
       .filter((m) => m.alive && m.targetId === h.id)
       .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0];
     if (foe) {
       setTarget(w, foe.id);
       hunt(w, h, true, true);
-    }
+    } else sidestep(w, h);
   }
 }
 
@@ -2106,7 +2237,10 @@ export function heroOnEvent(
     b.mood = Math.min(1, b.mood + 0.5);
     heroSay(w, h, 'levelUp', { level: payload.level ?? h.character.level }, 0);
   } else if (type === 'skillUp') heroSay(w, h, 'skillUp', { skill: payload.skill ?? '' }, 45000);
-  else if (type === 'damage' && payload.sourceName) b.lastHitBy = payload.sourceName;
+  else if (type === 'damage' && payload.sourceName) {
+    b.lastHitBy = payload.sourceName;
+    if ((payload.amount ?? 0) > 0) b.lastHurtAt = w.now;
+  }
   else if (type === 'kill') {
     b.mood = Math.min(1, b.mood + 0.03);
     b.bold = Math.min(1, b.bold + 0.015); // venceu: ganha confiança
@@ -2311,14 +2445,18 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
   const grudge = h.brain.grudge?.id === inv.fromId && w.now < h.brain.grudge.until;
   const levelGap = from ? Math.abs(from.character.level - h.character.level) : 99;
   const hostile = grudge || h.brain.pkTargetId === inv.fromId;
-  const chance = hostile
-    ? 0
-    : inv.fromId === w.human.id
-      ? aff < -0.3
-        ? 0.2
-        : 1
+  // convite do jogador humano nunca é recusado (sai de qualquer outro grupo); entre heróis, conforme a relação
+  const fromHuman = inv.fromId === w.human.id;
+  const chance = fromHuman
+    ? 1
+    : hostile
+      ? 0
       : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
-  if (w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
+  if (fromHuman || w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
+    if (fromHuman && hostile) {
+      h.brain.grudge = null;
+      h.brain.pkTargetId = null;
+    }
     const wasFree = !partyOf(w, h.id);
     if (acceptInvite(w, h.id, inv.fromId)) return declineInvite(w, h.id);
     changeAffinity(h, inv.fromId, 0.1);
@@ -2509,6 +2647,34 @@ function power(a: {
   return a.character.level * 12 + a.stats.maxHealth * 0.25 * (0.4 + hp * 0.6) + a.stats.armor * 2 + atk * 3;
 }
 
+/**
+ * Legítima defesa contra QUALQUER personagem que o atacou há pouco (o jogador ou outro herói), sozinho ou em grupo:
+ * revida se aguenta, foge se está perdendo feio. Antes só valia sozinho e contra o jogador — em grupo ele ficava parado
+ * apanhando até morrer. Retorna true se tomou conta do turno.
+ */
+function selfDefense(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (b.mode === 'pk' || h.dead) return false;
+  const foes = allActors(w).filter(
+    (a) =>
+      a !== h &&
+      !a.dead &&
+      chebyshev(a, h) <= 12 &&
+      attackedRecently(w, a.id, h.id, 8000) &&
+      !isSparring(w, a.id, h.id) &&
+      !canAttackActor(w, h, a),
+  );
+  if (!foes.length) return false;
+  const foe = foes.sort((a, c) => power(a) - power(c))[0]!;
+  const ratio = power(h) / Math.max(1, power(foe));
+  // com o grupo por perto ele aguenta mais: os colegas ajudam (ver follow, alvo do líder)
+  const backup = alliesNear(w, h) * 0.25;
+  if ((hpPct(h) > 0.35 && ratio + backup > 0.7) || hpPct(h) > 0.8) return startPk(w, h, foe.id, 'revenge');
+  heroSay(w, h, 'flee', { player: foe.character.name }, 20000);
+  if (b.mode !== 'retreat') setMode(w, h, 'retreat');
+  return true;
+}
+
 /** Reage a ataques e, com o PK ligado, decide se vale atacar alguém. Retorna true se tomou conta do turno. */
 function thinkPvp(w: World, h: HeroEntity): boolean {
   const b = h.brain;
@@ -2529,13 +2695,6 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   const dist = chebyshev(human, h);
   if (dist > 9) return false;
   const ratio = power(h) / Math.max(1, power(human));
-  // 1) legítima defesa: quem bate leva o troco (ou ele foge se estiver perdendo feio)
-  if (attackedRecently(w, human.id, h.id, 8000)) {
-    if (hpPct(h) > 0.35 && ratio > 0.7) return startPk(w, h, human.id, 'revenge');
-    heroSay(w, h, 'flee', { player: human.character.name }, 20000);
-    setMode(w, h, 'retreat');
-    return true;
-  }
   if (w.now < b.nextPkThinkAt) return false;
   b.nextPkThinkAt = w.now + 6000 + w.rng.next() * 6000;
   if (!hasLineOfSight(w, h, human)) return false;
@@ -2606,8 +2765,24 @@ function pk(w: World, h: HeroEntity): void {
     return setMode(w, h, 'retreat');
   }
   if (h.targetId !== victim.id) setTarget(w, victim.id);
-  if (chebyshev(victim, h) <= 1 && hpPct(h) > 0.4) tryCast(w, h, 'brutal_strike');
+  keepHaste(w, h);
+  // cada vocação usa as magias de ataque contra personagens também (antes só o Knight usava o golpe forte)
+  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
+  const d = chebyshev(victim, h);
+  for (const id of PVP_SPELLS[h.character.vocation]) {
+    const sp = w.data.spells[id];
+    if (!sp || d > Math.max(1, sp.range) || (id === 'brutal_strike' && hpPct(h) <= 0.4)) continue;
+    if (manaPct > 0.15 && tryCast(w, h, id)) break;
+  }
 }
+
+/** Magias de ataque usadas no PK (alvo único), da mais forte para a mais barata. */
+const PVP_SPELLS: Record<HeroEntity['character']['vocation'], string[]> = {
+  knight: ['brutal_strike'],
+  sorcerer: ['flame_lance', 'arcane_bolt'],
+  druid: ['earth_thorn'],
+  paladin: ['holy_arrow'],
+};
 
 // ------------------------------------------------------------------ improviso: comentários e pequenas vontades
 function whims(w: World, h: HeroEntity): void {

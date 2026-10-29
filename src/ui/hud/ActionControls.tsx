@@ -94,16 +94,48 @@ export const TOUCH_SLOT = 44;
 export const TOUCH_ATTACK = 54;
 export const TOUCH_GAP = 5;
 
+/**
+ * Seleção de personagem (jogador ou herói): cada toque marca o próximo por perto e, depois do último, desmarca.
+ * Com alguém marcado, o botão de ataque e as magias de ataque vão nele.
+ */
+function SelectActorButton({ width, height }: { width: number; height: number }) {
+  const session = useSession();
+  const sel = useSnap((s) => s.selectedActor);
+  return (
+    <button
+      type="button"
+      aria-label={sel ? `Selecionado: ${sel.name} (toque para o próximo)` : 'Selecionar jogador ou herói'}
+      title={sel ? `${sel.name} — o ataque vai nele (toque: próximo / desmarcar)` : 'Selecionar jogador ou herói para atacar'}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        session.audio.unlock();
+        session.cycleActorSelection();
+      }}
+      className={`${sel ? 'btn-gold anim-glow' : 'btn-pixel'} pointer-events-auto relative flex flex-col items-center justify-center !border-[6px]`}
+      style={{ width, height }}
+      data-testid="select-actor-button"
+    >
+      <ItemIcon icon="ui_players" size={18} />
+      <span className="max-w-full truncate px-[2px] text-[9px] leading-none">{sel ? sel.name : 'Jogador'}</span>
+    </button>
+  );
+}
+
 export function TouchActions() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
+  const hasSel = useSnap((s) => s.selectedActor !== null);
   const track = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
       <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
         <div className="flex flex-col items-end pb-1">
           <InteractButton />
+        </div>
+        {/* acima da grade, na coluna do botão de ataque: a seleção de jogador/herói */}
+        <div className="pointer-events-none flex justify-end px-[4px]">
+          <SelectActorButton width={TOUCH_ATTACK} height={TOUCH_SLOT} />
         </div>
         <div
           className="pointer-events-auto grid items-center justify-items-center p-[4px]"
@@ -117,7 +149,7 @@ export function TouchActions() {
           ))}
           <button
             type="button"
-            aria-label={hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
+            aria-label={hasSel ? 'Atacar o personagem selecionado' : hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
             onPointerDown={(e) => {
               e.preventDefault();
               session.audio.unlock();
@@ -128,7 +160,7 @@ export function TouchActions() {
             data-testid="attack-button"
           >
             <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={24} />
-            <span className="text-[10px] leading-none">{hasTarget ? 'Trocar' : 'Atacar'}</span>
+            <span className="text-[10px] leading-none">{hasSel ? 'Atacar' : hasTarget ? 'Trocar' : 'Atacar'}</span>
           </button>
         </div>
       </div>
@@ -152,6 +184,7 @@ export function DesktopActionBar() {
           <ItemIcon icon="ui_gear" size={14} />
         </button>
         <div className="mx-1 h-10 w-[2px] bg-dusk" />
+        <SelectActorButton width={58} height={46} />
         <button type="button" onClick={() => session.cycleTarget()} className="btn-gold flex h-[46px] flex-col items-center justify-center px-1 text-[10px]" title="Alvo mais próximo (Tab/Espaço)">
           <ItemIcon icon="ui_target" size={22} />
           Tab

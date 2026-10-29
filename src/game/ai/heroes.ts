@@ -37,7 +37,7 @@ function heroBus(w: World, h: HeroEntity, main: EventBus<GameEventMap>): EventBu
     asActor(w, h, () => heroOnEvent(w, h, 'skillUp', { skill: SKILL_LABEL[e.skill] }));
   });
   bus.on('damage', (e) => {
-    if (e.targetId === h.id && e.sourceId) heroOnEvent(w, h, 'damage', { sourceId: e.sourceId, sourceName: w.monsters.get(e.sourceId)?.def.name ?? w.heroes.get(e.sourceId)?.character.name ?? (e.sourceId === w.human.id ? w.human.character.name : undefined) });
+    if (e.targetId === h.id && e.sourceId) heroOnEvent(w, h, 'damage', { sourceId: e.sourceId, amount: e.amount + (e.manaLoss ?? 0), sourceName: w.monsters.get(e.sourceId)?.def.name ?? w.heroes.get(e.sourceId)?.character.name ?? (e.sourceId === w.human.id ? w.human.character.name : undefined) });
   });
   bus.on('entityDied', (e) => e.kind === 'monster' && heroOnEvent(w, h, 'kill', {}));
   bus.on('playerRespawned', () => main.emit('actorRespawned', { entityId: h.id }));

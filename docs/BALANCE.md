@@ -34,6 +34,28 @@ permite escudo, então o Paladin treina Distance e Shielding ao mesmo tempo.
 
 - Golpe físico: máx = `(ataque · (skill + 10) / 20 + nível / 3) · modificador da vocação`, rolado entre 35% e 100%.
 - Varinhas/cajados: dano fixo da arma + `0,5 · ML`, vezes o modificador mágico da vocação.
+- Magias de ataque dos magos: `(nível · fator + ML · poder + base) · (1 + dano médio da varinha / 150)` — crescem
+  com a varinha, como as magias de golpe/flecha crescem com o ataque da arma (`· (1 + ataque / 20)`).
+
+## Dano por vocação até o nível 100 (out/2026)
+
+Ferramenta: `RPGZIM_TOOLS=1 npx vitest run tests/tools/vocation-dps.test.ts` — melhor arma do nível, skills e ML
+pelo tempo de caça (curvas reais de treino) e mana limitada ao que cada vocação gasta por segundo.
+
+Antes, o ML cresce devagar (≈33 no nível 100) e as magias dos magos não dependiam da varinha: o Sorcerer caía de
+100% do dano no início para 49% no nível 100 e o Druid para 37%; o Knight ficava em ≈70%. Ajustes: varinha reforça
+as magias (acima), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Resultado (alvo único, % da
+melhor vocação no nível):
+
+| Nível | Knight | Paladin | Sorcerer | Druid |
+|---|---|---|---|---|
+| 8 | 74% | 73% | 100% | 95% |
+| 25 | 77% | 75% | 100% | 93% |
+| 50 | 83% | 82% | 100% | 92% |
+| 80 | 93% | 100% | 98% | 88% |
+| 100 | 91% | 100% | 86% | 73% |
+
+Em área (4 criaturas) os magos ficam bem à frente (Druid ≈ 490 e Sorcerer ≈ 430 no nível 100 contra ≈ 350 do Knight).
 - Armadura reduz só dano físico (entre 50% e 100% do valor, por golpe). Escudo dá chance de bloqueio que cresce
   com Shielding e com a defesa do escudo (máx. 45%).
 

@@ -41,12 +41,20 @@ export interface FormulaInput {
   /** Magic Level para magias; skill da arma para golpes. */
   power: number;
   weaponAttack: number;
+  /** Dano médio da varinha/cajado equipado: as magias de ataque dos magos crescem com ela (como os golpes com a arma). */
+  wandPower?: number;
 }
+
+/** Quanto a varinha reforça as magias de ataque: +1% a cada 1,5 de dano médio dela (a do nível 100 mais que dobra). */
+export const WAND_SPELL_SCALE = 150;
 
 /** Faixa [mín, máx] de uma magia (dano ou cura) antes de mitigação. */
 export function spellRange(f: SpellFormula, input: FormulaInput, vocationModifier: number): [number, number] {
   let value: number;
-  if (f.kind === 'magic') value = input.level * f.levelFactor + input.power * f.powerFactor + f.base;
+  if (f.kind === 'magic')
+    value =
+      (input.level * f.levelFactor + input.power * f.powerFactor + f.base) *
+      (1 + (input.wandPower ?? 0) / WAND_SPELL_SCALE);
   else value = (input.level * f.levelFactor + input.power * f.powerFactor) * (1 + input.weaponAttack / 20) + f.base;
   value *= vocationModifier;
   return [Math.max(1, Math.round(value * f.min)), Math.max(1, Math.round(value * f.max))];

@@ -190,23 +190,40 @@ describe('delays fechados e Cura Intensa', () => {
   });
 });
 
-describe('saco de morte reservado e mana na PZ', () => {
-  it('morte por criaturas: o saco é só do dono por 5 min; morte no PK: qualquer um pega', () => {
+describe('saco de morte sem trava e mana na PZ', () => {
+  it('qualquer um pega o saco de morte na hora', () => {
     const { sim, w, h } = setup('boladex');
-    h.character.inventory[0] = { itemId: 'potion_health', count: 3 };
+    h.character.gold = 500;
     killHero(sim, h);
     const bag = [...w.lootBags.values()].find((l) => l.ownerId === h.id)!;
-    expect(bag.lockedUntil).toBeGreaterThan(w.now + 4 * 60000);
-    // outro personagem (o jogador) não consegue pegar durante o bloqueio
+    expect(bag.gold).toBe(500);
     w.human.x = bag.x;
     w.human.y = bag.y;
     const before = w.human.character.gold;
+    w.ui.lootId = bag.id;
     sim.takeLoot('all');
-    expect(w.lootBags.get(bag.id)!.gold + 0).toBe(bag.gold);
-    expect(w.human.character.gold).toBe(before);
-    advance(sim, 5 * 60000 + 1000, 250);
-    const still = w.lootBags.get(bag.id);
-    expect(still === undefined || (still.lockedUntil ?? 0) <= w.now).toBe(true);
+    expect(w.human.character.gold).toBe(before + 500);
+  });
+
+  it('o próprio saco de morte não é dividido com o grupo; o de outro personagem é', () => {
+    const { sim, w, h } = setup('boladex');
+    const p = w.human;
+    w.social.party = { leaderId: p.id, members: [p.id, h.id], formation: 'free', targeting: 'nearest', friendlyFire: false, trail: [] };
+    h.x = p.x;
+    h.y = p.y;
+    // saco do próprio jogador: fica tudo com ele
+    w.lootBags.set('own', { id: 'own', ownerId: p.id, x: p.x, y: p.y, items: [], gold: 400, expiresAt: Infinity, sourceName: 'eu (morto)' });
+    w.ui.lootId = 'own';
+    const g0 = p.character.gold;
+    const hg0 = h.character.gold;
+    sim.takeLoot('all');
+    expect(p.character.gold).toBe(g0 + 400);
+    expect(h.character.gold).toBe(hg0);
+    // saco de morte de um estranho: dividido como loot comum
+    w.lootBags.set('other', { id: 'other', ownerId: 'outro', x: p.x, y: p.y, items: [], gold: 400, expiresAt: Infinity, sourceName: 'outro (morto)' });
+    w.ui.lootId = 'other';
+    sim.takeLoot('all');
+    expect(h.character.gold).toBe(hg0 + 200);
   });
 
   it('a PZ não recupera mana e a bênção do sacerdote só cura vida', () => {

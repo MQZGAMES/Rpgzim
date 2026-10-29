@@ -18,6 +18,7 @@ import {
   damageMonster,
   damagePlayer,
   hasLineOfSight,
+  selectedActor,
   setTarget,
   targetNearest,
 } from '../combat/combat';
@@ -87,6 +88,9 @@ export function castSpell(w: World, spellId: string): boolean {
   // (golpes corpo a corpo também: mira o mais próximo por perto e o golpe sai ao chegar nele)
   // Alvo morto, sumido ou fora da tela (ex.: segurando o botão da magia): passa para o inimigo mais próximo.
   if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !p.dead) {
+    // personagem selecionado no botão de seleção: a magia vai nele
+    const sel = selectedActor(w);
+    if (sel && p.targetId !== sel.id) setTarget(w, sel.id);
     const cur = currentTarget(w) ?? currentActorTarget(w);
     const offScreen = !!cur && chebyshev(p, cur) > SCREEN_RANGE;
     if (!cur || offScreen) {
@@ -183,9 +187,15 @@ export function castSpell(w: World, spellId: string): boolean {
         : spell.formula.kind === 'distance'
           ? voc.damage.distance
           : voc.damage.melee;
+    const wand = p.stats.weapon.kind === 'wand' ? p.stats.weapon.damage : undefined;
     const range = spellRange(
       spell.formula,
-      { level: c.level, power, weaponAttack: p.stats.weapon.attack },
+      {
+        level: c.level,
+        power,
+        weaponAttack: p.stats.weapon.attack,
+        wandPower: wand ? (wand[0] + wand[1]) / 2 : 0,
+      },
       mod,
     );
     for (const m of victims) {

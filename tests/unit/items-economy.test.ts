@@ -4,7 +4,7 @@ import { createCharacter } from '../../src/domain/rules/character';
 import { addItem, canFit, countItem, freeSlots, removeItem } from '../../src/domain/rules/inventory';
 import { equipFromInventory, unequip } from '../../src/domain/rules/equipment';
 import { parseSave, toSaveFile } from '../../src/game/persistence/saveSchema';
-import { buy, sell } from '../../src/domain/rules/economy';
+import { buy, sell, sellAllPreview } from '../../src/domain/rules/economy';
 import { computeStats } from '../../src/domain/rules/stats';
 import { rollLoot } from '../../src/domain/rules/loot';
 import { fixedRng, createRng } from '../../src/domain/value-objects/rng';
@@ -154,6 +154,18 @@ describe('compra e venda', () => {
     expect(buy(D, c, shop, 'shield_wood', 0)).toMatchObject({ ok: false, reason: 'invalidQuantity' });
     expect(c.gold).toBe(10);
     expect(JSON.stringify(c.inventory)).toBe(inv);
+  });
+  it('a alquimia compra poções pela metade do preço, mas o "vender tudo" não as leva', () => {
+    const c = char();
+    const potions = D.shops['potions']!;
+    for (const o of potions.sells.filter((s) => s.itemId.startsWith('potion_')))
+      expect(potions.buys.find((b) => b.itemId === o.itemId)?.price).toBe(Math.floor(o.price / 2));
+    c.inventory.fill(null);
+    addItem(D, c.inventory, 'potion_health', 4);
+    expect(sellAllPreview(c, potions)).toEqual([]);
+    const g = c.gold;
+    expect(sell(c, potions, 'potion_health', 4)).toEqual({ ok: true, total: 80 });
+    expect(c.gold).toBe(g + 80);
   });
   it('rejeita compra com mochila cheia', () => {
     const c = char();

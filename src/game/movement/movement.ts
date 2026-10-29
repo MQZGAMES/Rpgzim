@@ -81,6 +81,9 @@ export function resolveStuck(w: World, m: PlayerEntity, blockedBy: string | null
   if (w.now - m.stuckSince < SWAP_AFTER_MS) return;
   const other = w.human.id === blockedBy ? w.human : w.heroes.get(blockedBy);
   if (!other) return;
+  // ninguém é empurrado (nem puxado) para dentro de uma área protegida: a troca na borda da PZ não acontece
+  // (lá dentro os personagens já atravessam um ao outro)
+  if (isPz(w.map, m.x, m.y) || isPz(w.map, other.x, other.y)) return;
   swapPlaces(w, m, other);
   m.stuckWith = null;
   m.stuckSince = 0;

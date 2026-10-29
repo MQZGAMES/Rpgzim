@@ -23,6 +23,7 @@ import type { GameSimulation } from '../../game/simulation/GameSimulation';
 import { castCheck, spellCooldownRemaining } from '../../game/abilities/spells';
 import { nearbyInteractables } from '../../game/interaction/interaction';
 import { nearbyLootBags } from '../../game/inventory/inventoryService';
+import { selectedActor } from '../../game/combat/combat';
 import {
   PARTY_SHARE_RANGE,
   PVP_FAIL_MESSAGE,
@@ -33,6 +34,7 @@ import {
   pkNow,
   pzLockMs,
   skullOf,
+  skullSeenBy,
   pendingInviteFor,
   sameParty,
 } from '../../game/social/social';
@@ -166,6 +168,8 @@ export interface UiSnapshot {
   invite: { fromId: string; fromName: string } | null;
   pvp: boolean;
   standAttack: boolean;
+  /** Personagem marcado no botão de seleção (o ataque vai nele). */
+  selectedActor: { id: string; name: string } | null;
   /** Tempo restante da caveira do jogador (ms), 0 sem caveira. */
   /** PK estilo Tibia: caveira atual (tipo e tempo restante) e PZ lock restante. */
   pk: { skull: 'white' | 'yellow' | 'red' | null; skullMs: number; pzLockMs: number };
@@ -490,6 +494,10 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
     standAttack: c.flags.standAttack === true,
+    selectedActor: (() => {
+      const a = selectedActor(w);
+      return a ? { id: a.id, name: a.character.name } : null;
+    })(),
     pk: {
       skull: skullOf(w, p.id)?.kind ?? null,
       skullMs: Math.max(0, (skullOf(w, p.id)?.until ?? 0) - pkNow(w)),
@@ -506,7 +514,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       maxHp: h.stats.maxHealth,
       inParty: sameParty(w, p.id, h.id),
       isLeader: w.social.party?.leaderId === h.id,
-      skull: skullOf(w, h.id)?.kind ?? null,
+      skull: skullSeenBy(w, p.id, h.id),
       activity: heroActivity(w, h),
       attackBlocked: (() => {
         const f = canAttackActor(w, p, h);

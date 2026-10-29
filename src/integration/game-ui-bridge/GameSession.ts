@@ -510,6 +510,11 @@ export class GameSession {
     this.sim.cycleTarget();
     this.dirty = true;
   }
+  cycleActorSelection(): void {
+    this.sim.cycleActorSelection();
+    this.audio.play('ui');
+    this.dirty = true;
+  }
   clearTarget(): void {
     this.sim.setTarget(null);
   }
