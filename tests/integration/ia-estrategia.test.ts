@@ -6,7 +6,7 @@ import { createCharacter } from '../../src/domain/rules/character';
 import { castSpell } from '../../src/game/abilities/spells';
 import { actorSource, damagePlayer } from '../../src/game/combat/combat';
 import type { HeroEntity } from '../../src/game/entities/types';
-import { answerInviteNow, huntChoiceDebug } from '../../src/game/ai/heroBrain';
+import { answerInviteNow, huntChoiceDebug, updateHeroBrain } from '../../src/game/ai/heroBrain';
 import { SWAP_AFTER_MS, placeOccupant, removeOccupant, resolveStuck } from '../../src/game/movement/movement';
 import { refreshStats } from '../../src/game/progression/progression';
 import { invite, partyOf, registerAggression } from '../../src/game/social/social';
@@ -185,5 +185,102 @@ describe('caça pelo custo-benefício', () => {
     h.brain.mode = 'retreat';
     const start = { x: h.x, y: h.y };
     expect(runUntil(sim, () => h.dead || h.x !== start.x || h.y !== start.y || h.brain.mode !== 'retreat', 8000, 50)).toBe(true);
+  });
+});
+
+describe('magos só com varinha', () => {
+  it('Sorcerer/Druid não equipam espada, machado, maça nem arco', async () => {
+    const { checkEquip } = await import('../../src/domain/rules/equipment');
+    const { w } = rig(['mano_cura']);
+    const druid = [...w.heroes.values()][0]!.character;
+    for (const id of ['sword_short', 'axe_hand', 'club_wood', 'dagger', 'spear_throwing'])
+      expect(checkEquip(druid, GAME_DATA.items[id]!).ok, id).toBe(false);
+    expect(checkEquip(druid, GAME_DATA.items.rod_sprout!).ok).toBe(true);
+    expect(checkEquip(druid, GAME_DATA.items.shield_wood!).ok).toBe(true); // escudo não é arma
+  });
+
+  it('ao carregar, a arma errada volta para a mochila e entra o cajado do nível', async () => {
+    const { parseSave, toSaveFile } = await import('../../src/game/persistence/saveSchema');
+    const { countItem } = await import('../../src/domain/rules/inventory');
+    const c = createCharacter(GAME_DATA, { id: 'mano_cura', name: 'Mano Cura', vocation: 'druid', now: 0, position: { x: 1, y: 1 } });
+    c.level = 39;
+    c.experience = 45 * 38 ** 2.15 + 10;
+    c.equipment.mainHand = { itemId: 'axe_hand', count: 1 };
+    const back = parseSave(GAME_DATA, JSON.parse(JSON.stringify(toSaveFile(c)))).character;
+    const main = GAME_DATA.items[back.equipment.mainHand!.itemId]!;
+    expect(main.weapon?.kind).toBe('wand');
+    expect(main.vocations).toContain('druid');
+    expect(main.minLevel ?? 1).toBeGreaterThanOrEqual(30);
+    expect(main.minLevel ?? 1).toBeLessThanOrEqual(39);
+    expect(countItem(back.inventory, 'axe_hand')).toBe(1);
+  });
+});
+
+describe('Druid contra quem foge', () => {
+  it('abre com a Rajada Glacial quando o alvo se afasta sem lentidão', () => {
+    const { sim, w, h } = rig(['mano_cura']);
+    h.character.level = 20;
+    h.character.skills.magic.level = 10;
+    h.character.mana = 500;
+    asActor(w, h, () => refreshStats(w));
+    h.character.health = h.stats.maxHealth;
+    h.brain.nextThinkAt = Infinity;
+    const m = [...w.monsters.values()].find((x) => x.alive && x.def.id === 'wolf')!;
+    removeOccupant(w, h);
+    h.x = m.x - 4;
+    h.y = m.y;
+    placeOccupant(w, h);
+    let cast: string | null = null;
+    h.scope.events.on('spellCast', (e) => (cast ??= e.spellId));
+    asActor(w, h, () => sim.setTarget(m.id));
+    h.brain.chaseSeen = { id: m.id, d: 3 }; // estava mais perto: o alvo está se afastando
+    h.brain.mode = 'hunt';
+    h.brain.quarry = 'wolf';
+    h.brain.nextThinkAt = 0;
+    advance(sim, 60, 20);
+    expect(cast).toBe('frost_burst');
+  });
+});
+
+describe('recuperar e chamar', () => {
+  it('com pouca vida e sem poções ele foge para se recuperar mesmo em grupo', () => {
+    const { w, heroes } = rig(['maguim', 'boladex']);
+    const [a, b] = heroes as [HeroEntity, HeroEntity];
+    w.social.heroParties.push({ leaderId: b.id, members: [b.id, a.id], formation: 'follow', targeting: 'leader', friendlyFire: false, trail: [] });
+    const sp = w.map.spawns.find((s) => s.monsterId === 'wolf')!;
+    for (const x of [a, b]) {
+      removeOccupant(w, x);
+      x.x = sp.x;
+      x.y = sp.y + (x === a ? 0 : 1);
+      placeOccupant(w, x);
+    }
+    a.character.inventory.fill(null);
+    a.character.health = Math.round(a.stats.maxHealth * 0.3);
+    a.character.mana = 10;
+    a.brain.mode = 'follow';
+    a.brain.nextThinkAt = 0;
+    w.now += 1;
+    asActor(w, a, () => updateHeroBrain(w, a));
+    expect(a.brain.mode).toBe('retreat');
+    expect(a.brain.retreatWhy).toContain('recuperar');
+  });
+
+  it('"Chamar" faz o herói largar o que faz e vir até o líder', () => {
+    const { sim, w, h } = rig(['boladex']);
+    sim.partyInvite(h.id);
+    asActor(w, h, () => answerInviteNow(w, h));
+    expect(w.social.party?.members).toContain(h.id);
+    const far = w.map.spawns.find((s) => s.monsterId === 'boar')!;
+    removeOccupant(w, h);
+    h.x = far.x;
+    h.y = far.y;
+    placeOccupant(w, h);
+    h.brain.mode = 'hunt';
+    expect(sim.partyCall(h.id)).toBe(true);
+    expect(h.targetId).toBeNull();
+    const p = w.human;
+    expect(
+      runUntil(sim, () => Math.max(Math.abs(h.x - p.x), Math.abs(h.y - p.y)) <= 2, 120000, 50),
+    ).toBe(true);
   });
 });

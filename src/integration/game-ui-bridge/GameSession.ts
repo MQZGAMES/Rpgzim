@@ -451,6 +451,10 @@ export class GameSession {
     this.sim.partyKick(id);
     this.dirty = true;
   }
+  partyCall(id: string): void {
+    this.audio.play(this.sim.partyCall(id) ? 'ui' : 'error');
+    this.dirty = true;
+  }
   partyPassLeader(id: string): void {
     this.sim.partyPassLeader(id);
     this.dirty = true;

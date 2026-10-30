@@ -205,7 +205,7 @@ export function PartyPanel() {
         <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.</div>
         <Section
           title="Membros"
-          hint={`Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}
+          hint={`Chamar: o personagem larga o que faz e vem até o líder · Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}
         >
           <div className="flex flex-col gap-1">
             {party.members.map((m) => (
@@ -229,6 +229,17 @@ export function PartyPanel() {
                   color="var(--color-heal)"
                   height={4}
                 />
+                {!m.isYou && !m.dead && (
+                  <TapButton
+                    className="btn-pixel flex h-8 items-center justify-center !border-[6px] px-1 text-[10px]"
+                    title={`Chamar ${m.name}: larga o que está fazendo e vem até o líder`}
+                    aria-label={`Chamar ${m.name}`}
+                    onTap={() => session.partyCall(m.id)}
+                    data-testid={`party-call-${m.id}`}
+                  >
+                    Chamar
+                  </TapButton>
+                )}
                 {!m.isLeader && (
                   <TapButton
                     className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"

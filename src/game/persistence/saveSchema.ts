@@ -5,6 +5,7 @@ import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/de
 import type { GameData } from '../../domain/entities/gameData';
 import { normalizeHotbar } from '../../domain/rules/hotbar';
 import { addItem } from '../../domain/rules/inventory';
+import { fixMageWeapon } from '../../domain/rules/equipment';
 import { isVocationId } from '../../domain/value-objects/ids';
 import { MAX_LEVEL, levelForXp } from '../../domain/rules/experience';
 import { sanitizeName } from '../../domain/rules/character';
@@ -131,6 +132,8 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     createdAt: num(c.createdAt, Date.now()),
     updatedAt: num(c.updatedAt, Date.now()),
   };
+  // magos só com varinha: arma errada sai do slot e entra a varinha/cajado do nível
+  fixMageWeapon(data, character);
   return { version: SAVE_VERSION, savedAt: num(file.savedAt, Date.now()), character };
 }
 

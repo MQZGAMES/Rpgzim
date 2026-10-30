@@ -58,6 +58,8 @@ import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '..
 import {
   PARTY_FAIL_MESSAGE,
   acceptInvite,
+  actorName,
+  partyOf,
   configureParty,
   declineInvite,
   disbandParty,
@@ -75,7 +77,7 @@ import {
 import { addHero } from '../ai/heroes';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
-import { answerInviteNow, heroFollowTick, heroStatusLine, updateHeroBrain } from '../ai/heroBrain';
+import { answerInviteNow, heroFollowTick, heroStatusLine, summonHero, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -617,6 +619,16 @@ export class GameSimulation {
     const asLeader = party && party.members.includes(w.player.id) ? party.leaderId : w.player.id;
     const fail = party?.leaderId === id ? null : passLeadership(w, asLeader, id);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+  }
+  /** Botão "Chamar" do grupo: o herói larga o que faz e vem até o líder. */
+  partyCall(id: string): boolean {
+    const w = this.world;
+    const h = w.heroes.get(id);
+    if (!h || !summonHero(w, h, w.human.id)) return false;
+    const party = partyOf(w, id)!;
+    const to = party.leaderId === id ? w.human.character.name : actorName(w, party.leaderId);
+    w.events.emit('message', { text: `${h.character.name} parou o que fazia e está indo até ${to}.`, kind: 'system' });
+    return true;
   }
   configureParty(patch: PartySetting): void {
     const w = this.world;

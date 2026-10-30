@@ -125,6 +125,12 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Magos com varinha, Rajada na perseguição, recuperar e "Chamar"
+- **Sorcerer e Druid só equipam varinha/cajado** (nada de espada, machado, maça, arco ou lança; escudo e livro continuam). Ao carregar o jogo, a arma errada volta para a mochila (ou para o banco, se não couber) e o personagem recebe a varinha/cajado do nível mais próximo do dele (ou equipa uma boa que já tenha na mochila).
+- **Druid perseguindo quem foge**: com o alvo se afastando (ou voltando para casa) e ainda sem lentidão, abre com a **Rajada Glacial** para deixá-lo lento e só depois usa as outras magias — contra criaturas e no PK.
+- **Pouca vida e poucas poções = recuperar**: abaixo de 40% de vida com 2 poções ou menos (e sem mana para se curar), o herói foge para a área protegida para se recuperar **mesmo em grupo** (antes, os colegas faziam a régua achar que dava e ele ficava até morrer).
+- **Botão "Chamar"** no painel do grupo, ao lado de cada personagem: ele larga o que estiver fazendo (caça, loot, vila) e vem até o líder com Corrida (se ele próprio for o líder, vem até você). Ao chegar, volta a seguir o grupo.
+
 ## Rodada de ajustes (exaustões, saco de morte, PZ)
 - **Cura Intensa** (antiga Bênção da Seiva, Druid): só cura, sem regeneração contínua; alcança o grupo a até **12 tiles** (3× o anterior), custa **80 de mana** e tem exaustão de **2 s**.
 - **Exaustões fechadas**: toda magia, cura e poção usa 2, 4, 6 ou 8 s conforme a força. Rajada Glacial 4 s; criar poção 2 s; poções: básica 2 s, forte 4 s, suprema 6 s, espiritual e divina 8 s. Magias de buff longo (Foco do Caçador, Brado de Ferro) ficaram com 4 s de duração para não ficarem sempre ativas.

@@ -167,6 +167,11 @@ export interface HeroBrainState {
   passiveSince?: number;
   /** Última vez que não achou rota nenhuma até o abrigo na fuga (aí sim revidar faz sentido). */
   routeFailedAt?: number;
+  /** Distância do alvo na última olhada (para saber se ele está fugindo). */
+  chaseSeen?: { id: string; d: number };
+  /** Chamado pelo grupo: larga o que está fazendo e vai até o líder (até este instante). */
+  summonedUntil?: number;
+  summonTo?: string;
 }
 
 export function newHeroBrain(): HeroBrainState {
@@ -375,6 +380,8 @@ function weaponFits(w: World, h: HeroEntity, def: ItemDef): boolean {
     return !main || !w.data.items[main.itemId]?.twoHanded;
   }
   if (def.slot !== 'mainHand') return true;
+  const voc = h.character.vocation;
+  if (voc === 'sorcerer' || voc === 'druid') return def.weapon?.kind === 'wand'; // mago: só varinha/cajado
   if (h.character.vocation === 'paladin') return def.weapon?.kind === 'distance' && !!def.twoHanded; // só arcos
   return !def.twoHanded;
 }
@@ -611,6 +618,8 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     if (goal) goTo(w, h, goal.x, goal.y);
   }
   survive(w, h);
+  // chamado pelo grupo: larga tudo (caça, vila, loot) e vai até o líder; só as poções continuam valendo
+  if ((b.summonedUntil ?? 0) > w.now && b.mode !== 'retreat') return summoned(w, h);
   fightBack(w, h);
   unstick(w, h);
   heroGroupLife(w, h);
@@ -852,14 +861,20 @@ function survive(w: World, h: HeroEntity): void {
     ((noPotions && pct < 0.6 && a.margin < 3) ||
       (potionsOf(w, h) <= LOW_POTIONS && pct < 0.45 && a.margin < 3) ||
       (noPotions && pct < 0.35));
+  // pouca vida e poucas (ou nenhuma) poções: vai se recuperar — MESMO em grupo (a régua conta os colegas e, com eles
+  // por perto, nunca mandava fugir; o herói ficava até morrer). Só fica quem ainda se cura sozinho com magia.
+  const selfHeal =
+    (h.character.vocation === 'druid' && h.character.mana >= 160) ||
+    (h.character.vocation === 'sorcerer' && h.character.mana >= 120);
+  const recover = pct < 0.4 && potionsOf(w, h) <= LOW_POTIONS && !selfHeal;
   if (
-    (outmatched || swarmed || train || dry || (pct < 0.32 - t.bravery * 0.12 && noPotions)) &&
+    (outmatched || swarmed || train || dry || recover || (pct < 0.32 - t.bravery * 0.12 && noPotions)) &&
     h.brain.mode !== 'retreat' &&
     !isPz(w.map, h.x, h.y)
   ) {
     heroSay(w, h, 'retreat', {}, 20000);
     h.brain.bold = Math.max(-1, h.brain.bold - 0.12); // fugiu: da próxima vez pensa duas vezes
-    h.brain.retreatWhy = `${outmatched ? 'régua ' : ''}${swarmed ? 'cercado ' : ''}${train ? 'trem ' : ''}${dry ? 'seco ' : ''}margem=${a.margin.toFixed(2)} vida=${Math.round(pct * 100)}% pots=${potionsOf(w, h)} alvos=${a.mons.map((m) => m.def.id).join('+')}`;
+    h.brain.retreatWhy = `${recover ? 'recuperar ' : ''}${outmatched ? 'régua ' : ''}${swarmed ? 'cercado ' : ''}${train ? 'trem ' : ''}${dry ? 'seco ' : ''}margem=${a.margin.toFixed(2)} vida=${Math.round(pct * 100)}% pots=${potionsOf(w, h)} alvos=${a.mons.map((m) => m.def.id).join('+')}`;
     // aprendeu: foge de novo da mesma área? não — evita a caça atual e o que o cercou por alguns minutos
     if (outmatched || swarmed || train) {
       for (const m of a.mons)
@@ -1323,6 +1338,20 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     goTo(w, h, (b.spot ?? spot).x + w.rng.int(-3, 3), (b.spot ?? spot).y + w.rng.int(-3, 3));
 }
 
+/**
+ * O alvo está fugindo do herói? Sem lentidão e se afastando (a distância cresceu desde a última olhada, já fora do
+ * corpo a corpo) ou voltando para casa. Usado pelo Druid para abrir com a Rajada Glacial.
+ */
+function isFleeing(w: World, h: HeroEntity, t: MonsterEntity | PlayerEntity): boolean {
+  const b = h.brain;
+  const d = chebyshev(t, h);
+  const prev = b.chaseSeen?.id === t.id ? b.chaseSeen.d : d;
+  b.chaseSeen = { id: t.id, d };
+  if (w.now < t.slowUntil) return false;
+  if (t.kind === 'monster' && t.state === 'returning') return true;
+  return d >= 2 && d > prev;
+}
+
 /** Algum colega de grupo por perto precisa respirar (vida abaixo de 55% ou mago com menos de 25% de mana)? */
 function partyNeedsBreath(w: World, h: HeroEntity): boolean {
   return alliesAround(w, h).some((a) => {
@@ -1387,6 +1416,9 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       if (manaPct > 0.2) tryCast(w, h, 'arcane_bolt');
       return;
     case 'druid':
+      // alvo fugindo (ou se afastando enquanto ele persegue) e ainda sem lentidão: Rajada Glacial primeiro, para
+      // deixá-lo lento; só depois as outras magias
+      if (isFleeing(w, h, target) && manaPct > 0.12 && tryCast(w, h, 'frost_burst')) return;
       if (lean) {
         if ((cluster >= 2 || dist <= 3) && engaged >= 3 && manaPct > 0.3 && tryCast(w, h, 'frost_burst'))
           return;
@@ -2470,6 +2502,43 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
   }
 }
 
+/**
+ * Botão "Chamar" do painel do grupo: o herói para o que estiver fazendo e vai até o líder (se ele próprio for o
+ * líder, vai até quem chamou). Chega a 2 tiles e volta a seguir o grupo.
+ */
+export function summonHero(w: World, h: HeroEntity, callerId: string): boolean {
+  const party = partyOf(w, h.id);
+  if (!party || h.dead || !party.members.includes(callerId)) return false;
+  h.brain.summonedUntil = w.now + 90000;
+  h.brain.summonTo = party.leaderId === h.id ? callerId : party.leaderId;
+  asActor(w, h, () => {
+    setTarget(w, null);
+    h.path = null;
+    h.pathGoal = null;
+    h.brain.walkReq = null;
+    if (h.brain.mode !== 'follow') setMode(w, h, 'follow');
+  });
+  return true;
+}
+
+function summoned(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const to = actorById(w, b.summonTo);
+  if (!to || to.dead || !sameParty(w, h.id, to.id)) {
+    b.summonedUntil = 0;
+    return;
+  }
+  if (h.targetId) setTarget(w, null);
+  if (chebyshev(to, h) <= 2) {
+    b.summonedUntil = 0;
+    h.path = null;
+    heroSay(w, h, 'followLeader', { player: to.character.name }, 0);
+    return setMode(w, h, followingHuman(w, h) ? 'follow' : 'decide');
+  }
+  keepHaste(w, h);
+  walkToLeader(w, h, to, { x: to.x, y: to.y, near: 2 }, chebyshev(to, h) > 15);
+}
+
 /** Membro do grupo com o humano como líder: anda junto, ajuda nas lutas, pega loot e dá poção se ele precisar. */
 function follow(w: World, h: HeroEntity): void {
   const b = h.brain;
@@ -2769,8 +2838,10 @@ function pk(w: World, h: HeroEntity): void {
   // cada vocação usa as magias de ataque contra personagens também (antes só o Knight usava o golpe forte)
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
   const d = chebyshev(victim, h);
+  const fleeing = isFleeing(w, h, victim);
   for (const id of PVP_SPELLS[h.character.vocation]) {
     const sp = w.data.spells[id];
+    if (id === 'frost_burst' && !fleeing) continue; // a rajada abre a perseguição de quem foge
     if (!sp || d > Math.max(1, sp.range) || (id === 'brutal_strike' && hpPct(h) <= 0.4)) continue;
     if (manaPct > 0.15 && tryCast(w, h, id)) break;
   }
@@ -2780,7 +2851,7 @@ function pk(w: World, h: HeroEntity): void {
 const PVP_SPELLS: Record<HeroEntity['character']['vocation'], string[]> = {
   knight: ['brutal_strike'],
   sorcerer: ['flame_lance', 'arcane_bolt'],
-  druid: ['earth_thorn'],
+  druid: ['frost_burst', 'earth_thorn'],
   paladin: ['holy_arrow'],
 };
 
