@@ -86,7 +86,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0.05,
     baseSpeed: 3.1,
     attackIntervalMs: 1500,
-    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal', 'stunning_arrow', 'haste'],
+    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal', 'stunning_arrow', 'haste', 'divine_shot'],
     startingEquipment: {
       mainHand: { itemId: 'bow_hunting' },
       body: { itemId: 'armor_leather' },
@@ -116,7 +116,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0.12,
     baseSpeed: 2.9,
     attackIntervalMs: 1400,
-    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste'],
+    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste', 'crippling_blow'],
     startingEquipment: {
       mainHand: { itemId: 'sword_short' },
       offHand: { itemId: 'shield_wood' },

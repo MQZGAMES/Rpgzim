@@ -449,7 +449,7 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
       (window as unknown as { __RPGZIM__: { clearCastLog(): void } }).__RPGZIM__.clearCastLog(),
     );
 
-  // 1) quadrado 3x3: nenhum ponto dentro dele (botões e vãos) cai na camada do mapa, então tocar ali nunca anda
+  // 1) teclado 3x3 de atalhos + coluna do ataque: nenhum ponto dentro dele (botões e vãos) cai na camada do mapa
   const gaps = await page.evaluate(() => {
     const grid = document.querySelector('[data-testid=touch-grid]')!;
     const b = grid.getBoundingClientRect();
@@ -464,19 +464,24 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
     const slots = [...grid.querySelectorAll('button')].filter(
       (e) => e.getAttribute('data-testid') !== 'attack-button',
     );
+    // ordem de leitura 1 2 3 / 4 5 6 / 7 8 9: cada número à direita ou abaixo do anterior
+    const cells = [...grid.querySelectorAll('[data-testid^=slot-], [data-testid^=spell-], [data-testid^=potion-]')].map((e) => e.getBoundingClientRect());
+    const ordered = cells.every((r, i) => i === 0 || (i % 3 === 0 ? r.top > cells[i - 1]!.top : r.left > cells[i - 1]!.left));
     return {
       onMap,
       total,
       attack: Math.round(atk.width),
-      slots: slots.length,
-      square: Math.abs(b.width - b.height) < 3,
+      slots: slots.filter((e) => e.getAttribute('data-testid') !== 'select-actor-button').length,
+      ordered,
+      atkRight: atk.left > Math.max(...cells.map((r) => r.right)),
     };
   });
   expect(gaps.total).toBeGreaterThan(100);
   expect(gaps.onMap).toBe(0);
-  expect(gaps.slots).toBe(8); // 8 atalhos + o botão de ataque = 9 posições
+  expect(gaps.slots).toBe(9); // 9 atalhos (1–9) e, à direita, o botão de ataque
   expect(gaps.attack).toBeLessThanOrEqual(56);
-  expect(gaps.square).toBe(true);
+  expect(gaps.ordered).toBe(true);
+  expect(gaps.atkRight).toBe(true);
 
   // 2) segurar o atalho da magia repete a cada recarga; soltar encerra (nada dispara depois)
   const box = (await page.getByTestId('spell-earth_thorn').boundingBox())!;
@@ -553,13 +558,13 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   await expect(page.getByTestId('bag-organize')).toBeVisible();
 });
 
-test('PK: caveira e PZ lock no HUD, nome menor no celular e 8 atalhos', async ({ page }, info) => {
+test('PK: caveira e PZ lock no HUD, nome menor no celular e 9 atalhos', async ({ page }, info) => {
   await createCharacter(page, 'paladin', 'Marca');
   const isMobile = info.project.name === 'mobile';
-  // 8 atalhos configuráveis (1–8)
+  // 9 atalhos configuráveis (1–9), na mesma ordem no celular e no desktop
   await expect(
     page.locator('[data-testid^=slot-], [data-testid^=spell-], [data-testid^=potion-]'),
-  ).toHaveCount(8);
+  ).toHaveCount(9);
   // o arco não usa mais flechas: não há contador
   await expect(page.getByTestId('ammo-pill')).toHaveCount(0);
   // caveira branca + PZ lock aparecem ao lado do painel de status

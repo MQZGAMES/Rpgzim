@@ -25,8 +25,9 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Controles
 - **Toque:** joystick invisível na metade esquerda (aparece só ao pressionar e arrastar); toque no chão para
-  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **8 atalhos** num quadrado 3×3 com o botão de ataque no canto
-  em grade ao redor do botão de ataque; botão de ação contextual. Na mochila, toque duplo equipa/usa.
+  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **9 atalhos numerados** num teclado 3×3
+  (1 2 3 / 4 5 6 / 7 8 9, a mesma ordem das teclas do computador) com a coluna de seleção de personagem e do botão de
+  ataque à direita (no canto); botão de ação contextual. Na mochila, toque duplo equipa/usa.
   Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
 - **Entrada do mapa unificada** (`src/ui/controls/MapInput.tsx`): uma camada única trata toque e mouse (andar,
   selecionar, joystick, cursor), medindo a posição do canvas a cada toque. O input do Phaser usava uma posição em
@@ -48,7 +49,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Atalhos personalizáveis** (*Menu → Configurar atalhos*, botão *Atalhos* no Grimório, ou tocar num atalho
   vazio): cada posição numerada (a mesma da tela) recebe uma magia, uma **poção automática** (vida/mana, usa a
   menor que cobre o que falta) ou um item usável da mochila. Saves antigos são convertidos sozinhos.
-- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–8 atalhos,
+- **Teclado/mouse:** WASD/setas (8 direções), clique para andar/selecionar, Tab/Espaço alvo, 1–9 atalhos,
   Q vida, R mana, E interagir, I mochila, C personagem, K grimório, M mini mapa, O online, P grupo, Esc menu.
 - **HUD enxuto:** vida/mana compactas à esquerda; à direita, grade de 4 colunas (mochila, personagem, grimório,
   menu / mini mapa, online, modo de ataque, PK / grupo). O alvo aparece só no mapa (anel e barra vermelha), sem caixa extra.
@@ -124,6 +125,44 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Ninguém é empurrado nem puxado para dentro da PZ** (a troca de lugar não acontece na borda da área protegida).
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
+
+## IA tática dos heróis, atalhos 1–9 e magias novas
+**Combate em grupo**
+- **Foco de alvo**: entre as criaturas que atacam o grupo, cada herói escolhe a que os colegas já atacam e a de menos vida (morre primeiro); atiradores e quem bate num colega frágil sobem na fila (`focusPick` em `src/game/ai/heroTactics.ts`). No alvo "mais próximo" cada um continua pegando a mais perto.
+- **Triagem de cura**: o Druid atende quem corre mais risco (vida baixa + criaturas batendo nele) com a Cura Intensa, até 10 tiles; em grupo guarda 15% da mana para curar em vez de gastar em dano. Poção vai para o colega em estado crítico.
+- **Formação por papel**: com um Knight no grupo, Paladin e magos ficam na retaguarda — atrás do tanque, longe das criaturas corpo a corpo e sem perder o alvo do alcance.
+- **Tanque segura**: em qualquer grupo (inclusive só de heróis) o Knight puxa para si, com o Grito de Guerra, as criaturas que foram para cima dos colegas — atiradores primeiro.
+- **Socorro automático**: apanhando de 2+ criaturas (ou de uma com menos de 60% de vida), o herói chama os colegas que estão longe (como o botão "Chamar").
+
+**Combate individual**
+- **Kiting**: sozinho, quem luta de longe atira e logo recua um passo de quem vem corpo a corpo (se for mais rápido que a criatura ou ela estiver lenta). Recuar do alvo não conta mais como "o alvo está fugindo".
+- **Magia de área com cálculo**: só sai quando compensa — dano por mana (ou por conjuração, com mana sobrando) contra a magia de alvo único, contando só as criaturas já na briga — e nunca quando acordaria criaturas paradas em volta (puxava "trens").
+- **Atiradores primeiro**: criatura de longe que bate no herói sobe na ordem de abate.
+- **Mana da fuga**: quem luta de longe, com a luta apertando, não gasta a mana da Corrida em ataque.
+
+**Planejamento e economia**
+- **Compra pelo consumo real**: o estoque de vida (com 15% de folga) e o de mana dos magos seguem o que ele bebeu nos últimos minutos.
+- **Voltar na hora certa**: no ritmo de consumo dos últimos 4 min, se a cura não dura até chegar à vila (+1,5 min), ele volta antes de ficar seco.
+- **Meta de equipamento**: escolhe o próximo item que vale juntar dinheiro, guarda mais no banco e não gasta em coisa grande pelo caminho (a arma principal nunca espera). Com o dinheiro, a meta é a primeira compra.
+- **Loot por valor**: mochila cheia, larga o que vale menos para pegar um item bem melhor; cada item é vendido na loja da viagem que paga mais.
+
+**Memória e PK**
+- **Caças lembradas**: a caça que mais rendeu ganha preferência.
+- **Jogadores perigosos**: quem atacou ou matou o herói (ou um colega) fica marcado; com o PK ligado, se ele aparecer e o grupo não for forte o bastante, o herói avisa e sai de perto.
+- **Revanche planejada**: contra o jogador ou outro herói, só quando ele (com os colegas por perto) estiver bem mais forte; senão avisa que "a conta fica para depois". O líder do grupo guarda a rixa dos membros.
+
+**Comportamento e comunicação**
+- **Personalidade**: Boladex *Agressivo*, Maguim *Ganancioso*, Mano Cura *Cauteloso*, Distanciado *Equilibrado* — muda o risco aceito, a hora de fugir e de beber poção, e quanto loot busca/carrega. Aparece no menu do herói e no painel do grupo.
+- **Falas de intenção**: "Socorro, grupo!", "Cuidado: fulano é perigoso", "Tô juntando para {item}", "Vou repor antes de ficar sem poção", "Cura indo!"…
+- **Ordens no painel do grupo**: *Atacar meu alvo* (30 s), *Segurar posição* (de novo: soltar) e *Voltar à vila*.
+- **Tempo ocioso útil**: mana cheia e nada por perto, ele gasta a sobra em magia de cura/Corrida (treina o nível mágico); sem dinheiro para poções, o Knight prefere treinar a skill.
+
+**Atalhos e magias**
+- **Atalhos 1–9 na mesma ordem no celular e no computador**: no toque, teclado 3×3 com os números (1 2 3 / 4 5 6 / 7 8 9) e a coluna do ataque à direita; no computador, teclas 1–9. Barras antigas (6 ou 8 atalhos) ganham a magia que falta no 9.
+- **Magias novas**: Knight — *Golpe Paralisante* (nível 6, corpo a corpo, dano e lentidão de 3 s: ninguém foge do Knight); Paladin — *Disparo Divino* (nível 6, o tiro mais forte em alvo único).
+- **Magias de área**: recarga 2 s menor, +1 sqm de raio e o dobro de mana — Explosão Ígnea raio 4 / 6 s / 90; Rajada Glacial raio 2 / 2 s / 50; Chuva de Flechas raio 2 / 4 s / 60; Redemoinho de Aço raio 2 / 2 s / 60 (já estava no mínimo de 2 s).
+
+**Medido** (`tests/tools/hero-life`, 4 h, média de 6 sementes; "antes" já com as magias de área novas): Boladex nível 68 / 1,3 mortes; Maguim 61 / 2,8 (antes 67,5 / 1,7); Mano Cura 47,7 / 3,2 (51,3 / 3,2); Distanciado 46 / 5,0 (50,2 / 5,2). Duas ideias testadas e descartadas por aumentarem as mortes: fugir para a porta "menos cheia" em vez da mais próxima e guardar a mana da Corrida durante a luta.
 
 ## Magos com varinha, Rajada na perseguição, recuperar e "Chamar"
 - **Sorcerer e Druid só equipam varinha/cajado** (nada de espada, machado, maça, arco ou lança; escudo e livro continuam). Ao carregar o jogo, a arma errada volta para a mochila (ou para o banco, se não couber) e o personagem recebe a varinha/cajado do nível mais próximo do dele (ou equipa uma boa que já tenha na mochila).
@@ -264,7 +303,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **218 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **304 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **12 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

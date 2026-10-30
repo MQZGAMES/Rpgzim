@@ -34,7 +34,7 @@ describe('formato de save', () => {
     const parsed = parseSave(D, { version: 1, savedAt: 1, character: c });
     expect(parsed.version).toBe(SAVE_VERSION);
     expect(parsed.character.hotbar).toEqual([
-      ...D.vocations.druid.spells.slice(0, 6).map((id) => `spell:${id}`),
+      ...D.vocations.druid.spells.slice(0, 7).map((id) => `spell:${id}`),
       'potion:health',
       'potion:mana',
     ]);

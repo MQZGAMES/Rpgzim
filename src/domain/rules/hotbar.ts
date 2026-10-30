@@ -4,7 +4,8 @@
 import type { GameData } from '../entities/gameData';
 import type { VocationId } from '../value-objects/ids';
 
-export const HOTBAR_SIZE = 8;
+/** Atalhos 1–9: a mesma ordem (e os mesmos números) no celular e no computador. */
+export const HOTBAR_SIZE = 9;
 /** Tamanho da barra nas versões antigas (os atalhos novos entram depois dele). */
 const LEGACY_SIZE = 6;
 
@@ -52,11 +53,12 @@ export function normalizeHotbar(data: GameData, vocation: VocationId, raw: reado
     const e = parseHotbarEntry(base[i]);
     out.push(valid(data, vocation, e) ? encodeHotbarEntry(e) : '');
   }
-  // barra antiga (6 atalhos): as magias novas da vocação ocupam os atalhos novos, se ainda não estiverem na barra
-  if (list.length <= LEGACY_SIZE) {
+  // barra antiga (6 ou 8 atalhos): as magias da vocação que ainda não estão na barra ocupam os atalhos novos
+  const grown = legacy ? LEGACY_SIZE : list.length;
+  if (grown < HOTBAR_SIZE) {
     const have = new Set(out);
     const fresh = data.vocations[vocation].spells.filter((id) => !have.has(`spell:${id}`));
-    for (let i = LEGACY_SIZE; i < HOTBAR_SIZE && fresh.length; i++) if (!out[i]) out[i] = `spell:${fresh.shift()}`;
+    for (let i = grown; i < HOTBAR_SIZE && fresh.length; i++) if (!out[i]) out[i] = `spell:${fresh.shift()}`;
   }
   return out;
 }

@@ -39,6 +39,7 @@ import {
   sameParty,
 } from '../../game/social/social';
 import { heroActivity } from '../../game/ai/heroBrain';
+import { personaOf } from '../../game/ai/heroTactics';
 
 export interface ItemView {
   itemId: string;
@@ -151,6 +152,8 @@ export interface UiSnapshot {
     targeting: 'nearest' | 'leader' | 'lure';
     friendlyFire: boolean;
     sparMode: 'training' | 'duel';
+    /** Os heróis do grupo estão segurando a posição (ordem do painel). */
+    holding: boolean;
     members: {
       id: string;
       name: string;
@@ -162,6 +165,9 @@ export interface UiSnapshot {
       isLeader: boolean;
       near: boolean;
       dead: boolean;
+      /** Herói: personalidade (agressivo, cauteloso...) e o que está fazendo agora. */
+      persona?: string;
+      activity?: string;
     }[];
   } | null;
   /** Convite de grupo recebido e ainda válido. */
@@ -187,6 +193,8 @@ export interface UiSnapshot {
     isLeader: boolean;
     skull: 'white' | 'yellow' | 'red' | null;
     activity: string;
+    /** Personalidade do herói (Agressivo, Cauteloso, Ganancioso, Equilibrado). */
+    persona: string;
     attackBlocked: string | null;
     distance: number;
     dead: boolean;
@@ -376,9 +384,11 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
     targeting: party.targeting,
     friendlyFire: party.friendlyFire,
     sparMode: party.sparMode === 'duel' ? 'duel' : 'training',
+    holding: party.members.some((id) => w.heroes.get(id)?.brain.order?.kind === 'hold'),
     members: party.members.flatMap((id) => {
       const a = actorById(w, id);
       if (!a) return [];
+      const hero = w.heroes.get(id);
       return [
         {
           id,
@@ -391,6 +401,9 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
           isLeader: id === party.leaderId,
           near: Math.max(Math.abs(a.x - p.x), Math.abs(a.y - p.y)) <= PARTY_SHARE_RANGE,
           dead: a.dead,
+          ...(hero && hero.id !== p.id
+            ? { persona: personaOf(hero.hero.temperament).label, activity: heroActivity(w, hero) }
+            : {}),
         },
       ];
     }),
@@ -516,6 +529,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       isLeader: w.social.party?.leaderId === h.id,
       skull: skullSeenBy(w, p.id, h.id),
       activity: heroActivity(w, h),
+      persona: personaOf(h.hero.temperament).label,
       attackBlocked: (() => {
         const f = canAttackActor(w, p, h);
         return f ? PVP_FAIL_MESSAGE[f] : null;

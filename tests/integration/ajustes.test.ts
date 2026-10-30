@@ -313,12 +313,12 @@ describe('controle no celular e ritmo', () => {
     c.inventory[6] = { itemId: 'meat', count: 2 };
     sim.setHotbar(0, { kind: 'item', id: 'meat' });
     const snap = buildSnapshot(sim, 1).hotbar;
-    expect(snap).toHaveLength(8);
+    expect(snap).toHaveLength(9);
     expect(snap[0]).toMatchObject({ kind: 'item', itemId: 'meat', count: 2 });
     expect(snap.find((s) => s.kind === 'potion' && s.itemId === 'health')).toBeTruthy();
     // o atalho 1 foi trocado pela carne: ficam as outras 5 magias da barra
     expect(c.hotbar.filter((e) => e.startsWith('spell:')).length).toBe(
-      GAME_DATA.vocations.druid.spells.slice(0, 6).length - 1,
+      GAME_DATA.vocations.druid.spells.slice(0, 7).length - 1,
     );
     expect(sim.useItemById('meat')).toBe(true);
     expect(buildSnapshot(sim, 2).hotbar[0]!.count).toBe(1);

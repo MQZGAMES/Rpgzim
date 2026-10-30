@@ -186,7 +186,7 @@ describe('delays fechados e Cura Intensa', () => {
     expect(cura.manaCost).toBe(80);
     expect(cura.partyRadius).toBe(12);
     expect(cura.buff).toBeUndefined();
-    expect(GAME_DATA.spells.frost_burst!.cooldownMs).toBe(4000);
+    expect(GAME_DATA.spells.frost_burst!.cooldownMs).toBe(2000);
   });
 });
 

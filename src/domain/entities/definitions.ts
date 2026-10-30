@@ -378,7 +378,15 @@ export type HeroLineKey =
   | 'pkWish'
   | 'lowPotions'
   | 'lure'
-  | 'recover';
+  | 'recover'
+  | 'helpCall'
+  | 'dangerSeen'
+  | 'revengeLater'
+  | 'goal'
+  | 'supplyRun'
+  | 'healAlly'
+  | 'holdPos'
+  | 'orderAttack';
 
 export interface HeroDef {
   id: string;

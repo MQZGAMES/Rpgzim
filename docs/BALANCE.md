@@ -130,7 +130,12 @@ fica em 2,8): todas são um pouco mais lentas que o jogador, como no Tibia, e d�
 
 ## Áreas e controle de grupo
 
-- **Explosão Ígnea** (Sorcerer) raio 2 → 3 e **Rajada Glacial** (Druid) raio 1 → 2: +1 tile para todos os lados.
+- **Magias de área (revisão atual)**: recarga 2 s menor, +1 sqm de raio e o dobro de mana —
+  **Explosão Ígnea** raio 4 · 6 s · 90 de mana; **Rajada Glacial** raio 2 · 2 s · 50; **Chuva de Flechas** raio 2 · 4 s · 60;
+  **Redemoinho de Aço** raio 2 · 2 s (já no mínimo) · 60. Mais fortes por conjuração, bem mais caras por ponto de mana:
+  a IA só usa quando compensa contra a magia de alvo único e quando não acorda criaturas paradas em volta.
+- **Magias novas**: *Golpe Paralisante* (Knight, nível 6, 30 de mana, 6 s, corpo a corpo com lentidão de 3 s) e
+  *Disparo Divino* (Paladin, nível 6, 45 de mana, 6 s, o tiro mais forte em alvo único).
 - **Grito de Guerra** (Knight) tem `attract`: as criaturas atingidas passam a perseguir o conjurador por 4 s
   (`TAUNT_MS`), sem trocar de alvo pelo "mais próximo" nesse período. O **Redemoinho de Aço** só causa dano.
 - Criaturas reavaliam o alvo todo quadro: trocam para quem estiver estritamente mais perto (empate mantém o atual).

@@ -77,7 +77,7 @@ import {
 import { addHero } from '../ai/heroes';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
-import { answerInviteNow, heroFollowTick, heroStatusLine, summonHero, updateHeroBrain } from '../ai/heroBrain';
+import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, summonHero, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -628,6 +628,38 @@ export class GameSimulation {
     const party = partyOf(w, id)!;
     const to = party.leaderId === id ? w.human.character.name : actorName(w, party.leaderId);
     w.events.emit('message', { text: `${h.character.name} parou o que fazia e está indo até ${to}.`, kind: 'system' });
+    return true;
+  }
+  /**
+   * Ordens táticas do painel do grupo para os heróis: atacar o alvo do jogador, segurar a posição (de novo: soltar) ou
+   * voltar à vila (vender, repor, curar e voltar a seguir).
+   */
+  partyOrder(kind: 'attack' | 'hold' | 'town'): boolean {
+    const w = this.world;
+    const party = partyOf(w, w.human.id);
+    const heroes = (party?.members ?? []).map((id) => w.heroes.get(id)).filter((h): h is NonNullable<typeof h> => !!h && !h.dead);
+    if (!heroes.length) {
+      w.events.emit('message', { text: 'Nenhum herói no seu grupo para receber a ordem.', kind: 'system' });
+      return false;
+    }
+    let order: 'attack' | 'hold' | 'release' | 'town' = kind;
+    const target = kind === 'attack' ? w.human.targetId : null;
+    if (kind === 'attack' && !target) {
+      w.events.emit('message', { text: 'Selecione um alvo primeiro: os heróis atacam o mesmo alvo que você.', kind: 'system' });
+      return false;
+    }
+    if (kind === 'hold' && heroes.every((h) => h.brain.order?.kind === 'hold')) order = 'release';
+    const done = heroes.filter((h) => orderHero(w, h, order, target)).map((h) => h.character.name);
+    if (!done.length) return false;
+    const what =
+      order === 'attack'
+        ? 'atacando o seu alvo'
+        : order === 'hold'
+          ? 'segurando a posição'
+          : order === 'release'
+            ? 'livres de novo (seguem o grupo)'
+            : 'indo à vila (vender, repor e se curar)';
+    w.events.emit('message', { text: `${done.join(', ')}: ${what}.`, kind: 'system' });
     return true;
   }
   configureParty(patch: PartySetting): void {

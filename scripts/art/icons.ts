@@ -1097,6 +1097,37 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
         c.set(x, y, P.ice[3]!);
     },
   ],
+  [
+    'divine_shot',
+    P.holy,
+    (c) => {
+      // flecha dourada com um halo de luz na ponta
+      diag(c, 2, 13, 10, P.holy[3]!);
+      c.disc(11, 4, 2.6, P.holy[4]!);
+      c.disc(11, 4, 1.2, P.white);
+      c.set(1, 13, P.holy[2]!);
+      c.set(2, 14, P.holy[2]!);
+      for (const [x, y] of [
+        [14, 1],
+        [8, 2],
+        [14, 7],
+      ] as const)
+        c.set(x, y, P.white);
+    },
+  ],
+  [
+    'crippling_blow',
+    P.steel,
+    (c) => {
+      // maça descendo sobre uma corrente de gelo (lentidão)
+      c.rect(3, 3, 5, 5, P.steel[4]!);
+      c.rect(4, 4, 3, 3, P.steel[5]!);
+      diag(c, 7, 7, 5, P.wood[4]!, 1, 1);
+      for (let x = 2; x <= 13; x += 2) c.set(x, 13, P.ice[4]!);
+      for (let x = 3; x <= 12; x += 2) c.set(x, 12, P.ice[3]!);
+      c.set(4, 3, P.white);
+    },
+  ],
 ];
 for (const [name, ramp, draw] of SPELLS)
   icon(

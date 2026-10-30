@@ -601,9 +601,11 @@ describe('herói com vida própria (Boladex)', () => {
       let sold = false;
       const start = { gold: h.character.gold, sword: h.character.skills.sword.level };
       let huntTicks = 0;
+      const goals = new Set<string>();
       for (let s = 0; s < 40 * 60; s++) {
         advance(sim, 1000, 50);
         w.human.character.health = w.human.stats.maxHealth;
+        if (h.brain.goal) goals.add(h.brain.goal.itemId);
         if (h.character.stats.monstersKilled > 0 && h.brain.mode === 'town') sold = true;
         if (h.brain.mode === 'hunt') huntTicks++;
       }
@@ -616,7 +618,9 @@ describe('herói com vida própria (Boladex)', () => {
       expect(c.skills.sword.level).toBeGreaterThan(start.sword);
       expect(c.skills.shielding.level).toBeGreaterThan(10);
       expect(sold).toBe(true);
-      expect(c.bankGold).toBeGreaterThan(0);
+      // guarda no banco ou junta o ouro para uma meta de equipamento e a compra
+      const wearing = Object.values(c.equipment).map((e) => e?.itemId);
+      expect(c.bankGold > 0 || [...goals].some((id) => wearing.includes(id))).toBe(true);
       expect(potionsCount(c)).toBeGreaterThan(0);
       expect(speech.length).toBeGreaterThan(5);
       // as mensagens do herói não vão para o registro do jogador humano

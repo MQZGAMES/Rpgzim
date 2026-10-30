@@ -251,14 +251,14 @@ export function HelpPanel({ onClose, touch }: { onClose: () => void; touch: bool
       <h3 className="mb-1 text-[13px] text-gold">Toque</h3>
       {line('Andar', 'Arraste no lado esquerdo (joystick) ou toque no chão')}
       {line('Alvo', 'Toque no monstro ou no botão Atacar')}
-      {line('Magias', 'Botões em arco ao redor do Atacar')}
+      {line('Atalhos 1–9', 'Teclado 3×3 ao lado do Atacar (1 2 3 / 4 5 6 / 7 8 9)')}
       {line('Conversar / loot', 'Toque no NPC ou no saco, ou no botão de ação')}
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Teclado e mouse</h3>
       {line('WASD / setas', 'Andar (8 direções)')}
       {line('Clique', 'Andar até o ponto, selecionar alvo, falar com NPC')}
       {line('Tab / Espaço', 'Selecionar o próximo alvo')}
-      {line('1 – 4', 'Magias da barra')}
-      {line('5 / Q · 6 / R', 'Poção de vida · poção de mana')}
+      {line('1 – 9', 'Atalhos da barra (a mesma ordem do celular)')}
+      {line('Q · R', 'Poção de vida · poção de mana')}
       {line('E / Enter', 'Interagir')}
       {line('I · C · K', 'Mochila · Personagem · Grimório')}
       {line('Esc', 'Fechar janelas / menu')}

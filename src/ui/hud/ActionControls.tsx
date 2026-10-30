@@ -1,5 +1,6 @@
-// Controles de ação. No toque: botão de ataque no canto e os 6 atalhos (magias/itens/poções) em grade ao redor.
-// No desktop: barra inferior com atalhos numerados (1–8). Os atalhos são configuráveis (painel "Atalhos").
+// Controles de ação. Os 9 atalhos (magias/itens/poções) seguem a mesma ordem 1–9 no celular e no desktop:
+// no toque, um teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9) ao lado do botão de ataque; no desktop, a barra inferior
+// com as teclas 1–9. Os atalhos são configuráveis (painel "Atalhos").
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
@@ -75,22 +76,13 @@ function InteractButton({ size = 56 }: { size?: number }) {
 }
 
 /**
- * Atalhos no celular: um quadrado de 3x3 botões colado ao canto inferior direito. O botão de ataque (um pouco
- * menor que antes) fica no canto e os 8 atalhos o cercam: o 1º ao lado, o 2º em cima, e assim por diante, do mais
- * perto para o mais longe. O quadrado inteiro captura o toque (os vãos nunca andam pelo mapa).
+ * Atalhos no celular: um teclado 3x3 em ordem de leitura (1 2 3 / 4 5 6 / 7 8 9, igual às teclas do desktop),
+ * com o número em cada botão, e à direita a coluna da seleção de personagem e do botão de ataque (no canto).
+ * O bloco inteiro captura o toque (os vãos nunca andam pelo mapa).
  * Célula de cada atalho: [linha, coluna] (1–3).
  */
-export const TOUCH_CELLS: readonly (readonly [number, number])[] = [
-  [3, 2], // 1
-  [2, 3], // 2
-  [2, 2], // 3
-  [3, 1], // 4
-  [1, 3], // 5
-  [2, 1], // 6
-  [1, 2], // 7
-  [1, 1], // 8
-];
-export const TOUCH_SLOT = 44;
+export const TOUCH_CELLS: readonly (readonly [number, number])[] = Array.from({ length: 9 }, (_, i) => [Math.floor(i / 3) + 1, (i % 3) + 1] as const);
+export const TOUCH_SLOT = 42;
 export const TOUCH_ATTACK = 54;
 export const TOUCH_GAP = 5;
 
@@ -126,27 +118,28 @@ export function TouchActions() {
   const hotbar = useSnap((s) => s.hotbar);
   const hasTarget = useSnap((s) => s.target !== null);
   const hasSel = useSnap((s) => s.selectedActor !== null);
-  const track = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
+  const cols = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
+  const rows = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
       <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
         <div className="flex flex-col items-end pb-1">
           <InteractButton />
         </div>
-        {/* acima da grade, na coluna do botão de ataque: a seleção de jogador/herói */}
-        <div className="pointer-events-none flex justify-end px-[4px]">
-          <SelectActorButton width={TOUCH_ATTACK} height={TOUCH_SLOT} />
-        </div>
         <div
           className="pointer-events-auto grid items-center justify-items-center p-[4px]"
-          style={{ gridTemplateColumns: track, gridTemplateRows: track, gap: TOUCH_GAP }}
+          style={{ gridTemplateColumns: cols, gridTemplateRows: rows, gap: TOUCH_GAP }}
           data-testid="touch-grid"
         >
           {hotbar.map((slot) => (
             <div key={slot.index} style={{ gridRow: TOUCH_CELLS[slot.index]![0], gridColumn: TOUCH_CELLS[slot.index]![1] }}>
-              <HotbarSlot slot={slot} size={TOUCH_SLOT} />
+              <HotbarSlot slot={slot} size={TOUCH_SLOT} keyHint={String(slot.index + 1)} />
             </div>
           ))}
+          {/* coluna do ataque: a seleção de jogador/herói logo acima do botão de ataque */}
+          <div style={{ gridRow: 2, gridColumn: 4 }}>
+            <SelectActorButton width={TOUCH_ATTACK} height={TOUCH_SLOT} />
+          </div>
           <button
             type="button"
             aria-label={hasSel ? 'Atacar o personagem selecionado' : hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
@@ -156,7 +149,7 @@ export function TouchActions() {
               session.cycleTarget();
             }}
             className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
-            style={{ gridRow: 3, gridColumn: 3, width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
+            style={{ gridRow: 3, gridColumn: 4, width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
             data-testid="attack-button"
           >
             <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={24} />

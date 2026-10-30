@@ -106,6 +106,14 @@ const boladex: HeroDef = {
       'Poção acabando... passo na vila e já volto pra caça.',
     ],
     lure: ['Vem todo mundo pra cá! Atrás de mim, pessoal!', 'Puxei a tela inteira: agora é com vocês!'],
+    helpCall: ['Socorro, grupo! Tô cercado aqui!', 'Ajuda aqui, pessoal! Rápido!'],
+    dangerSeen: ['Cuidado: {player} tá por aqui. Esse aí é perigoso!', 'Olho no {player}, galera. Vou sair de perto.'],
+    revengeLater: ['Ainda não, {player}... mas a conta fica pra depois.', 'Te achei, {player}. Quando eu tiver mais forte, a gente acerta.'],
+    goal: ['Tô juntando ouro pra {item} ({gold} de ouro). Nada de gastar à toa!', 'Meta nova: {item}. Cada moeda conta.'],
+    supplyRun: ['No ritmo que tô bebendo, a poção não chega ao fim da caça. Vou repor antes!', 'Vou à vila agora, antes de ficar sem poção aqui no meio.'],
+    healAlly: ['Segura, {player}, tô te curando!', 'Cura indo, {player}!'],
+    holdPos: ['Posição segurada. Daqui não saio!', 'Fico aqui. Quem chegar, apanha.'],
+    orderAttack: ['Entendido! Todo mundo nesse alvo!', 'Foco nele!'],
   },
 };
 
@@ -184,6 +192,8 @@ const manoCura: HeroDef = {
       'Fala, {player}! Fica por perto que eu te cubro.',
     ],
     help: ['Calma, {player}, vou te curar!', 'Segura aí que eu ajudo!'],
+    healAlly: ['Calma, {player}, a cura já vai!', 'Respira, {player}, tô te curando.'],
+    helpCall: ['Me ajudem! Sem o tanque eu não aguento!', 'Socorro! O curandeiro tá apanhando!'],
     gift: ['Toma uma poção, {player}! Cuida da vida.', '{player}, bebe isso, por favor!'],
     status: ['Nível {level}, {area}. {gold} de ouro e {potions} poções.'],
     pkWish: [

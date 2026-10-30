@@ -218,9 +218,13 @@ export function PartyPanel() {
                 ) : (
                   <span className="w-[14px]" />
                 )}
-                <span className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}>
+                <span
+                  className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}
+                  title={m.activity ? `${m.persona} · ${m.activity}` : undefined}
+                >
                   {m.name}
                   {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
+                  {m.persona && <span className="block truncate text-[10px] text-muted">{m.persona} · {m.dead ? 'morto' : m.activity}</span>}
                 </span>
                 <Bar
                   className="w-[60px]"
@@ -268,6 +272,29 @@ export function PartyPanel() {
             ))}
           </div>
         </Section>
+        {party.members.some((m) => m.persona) && (
+          <Section
+            title="Ordens aos heróis"
+            hint="Atacar: todos focam o alvo que você marcou (30 s). Segurar: ficam onde estão e só batem no que chega perto (toque de novo para soltar). Vila: vendem, repõem, se curam e voltam."
+          >
+            <div className="flex gap-1">
+              <PixelButton className="flex-1 !border-[6px] px-1 text-[12px]" onClick={() => session.partyOrder('attack')} data-testid="party-order-attack">
+                Atacar meu alvo
+              </PixelButton>
+              <PixelButton
+                variant={party.holding ? 'gold' : undefined}
+                className="flex-1 !border-[6px] px-1 text-[12px]"
+                onClick={() => session.partyOrder('hold')}
+                data-testid="party-order-hold"
+              >
+                {party.holding ? 'Soltar posição' : 'Segurar posição'}
+              </PixelButton>
+              <PixelButton className="flex-1 !border-[6px] px-1 text-[12px]" onClick={() => session.partyOrder('town')} data-testid="party-order-town">
+                Voltar à vila
+              </PixelButton>
+            </div>
+          </Section>
+        )}
         <Section title="Formação" hint="Como os membros andam fora de combate.">
           <Segmented
             value={party.formation}
@@ -422,8 +449,8 @@ export function ActorMenu() {
           )}
           <b className={inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{hero.name}</b>
         </div>
-        <div className="truncate text-[10px] text-muted">
-          {hero.vocationName} nv {hero.level} · {hero.dead ? 'morto' : hero.activity}
+        <div className="truncate text-[10px] text-muted" title={`Personalidade: ${hero.persona}`}>
+          {hero.vocationName} nv {hero.level} · {hero.persona} · {hero.dead ? 'morto' : hero.activity}
         </div>
         <Bar className="mt-[2px]" value={hero.hp} max={hero.maxHp} color="var(--color-heal)" height={3} />
       </div>
