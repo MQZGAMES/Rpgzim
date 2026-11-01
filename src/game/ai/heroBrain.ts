@@ -32,7 +32,7 @@ import {
 } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
 import { spellManaCost } from '../../domain/rules/spells';
-import { aoeWorth, backlineStep, focusPick, personaOf } from './heroTactics';
+import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
   aggro,
@@ -43,12 +43,7 @@ import {
   setTarget,
 } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
-import {
-  equipItem,
-  nearbyLootBags,
-  takeLoot,
-  useInventoryItem,
-} from '../inventory/inventoryService';
+import { equipItem, nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold, depotWithdraw } from '../economy/depotService';
 import { marketAutoList, marketBuy, marketCancel } from '../economy/marketService';
@@ -188,7 +183,10 @@ export interface HeroBrainState {
   /** Pedido de socorro ao grupo (quando pode pedir de novo). */
   nextHelpCallAt: number;
   /** Ordem tática do jogador (painel do grupo): atacar o alvo dele ou segurar a posição. */
-  order: { kind: 'attack'; targetId: string; until: number } | { kind: 'hold'; x: number; y: number; until: number } | null;
+  order:
+    | { kind: 'attack'; targetId: string; until: number }
+    | { kind: 'hold'; x: number; y: number; until: number }
+    | null;
   /** Treino de nível mágico no tempo ocioso (mana cheia sem nada para fazer). */
   nextIdleTrainAt: number;
 }
@@ -691,7 +689,8 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   const group = partyOf(w, h.id);
   const solo = !group || group.friendlyFire;
   // em grupo o PK é o do líder, mas a legítima defesa vale sempre
-  if (b.mode === 'pk' && !solo && !attackedRecently(w, b.pkTargetId ?? '', h.id, 10000)) setMode(w, h, 'decide');
+  if (b.mode === 'pk' && !solo && !attackedRecently(w, b.pkTargetId ?? '', h.id, 10000))
+    setMode(w, h, 'decide');
   if (b.mode !== 'retreat' && selfDefense(w, h)) return;
   if (watchDanger(w, h)) return;
   // revanche planejada: sozinho ou como líder do grupo (os membros atacam o alvo do líder)
@@ -777,10 +776,7 @@ function unstick(w: World, h: HeroEntity): void {
   const reachable = [...w.monsters.values()]
     .filter(
       (m) =>
-        m.alive &&
-        m.targetId === h.id &&
-        chebyshev(m, h) <= range &&
-        (range <= 1 || hasLineOfSight(w, h, m)),
+        m.alive && m.targetId === h.id && chebyshev(m, h) <= range && (range <= 1 || hasLineOfSight(w, h, m)),
     )
     .sort((a, c) => a.hp - c.hp)[0];
   // já mirava quem está ao alcance e mesmo assim não atacou (sem mana para a varinha, arma inútil): não adianta
@@ -872,6 +868,12 @@ function survive(w: World, h: HeroEntity): void {
   const attackers = [...w.monsters.values()].filter(
     (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.min(3, Math.max(2, m.def.attack.range)),
   );
+  // apanhando de personagens (PK): conta para a poção e para a cura como as criaturas
+  const pvpHit =
+    w.social.pvp &&
+    allActors(w).some(
+      (a) => a !== h && !a.dead && chebyshev(a, h) <= 7 && attackedRecently(w, a.id, h.id, 4000),
+    );
   // régua de ameaça: quem está na briga, quanto dano chega por segundo e quanto tempo de vida resta
   const a = assess(w, h);
   const hp = h.character.health;
@@ -883,7 +885,11 @@ function survive(w: World, h: HeroEntity): void {
   // em grupo age mais cedo (os colegas seguram a briga enquanto ele se cura): não espera chegar perto do fim
   const grouped = alliesNear(w, h) > 0;
   const persona = personaOf(t);
-  if ((pct < 0.45 + t.caution * 0.15 + (grouped ? 0.1 : 0) + persona.drink && attackers.length) || pct < 0.25 || danger) {
+  if (
+    (pct < 0.45 + t.caution * 0.15 + (grouped ? 0.1 : 0) + persona.drink && (attackers.length || pvpHit)) ||
+    pct < 0.25 ||
+    danger
+  ) {
     const idx = pickPotion(w, h, danger || pct < 0.25);
     if (idx >= 0) drinkHealth(w, h, idx);
   }
@@ -892,7 +898,8 @@ function survive(w: World, h: HeroEntity): void {
   } else if (
     pct < (grouped ? 0.7 : 0.6) &&
     // (a Luz Restauradora só com mana sobrando: sem mana o Paladin fica sem Corrida para fugir)
-    ((h.character.mana > h.stats.maxMana * 0.5 && tryCast(w, h, 'holy_light')) || tryCast(w, h, 'second_wind'))
+    ((h.character.mana > h.stats.maxMana * 0.5 && tryCast(w, h, 'holy_light')) ||
+      tryCast(w, h, 'second_wind'))
   ) {
     // Paladin: Luz Restauradora; Knight: Segundo Fôlego (curam mais que o Respiro Vital para eles)
   } else if (pct < (grouped ? 0.7 : 0.6)) tryCast(w, h, 'light_heal');
@@ -1227,9 +1234,13 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     // em grupo, a régua vale para o membro mais frágil (o mago não pode morrer para o Knight upar)
     let margin = fightMargin(w, h, protoMonsters(w, id, pull));
     for (const a of alliesAround(w, h))
-      if ('brain' in a) margin = Math.min(margin, fightMargin(w, a as HeroEntity, protoMonsters(w, id, pull)));
+      if ('brain' in a)
+        margin = Math.min(margin, fightMargin(w, a as HeroEntity, protoMonsters(w, id, pull)));
     // segurança: 0 abaixo da margem de risco, sobe até 1 na margem exigida pelo temperamento
-    let safety = Math.max(0, Math.min(1, (margin - RISKY_MARGIN * 0.9) / Math.max(0.2, need - RISKY_MARGIN * 0.9)));
+    let safety = Math.max(
+      0,
+      Math.min(1, (margin - RISKY_MARGIN * 0.9) / Math.max(0.2, need - RISKY_MARGIN * 0.9)),
+    );
     // espécies que dividem a região (até 12 tiles de um ponto de surgimento): uma perigosa sozinha estraga a área
     for (const sp of w.map.spawns)
       if (
@@ -1249,7 +1260,8 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     if (st?.deaths) safety /= 1 + st.deaths * 0.25 * Math.exp(-(w.now - st.lastDeathAt) / (40 * 60000));
     let score = rate * safety ** 1.5;
     // a caça que mais rendeu de verdade (já conhecida, sem morte recente) ganha um empurrão: ele volta para ela
-    if (st && st.ms > 5 * 60000 && id === favoriteHunt(h) && w.now - st.lastDeathAt > 30 * 60000) score *= 1.15;
+    if (st && st.ms > 5 * 60000 && id === favoriteHunt(h) && w.now - st.lastDeathAt > 30 * 60000)
+      score *= 1.15;
     if (explore && !st) score *= 2.5; // vontade de conhecer uma área nova
     out.push({ id, level: min, margin, rate, safety, score });
   }
@@ -1465,7 +1477,11 @@ function isFleeing(w: World, h: HeroEntity, t: MonsterEntity | PlayerEntity): bo
   const d = chebyshev(t, h);
   const seen = b.chaseSeen?.id === t.id ? b.chaseSeen : null;
   // distância de ONDE O ALVO ESTAVA até onde o herói está agora: o recuo do próprio herói (kiting) não conta como fuga
-  const prev = seen ? (seen.x !== undefined && seen.y !== undefined ? chebyshev({ x: seen.x, y: seen.y }, h) : seen.d) : d;
+  const prev = seen
+    ? seen.x !== undefined && seen.y !== undefined
+      ? chebyshev({ x: seen.x, y: seen.y }, h)
+      : seen.d
+    : d;
   b.chaseSeen = { id: t.id, d, x: t.x, y: t.y };
   if (w.now < t.slowUntil) return false;
   if (t.kind === 'monster') {
@@ -1480,8 +1496,7 @@ function partyNeedsBreath(w: World, h: HeroEntity): boolean {
   return alliesAround(w, h).some((a) => {
     const mage = a.character.vocation === 'sorcerer' || a.character.vocation === 'druid';
     return (
-      a.character.health < a.stats.maxHealth * 0.55 ||
-      (mage && a.character.mana < a.stats.maxMana * 0.25)
+      a.character.health < a.stats.maxHealth * 0.55 || (mage && a.character.mana < a.stats.maxMana * 0.25)
     );
   });
 }
@@ -1530,7 +1545,13 @@ function engagedAround(
 /** Alguma criatura parada (fora da briga) a até `radius` do ponto? A magia de área a acordaria e puxaria um trem. */
 function wakesIdle(w: World, at: { x: number; y: number }, radius: number): boolean {
   for (const m of w.monsters.values())
-    if (m.alive && !m.targetId && m.state !== 'returning' && chebyshev(m, at) <= radius && !isPz(w.map, m.x, m.y))
+    if (
+      m.alive &&
+      !m.targetId &&
+      m.state !== 'returning' &&
+      chebyshev(m, at) <= radius &&
+      !isPz(w.map, m.x, m.y)
+    )
       return true;
   return false;
 }
@@ -1582,7 +1603,12 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       )
         return;
       // quem tenta escapar (ou está quase morto e vai fugir) leva o golpe que deixa lento
-      if (dist <= 1 && !slowed && (fleeing || target.hp < target.def.health * 0.3) && tryCast(w, h, 'crippling_blow'))
+      if (
+        dist <= 1 &&
+        !slowed &&
+        (fleeing || target.hp < target.def.health * 0.3) &&
+        tryCast(w, h, 'crippling_blow')
+      )
         return;
       if ((engagedAround(w, h, h, 2) >= 2 || target.hp > target.def.health * 0.6) && manaPct > 0.5)
         tryCast(w, h, 'berserk');
@@ -1591,7 +1617,11 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       if (adjacent >= 3 && manaPct > 0.3) tryCast(w, h, 'steel_whirlwind'); // cercado: o giro acerta todos
       return;
     case 'sorcerer':
-      if (engagedOrJoining(w, h).length >= 3 && manaPct > 0.75 && !h.buffs.some((b) => b.kind === 'manaShield'))
+      if (
+        engagedOrJoining(w, h).length >= 3 &&
+        manaPct > 0.75 &&
+        !h.buffs.some((b) => b.kind === 'manaShield')
+      )
         tryCast(w, h, 'mana_shield');
       if (
         manaPct > 0.3 &&
@@ -1615,7 +1645,11 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       // alvo fugindo (ou se afastando enquanto ele persegue) e ainda sem lentidão: Rajada Glacial primeiro, para
       // deixá-lo lento; só depois as outras magias
       if (fleeing && !slowed && manaPct > 0.12 && (cast('ice_shard') || cast('frost_burst'))) return;
-      if (engagedOrJoining(w, h).length >= 3 && manaPct > 0.75 && !h.buffs.some((b) => b.kind === 'manaShield'))
+      if (
+        engagedOrJoining(w, h).length >= 3 &&
+        manaPct > 0.75 &&
+        !h.buffs.some((b) => b.kind === 'manaShield')
+      )
         tryCast(w, h, 'mana_shield');
       if (
         manaPct > 0.3 + reserve &&
@@ -1635,7 +1669,12 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         cast('stunning_arrow')
       )
         return;
-      if (manaPct > 0.3 && !wakesIdle(w, target, 2) && aoeWorth(w, h, 'arrow_rain', 'holy_arrow', around(2), rich) && cast('arrow_rain'))
+      if (
+        manaPct > 0.3 &&
+        !wakesIdle(w, target, 2) &&
+        aoeWorth(w, h, 'arrow_rain', 'holy_arrow', around(2), rich) &&
+        cast('arrow_rain')
+      )
         return;
       if (
         manaPct > 0.35 &&
@@ -1668,7 +1707,8 @@ function keepDistance(w: World, h: HeroEntity): void {
   );
   if (!melee.length) return;
   const tank =
-    alliesAround(w, h).find((a) => a.character.vocation === 'knight' && !a.dead && chebyshev(a, h) <= 8) ?? null;
+    alliesAround(w, h).find((a) => a.character.vocation === 'knight' && !a.dead && chebyshev(a, h) <= 8) ??
+    null;
   const chasing = melee.filter((m) => m.targetId === h.id);
   if (!tank) {
     if (!chasing.length || chasing.length >= 3) return;
@@ -1953,11 +1993,7 @@ const LOOT_SCAN = 10;
  * Este saco é dele para pegar? Nunca o item que alguém jogou no chão nem o saco de morte de outro personagem (do
  * jogador, de colega de grupo ou de outro herói): só o próprio saco — ou o de quem ele está caçando no PK.
  */
-function heroMayLoot(
-  w: World,
-  h: HeroEntity,
-  l: { ownerId?: string; dropped?: boolean },
-): boolean {
+function heroMayLoot(w: World, h: HeroEntity, l: { ownerId?: string; dropped?: boolean }): boolean {
   if (l.dropped) return false;
   if (!l.ownerId || l.ownerId === h.id) return true;
   // o saco de morte é aberto a todos: ainda assim ele não saqueia o jogador nem colegas de grupo
@@ -1982,7 +2018,11 @@ function bestInBag(w: World, bag: { items: readonly { itemId: string; count: num
 }
 
 /** Mochila cheia e o saco tem algo que vale bem mais que o lixo dela? (larga o lixo e pega o que vale) */
-function worthSwapping(w: World, h: HeroEntity, bag: { items: readonly { itemId: string; count: number }[] }): boolean {
+function worthSwapping(
+  w: World,
+  h: HeroEntity,
+  bag: { items: readonly { itemId: string; count: number }[] },
+): boolean {
   const cheap = cheapestStack(w, h);
   return !!cheap && bestInBag(w, bag) >= Math.max(20, cheap.value * 2);
 }
@@ -2367,7 +2407,8 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       // sem arma: compra a melhor que o bolso paga, sem reservar nada para poções
       const reserve = unarmed(h) ? 0 : potionHeal(w, h) < healGoal(h, w.now) * 0.5 ? potionPrice(w) * 8 : 0;
       const goal = goalOffer(w, h, c.gold - 30 - reserve);
-      const up = (unarmed(h) && bestUpgrade(w, h, c.gold - 5, 'mainHand')) || nextUpgrade(w, h, c.gold - 30 - reserve);
+      const up =
+        (unarmed(h) && bestUpgrade(w, h, c.gold - 5, 'mainHand')) || nextUpgrade(w, h, c.gold - 30 - reserve);
       if (!up || up.shopId !== shop.id) break;
       if (!buyItem(w, up.itemId, 1)) break;
       const idx = c.inventory.findIndex((s) => s?.itemId === up.itemId);
@@ -2584,8 +2625,7 @@ export function heroOnEvent(
   else if (type === 'damage' && payload.sourceName) {
     b.lastHitBy = payload.sourceName;
     if ((payload.amount ?? 0) > 0) b.lastHurtAt = w.now;
-  }
-  else if (type === 'kill') {
+  } else if (type === 'kill') {
     b.mood = Math.min(1, b.mood + 0.03);
     b.bold = Math.min(1, b.bold + 0.015); // venceu: ganha confiança
     if (w.rng.chance(0.15)) heroSay(w, h, 'kill', {}, 40000);
@@ -2712,7 +2752,8 @@ function conjurePotions(w: World, h: HeroEntity): void {
   const spellId = voc === 'sorcerer' ? 'conjure_mana' : 'conjure_health';
   const spell = w.data.spells[spellId];
   if (!spell || h.character.mana - spellManaCost(spell, h.character.level) < h.stats.maxMana * 0.5) return;
-  const lacking = voc === 'sorcerer' ? manaStock(w, h) < manaGoal(w, h) : potionHeal(w, h) < healGoal(h, w.now);
+  const lacking =
+    voc === 'sorcerer' ? manaStock(w, h) < manaGoal(w, h) : potionHeal(w, h) < healGoal(h, w.now);
   if (lacking) tryCast(w, h, spellId);
 }
 
@@ -2895,7 +2936,7 @@ function follow(w: World, h: HeroEntity): void {
   const leaderFoe = actorById(w, leader.targetId);
   if (leaderFoe && !leaderFoe.dead && !sameParty(w, h.id, leaderFoe.id) && !canAttackActor(w, h, leaderFoe)) {
     if (h.targetId !== leaderFoe.id) setTarget(w, leaderFoe.id);
-    if (chebyshev(leaderFoe, h) <= 1 && hpPct(h) > 0.4) tryCast(w, h, 'brutal_strike');
+    if (h.targetId === leaderFoe.id) pvpSpells(w, h, leaderFoe);
     return;
   }
   if (currentActorTarget(w)) setTarget(w, null);
@@ -3150,30 +3191,87 @@ function pk(w: World, h: HeroEntity): void {
   }
   if (h.targetId !== victim.id) setTarget(w, victim.id);
   keepHaste(w, h);
-  // cada vocação usa as magias de ataque contra personagens também (antes só o Knight usava o golpe forte)
-  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
-  const d = chebyshev(victim, h);
-  const fleeing = isFleeing(w, h, victim);
-  for (const id of PVP_SPELLS[h.character.vocation]) {
-    const sp = w.data.spells[id];
-    // a rajada, o golpe paralisante e a flecha atordoante abrem a perseguição de quem foge
-    if (
-      (id === 'frost_burst' || id === 'crippling_blow' || id === 'stunning_arrow' || id === 'ice_shard') &&
-      (!fleeing || w.now < victim.slowUntil)
-    )
-      continue;
-    if (!sp || d > Math.max(1, sp.range) || (id === 'brutal_strike' && hpPct(h) <= 0.4)) continue;
-    if (manaPct > 0.15 && tryCast(w, h, id)) break;
-  }
+  if (h.targetId === victim.id) pvpSpells(w, h, victim);
 }
 
-/** Magias de ataque usadas no PK (alvo único), da mais forte para a mais barata. */
-const PVP_SPELLS: Record<HeroEntity['character']['vocation'], string[]> = {
-  knight: ['crippling_blow', 'brutal_strike'],
-  sorcerer: ['thunder_strike', 'flame_lance', 'arcane_bolt'],
-  druid: ['ice_shard', 'frost_burst', 'earth_thorn'],
-  paladin: ['stunning_arrow', 'divine_shot', 'holy_arrow'],
+/** Magias que deixam lento, por vocação: abrem a perseguição de quem foge (ou está para fugir). */
+const PVP_SLOW: Record<HeroEntity['character']['vocation'], string[]> = {
+  knight: ['crippling_blow'],
+  sorcerer: [],
+  druid: ['ice_shard', 'frost_burst'],
+  paladin: ['stunning_arrow'],
 };
+
+/**
+ * Magias no PK — sozinho (modo pk) ou ajudando o grupo a matar o personagem que o líder ataca (antes, em grupo, os
+ * colegas só davam o ataque básico). Pensado para matar gente, que bebe poção e foge:
+ * 1. defesa quando é ele quem apanha (Escudo de Mana, Pele de Pedra, Rugido de Ferro);
+ * 2. reforço de ataque já na briga (Fúria encostado, Foco do Caçador no alcance);
+ * 3. lentidão em quem foge ou está com pouca vida (vai fugir) e ainda não está lento;
+ * 4. o resto pela magia que mais tira vida agora — a de área quando pega a vítima e outros inimigos (sem acordar
+ *    criaturas paradas); com a mana curta, a que rende mais dano por ponto de mana.
+ * Com a vida baixa guarda mana para a própria cura; o Druid em grupo guarda um pouco para curar os colegas.
+ */
+function pvpSpells(w: World, h: HeroEntity, victim: PlayerEntity): void {
+  const voc = h.character.vocation;
+  const lv = h.character.level;
+  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
+  const reserve = hpPct(h) < 0.45 ? 0.35 : voc === 'druid' && alliesNear(w, h) > 0 ? 0.15 : 0.05;
+  const d = chebyshev(victim, h);
+  if (d > 7 || !hasLineOfSight(w, h, victim)) return;
+  // 1) apanhando de um personagem (a vítima ou outro): defesa antes de atacar
+  const hitBy = allActors(w).filter(
+    (a) =>
+      a !== h &&
+      !a.dead &&
+      chebyshev(a, h) <= 7 &&
+      attackedRecently(w, a.id, h.id, 4000) &&
+      !canAttackActor(w, h, a),
+  ).length;
+  if (hitBy && hpPct(h) < 0.6) {
+    if (
+      isRanged(voc) &&
+      manaPct > 0.5 &&
+      !h.buffs.some((b) => b.kind === 'manaShield') &&
+      tryCast(w, h, 'mana_shield')
+    )
+      return;
+    if (tryCast(w, h, voc === 'knight' ? 'iron_roar' : 'stone_skin')) return;
+  }
+  if (manaPct <= reserve) return;
+  // 2) reforço de ataque
+  if (voc === 'knight' && d <= 1 && manaPct > 0.3) tryCast(w, h, 'berserk');
+  if (voc === 'paladin' && d <= 6 && manaPct > 0.3) tryCast(w, h, 'hunters_focus');
+  // 3) quem foge (ou vai fugir, com pouca vida) leva primeiro a magia que deixa lento
+  const victimHp = victim.character.health / Math.max(1, victim.stats.maxHealth);
+  if ((isFleeing(w, h, victim) || victimHp < 0.35) && w.now >= victim.slowUntil)
+    for (const id of PVP_SLOW[voc]) if (tryCast(w, h, id)) return;
+  // 4) a de mais dano agora (área conta todos os inimigos que pega; mana curta: dano por mana)
+  const hostile = (a: PlayerEntity) => a !== h && !a.dead && !canAttackActor(w, h, a);
+  const foes = allActors(w).filter(hostile);
+  const thrifty = manaPct < 0.4;
+  let best: { id: string; score: number } | null = null;
+  for (const id of w.data.vocations[voc].spells) {
+    const sp = w.data.spells[id];
+    if (!sp || sp.effect !== 'damage' || sp.attract || !castCheck(w, sp).ok) continue; // (o grito de isca é para criaturas)
+    let hits = 1;
+    if (sp.target === 'areaSelf' || sp.target === 'areaTarget') {
+      const at = sp.target === 'areaSelf' ? h : victim;
+      const r = sp.radius ?? 1;
+      if (sp.target === 'areaSelf' && d > r) continue; // a área em volta dele não chega na vítima
+      if (wakesIdle(w, at, r)) continue;
+      hits = foes.filter((a) => chebyshev(a, at) <= r).length;
+      // criaturas já brigando com o grupo também levam (bônus pequeno: o alvo é a vítima)
+      hits +=
+        [...w.monsters.values()].filter((m) => m.alive && m.targetId && chebyshev(m, at) <= r).length * 0.3;
+      if (hits < 1) continue;
+    }
+    const dmg = spellAverage(w, h, id) * hits;
+    const score = thrifty ? dmg / Math.max(1, spellManaCost(sp, lv)) : dmg;
+    if (!best || score > best.score) best = { id, score };
+  }
+  if (best) tryCast(w, h, best.id);
+}
 
 // ------------------------------------------------------------------ improviso: comentários e pequenas vontades
 function whims(w: World, h: HeroEntity): void {
@@ -3244,7 +3342,9 @@ function callForHelp(w: World, h: HeroEntity): void {
   if (w.now < b.nextHelpCallAt || h.dead || isPz(w.map, h.x, h.y)) return;
   const party = partyOf(w, h.id);
   if (!party) return;
-  const hitters = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 3);
+  const hitters = [...w.monsters.values()].filter(
+    (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 3,
+  );
   if (!hitters.length || (hitters.length < 2 && hpPct(h) > 0.6)) return;
   const far = party.members
     .map((id) => w.heroes.get(id))
@@ -3274,7 +3374,10 @@ function callForHelp(w: World, h: HeroEntity): void {
   }
   heroSay(w, h, 'helpCall', {}, 0);
   if (party.members.includes(w.human.id))
-    w.human.scope.events.emit('message', { text: `${h.character.name} pediu socorro ao grupo.`, kind: 'system' });
+    w.human.scope.events.emit('message', {
+      text: `${h.character.name} pediu socorro ao grupo.`,
+      kind: 'system',
+    });
 }
 
 /** Ordem tática do painel do grupo. Retorna false se o herói não pôde cumprir (ex.: PZ lock para ir à vila). */
@@ -3429,7 +3532,12 @@ function plannedRevenge(w: World, h: HeroEntity): boolean {
   if (!g || w.now > g.until || !w.social.pvp || b.mode === 'pk') return false;
   const foe = actorById(w, g.id);
   if (!foe || foe.dead || sameParty(w, h.id, foe.id)) return false;
-  if (chebyshev(foe, h) > 9 || isPz(w.map, foe.x, foe.y) || isPz(w.map, h.x, h.y) || !hasLineOfSight(w, h, foe))
+  if (
+    chebyshev(foe, h) > 9 ||
+    isPz(w.map, foe.x, foe.y) ||
+    isPz(w.map, h.x, h.y) ||
+    !hasLineOfSight(w, h, foe)
+  )
     return false;
   if (canAttackActor(w, h, foe)) return false;
   if (strengthWithAllies(w, h) / Math.max(1, power(foe)) > 1.1 && hpPct(h) > 0.6)
@@ -3474,17 +3582,26 @@ function upgradeBudget(h: HeroEntity, budget: number): number {
  * Melhor upgrade respeitando a meta: a meta primeiro (se der para pagar); juntando para ela, só coisa pequena — menos a
  * arma principal, que nunca espera (é o dano: atrasar a arma atrasa a caça inteira, e a meta junto).
  */
-function nextUpgrade(w: World, h: HeroEntity, budget: number): { itemId: string; price: number; shopId: string } | null {
+function nextUpgrade(
+  w: World,
+  h: HeroEntity,
+  budget: number,
+): { itemId: string; price: number; shopId: string } | null {
   const goal = goalOffer(w, h, budget);
   if (goal) return goal;
   const g = h.brain.goal;
   const goalSlot = g ? w.data.items[g.itemId]?.slot : undefined;
-  const weapon = g && budget < g.price && goalSlot !== 'mainHand' ? bestUpgrade(w, h, budget, 'mainHand') : null;
+  const weapon =
+    g && budget < g.price && goalSlot !== 'mainHand' ? bestUpgrade(w, h, budget, 'mainHand') : null;
   return weapon ?? bestUpgrade(w, h, upgradeBudget(h, budget));
 }
 
 /** A meta à venda e dentro do orçamento: é a primeira compra (antes de qualquer outro upgrade). */
-function goalOffer(w: World, h: HeroEntity, budget: number): { itemId: string; price: number; shopId: string } | null {
+function goalOffer(
+  w: World,
+  h: HeroEntity,
+  budget: number,
+): { itemId: string; price: number; shopId: string } | null {
   const g = h.brain.goal;
   if (!g || budget < g.price) return null;
   const def = w.data.items[g.itemId];
@@ -3509,7 +3626,8 @@ function savingForGoal(h: HeroEntity): boolean {
 function suppliesRunningOut(w: World, h: HeroEntity): boolean {
   const b = h.brain;
   // acabou de voltar da vila (ou de tentar): espera; e só com uns minutos de caça para a média valer
-  if (w.now < b.nextSupplyAt || w.now < b.nextTownAt || isPzLocked(w, h.id) || !canResupply(w, h)) return false;
+  if (w.now < b.nextSupplyAt || w.now < b.nextTownAt || isPzLocked(w, h.id) || !canResupply(w, h))
+    return false;
   if (w.now - b.huntStartedAt < 3 * 60000) return false;
   const shop = nearestShopNpc(w, h);
   if (!shop) return false;
@@ -3565,7 +3683,10 @@ function marketDeals(w: World, h: HeroEntity): MarketListing[] {
     } else if (def.slot && weaponFits(w, h, def) && !def.weapon?.training && isUpgrade(w.data, c, def)) {
       const cur = c.equipment[def.slot];
       const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
-      if (gain >= 5 && total <= Math.max(goalOffer(w, h, money - 40) ? money - 40 : 0, upgradeBudget(h, money - 40)))
+      if (
+        gain >= 5 &&
+        total <= Math.max(goalOffer(w, h, money - 40) ? money - 40 : 0, upgradeBudget(h, money - 40))
+      )
         out.push(l);
     }
   }
@@ -3607,7 +3728,9 @@ function useMarket(w: World, h: HeroEntity): void {
 function listLootOnMarket(w: World, h: HeroEntity): void {
   const c = h.character;
   // anúncio parado há mais de 30 min ninguém quer: retira e vende ao NPC na próxima loja
-  for (const l of w.market.listings.filter((x) => x.sellerId === c.id && pkNow(w) - x.listedAt > 30 * 60000)) {
+  for (const l of w.market.listings.filter(
+    (x) => x.sellerId === c.id && pkNow(w) - x.listedAt > 30 * 60000,
+  )) {
     if (!marketCancel(w, l.id)) continue;
     const idx = c.depot.findIndex((st) => st?.itemId === l.itemId);
     if (idx >= 0 && freeSlots(c.inventory) > 1) depotWithdraw(w, idx);
