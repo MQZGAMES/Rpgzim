@@ -16,6 +16,8 @@ import { castFailMessage } from '../../domain/rules/spells';
 import { countItem } from '../../domain/rules/inventory';
 import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
+import { spellManaCost } from '../../domain/rules/spells';
+import { MARKET_AUTO_RATE, MARKET_MAX_PER_SELLER } from '../../domain/rules/market';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -218,6 +220,23 @@ export interface UiSnapshot {
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
   depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
+  /** Mercado do banco (só com a janela do banco aberta). */
+  market: {
+    listings: {
+      id: string;
+      item: ItemView;
+      count: number;
+      price: number;
+      total: number;
+      sellerName: string;
+      mine: boolean;
+      canAfford: boolean;
+    }[];
+    mine: number;
+    max: number;
+    /** Preço da venda automática (75% do valor) por item, para a tela sugerir. */
+    autoRate: number;
+  } | null;
   loot: {
     title: string;
     bags: number;
@@ -359,7 +378,7 @@ function spellView(sim: GameSimulation, id: string): SpellView {
     words: s.words,
     icon: s.icon,
     description: s.description,
-    manaCost: s.manaCost,
+    manaCost: spellManaCost(s, c.level),
     cooldownMs: s.cooldownMs,
     cooldownRemaining: spellCooldownRemaining(w, id),
     minLevel: s.minLevel,
@@ -476,7 +495,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       label: SKILL_LABEL[id],
       level: p.stats.skills[id],
       base: c.skills[id].level,
-      pct: skillProgress(id, c.skills[id], voc.skillMultipliers[id], w.data.balance),
+      pct: skillProgress(id, c.skills[id], voc.skillMultipliers[id], w.data.balance, voc.magicGrowth),
     })),
     buffs: p.buffs
       .filter((b) => b.expiresAt > w.now)
@@ -589,6 +608,25 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
           gold: c.gold,
           bankGold: c.bankGold,
           items: c.depot.map((st) => (st ? itemView(sim, st) : null)),
+        }
+      : null,
+    market: depotNpc
+      ? {
+          listings: [...w.market.listings]
+            .sort((a, b) => b.listedAt - a.listedAt)
+            .map((l) => ({
+              id: l.id,
+              item: itemView(sim, { itemId: l.itemId, count: l.count }),
+              count: l.count,
+              price: l.price,
+              total: l.price * l.count,
+              sellerName: l.sellerName,
+              mine: l.sellerId === c.id,
+              canAfford: c.gold + c.bankGold >= l.price * l.count,
+            })),
+          mine: w.market.listings.filter((l) => l.sellerId === c.id).length,
+          max: MARKET_MAX_PER_SELLER,
+          autoRate: MARKET_AUTO_RATE,
         }
       : null,
     loot: bags.length

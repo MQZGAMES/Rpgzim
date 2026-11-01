@@ -171,6 +171,12 @@ export function updateMonster(w: World, m: MonsterEntity): void {
       }
       m.state = 'chasing';
       if (isMoving(m, w.now)) break;
+      // corpo a corpo: cerca o alvo — cada criatura mira uma casa livre ao redor dele e contorna árvores, lagos e as
+      // outras criaturas pelo caminho calculado (antes ia em linha reta e fazia fila atrás da primeira)
+      if (range <= 1) {
+        surround(w, m, p);
+        break;
+      }
       // caminho livre e perto: passo direto; com obstáculo no meio (árvore, pedra, casa, cerca), contorna pelo A*
       if (los && dist <= 4 && greedyStepToward(w, m, p.x, p.y, speedOf(w, m), true)) {
         m.path = null;
@@ -199,6 +205,44 @@ export function updateMonster(w: World, m: MonsterEntity): void {
     case 'dead':
       break;
   }
+}
+
+/**
+ * Casa ao redor do alvo para esta criatura: livre (ou a dela mesma), fora de área protegida, sem outra criatura já
+ * indo para lá; entre as livres, a mais perto. Sem nenhuma livre, null (fica por perto esperando vaga).
+ */
+function surroundSlot(w: World, m: MonsterEntity, p: { x: number; y: number; id: string }): { x: number; y: number } | null {
+  const claimed = new Set<string>();
+  for (const o of w.monsters.values())
+    if (o !== m && o.alive && o.targetId === p.id && o.pathGoal) claimed.add(`${o.pathGoal.x},${o.pathGoal.y}`);
+  let best: { x: number; y: number; score: number } | null = null;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const x = p.x + dx;
+      const y = p.y + dy;
+      const mine = x === m.x && y === m.y;
+      if (!mine && !canEnter(w, x, y, true, m.id)) continue;
+      const score = chebyshev({ x, y }, m) + (claimed.has(`${x},${y}`) ? 8 : 0) + (dx && dy ? 0.3 : 0);
+      if (!best || score < best.score) best = { x, y, score };
+    }
+  return best;
+}
+
+/** Aproximação corpo a corpo: caminho até a casa escolhida ao redor do alvo, refeito quando o alvo anda ou trava. */
+function surround(w: World, m: MonsterEntity, p: PlayerEntity): void {
+  const slot = surroundSlot(w, m, p);
+  const goal = slot ?? { x: p.x, y: p.y };
+  const changed = !m.pathGoal || m.pathGoal.x !== goal.x || m.pathGoal.y !== goal.y;
+  if (!m.path?.length || changed || w.now - m.pathAt > 1200) {
+    m.path = pathTo(w, m, goal, true, { stopWithin: slot ? 0 : 2, maxNodes: 3000 });
+    m.pathGoal = goal;
+    m.pathAt = w.now;
+  }
+  if (followPath(w, m)) return;
+  // sem rota (cercado de outras criaturas, alvo do outro lado de um obstáculo): um passo que aproxime e replaneja logo
+  m.pathAt = 0;
+  greedyStepToward(w, m, goal.x, goal.y, speedOf(w, m), true);
 }
 
 function wander(w: World, m: MonsterEntity): void {

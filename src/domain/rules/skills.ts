@@ -6,9 +6,15 @@ import type { SkillState } from '../entities/character';
 export const MAX_SKILL = 150;
 
 /** Tentativas necessárias para avançar do nível `level` para `level + 1`. */
-export function triesForNextLevel(skill: SkillId, level: number, vocationMultiplier: number, balance: BalanceConfig): number {
+export function triesForNextLevel(
+  skill: SkillId,
+  level: number,
+  vocationMultiplier: number,
+  balance: BalanceConfig,
+  magicGrowth = balance.magic.growth,
+): number {
   if (skill === 'magic') {
-    return Math.round(balance.magic.baseMana * Math.pow(balance.magic.growth, level) * vocationMultiplier);
+    return Math.round(balance.magic.baseMana * Math.pow(magicGrowth, level) * vocationMultiplier);
   }
   const steps = Math.max(0, level - balance.skills.startLevel);
   return Math.round(balance.skills.baseTries * Math.pow(balance.skills.growth, steps) * vocationMultiplier);
@@ -26,12 +32,13 @@ export function trainSkill(
   amount: number,
   vocationMultiplier: number,
   balance: BalanceConfig,
+  magicGrowth?: number,
 ): SkillTrainResult {
   let { level, tries } = current;
   tries += Math.max(0, amount);
   let levelsGained = 0;
   while (level < MAX_SKILL) {
-    const need = triesForNextLevel(skill, level, vocationMultiplier, balance);
+    const need = triesForNextLevel(skill, level, vocationMultiplier, balance, magicGrowth);
     if (tries < need) break;
     tries -= need;
     level++;
@@ -40,8 +47,14 @@ export function trainSkill(
   return { state: { level, tries }, levelsGained };
 }
 
-export function skillProgress(skill: SkillId, state: SkillState, vocationMultiplier: number, balance: BalanceConfig): number {
-  const need = triesForNextLevel(skill, state.level, vocationMultiplier, balance);
+export function skillProgress(
+  skill: SkillId,
+  state: SkillState,
+  vocationMultiplier: number,
+  balance: BalanceConfig,
+  magicGrowth?: number,
+): number {
+  const need = triesForNextLevel(skill, state.level, vocationMultiplier, balance, magicGrowth);
   return need <= 0 ? 1 : Math.min(1, state.tries / need);
 }
 

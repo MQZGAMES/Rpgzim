@@ -28,6 +28,8 @@ export interface UiLocalState {
   actorMenu: string | null;
   /** Painel de controle do grupo aberto. */
   partyPanel: boolean;
+  /** Personagens salvos que estão fora do jogo (podem ser logados com IA pela lista de online). */
+  offline: { id: string; name: string; vocation: string; level: number }[];
 }
 
 type Listener = () => void;
@@ -51,7 +53,7 @@ export class Store<T> {
 }
 
 export function createLocalStore(touch: boolean): Store<UiLocalState> {
-  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, pkToast: null, ready: false, saving: false, lastSaved: null, fps: 0, touch, actorMenu: null, partyPanel: false });
+  return new Store<UiLocalState>({ panel: null, messages: [], banner: null, levelUp: null, pkToast: null, ready: false, saving: false, lastSaved: null, fps: 0, touch, actorMenu: null, partyPanel: false, offline: [] });
 }
 
 export function createSnapshotStore(initial: UiSnapshot): Store<UiSnapshot> {

@@ -34,11 +34,15 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
   const spot = process.env.HERO_HUMAN?.split(',').map(Number);
   if (spot) sim.teleportPlayer(spot[0]!, spot[1]!);
   sim.events.on('entityDied', (e) => e.kind === 'monster' && kills++);
+  let manaDrunk = 0;
+  let manaSeen = -Infinity;
   const t0 = performance.now();
   for (let s = 0; s < minutes * 60; s++) {
     advance(sim, 1000, 50);
     sim.world.player.character.health = sim.world.player.stats.maxHealth; // o jogador humano fica parado no templo
     modeMs[h.brain.mode] = (modeMs[h.brain.mode] ?? 0) + 1;
+    for (const e of h.brain.manaLog) if (e.at > manaSeen) manaDrunk++;
+    manaSeen = h.brain.manaLog[h.brain.manaLog.length - 1]?.at ?? manaSeen;
     if (h.brain.mode !== mode) {
       mode = h.brain.mode;
       if (mode === 'retreat') log.push(`${t()} ⚠ fuga: ${h.brain.retreatWhy}`);
@@ -62,7 +66,7 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
     .join(' · ');
   process.stderr.write(
     (process.env.HERO_QUIET ? '' : log.join('\n')) +
-      `\n\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths}\nequip: ${eq}\nmochila: ${ch.inventory
+      `\n\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths} | ml ${ch.skills.magic.level} poçõesMana ${manaDrunk}\nequip: ${eq}\nmochila: ${ch.inventory
         .filter(Boolean)
         .map((s) => `${s!.itemId}x${s!.count}`)
         .join(', ')}\n`,

@@ -1128,6 +1128,143 @@ const SPELLS: [string, Ramp, (c: PixelCanvas) => void][] = [
       c.set(4, 3, P.white);
     },
   ],
+  [
+    'thunder_strike',
+    P.arcane,
+    (c) => {
+      // raio em zigue-zague caindo de uma nuvem
+      c.rect(3, 2, 10, 3, P.steel[3]!);
+      c.rect(4, 1, 7, 1, P.steel[4]!);
+      for (const [x, y] of [
+        [9, 5],
+        [8, 6],
+        [7, 7],
+        [8, 8],
+        [9, 8],
+        [8, 9],
+        [7, 10],
+        [6, 11],
+        [5, 12],
+        [5, 13],
+      ] as const) {
+        c.set(x, y, P.arcane[4]!);
+        c.set(x + 1, y, P.white);
+      }
+    },
+  ],
+  [
+    'inferno_rain',
+    P.fire,
+    (c) => {
+      // brasas caindo em diagonal sobre um chão em chamas
+      for (const [x, y] of [
+        [3, 2],
+        [8, 3],
+        [12, 2],
+        [5, 6],
+        [10, 7],
+      ] as const) {
+        c.set(x, y, P.fire[5] ?? P.white);
+        c.set(x - 1, y - 1, P.fire[3]!);
+        c.set(x + 1, y + 1, P.fire[4]!);
+      }
+      for (let x = 2; x <= 13; x++) c.set(x, 12 + ((x * 7) % 3 === 0 ? -1 : 0), P.fire[3]!);
+      c.hline(2, 13, 13, P.fire[2]!);
+    },
+  ],
+  [
+    'ice_shard',
+    P.ice,
+    (c) => {
+      // estilhaço de gelo pontiagudo
+      for (let i = 0; i < 10; i++) {
+        c.set(3 + i, 12 - i, P.ice[3]!);
+        c.set(4 + i, 12 - i, P.ice[4]!);
+        if (i < 8) c.set(3 + i, 11 - i, P.ice[2]!);
+      }
+      c.set(13, 2, P.white);
+      c.set(12, 3, P.white);
+      c.set(3, 13, P.ice[2]!);
+    },
+  ],
+  [
+    'stone_skin',
+    P.nature,
+    (c) => {
+      // escudo de pedra com rachaduras e um broto
+      c.ellipse(8, 8, 5.5, 6, (x, y, nx, ny) => (nx + ny < -0.3 ? P.steel[4]! : P.steel[3]!));
+      c.set(6, 6, P.steel[2]!);
+      c.set(7, 7, P.steel[2]!);
+      c.set(7, 8, P.steel[2]!);
+      c.set(10, 9, P.steel[2]!);
+      c.vline(8, 9, 12, P.nature[3]!);
+      c.set(7, 10, P.nature[4]!);
+      c.set(9, 10, P.nature[4]!);
+    },
+  ],
+  [
+    'holy_light',
+    P.holy,
+    (c) => {
+      // sol de luz com cruz de cura no centro
+      c.disc(8, 8, 4.5, P.holy[3]!);
+      c.rect(7, 5, 2, 6, P.white);
+      c.rect(5, 7, 6, 2, P.white);
+      for (const [x, y] of [
+        [8, 1],
+        [8, 14],
+        [1, 8],
+        [14, 8],
+        [3, 3],
+        [13, 3],
+        [3, 13],
+        [13, 13],
+      ] as const)
+        c.set(x, y, P.holy[4]!);
+    },
+  ],
+  [
+    'sacred_fire',
+    P.holy,
+    (c) => {
+      // anel de chamas douradas em volta
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        c.set(Math.round(8 + Math.cos(a) * 5.5), Math.round(8 + Math.sin(a) * 5.5), i % 2 ? P.holy[4]! : P.fire[4]!);
+      }
+      c.disc(8, 8, 1.8, P.holy[4]!);
+      c.set(8, 8, P.white);
+    },
+  ],
+  [
+    'berserk',
+    P.red,
+    (c) => {
+      // dois machados cruzados com faíscas
+      diag(c, 3, 13, 10, P.wood[4]!);
+      diag(c, 3, 3, 10, P.wood[4]!, 1, 1);
+      c.rect(10, 2, 4, 3, P.steel[4]!);
+      c.rect(2, 2, 4, 3, P.steel[4]!);
+      c.set(8, 8, P.red[4]!);
+      c.set(7, 9, P.red[3]!);
+      c.set(9, 7, P.red[3]!);
+    },
+  ],
+  [
+    'second_wind',
+    P.heal,
+    (c) => {
+      // rajadas de vento em volta de um coração
+      c.disc(6, 8, 2, P.red[3]!);
+      c.disc(10, 8, 2, P.red[3]!);
+      for (let i = 0; i < 4; i++) c.hline(5 + i, 11 - i, 10 + i, P.red[3]!);
+      c.set(6, 7, P.white);
+      c.hline(1, 5, 3, P.heal[3]!);
+      c.hline(10, 14, 3, P.heal[3]!);
+      c.hline(2, 4, 5, P.heal[4]!);
+      c.hline(11, 13, 5, P.heal[4]!);
+    },
+  ],
 ];
 for (const [name, ramp, draw] of SPELLS)
   icon(

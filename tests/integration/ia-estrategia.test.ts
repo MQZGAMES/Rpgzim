@@ -238,7 +238,8 @@ describe('Druid contra quem foge', () => {
     h.brain.quarry = 'wolf';
     h.brain.nextThinkAt = 0;
     advance(sim, 60, 20);
-    expect(cast).toBe('frost_burst');
+    // a magia que deixa lento vem primeiro: o Estilhaço de Gelo (mais barato) ou a Rajada Glacial
+    expect(['ice_shard', 'frost_burst']).toContain(cast);
   });
 });
 

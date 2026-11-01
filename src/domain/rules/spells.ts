@@ -40,6 +40,11 @@ export interface CastContext {
 
 export type CastCheck = { ok: true } | { ok: false; reason: CastFailReason; detail?: string };
 
+/** Mana que a magia custa para um personagem deste nível (as de ataque dos magos sobem com o nível). */
+export function spellManaCost(spell: Pick<SpellDef, 'manaCost' | 'manaPerLevel'>, level: number): number {
+  return spell.manaCost + Math.floor(Math.max(0, level) * (spell.manaPerLevel ?? 0));
+}
+
 export function validateCast(spell: SpellDef, ctx: CastContext): CastCheck {
   if (ctx.dead) return { ok: false, reason: 'dead' };
   if (!spell.vocations.includes(ctx.vocation)) return { ok: false, reason: 'vocation' };
@@ -47,7 +52,7 @@ export function validateCast(spell: SpellDef, ctx: CastContext): CastCheck {
   if (ctx.magicLevel < spell.minMagicLevel)
     return { ok: false, reason: 'magicLevel', detail: String(spell.minMagicLevel) };
   if (ctx.cooldownRemaining > 0 || ctx.globalCooldownRemaining > 0) return { ok: false, reason: 'cooldown' };
-  if (ctx.mana < spell.manaCost) return { ok: false, reason: 'noMana' };
+  if (ctx.mana < spellManaCost(spell, ctx.level)) return { ok: false, reason: 'noMana' };
   if (spell.requiresWeapon && !ctx.unarmed && spell.requiresWeapon !== ctx.weaponKind)
     return { ok: false, reason: 'weapon', detail: spell.requiresWeapon };
   const offensive = spell.effect === 'damage';

@@ -248,6 +248,30 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await expect(page.getByTestId('loot-window')).toBeVisible();
 });
 
+test('mercado do banco: venda automática anuncia o item; personagens online: deslogar e logar', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'um projeto basta');
+  await createCharacter(page, 'knight', 'Feira');
+  const banker = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:banker')!;
+  await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).teleport(x!, y!), [banker.x, banker.y + 2]);
+  await page.getByTestId('interact-button').click();
+  await page.getByRole('button', { name: 'Abrir depósito' }).click();
+  await page.getByTestId('depot-tab-market').click();
+  await expect(page.getByTestId('market-tab')).toBeVisible();
+  const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
+  await page.getByTestId(`market-bag-${axe}`).click();
+  await page.getByTestId('market-auto').click();
+  await expect(page.locator('[data-testid^=market-row-]')).toHaveCount(1);
+  await expect(page.locator('[data-testid^=market-cancel-]')).toHaveCount(1); // é o seu anúncio: dá para retirar
+  await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
+  // lista de online: o Boladex sai do jogo e volta
+  await page.getByTestId('btn-players').click();
+  await expect(page.getByTestId('players-panel')).toContainText('Boladex');
+  await page.getByTestId('player-logout-hero:boladex').click();
+  await expect(page.getByTestId('player-login-boladex')).toBeVisible();
+  await page.getByTestId('player-login-boladex').click();
+  await expect(page.getByTestId('player-logout-hero:boladex')).toBeVisible();
+});
+
 test('mobile: toque duplo equipa; toque curto na área do joystick anda até o ponto', async ({
   page,
 }, info) => {

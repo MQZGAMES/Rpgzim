@@ -126,6 +126,37 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Personagens logados com IA, mercado do banco, magos e criaturas mais espertas
+- **Logar e deslogar personagens** (lista de *Personagens online*, tecla O): todo personagem salvo pode entrar no jogo
+  jogando sozinho — com a mesma IA dos heróis, na vocação e no nível dele — ou sair (o progresso é salvo). Os heróis
+  (Boladex, Maguim, Mano Cura, Distanciado) entram logados por padrão; os criados por você ficam em *Fora do jogo* até
+  você logá-los. A escolha fica gravada no aparelho. Logados, eles formam grupos, caçam, usam a vila, o mercado e o PK
+  como os heróis (personagens criados ganham um temperamento próprio e falas neutras).
+- **Mercado do banco** (aba *Mercado* na janela do banqueiro): anuncie um item da mochila ou do depósito pelo preço que
+  quiser ou use a **venda automática** (75% do valor — o NPC paga 50%). Os anúncios de todos os personagens aparecem
+  para todos; ao comprar, o item vai direto para o **depósito** (sem espaço, não compra) e o ouro vai para o **banco**
+  de quem vendeu — se ele estiver fora do jogo, entra no banco dele quando logar. Até 12 anúncios por personagem.
+- **Heróis usam o mercado primeiro**: na vila passam no banco antes das lojas e compram as poções anunciadas pelo
+  preço do NPC ou menos e os upgrades que cabem no orçamento; só o que faltar compram no NPC. Também anunciam o
+  equipamento do loot que venderiam barato ao NPC (e retiram o que ficar 30 min sem comprador).
+- **Decisões rápidas na vila**: visita de no máximo ~45 s (antes 75 s), cada parada ~18 s, menos tempo de praça e, ao
+  terminar, direto para a caça.
+- **Magos**: cada vocação tem a própria curva de Magic Level — Sorcerer/Druid sobem muito mais rápido (1,18 por nível),
+  Paladin 1,3 e Knight 1,4 —, e a cura (*Respiro Vital*, *Cura Intensa*) passou a depender bem mais do Magic Level do
+  que do nível: o mago cura várias vezes mais que o Knight. As magias de ataque de Sorcerer e Druid custam mais mana
+  conforme o nível (ex.: *Lança de Chamas* 25 no nível 1, 52 no 60), então a poção de mana volta a ser necessária.
+- **2 magias inéditas por vocação**, para escolher no painel de atalhos (a barra padrão continua a mesma):
+  Sorcerer *Relâmpago* e *Chuva de Brasas*; Druid *Estilhaço de Gelo* (lentidão) e *Pele de Pedra* (−30% de dano);
+  Paladin *Luz Restauradora* (cura) e *Fogo Sagrado* (área em volta); Knight *Fúria* (ataque mais rápido) e
+  *Segundo Fôlego* (cura pela força). Os heróis usam todas nas situações certas.
+- **Poções**: todas as poções existentes estão à venda na Alquimia e na Banca do Ilário, listadas primeiro.
+- **Seguir o alvo sem travar**: a rota é refeita assim que o alvo anda 2 casas (antes 3) e a cada 0,4 s; com o passo
+  bloqueado, desvia na hora; e quem atira, "no alcance" mas com árvore ou parede no meio, chega mais perto em vez de
+  ficar parado.
+- **Criaturas cercam e contornam**: cada criatura corpo a corpo escolhe uma casa livre ao redor do alvo (sem repetir a
+  de outra) e vai até ela pelo caminho calculado, contornando árvores, lagos e as outras criaturas — antes iam em linha
+  reta e faziam fila atrás da primeira.
+
 ## IA tática dos heróis, atalhos 1–9 e magias novas
 **Combate em grupo**
 - **Foco de alvo**: entre as criaturas que atacam o grupo, cada herói escolhe a que os colegas já atacam e a de menos vida (morre primeiro); atiradores e quem bate num colega frágil sobem na fila (`focusPick` em `src/game/ai/heroTactics.ts`). No alvo "mais próximo" cada um continua pegando a mais perto.
@@ -303,8 +334,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **304 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
-- Playwright: **12 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **315 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
   na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.

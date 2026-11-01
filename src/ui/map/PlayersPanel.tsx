@@ -1,17 +1,21 @@
-// Personagens online: quem está no mundo (heróis com vida própria), onde estão e o que fazem.
+// Personagens online: quem está no mundo (heróis e personagens logados com IA), onde estão e o que fazem.
 // "Chamar para o grupo" convida na hora; quem entra no grupo vem andando até você (aparece no mini mapa).
-import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
+// Todo personagem salvo pode ser logado (entra jogando sozinho, com a IA da vocação e do nível dele) ou deslogado.
+import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { Bar, ItemIcon, Panel, PixelButton, SpriteFrame } from '../common/primitives';
 
 export function PlayersPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const heroes = useSnap((s) => s.heroes);
   const me = useSnap((s) => ({ name: s.player.name, region: s.region }));
+  const offline = useLocal((s) => s.offline);
   return (
     <Panel title="Personagens online" icon="ui_players" onClose={onClose}>
       <div data-testid="players-panel">
         <p className="text-[12px] text-muted">
-          {heroes.length + 1} no mundo. Chame para o grupo: a pessoa entra e vem andando até você (aparece no mini mapa).
+          {heroes.length + 1} no mundo. Chame para o grupo: a pessoa entra e vem andando até você (aparece no
+          mini mapa). Logar/Deslogar: o personagem entra ou sai do jogo; logado, ele joga sozinho com a IA da
+          vocação e do nível dele.
         </p>
         <div className="mt-2 flex flex-col gap-2">
           <div className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1 text-[12px] opacity-80">
@@ -20,10 +24,21 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
             <span className="truncate text-[11px] text-muted">{me.region ?? ''}</span>
           </div>
           {heroes.map((h) => (
-            <div key={h.id} className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1" data-testid={`player-row-${h.id}`}>
+            <div
+              key={h.id}
+              className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1"
+              data-testid={`player-row-${h.id}`}
+            >
               <div className="relative flex h-[40px] w-[32px] shrink-0 items-end justify-center overflow-hidden">
-                <SpriteFrame sheet={h.vocation} scale={1.2} className={h.dead ? 'opacity-40 grayscale' : ''} />
-                <span className={`absolute right-0 top-0 h-2 w-2 rounded-full ${h.dead ? 'bg-muted' : 'bg-heal'}`} title={h.dead ? 'morto' : 'online'} />
+                <SpriteFrame
+                  sheet={h.vocation}
+                  scale={1.2}
+                  className={h.dead ? 'opacity-40 grayscale' : ''}
+                />
+                <span
+                  className={`absolute right-0 top-0 h-2 w-2 rounded-full ${h.dead ? 'bg-muted' : 'bg-heal'}`}
+                  title={h.dead ? 'morto' : 'online'}
+                />
               </div>
               <div className="min-w-0 flex-1 text-[12px]">
                 <div className="flex items-center gap-1">
@@ -39,8 +54,20 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                 </div>
                 <Bar className="mt-[2px]" value={h.hp} max={h.maxHp} color="var(--color-heal)" height={3} />
               </div>
+              <PixelButton
+                className="shrink-0 !border-[6px] px-1 text-[11px]"
+                title={`Tirar ${h.name} do jogo (o progresso é salvo)`}
+                onClick={() => void session.logoutCharacter(h.id)}
+                data-testid={`player-logout-${h.id}`}
+              >
+                Deslogar
+              </PixelButton>
               {h.inParty ? (
-                <PixelButton className="shrink-0 !border-[6px] px-1 text-[11px]" onClick={() => session.setPartyPanel(true)} data-testid={`player-party-${h.id}`}>
+                <PixelButton
+                  className="shrink-0 !border-[6px] px-1 text-[11px]"
+                  onClick={() => session.setPartyPanel(true)}
+                  data-testid={`player-party-${h.id}`}
+                >
                   No grupo
                 </PixelButton>
               ) : (
@@ -58,6 +85,43 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+        {offline.length > 0 && (
+          <>
+            <h3 className="mb-1 mt-3 text-[13px] text-gold">Fora do jogo</h3>
+            <div className="flex flex-col gap-2">
+              {offline.map((o) => (
+                <div
+                  key={o.id}
+                  className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1 opacity-90"
+                  data-testid={`offline-row-${o.id}`}
+                >
+                  <div className="relative flex h-[40px] w-[32px] shrink-0 items-end justify-center overflow-hidden">
+                    <SpriteFrame sheet={o.vocation} scale={1.2} className="opacity-60 grayscale" />
+                    <span
+                      className="absolute right-0 top-0 h-2 w-2 rounded-full bg-muted"
+                      title="fora do jogo"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 text-[12px]">
+                    <b className="text-parchment">{o.name}</b>{' '}
+                    <span className="text-muted">
+                      · {o.vocation.charAt(0).toUpperCase() + o.vocation.slice(1)} nv {o.level}
+                    </span>
+                  </div>
+                  <PixelButton
+                    variant="gold"
+                    className="shrink-0 !border-[6px] px-1 text-[11px]"
+                    title={`Colocar ${o.name} no jogo: ele joga sozinho com a IA`}
+                    onClick={() => session.loginCharacter(o.id)}
+                    data-testid={`player-login-${o.id}`}
+                  >
+                    Logar
+                  </PixelButton>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </Panel>
   );

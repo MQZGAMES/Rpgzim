@@ -179,3 +179,15 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - Arcos: sem flechas (+1/+2 de ataque que elas davam foram embutidos: arcos antigos +3). O Paladino só equipa arcos.
 - Corrida: recarga 18 s → 8 s (= duração).
 - IA: fuga só com margem < ~0,75 e vida < 65% (antes 1,0 e 80%); "trem" de 3+ criaturas ao redor também. Em 4 h por herói: retiradas 4–6% do tempo (antes 8–11%), 0–1 morte por herói; níveis finais (seeds 11/12) Boladex 42–47, Maguim 50–58, Mano Cura 36–39, Distanciado 41–47.
+
+## Magic Level por vocação, cura e mana dos magos
+
+- **Curva de Magic Level própria** (`magicGrowth` em `src/data/vocations.ts`): mana exigida por nível =
+  `60 × crescimento^ML × multiplicador`. Sorcerer e Druid 1,18; Paladin 1,3; Knight 1,4 (antes todos 1,25, o que deixava o
+  Knight só ~5 níveis atrás dos magos). Medido em 3 h de jogo: magos ML ~35, Paladin ~18, Knight ~14.
+- **Cura pelo Magic Level**: *Respiro Vital* = (0,3·nível + 3,2·ML + 20) × modificador de cura (Sorcerer 1,05, Druid 1,3,
+  Paladin 0,85, Knight 0,75); *Cura Intensa* (Druid) = 0,5·nível + 4,4·ML + 30. No nível 50: mago com ML 40 cura ~165,
+  Knight com ML 12 ~55.
+- **Mana que acompanha o nível** (`manaPerLevel`): as magias de ataque de Sorcerer e Druid custam
+  `mana base + nível × fator` (Faísca/Espinho +0,25; Lança de Chamas +0,45; Rajada Glacial +0,35; Explosão Ígnea +0,65;
+  Cura Intensa +0,3 — o dobro disso estrangulava o Druid: nível 31 em vez de 52 em 3 h). O dano delas cresce com o nível e o ML; o custo agora também, e a poção de mana volta a contar.

@@ -12,7 +12,8 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
   const itemLog: { itemId: string; at: number }[] = [];
   const damageLog: { targetId: string; amount: number; blocked: boolean }[] = [];
   const attackLog: { sourceId: string; targetId: string; at: number }[] = [];
-  sim.events.on('spellCast', (e) => castLog.push({ spellId: e.spellId, at: sim.world.now }));
+  // só as magias do jogador (as dos heróis também passam pelo barramento principal)
+  sim.events.on('spellCast', (e) => e.casterId === sim.world.human.id && castLog.push({ spellId: e.spellId, at: sim.world.now }));
   sim.events.on('itemUsed', (e) => itemLog.push({ itemId: e.itemId, at: sim.world.now }));
   sim.events.on('damage', (e) => damageLog.push({ targetId: e.targetId, amount: e.amount, blocked: e.blocked }));
   sim.events.on('attack', (e) => attackLog.push({ sourceId: e.sourceId, targetId: e.targetId, at: sim.world.now }));

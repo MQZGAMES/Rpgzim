@@ -8,6 +8,7 @@ import type { Rng } from '../../domain/value-objects/rng';
 import type { LootGenerator } from '../../domain/rules/loot';
 import type { GameMap } from '../world/GameMap';
 import type { SocialState } from '../social/social';
+import type { MarketState } from '../../domain/rules/market';
 import type { Corpse, HeroEntity, LootContainer, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 
 export interface UiState {
@@ -51,6 +52,8 @@ export interface World {
   monsters: Map<string, MonsterEntity>;
   npcs: Map<string, NpcEntity>;
   lootBags: Map<string, LootContainer>;
+  /** Mercado do banco (anúncios de todos os personagens, salvo à parte no aparelho). */
+  market: MarketState;
   corpses: Map<string, Corpse>;
   /** Célula -> id da entidade que a ocupa. */
   occupancy: Map<number, string>;

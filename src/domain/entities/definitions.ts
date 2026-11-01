@@ -135,6 +135,8 @@ export interface SpellDef {
   minLevel: number;
   minMagicLevel: number;
   manaCost: number;
+  /** Mana a mais por nível do personagem (magias de ataque dos magos: o custo acompanha o dano). */
+  manaPerLevel?: number;
   cooldownMs: number;
   /** Alcance (tiles) para alvos ou centro de área. */
   range: number;
@@ -175,6 +177,11 @@ export interface VocationDef {
   regen: { health: number; mana: number };
   /** Dificuldade de treino por skill: quanto menor, mais rápido evolui. */
   skillMultipliers: Record<SkillId, number>;
+  /**
+   * Crescimento da mana exigida a cada Magic Level desta vocação (o padrão é o do balanceamento). Magos têm a curva
+   * mais suave (o ML deles fica muito acima), Knight a mais íngreme.
+   */
+  magicGrowth?: number;
   /** Modificadores de dano/cura por categoria. */
   damage: { melee: number; distance: number; magic: number; healing: number };
   /** Redução de dano físico adicional (0..1). */
@@ -386,7 +393,8 @@ export type HeroLineKey =
   | 'supplyRun'
   | 'healAlly'
   | 'holdPos'
-  | 'orderAttack';
+  | 'orderAttack'
+  | 'marketBuy';
 
 export interface HeroDef {
   id: string;

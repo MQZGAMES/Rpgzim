@@ -10,7 +10,7 @@ import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { actorById, partyOf } from '../social/social';
 import { isPz } from '../world/GameMap';
-import { pathTo, tryStep } from './movement';
+import { greedyStepToward, pathTo, tryStep } from './movement';
 
 /** Velocidade atual do ator (tiles/s): base + buffs, lentidão e o fôlego de quem segue o líder e ficou para trás. */
 export function actorSpeed(w: World, p: PlayerEntity): number {
@@ -82,11 +82,12 @@ export function trailStep(w: World, p: PlayerEntity, tolerance: number): 'arrive
 export function chaseStep(w: World, p: PlayerEntity, t: MonsterEntity | PlayerEntity, stop: number): boolean {
   if (isPz(w.map, p.x, p.y)) return false;
   const cache = p.chasePath;
-  const targetMoved = !cache || chebyshev(cache.goal, t) > 2;
+  // (o alvo andou 2 casas já é rota velha: com 3 o perseguidor ia até onde o alvo estava e parecia travado)
+  const targetMoved = !cache || chebyshev(cache.goal, t) > 1;
   const exhausted = !cache || cache.path.length === 0;
   // replaneja quando o alvo andou, o caminho acabou ou já passou do tempo (a rota envelhece com a vida em volta)
   if (targetMoved || exhausted || w.now >= p.chaseRecalcAt) {
-    p.chaseRecalcAt = w.now + 600;
+    p.chaseRecalcAt = w.now + 400;
     const path = pathTo(w, p, { x: t.x, y: t.y }, false, { stopWithin: stop, maxNodes: 2500 });
     p.chasePath = path?.length ? { goal: { x: t.x, y: t.y }, path } : null;
   }
@@ -103,8 +104,8 @@ export function chaseStep(w: World, p: PlayerEntity, t: MonsterEntity | PlayerEn
     route.path.shift();
     return true;
   }
-  // bloqueado (alguém no caminho): refaz agora, sem esperar
+  // bloqueado (alguém no caminho): desvia na hora com um passo que aproxime e refaz a rota no próximo passo
   p.chaseRecalcAt = 0;
   p.chasePath = null;
-  return false;
+  return greedyStepToward(w, p, t.x, t.y, actorSpeed(w, p), false);
 }

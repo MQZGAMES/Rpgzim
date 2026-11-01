@@ -37,8 +37,8 @@ export function gainExperience(w: World, amount: number): void {
 export function trainPlayerSkill(w: World, skill: SkillId, amount: number): void {
   if (amount <= 0) return;
   const c = w.player.character;
-  const mult = w.data.vocations[c.vocation].skillMultipliers[skill];
-  const res = trainSkill(skill, c.skills[skill], amount, mult, w.data.balance);
+  const voc = w.data.vocations[c.vocation];
+  const res = trainSkill(skill, c.skills[skill], amount, voc.skillMultipliers[skill], w.data.balance, voc.magicGrowth);
   c.skills[skill] = res.state;
   if (res.levelsGained > 0) {
     refreshStats(w);

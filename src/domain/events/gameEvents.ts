@@ -49,6 +49,10 @@ export interface GameEventMap extends Record<string, unknown> {
   actorRespawned: { entityId: string };
   /** Um herói pediu para salvar o próprio progresso. */
   heroSaveRequested: { heroId: string; reason: string };
+  /** Anúncios do mercado mudaram (salvar e atualizar a tela). */
+  marketChanged: Record<string, never>;
+  /** Um personagem entrou ou saiu do jogo (logado com IA). */
+  heroesChanged: Record<string, never>;
   // ---- grupo e PK
   partyInvite: { fromId: string; toId: string; fromName: string; toName: string };
   partyChanged: Record<string, never>;

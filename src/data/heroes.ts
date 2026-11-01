@@ -114,6 +114,7 @@ const boladex: HeroDef = {
     healAlly: ['Segura, {player}, tô te curando!', 'Cura indo, {player}!'],
     holdPos: ['Posição segurada. Daqui não saio!', 'Fico aqui. Quem chegar, apanha.'],
     orderAttack: ['Entendido! Todo mundo nesse alvo!', 'Foco nele!'],
+    marketBuy: ['Achei mais barato no mercado do banco!', 'Mercado primeiro, loja depois. Economia é tudo.'],
   },
 };
 
@@ -255,3 +256,36 @@ export const HEROES: Readonly<Record<string, HeroDef>> = {
   [manoCura.id]: manoCura,
   [distanciado.id]: distanciado,
 };
+
+/** Falas neutras (sem o nome de nenhum herói) para personagens criados pelo jogador que jogam sozinhos. */
+const neutral: Partial<Record<keyof HeroDef['lines'], readonly string[]>> = {
+  levelUp: ['Nível {level}! Subindo!', 'Mais um nível: {level}!'],
+  idle: ['Dia tranquilo em Pedraluz.', 'Alguém aí quer caçar junto?', 'Hora de planejar a próxima caça.'],
+  greetPlayer: ['Oi, {player}! Bora caçar?', 'Fala, {player}! Tudo certo por aí?'],
+  sell: ['Vendido! +{gold} de ouro na bolsa.', 'Negócio fechado.'],
+  bank: ['Guardando um pouco no banco.', 'Ouro no banco, cabeça tranquila.'],
+  status: ['Nível {level}, {area}. {gold} de ouro e {potions} poções.'],
+};
+
+/**
+ * Personagem criado pelo jogador jogando sozinho (logado pela lista de online): mesma IA dos heróis, com as falas do
+ * herói da mesma vocação (trocando as que citam o nome dele) e um temperamento próprio, fixo para cada personagem.
+ */
+export function customHeroDef(c: { id: string; name: string; vocation: HeroDef['vocation'] }): HeroDef {
+  const base = Object.values(HEROES).find((h) => h.vocation === c.vocation) ?? boladex;
+  // temperamento estável derivado do id (cada personagem tem o seu jeito, sempre o mesmo)
+  let seed = [...c.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const next = () => {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    return 0.3 + ((seed >>> 8) % 1000) / 1000 * 0.5;
+  };
+  return {
+    id: c.id,
+    slotId: c.id,
+    name: c.name,
+    title: base.title,
+    vocation: c.vocation,
+    temperament: { bravery: next(), greed: next(), discipline: next(), sociability: next(), caution: next() },
+    lines: { ...base.lines, ...neutral } as HeroDef['lines'],
+  };
+}

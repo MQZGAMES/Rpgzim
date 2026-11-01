@@ -309,6 +309,12 @@ export class EntityViews {
       v.sync(n, now, true, 1.6);
       v.setLabelVisible(true);
     }
+    // quem deslogou some da tela
+    for (const [id, v] of this.heroes)
+      if (!w.heroes.has(id)) {
+        v.destroy();
+        this.heroes.delete(id);
+      }
     for (const h of w.heroes.values()) {
       const v = this.heroes.get(h.id) ?? this.addHero(h);
       v.container.setVisible(visible(h));

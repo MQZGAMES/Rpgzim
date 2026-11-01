@@ -11,6 +11,14 @@ import type { SaveService } from '../../game/persistence/SaveService';
 import type { AudioService } from '../../game/audio/AudioService';
 import { buildSnapshot, type UiSnapshot } from './snapshot';
 import { heroSnapshot } from '../../game/ai/heroes';
+import { customHeroDef } from '../../data/heroes';
+import { parseMarket } from '../../domain/rules/market';
+import type { HeroDef } from '../../domain/entities/definitions';
+
+/** Herói fixo do jogo (Boladex, Maguim...) ou um personagem criado pelo jogador jogando com a IA. */
+function heroDefOf(data: GameData, c: CharacterState): HeroDef {
+  return Object.values(data.heroes).find((d) => d.slotId === c.id) ?? customHeroDef(c);
+}
 import { canAttackActor, type PartySetting } from '../../game/social/social';
 import { createLocalStore, createSnapshotStore, type Panel, type Store, type UiLocalState } from './store';
 
@@ -25,13 +33,34 @@ export interface SessionOptions {
   saves: SaveService;
   audio: AudioService;
   touch: boolean;
-  /** Personagens-heróis com vida própria (os que não estão sendo jogados). */
+  /** Personagens que entram no jogo já logados, jogando com IA (os heróis por padrão). */
   heroes?: CharacterState[];
+  /** Personagens salvos fora do jogo: aparecem na lista de online com a opção de logar. */
+  offline?: CharacterState[];
   /** Callback ao sair para o menu. */
   onExit: () => void;
 }
 
 const AUTO_KEY = 'rpgzim:auto';
+const MARKET_KEY = 'rpgzim:market';
+/** Quem o jogador deixou logado/deslogado (id do personagem -> logado?). Sem registro, só os heróis entram. */
+export const ONLINE_KEY = 'rpgzim:online';
+
+/** Preferência de login com IA salva neste aparelho. */
+export function onlinePrefs(): Record<string, boolean> {
+  try {
+    return (JSON.parse(localStorage.getItem(ONLINE_KEY) ?? '{}') as Record<string, boolean>) ?? {};
+  } catch {
+    return {};
+  }
+}
+function setOnlinePref(id: string, on: boolean): void {
+  try {
+    localStorage.setItem(ONLINE_KEY, JSON.stringify({ ...onlinePrefs(), [id]: on }));
+  } catch {
+    // sem armazenamento: vale só nesta partida
+  }
+}
 
 export class GameSession {
   readonly sim: GameSimulation;
@@ -56,10 +85,15 @@ export class GameSession {
     let character = opts.character;
     // personagem salvo morto renasce no templo com a vida cheia
     const restore = character.health > 0;
-    const heroes = (opts.heroes ?? []).flatMap((hc) => {
-      const hero = Object.values(opts.data.heroes).find((d) => d.slotId === hc.id);
-      return hero && hc.id !== character.id ? [{ hero, character: hc }] : [];
-    });
+    const heroes = (opts.heroes ?? [])
+      .filter((hc) => hc.id !== character.id)
+      .map((hc) => ({ hero: heroDefOf(opts.data, hc), character: hc }));
+    let market;
+    try {
+      market = parseMarket(opts.data, JSON.parse(localStorage.getItem(MARKET_KEY) ?? 'null'));
+    } catch {
+      market = undefined;
+    }
     this.sim = new GameSimulation({
       data: opts.data,
       map: opts.map,
@@ -67,7 +101,9 @@ export class GameSession {
       restorePosition: restore,
       heroes,
       clock: Date.now,
+      market,
     });
+    this.offline = (opts.offline ?? []).filter((c) => c.id !== character.id);
     character = this.sim.world.player.character;
     if (!restore) {
       character.health = this.sim.world.player.stats.maxHealth;
@@ -84,7 +120,54 @@ export class GameSession {
     this.onExit = opts.onExit;
     this.snapshot = createSnapshotStore(buildSnapshot(this.sim, 0));
     this.local = createLocalStore(opts.touch);
+    this.publishOffline();
     this.wireEvents();
+  }
+
+  /** Personagens fora do jogo (o progresso salvo deles). */
+  private offline: CharacterState[];
+  private publishOffline(): void {
+    this.local.update({
+      offline: this.offline.map((c) => ({ id: c.id, name: c.name, vocation: c.vocation, level: c.level })),
+    });
+  }
+
+  /** Loga um personagem salvo: ele entra no mundo jogando com a IA da vocação e do nível dele. */
+  loginCharacter(id: string): boolean {
+    const c = this.offline.find((x) => x.id === id);
+    if (!c) return false;
+    this.offline = this.offline.filter((x) => x !== c);
+    const h = this.sim.addHero(heroDefOf(this.sim.world.data, c), structuredClone(c));
+    setOnlinePref(id, true);
+    this.publishOffline();
+    this.pushMessage(`${h.character.name} entrou no jogo (joga sozinho com a IA).`, 'system');
+    this.audio.play('ui');
+    this.dirty = true;
+    return true;
+  }
+
+  /** Desloga um personagem que joga com IA: salva o progresso e tira do mundo. */
+  async logoutCharacter(heroId: string): Promise<boolean> {
+    const h = [...this.sim.world.heroes.values()].find((x) => x.hero.id === heroId || x.id === heroId);
+    if (!h) return false;
+    const snap = heroSnapshot(this.sim.world, h);
+    this.sim.removeHero(h.hero.id);
+    this.offline = [...this.offline, snap];
+    setOnlinePref(snap.id, false);
+    this.publishOffline();
+    this.pushMessage(`${snap.name} saiu do jogo.`, 'system');
+    this.audio.play('ui');
+    this.dirty = true;
+    await this.saves.save(snap).catch(() => undefined);
+    return true;
+  }
+
+  private saveMarket(): void {
+    try {
+      localStorage.setItem(MARKET_KEY, JSON.stringify(this.sim.world.market));
+    } catch {
+      // sem armazenamento: o mercado vale só nesta partida
+    }
   }
 
   /** Ajudas automáticas (loot e poção): ficam no aparelho, valem para qualquer personagem. */
@@ -126,6 +209,8 @@ export class GameSession {
       'regionEntered',
       'buildingChanged',
       'xpGained',
+      'marketChanged',
+      'heroesChanged',
     ] as const) {
       this.disposers.push(ev.on(type, markDirty));
     }
@@ -152,6 +237,7 @@ export class GameSession {
       ),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
+      ev.on('marketChanged', () => this.saveMarket()),
       ev.on('partyChanged', () => {
         const has = !!this.sim.world.social.party;
         // grupo formado pelo menu do personagem: abre os controles (pela lista de online, só avisa)
@@ -599,6 +685,30 @@ export class GameSession {
   depotWithdraw(depotIndex: number): boolean {
     const ok = this.sim.depotWithdraw(depotIndex);
     if (ok) this.audio.play('pickup');
+    this.dirty = true;
+    return ok;
+  }
+  marketList(from: 'inventory' | 'depot', index: number, price: number): boolean {
+    const ok = this.sim.marketList(from, index, price);
+    this.audio.play(ok ? 'coin' : 'error');
+    this.dirty = true;
+    return ok;
+  }
+  marketAutoList(from: 'inventory' | 'depot', index: number): boolean {
+    const ok = this.sim.marketAutoList(from, index);
+    this.audio.play(ok ? 'coin' : 'error');
+    this.dirty = true;
+    return ok;
+  }
+  marketBuy(listingId: string): boolean {
+    const ok = this.sim.marketBuy(listingId);
+    this.audio.play(ok ? 'coin' : 'error');
+    this.dirty = true;
+    return ok;
+  }
+  marketCancel(listingId: string): boolean {
+    const ok = this.sim.marketCancel(listingId);
+    this.audio.play(ok ? 'pickup' : 'error');
     this.dirty = true;
     return ok;
   }

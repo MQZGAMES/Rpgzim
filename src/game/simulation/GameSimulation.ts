@@ -16,7 +16,7 @@ import { isPz, isSolid } from '../world/GameMap';
 import type { GameMap } from '../world/GameMap';
 import type { HeroDef } from '../../domain/entities/definitions';
 import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
-import { canEnter, isMoving, pathTo, placeOccupant, settle, teleport, tryStep } from '../movement/movement';
+import { canEnter, isMoving, pathTo, placeOccupant, removeOccupant, settle, teleport, tryStep } from '../movement/movement';
 import {
   currentActorTarget,
   currentTarget,
@@ -75,6 +75,8 @@ import {
   type PartySetting,
 } from '../social/social';
 import { addHero } from '../ai/heroes';
+import { emptyMarket, type MarketState } from '../../domain/rules/market';
+import { marketAutoList, marketBuy, marketCancel, marketCollect, marketList } from '../economy/marketService';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, summonHero, updateHeroBrain } from '../ai/heroBrain';
@@ -95,6 +97,8 @@ export interface SimulationOptions {
   clock?: () => number;
   /** Heróis com vida própria presentes no mundo (personagens não controlados pelo jogador). */
   heroes?: { hero: HeroDef; character: CharacterState }[];
+  /** Mercado salvo (anúncios e vendas a receber). */
+  market?: MarketState;
 }
 
 /** Depois de atacar, quem segue o líder fica caçando em paz por este tempo antes de voltar a segui-lo. */
@@ -171,6 +175,7 @@ export class GameSimulation {
       monsters: new Map(),
       npcs: new Map(),
       lootBags: new Map(),
+      market: opts.market ?? emptyMarket(),
       corpses: new Map(),
       occupancy: new Map(),
       doorsOpen: new Map(),
@@ -222,6 +227,7 @@ export class GameSimulation {
     refreshStats(w);
     updateRegion(w);
     for (const hc of opts.heroes ?? []) this.addHero(hc.hero, hc.character);
+    marketCollect(w, w.human);
   }
 
   /** Coloca um herói (personagem com vida própria) no mundo. */
@@ -232,6 +238,31 @@ export class GameSimulation {
       refreshStats(w);
       updateRegion(w);
     });
+    marketCollect(w, h);
+    w.events.emit('heroesChanged', {});
+    return h;
+  }
+
+  /**
+   * Desloga um herói: sai do grupo, larga alvos e convites e some do mundo (o progresso deve ser salvo antes por quem
+   * chama). Retorna o herói removido.
+   */
+  removeHero(heroId: string): HeroEntity | null {
+    const w = this.world;
+    const h = [...w.heroes.values()].find((x) => x.hero.id === heroId || x.id === heroId);
+    if (!h) return null;
+    if (partyOf(w, h.id)) leaveParty(w, h.id);
+    w.social.invites = w.social.invites.filter((i) => i.fromId !== h.id && i.toId !== h.id);
+    for (const m of w.monsters.values())
+      if (m.targetId === h.id) {
+        m.targetId = null;
+        if (m.state === 'chasing' || m.state === 'attacking') m.state = 'returning';
+      }
+    for (const a of allActors(w)) if (a.targetId === h.id) a.targetId = null;
+    removeOccupant(w, h);
+    w.heroes.delete(h.id);
+    w.events.emit('heroesChanged', {});
+    w.events.emit('partyChanged', {});
     return h;
   }
 
@@ -381,7 +412,10 @@ export class GameSimulation {
     if (t && !stand && !p.chasePaused && !weaponCanReach(w, t)) {
       // sem arma (só magias): para a uns 4 tiles do alvo, no alcance dos feitiços
       const spellOnly = !p.character.equipment.mainHand && p.character.vocation !== 'knight';
-      const stop = spellOnly ? 4 : p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
+      let stop = spellOnly ? 4 : p.stats.weapon.range <= 1 ? 1 : Math.max(1, p.stats.weapon.range - 1);
+      // já "no alcance" mas sem acertar (árvore ou parede no meio da mira): chega mais perto em vez de ficar parado
+      const d = Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y));
+      if (d <= stop) stop = Math.max(1, d - 1);
       chaseStep(w, p, t, stop);
     }
   }
@@ -542,6 +576,18 @@ export class GameSimulation {
   }
   depotDeposit(invIndex: number): boolean {
     return depotDeposit(this.world, invIndex);
+  }
+  marketList(from: 'inventory' | 'depot', index: number, price: number): boolean {
+    return marketList(this.world, from, index, price);
+  }
+  marketAutoList(from: 'inventory' | 'depot', index: number): boolean {
+    return marketAutoList(this.world, from, index);
+  }
+  marketBuy(listingId: string): boolean {
+    return marketBuy(this.world, listingId);
+  }
+  marketCancel(listingId: string): boolean {
+    return marketCancel(this.world, listingId);
   }
   depotWithdraw(depotIndex: number): boolean {
     return depotWithdraw(this.world, depotIndex);

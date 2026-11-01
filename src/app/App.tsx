@@ -8,9 +8,10 @@ import { ServicesProvider, useServices } from './providers/services';
 import { TitleScreen } from './routes/TitleScreen';
 import { CreateCharacter } from './routes/CreateCharacter';
 import { GameScreen } from './routes/GameScreen';
-import { loadHeroesFor } from './heroes';
+import { loadRosterFor } from './heroes';
+import { onlinePrefs } from '../integration/game-ui-bridge/GameSession';
 
-type Screen = { kind: 'title' } | { kind: 'create' } | { kind: 'game'; character: CharacterState; heroes: CharacterState[] } | { kind: 'error'; message: string };
+type Screen = { kind: 'title' } | { kind: 'create' } | { kind: 'game'; character: CharacterState; heroes: CharacterState[]; offline: CharacterState[] } | { kind: 'error'; message: string };
 
 function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -30,14 +31,18 @@ function Screens() {
     } catch {
       /* segue mesmo sem armazenamento persistente */
     }
-    setScreen({ kind: 'game', character: c, heroes: await loadHeroesFor(saves, data, c.id) });
+    const r = await loadRosterFor(saves, data, c.id, onlinePrefs());
+    setScreen({ kind: 'game', character: c, heroes: r.online, offline: r.offline });
   };
 
   const load = async (slotId: string) => {
     audio.unlock();
     try {
       const c = await saves.load(slotId);
-      if (c) setScreen({ kind: 'game', character: c, heroes: await loadHeroesFor(saves, data, c.id) });
+      if (c) {
+        const r = await loadRosterFor(saves, data, c.id, onlinePrefs());
+        setScreen({ kind: 'game', character: c, heroes: r.online, offline: r.offline });
+      }
       else setScreen({ kind: 'error', message: 'Save não encontrado.' });
     } catch (e) {
       setScreen({ kind: 'error', message: `Save inválido ou corrompido: ${(e as Error).message}` });
@@ -50,7 +55,7 @@ function Screens() {
     case 'create':
       return <CreateCharacter onBack={toTitle} onCreate={(n, v) => void create(n, v)} />;
     case 'game':
-      return <GameScreen key={screen.character.id} character={screen.character} heroes={screen.heroes} onExit={toTitle} />;
+      return <GameScreen key={screen.character.id} character={screen.character} heroes={screen.heroes} offline={screen.offline} onExit={toTitle} />;
     case 'error':
       return (
         <div className="fixed inset-0 flex items-center justify-center p-4">

@@ -95,10 +95,10 @@ describe('magias de área e magias novas', () => {
     expect(GAME_DATA.spells.steel_whirlwind).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 60 });
   });
 
-  it('Knight e Paladin ganharam uma magia (todas as vocações com 7)', () => {
+  it('Knight e Paladin ganharam uma magia (7 na barra padrão + 2 opcionais por vocação)', () => {
     expect(GAME_DATA.vocations.knight.spells).toContain('crippling_blow');
     expect(GAME_DATA.vocations.paladin.spells).toContain('divine_shot');
-    for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells).toHaveLength(7);
+    for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells).toHaveLength(9);
     expect(GAME_DATA.spells.crippling_blow!.slow).toBeTruthy();
   });
 

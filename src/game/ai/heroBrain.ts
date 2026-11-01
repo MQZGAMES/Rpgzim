@@ -31,6 +31,7 @@ import {
   SAFE_MARGIN,
 } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
+import { spellManaCost } from '../../domain/rules/spells';
 import { aoeWorth, backlineStep, focusPick, personaOf } from './heroTactics';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
@@ -49,7 +50,9 @@ import {
   useInventoryItem,
 } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
-import { bankGold } from '../economy/depotService';
+import { bankGold, depotWithdraw } from '../economy/depotService';
+import { marketAutoList, marketBuy, marketCancel } from '../economy/marketService';
+import type { MarketListing } from '../../domain/rules/market';
 import { lureTankId, sparMode } from '../social/social';
 import {
   acceptInvite,
@@ -65,6 +68,7 @@ import {
   leaveParty,
   partyOf,
   pendingInviteFor,
+  pkNow,
   sameParty,
 } from '../social/social';
 
@@ -356,6 +360,7 @@ export const heroHelpers = {
   upgradeBudget: (h: HeroEntity, budget: number): number => upgradeBudget(h, budget),
   collectLoot: (w: World, h: HeroEntity): void => collectLootWhileFighting(w, h),
   fightSpells: (w: World, h: HeroEntity, target: MonsterEntity): void => fightSpells(w, h, target, 0),
+  useMarket: (w: World, h: HeroEntity): void => useMarket(w, h),
 };
 
 /** Poções de vida que restam quando ele decide ir repor o estoque (antes de ficar seco no meio das criaturas). */
@@ -459,8 +464,9 @@ function needMargin(w: World, h: HeroEntity): number {
     (h.hero.temperament.bravery - 0.5) * 0.4 -
     h.brain.bold * 0.35 +
     (h.brain.frugal ? 0.3 : 0) +
-    scarce -
-    (isRanged(h.character.vocation) ? 0.05 : 0) +
+    scarce +
+    // quem luta de longe não aguenta ser cercado (as criaturas contornam e tomam as casas em volta): mais folga
+    (isRanged(h.character.vocation) ? 0.2 : 0) +
     personaOf(h.hero.temperament).margin
   );
 }
@@ -744,7 +750,7 @@ function canHitNow(w: World, h: HeroEntity): boolean {
   if (mana >= (weapon.manaCost ?? 0)) return true;
   return w.data.vocations[h.character.vocation].spells.some((id) => {
     const s = w.data.spells[id];
-    return !!s && s.effect === 'damage' && s.manaCost <= mana;
+    return !!s && s.effect === 'damage' && spellManaCost(s, h.character.level) <= mana;
   });
 }
 
@@ -883,7 +889,14 @@ function survive(w: World, h: HeroEntity): void {
   }
   if (pct < (grouped ? 0.75 : 0.65) && h.character.vocation === 'druid' && tryCast(w, h, 'sap_blessing')) {
     // Bênção da Seiva: cura forte + regeneração (e cura o grupo)
+  } else if (
+    pct < (grouped ? 0.7 : 0.6) &&
+    // (a Luz Restauradora só com mana sobrando: sem mana o Paladin fica sem Corrida para fugir)
+    ((h.character.mana > h.stats.maxMana * 0.5 && tryCast(w, h, 'holy_light')) || tryCast(w, h, 'second_wind'))
+  ) {
+    // Paladin: Luz Restauradora; Knight: Segundo Fôlego (curam mais que o Respiro Vital para eles)
   } else if (pct < (grouped ? 0.7 : 0.6)) tryCast(w, h, 'light_heal');
+  if (attackers.length >= 2 && pct < 0.7) tryCast(w, h, 'stone_skin');
   // em grupo, ferido e com criatura em cima: recua para trás dos colegas (eles pegam a criatura) em vez de apanhar até o fim
   if (grouped && attackers.length && pct < 0.55 && h.character.vocation !== 'knight')
     kiteToAlly(w, h, attackers);
@@ -912,8 +925,12 @@ function survive(w: World, h: HeroEntity): void {
   // cercado só pesa quando a luta não é folgada (com a régua em dia e poções, é só bater e beber)
   const swarmed = attackers.length >= 4 && pct < 0.7 && a.margin < 1.5;
   // "trem" de criaturas atrás dele e a luta não é segura: sai antes de a vida (ou o escudo) começar a cair
+  // (já cercado — 2+ encostadas — e com vida e poções, correr só entrega as costas: as criaturas contornam e alcançam)
+  const pinned =
+    attackers.filter((m) => chebyshev(m, h) <= 1).length >= 2 && pct > 0.6 && potionsOf(w, h) >= 4;
   const train =
     !!a &&
+    !pinned &&
     a.mons.filter((m) => m.targetId === h.id).length >= 3 &&
     a.margin < fleeMargin + 0.35 - h.brain.bold * 0.1;
   // poções no fim: foge cedo, enquanto ainda dá tempo (sem dinheiro para repor ele só caça o que é folgado, ver needMargin)
@@ -1119,7 +1136,7 @@ function decide(w: World, h: HeroEntity): void {
         ? t.discipline * 0.45 + (potionsOf(w, h) <= LOW_POTIONS && !canResupply(w, h) ? 0.5 : 0)
         : 0,
     ],
-    ['social', t.sociability * 0.08 + (humanNear ? 0.06 : 0)],
+    ['social', t.sociability * 0.03 + (humanNear ? 0.04 : 0)], // pouco tempo de praça: a caça é o que rende
     ['invite', canInviteHuman(w, h) ? t.sociability * 0.5 + affinityOf(h, human.id) * 0.4 : 0],
   ];
   const total = options.reduce((s2, [, v]) => s2 + Math.max(0, v) ** 2, 0);
@@ -1143,7 +1160,7 @@ function decide(w: World, h: HeroEntity): void {
         );
       return startTraining(w, h);
     case 'social':
-      return setMode(w, h, 'social', 10000 + w.rng.next() * 12000);
+      return setMode(w, h, 'social', 5000 + w.rng.next() * 5000);
     case 'invite':
       inviteHuman(w, h);
       return startHunt(w, h);
@@ -1567,6 +1584,8 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       // quem tenta escapar (ou está quase morto e vai fugir) leva o golpe que deixa lento
       if (dist <= 1 && !slowed && (fleeing || target.hp < target.def.health * 0.3) && tryCast(w, h, 'crippling_blow'))
         return;
+      if ((engagedAround(w, h, h, 2) >= 2 || target.hp > target.def.health * 0.6) && manaPct > 0.5)
+        tryCast(w, h, 'berserk');
       if (dist <= 1 && hpPct(h) > 0.5 && tryCast(w, h, 'brutal_strike')) return;
       if (dist <= 1 && manaPct > 0.6 && tryCast(w, h, 'crippling_blow')) return;
       if (adjacent >= 3 && manaPct > 0.3) tryCast(w, h, 'steel_whirlwind'); // cercado: o giro acerta todos
@@ -1581,13 +1600,21 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         cast('fire_nova')
       )
         return;
+      if (
+        manaPct > 0.35 &&
+        !wakesIdle(w, target, 1) &&
+        aoeWorth(w, h, 'inferno_rain', 'flame_lance', around(1), rich) &&
+        cast('inferno_rain')
+      )
+        return;
+      if (manaPct > 0.4 && cast('thunder_strike')) return;
       if (manaPct > 0.3 && cast('flame_lance')) return;
       if (manaPct > 0.2) cast('arcane_bolt');
       return;
     case 'druid':
       // alvo fugindo (ou se afastando enquanto ele persegue) e ainda sem lentidão: Rajada Glacial primeiro, para
       // deixá-lo lento; só depois as outras magias
-      if (fleeing && !slowed && manaPct > 0.12 && cast('frost_burst')) return;
+      if (fleeing && !slowed && manaPct > 0.12 && (cast('ice_shard') || cast('frost_burst'))) return;
       if (engagedOrJoining(w, h).length >= 3 && manaPct > 0.75 && !h.buffs.some((b) => b.kind === 'manaShield'))
         tryCast(w, h, 'mana_shield');
       if (
@@ -1609,6 +1636,13 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       )
         return;
       if (manaPct > 0.3 && !wakesIdle(w, target, 2) && aoeWorth(w, h, 'arrow_rain', 'holy_arrow', around(2), rich) && cast('arrow_rain'))
+        return;
+      if (
+        manaPct > 0.35 &&
+        !wakesIdle(w, h, 2) &&
+        aoeWorth(w, h, 'sacred_fire', 'holy_arrow', engagedAround(w, h, h, 2), rich) &&
+        cast('sacred_fire')
+      )
         return;
       if (manaPct > 0.55 && cast('divine_shot')) return;
       if (manaPct > 0.25) cast('holy_arrow');
@@ -2132,7 +2166,10 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
     const needBank = noWeapon
       ? c.gold + earn < (up?.price ?? 0) + price * 10
       : !!up && c.gold + earn - 30 < up.price;
-    if (c.bankGold > 0 && (needBank || ((wantPotions || !!manaGoal(w, h)) && c.gold + earn < price * 14)))
+    if (
+      (c.bankGold > 0 && (needBank || ((wantPotions || !!manaGoal(w, h)) && c.gold + earn < price * 14))) ||
+      marketDeals(w, h).length // o mercado antes das lojas
+    )
       steps.unshift({ kind: 'bank', op: 'withdraw' });
     // não volta à vila só por causa de upgrade nos próximos minutos
     h.brain.nextUpgradeTripAt = w.now + 8 * 60000;
@@ -2183,7 +2220,8 @@ function town(w: World, h: HeroEntity): void {
   // a visita inteira tem limite: resolve rápido e volta a caçar (o que faltou fica para a próxima)
   // a visita inteira tem limite (somado ao tempo da viagem, que pode cruzar o mapa)
   const trip = b.townAnchor ? chebyshev(b.townAnchor, b.townFrom ?? h) * 500 : 0;
-  if (b.town.length && w.now - b.townStartedAt > 75000 + trip) b.town.length = 0;
+  // (decide rápido: o que não deu para resolver em ~45 s fica para a próxima — parado na vila não sobe nível)
+  if (b.town.length && w.now - b.townStartedAt > 45000 + trip) b.town.length = 0;
   const step = b.town[0];
   if (!step) {
     // área protegida não recupera mana: quem vive dela bebe poção de mana antes de sair para caçar
@@ -2203,7 +2241,7 @@ function town(w: World, h: HeroEntity): void {
     const after = b.after;
     b.after = 'decide';
     if (after === 'train') return startTraining(w, h);
-    if (after === 'decide' && w.rng.chance(0.8)) return startHunt(w, h);
+    if (after === 'decide') return startHunt(w, h); // terminou a vila: direto para a caça
     return setMode(w, h, 'decide');
   }
   const done = () => {
@@ -2215,7 +2253,7 @@ function town(w: World, h: HeroEntity): void {
     w.ui.dialog = null;
   };
   // cada etapa tem um limite de tempo (caminho bloqueado, NPC ocupado...)
-  if (w.now - b.stepStartedAt > 30000 + (b.stepStartedAt === b.townStartedAt ? trip : 0)) return done();
+  if (w.now - b.stepStartedAt > 18000 + (b.stepStartedAt === b.townStartedAt ? trip : 0)) return done();
   const npc =
     step.kind === 'shop'
       ? w.npcs.get(step.npcId)
@@ -2247,7 +2285,7 @@ function town(w: World, h: HeroEntity): void {
       if (chebyshev(npc, h) > 10) return goTo(w, h, npc.x, npc.y + 2, 150000);
       interactWith(w, { kind: 'npc', id: npc.id });
       // sem caminho até o NPC: desiste desta etapa depois de algumas tentativas
-      if (!w.ui.pending && !w.ui.dialog && ++b.failures >= 3) return done();
+      if (!w.ui.pending && !w.ui.dialog && ++b.failures >= 2) return done();
     }
     return;
   }
@@ -2354,6 +2392,9 @@ function isUsableLater(w: World, h: HeroEntity, itemId: string): boolean {
 
 function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit', ticket?: number): void {
   const c = h.character;
+  // no banco, o mercado primeiro: o que os outros anunciam pelo preço do NPC (ou menos) sai daqui, não da loja
+  useMarket(w, h);
+  listLootOnMarket(w, h);
   if (op === 'withdraw' && ticket) {
     // saque para uma finalidade exata
     if (ticket > 0) bankGold(w, 'withdraw', Math.min(ticket, c.bankGold));
@@ -2442,7 +2483,18 @@ function retreat(w: World, h: HeroEntity): void {
     h.brain.prepare = potionsOf(w, h) < 6 || hpPct(h) < 0.5;
     return setMode(w, h, 'decide');
   }
-  // corre (Corrida) para a área protegida mais próxima (porta de uma construção), desviando das criaturas
+  // corre (Corrida) para a área protegida mais próxima (porta de uma construção), desviando das criaturas. Sem mana
+  // para a Corrida, bebe uma poção de mana antes: as criaturas contornam obstáculos e alcançam quem foge a pé
+  const haste = w.data.spells.haste;
+  if (
+    haste &&
+    !h.buffs.some((x) => x.kind === 'haste') &&
+    h.character.level >= haste.minLevel &&
+    h.character.mana < spellManaCost(haste, h.character.level)
+  ) {
+    const idx = pickManaPotion(w, h);
+    if (idx >= 0) drinkMana(w, h, idx);
+  }
   tryCast(w, h, 'haste');
   // a porta mais perto (medido: trocar por uma "menos cheia" mais longe matava mais no caminho; a rota já desvia das criaturas)
   const door = [...w.map.doors].sort((a, b) => chebyshev(a, h) - chebyshev(b, h))[0];
@@ -2659,7 +2711,7 @@ function conjurePotions(w: World, h: HeroEntity): void {
   if (h.targetId || engagedByMonsters(w, h) || freeSlots(h.character.inventory) < 3) return;
   const spellId = voc === 'sorcerer' ? 'conjure_mana' : 'conjure_health';
   const spell = w.data.spells[spellId];
-  if (!spell || h.character.mana - spell.manaCost < h.stats.maxMana * 0.5) return;
+  if (!spell || h.character.mana - spellManaCost(spell, h.character.level) < h.stats.maxMana * 0.5) return;
   const lacking = voc === 'sorcerer' ? manaStock(w, h) < manaGoal(w, h) : potionHeal(w, h) < healGoal(h, w.now);
   if (lacking) tryCast(w, h, spellId);
 }
@@ -3105,7 +3157,10 @@ function pk(w: World, h: HeroEntity): void {
   for (const id of PVP_SPELLS[h.character.vocation]) {
     const sp = w.data.spells[id];
     // a rajada, o golpe paralisante e a flecha atordoante abrem a perseguição de quem foge
-    if ((id === 'frost_burst' || id === 'crippling_blow' || id === 'stunning_arrow') && (!fleeing || w.now < victim.slowUntil))
+    if (
+      (id === 'frost_burst' || id === 'crippling_blow' || id === 'stunning_arrow' || id === 'ice_shard') &&
+      (!fleeing || w.now < victim.slowUntil)
+    )
       continue;
     if (!sp || d > Math.max(1, sp.range) || (id === 'brutal_strike' && hpPct(h) <= 0.4)) continue;
     if (manaPct > 0.15 && tryCast(w, h, id)) break;
@@ -3115,8 +3170,8 @@ function pk(w: World, h: HeroEntity): void {
 /** Magias de ataque usadas no PK (alvo único), da mais forte para a mais barata. */
 const PVP_SPELLS: Record<HeroEntity['character']['vocation'], string[]> = {
   knight: ['crippling_blow', 'brutal_strike'],
-  sorcerer: ['flame_lance', 'arcane_bolt'],
-  druid: ['frost_burst', 'earth_thorn'],
+  sorcerer: ['thunder_strike', 'flame_lance', 'arcane_bolt'],
+  druid: ['ice_shard', 'frost_burst', 'earth_thorn'],
   paladin: ['stunning_arrow', 'divine_shot', 'holy_arrow'],
 };
 
@@ -3477,4 +3532,94 @@ function idleTraining(w: World, h: HeroEntity): void {
   if (h.character.mana < h.stats.maxMana * 0.95) return;
   if ([...w.monsters.values()].some((m) => m.alive && m.targetId && chebyshev(m, h) <= 8)) return;
   if (!tryCast(w, h, 'light_heal')) tryCast(w, h, 'haste');
+}
+
+// ------------------------------------------------------------------ mercado do banco
+/** Menor preço de um item nas lojas dos NPCs (Infinity se nenhuma vende). */
+function npcPrice(w: World, itemId: string): number {
+  let best = Infinity;
+  for (const shop of Object.values(w.data.shops))
+    for (const o of shop.sells) if (o.itemId === itemId && o.price < best) best = o.price;
+  return best;
+}
+
+/**
+ * Anúncios do mercado que valem para ele agora: poções pelo preço do NPC ou menos (enquanto falta estoque) e upgrades
+ * que cabem no orçamento (respeitando a meta de equipamento).
+ */
+function marketDeals(w: World, h: HeroEntity): MarketListing[] {
+  const c = h.character;
+  const money = c.gold + c.bankGold - keepGold(w, h);
+  const out: MarketListing[] = [];
+  for (const l of w.market.listings) {
+    if (l.sellerId === c.id) continue;
+    const def = w.data.items[l.itemId];
+    const total = l.price * l.count;
+    if (!def || total > money) continue;
+    if (def.type === 'potion') {
+      if (l.price > npcPrice(w, l.itemId)) continue;
+      const heal = !!def.use?.heal && !def.use.mana;
+      const mana = !!def.use?.mana && !def.use.heal;
+      if (heal && potionHeal(w, h) < healGoal(h, w.now)) out.push(l);
+      else if (mana && manaGoal(w, h) && manaStock(w, h) < manaGoal(w, h)) out.push(l);
+    } else if (def.slot && weaponFits(w, h, def) && !def.weapon?.training && isUpgrade(w.data, c, def)) {
+      const cur = c.equipment[def.slot];
+      const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
+      if (gain >= 5 && total <= Math.max(goalOffer(w, h, money - 40) ? money - 40 : 0, upgradeBudget(h, money - 40)))
+        out.push(l);
+    }
+  }
+  return out;
+}
+
+/** No banco: compra as ofertas boas do mercado (vão para o depósito) e já tira para a mochila / equipa. */
+function useMarket(w: World, h: HeroEntity): void {
+  const c = h.character;
+  let bought = 0;
+  for (let guard = 0; guard < 8; guard++) {
+    const deals = marketDeals(w, h);
+    if (!deals.length) break;
+    // poções pelo menor preço por ponto curado; equipamento pelo maior ganho por ouro
+    const score = (l: MarketListing) => {
+      const def = w.data.items[l.itemId]!;
+      if (def.type === 'potion') return -(l.price / Math.max(1, def.use?.heal ?? def.use?.mana ?? 1)) * 1000;
+      const cur = c.equipment[def.slot!];
+      return (valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0)) / (l.price * l.count);
+    };
+    const l = deals.sort((a, b) => score(b) - score(a))[0]!;
+    if (!marketBuy(w, l.id)) break;
+    bought++;
+    const idx = c.depot.findIndex((st) => st?.itemId === l.itemId);
+    if (idx >= 0) depotWithdraw(w, idx);
+    const def = w.data.items[l.itemId]!;
+    if (def.slot) {
+      const bi = c.inventory.findIndex((st) => st?.itemId === l.itemId);
+      if (bi >= 0 && equipItem(w, bi)) heroSay(w, h, 'upgrade', { item: def.name }, 0);
+    }
+  }
+  if (bought) heroSay(w, h, 'marketBuy', {}, 60000);
+}
+
+/**
+ * Anuncia no mercado (venda automática, 75% do valor) o equipamento do loot que ele venderia ao NPC por bem menos —
+ * no máximo 2 por visita e 4 anúncios abertos.
+ */
+function listLootOnMarket(w: World, h: HeroEntity): void {
+  const c = h.character;
+  // anúncio parado há mais de 30 min ninguém quer: retira e vende ao NPC na próxima loja
+  for (const l of w.market.listings.filter((x) => x.sellerId === c.id && pkNow(w) - x.listedAt > 30 * 60000)) {
+    if (!marketCancel(w, l.id)) continue;
+    const idx = c.depot.findIndex((st) => st?.itemId === l.itemId);
+    if (idx >= 0 && freeSlots(c.inventory) > 1) depotWithdraw(w, idx);
+  }
+  let open = w.market.listings.filter((l) => l.sellerId === c.id).length;
+  for (let i = 0, listed = 0; i < c.inventory.length && listed < 2 && open < 4; i++) {
+    const st = c.inventory[i];
+    const def = st ? w.data.items[st.itemId] : undefined;
+    if (!st || !def?.slot || def.value < 150 || !sellable(w, h, st.itemId)) continue;
+    if (marketAutoList(w, 'inventory', i)) {
+      listed++;
+      open++;
+    }
+  }
 }

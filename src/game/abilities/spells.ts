@@ -4,7 +4,7 @@ import type { SpellDef } from '../../domain/entities/definitions';
 import { chebyshev, type TilePos } from '../../domain/value-objects/position';
 import { GLOBAL_SPELL, remaining, startCooldown } from '../../domain/rules/cooldowns';
 import { mitigate, rollRange, spellRange } from '../../domain/rules/damage';
-import { castFailMessage, validateCast } from '../../domain/rules/spells';
+import { castFailMessage, spellManaCost, validateCast } from '../../domain/rules/spells';
 import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
@@ -126,10 +126,11 @@ export function castSpell(w: World, spellId: string): boolean {
     w.events.emit('itemsChanged', {});
   }
   // custo, cooldowns e treino de Magic Level (mana gasta)
-  c.mana -= spell.manaCost;
+  const cost = spellManaCost(spell, c.level);
+  c.mana -= cost;
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
   startCooldown(p.cooldowns, GLOBAL_SPELL, w.now, w.data.balance.combat.globalSpellCooldownMs);
-  trainPlayerSkill(w, 'magic', spell.manaCost);
+  trainPlayerSkill(w, 'magic', cost);
   if (spell.cancelSlow) {
     p.slowUntil = 0;
     p.slowFactor = 1;

@@ -3,6 +3,7 @@
 // O cérebro (heroBrain) decide QUANDO usar cada uma; aqui fica só o COMO.
 import type { Temperament } from '../../domain/entities/definitions';
 import { spellRange } from '../../domain/rules/damage';
+import { spellManaCost } from '../../domain/rules/spells';
 import { chebyshev } from '../../domain/value-objects/position';
 import type { HeroEntity, MonsterEntity, PlayerEntity } from '../entities/types';
 import { canEnter } from '../movement/movement';
@@ -82,7 +83,8 @@ export function aoeWorth(w: World, h: PlayerEntity, aoeId: string, singleId: str
   const aoeHit = spellAverage(w, h, aoeId) * n;
   const singleHit = spellAverage(w, h, singleId);
   if (rich) return aoeHit >= singleHit * 1.1;
-  return aoeHit / Math.max(1, aoe.manaCost) >= singleHit / Math.max(1, single.manaCost);
+  const lv = h.character.level;
+  return aoeHit / Math.max(1, spellManaCost(aoe, lv)) >= singleHit / Math.max(1, spellManaCost(single, lv));
 }
 
 // ------------------------------------------------------------------ foco do grupo

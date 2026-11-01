@@ -20,5 +20,13 @@ export function withLateStock(shops: ShopDef[]): ShopDef[] {
       return { ...s, sells: [...s.sells, ...mage.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price }))], buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price: Math.floor(price / 2) }))] };
     if (s.id === 'general') return { ...s, buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value }))] };
     return s;
+  }).map((s, _i, all) => {
+    // todas as poções existentes à venda em quem vende poção (Alquimia e Banca do Ilário), listadas primeiro
+    const alch = all.find((x) => x.id === 'potions');
+    if (!alch || !s.sells.some((o) => o.itemId.startsWith('potion_'))) return s;
+    const potions = alch.sells.filter((o) => o.itemId.startsWith('potion_')).sort((a, b) => a.price - b.price);
+    const rest = s.sells.filter((o) => !o.itemId.startsWith('potion_'));
+    const own = new Map(s.sells.filter((o) => o.itemId.startsWith('potion_')).map((o) => [o.itemId, o.price]));
+    return { ...s, sells: [...potions.map((o) => ({ itemId: o.itemId, price: own.get(o.itemId) ?? o.price })), ...rest] };
   });
 }
