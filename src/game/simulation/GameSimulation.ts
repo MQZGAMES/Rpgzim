@@ -60,6 +60,7 @@ import {
   acceptInvite,
   actorName,
   partyOf,
+  actorById,
   configureParty,
   declineInvite,
   disbandParty,
@@ -347,6 +348,7 @@ export class GameSimulation {
     const speed = actorSpeed(w, p);
     const dir = p.heldDir;
     if (dir) {
+      if (p === w.human) this.goToId = null; // andar por conta própria cancela o "Ir até"
       p.path = null;
       p.pathGoal = null;
       w.ui.pending = null;
@@ -364,6 +366,7 @@ export class GameSimulation {
     // em grupo com outro líder (formação seguir/fila), sem alvo e sem caminho escolhido por você: anda junto do líder.
     // O caminho é refeito a cada ~0,25 s enquanto anda (sem parar entre recálculos) e para perto dele.
     // atacar cancela o seguir: o caminho do seguir é largado ao mirar uma criatura e só volta depois de ~6 s sem combate
+    if (p === w.human && this.goToId && this.goToTick()) return;
     if (p === w.human && p.following && (p.targetId || w.now - p.lastAttackAt < FOLLOW_COMBAT_PAUSE_MS)) {
       p.path = null;
       p.pathGoal = null;
@@ -371,6 +374,7 @@ export class GameSimulation {
     }
     if (
       p === w.human &&
+      !this.goToId &&
       !p.targetId &&
       w.now - p.lastAttackAt >= FOLLOW_COMBAT_PAUSE_MS &&
       (!p.path?.length || p.following) &&
@@ -501,7 +505,54 @@ export class GameSimulation {
     if (ok) this.manualMove();
     return ok;
   }
+  /** "Ir até" (lista de personagens online): personagem que o jogador está indo encontrar. */
+  goToId: string | null = null;
+  private goToReplanAt = 0;
+  /**
+   * Vai andando até o personagem, onde quer que ele esteja (a rota é refeita quando ele se afasta do destino) e para a
+   * 2 tiles dele. Não ataca nada no caminho. Andar, tocar no chão ou viajar pelo mini mapa cancela.
+   */
+  goToActor(id: string): boolean {
+    const w = this.world;
+    const t = actorById(w, id);
+    if (!t || t.dead || t === w.human) return false;
+    this.manualMove();
+    this.goToId = id;
+    this.goToReplanAt = 0;
+    message(w, `Indo até ${t.character.name}...`, 'system');
+    return true;
+  }
+  /** Um passo do "Ir até": retorna true se chegou (parou) neste passo. */
+  private goToTick(): boolean {
+    const w = this.world;
+    const p = w.human;
+    const t = this.goToId ? actorById(w, this.goToId) : undefined;
+    if (!t || t.dead) {
+      this.goToId = null;
+      message(w, 'Ir até: o personagem saiu do jogo ou morreu.', 'system');
+      return false;
+    }
+    const d = Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y));
+    if (d <= 2) {
+      this.goToId = null;
+      p.path = null;
+      p.pathGoal = null;
+      message(w, `Você chegou perto de ${t.character.name}.`, 'system');
+      return true;
+    }
+    if (p.targetId) p.chasePaused = true; // não ataca: só anda
+    // refaz a rota quando ele se afasta do destino (mais folga e menos recálculo quando ainda está longe)
+    const g = p.pathGoal;
+    const stale = !p.path?.length || !g || Math.max(Math.abs(g.x - t.x), Math.abs(g.y - t.y)) > Math.max(2, Math.floor(d / 8));
+    if (stale && w.now >= this.goToReplanAt) {
+      this.goToReplanAt = w.now + (d > 40 ? 2000 : 600);
+      planWalk(w, t.x, t.y, { quiet: true, maxNodes: 120000, avoidMonsters: true, stopWithin: 1 });
+      p.following = false;
+    }
+    return false;
+  }
   private manualMove(): void {
+    this.goToId = null;
     const p = this.world.player;
     p.lastMoveCommandAt = this.world.now;
     p.following = false;
@@ -566,10 +617,14 @@ export class GameSimulation {
     this.world.events.emit('saveRequested', { reason: 'inventory' });
   }
   /** Coleta da janela de loot: 'all' (todos os sacos ao redor), 'gold' ou um item de um saco específico. */
-  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number }): void {
+  /** Pega tudo, só o ouro, uma pilha ou um grupo de pilhas do mesmo item (de vários sacos de uma vez). */
+  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] }): void {
     if (!this.world.ui.lootId) return;
     if (which === 'all') takeAllNearbyLoot(this.world);
     else if (which === 'gold') takeNearbyGold(this.world);
+    else if ('refs' in which)
+      // do maior índice para o menor em cada saco: tirar uma pilha não muda o índice das anteriores
+      for (const r of [...which.refs].sort((a, b) => b.index - a.index)) takeLoot(this.world, r.bagId, r.index);
     else takeLoot(this.world, which.bagId, which.index);
   }
   closeLoot(): void {

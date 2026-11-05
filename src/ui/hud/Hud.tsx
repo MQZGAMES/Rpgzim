@@ -11,7 +11,7 @@ import { ShopPanel } from '../shops/ShopPanel';
 import { DepotPanel } from '../shops/DepotPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { BuffBar, StatusPanel } from './StatusPanel';
-import { ActorMenu, HudButton as MenuButton, InvitePrompt, PartyPanel, PkBadge, QuickToggles } from './Social';
+import { ActorMenu, GoingTo, HudButton as MenuButton, InvitePrompt, PartyPanel, PkBadge, QuickToggles } from './Social';
 import { DesktopActionBar, TouchActions } from './ActionControls';
 import { DeathOverlay, FpsCounter, LevelUpToast, MessageLog, PkToast, RegionBanner } from './Overlays';
 
@@ -46,6 +46,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       <div className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+92px)] max-sm:portrait:top-[calc(env(safe-area-inset-top)+150px)] -translate-x-1/2 lg:top-3">
         <div className="flex flex-col items-center gap-1">
           <InvitePrompt />
+          <GoingTo />
           <ActorMenu />
         </div>
       </div>

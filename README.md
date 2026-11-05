@@ -127,6 +127,15 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## "Ir até" e materiais agrupados no loot
+- **Ir até** (lista de *Personagens online*): você vai andando até o personagem, onde ele estiver no mapa — a rota é
+  refeita quando ele muda de lugar — e para a 2 tiles dele. Não ataca nada no caminho. No topo da tela aparece
+  *Indo até Fulano · N tiles* com o botão *Parar*; andar por conta própria, tocar no chão ou viajar pelo mini mapa
+  também cancela. No celular os botões da lista ficam numa segunda linha (o nome e a atividade continuam legíveis).
+- **Materiais agrupados no loot**: com vários sacos ao redor, o mesmo material (e qualquer item agrupável) aparece numa
+  pilha só na janela de loot e é pego de todos os sacos de uma vez, entrando numa pilha só na mochila. Equipamentos
+  continuam um por um.
+
 ## Mercado novo: livro de ofertas
 - **Comprar sempre pelo menor preço e vender sempre pela maior oferta.** O mercado do banco virou um livro de ofertas
   por item: de um lado os **anúncios de venda** (preço pedido por unidade), do outro as **ofertas de compra** (preço
@@ -407,7 +416,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **341 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **345 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

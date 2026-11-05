@@ -54,12 +54,12 @@ export function LootWindow() {
               <span className="text-outline absolute bottom-[-4px] right-[-2px] text-[10px]">{loot.gold}</span>
             </button>
           )}
-          {loot.items.map(({ bagId, index, item: it }) => (
+          {loot.items.map(({ bagId, index, item: it, refs }) => (
             <button
               type="button"
               key={`${bagId}-${index}-${it.itemId}`}
               className="frame-slot relative flex h-[50px] w-[50px] items-center justify-center !border-[5px]"
-              onClick={() => session.takeLoot({ bagId, index })}
+              onClick={() => session.takeLoot({ refs })}
               title={`${it.name}${it.count > 1 ? ` x${it.count}` : ''}`}
               aria-label={`Pegar ${it.name}`}
             >

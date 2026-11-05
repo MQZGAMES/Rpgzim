@@ -488,3 +488,21 @@ export function ActorMenu() {
     </div>
   );
 }
+
+/** Aviso do "Ir até": para quem você está andando, a que distância, e o botão para parar. */
+export function GoingTo() {
+  const session = useSession();
+  const g = useSnap((s) => s.goingTo);
+  if (!g) return null;
+  return (
+    <div className="frame-dark pointer-events-auto flex items-center gap-2 !border-[8px] px-1 text-[12px]" data-testid="going-to">
+      <ItemIcon icon="ui_players" size={14} />
+      <span>
+        Indo até <b className="text-[#8ff0b0]">{g.name}</b> · {g.distance} tiles
+      </span>
+      <PixelButton className="!border-[5px] px-1 text-[11px]" onClick={() => session.stopGoTo()} data-testid="going-to-stop">
+        Parar
+      </PixelButton>
+    </div>
+  );
+}

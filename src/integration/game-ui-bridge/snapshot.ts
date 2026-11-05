@@ -201,6 +201,8 @@ export interface UiSnapshot {
   standAttack: boolean;
   /** Personagem marcado no botão de seleção (o ataque vai nele). */
   selectedActor: { id: string; name: string } | null;
+  /** "Ir até": o personagem que você está indo encontrar (e a distância). */
+  goingTo: { name: string; distance: number } | null;
   /** Tempo restante da caveira do jogador (ms), 0 sem caveira. */
   /** PK estilo Tibia: caveira atual (tipo e tempo restante) e PZ lock restante. */
   pk: { skull: 'white' | 'yellow' | 'red' | null; skullMs: number; pzLockMs: number };
@@ -260,7 +262,8 @@ export interface UiSnapshot {
     title: string;
     bags: number;
     gold: number;
-    items: { bagId: string; index: number; item: ItemView }[];
+    /** Itens no chão ao redor; os agrupáveis (materiais, poções…) de vários sacos aparecem juntos numa pilha só. */
+    items: { bagId: string; index: number; item: ItemView; refs: { bagId: string; index: number }[] }[];
   } | null;
   region: string | null;
   regionId: string | null;
@@ -305,6 +308,31 @@ function levels(orders: readonly { price: number; count: number }[]): { price: n
     else out.push({ price: o.price, count: o.count });
   }
   return out;
+}
+
+/** Junta, entre os sacos ao redor, as pilhas do mesmo item agrupável (o equipamento continua um por um). */
+function groupLoot(sim: GameSimulation, bags: readonly { id: string; items: readonly ItemStack[] }[]): NonNullable<UiSnapshot['loot']>['items'] {
+  const out: NonNullable<UiSnapshot['loot']>['items'] = [];
+  const byItem = new Map<string, { count: number; refs: { bagId: string; index: number }[] }>();
+  for (const b of bags)
+    b.items.forEach((st, index) => {
+      const ref = { bagId: b.id, index };
+      if (!sim.world.data.items[st.itemId]?.stackable) {
+        out.push({ ...ref, item: itemView(sim, st), refs: [ref] });
+        return;
+      }
+      const g = byItem.get(st.itemId);
+      if (g) {
+        g.count += st.count;
+        g.refs.push(ref);
+      } else byItem.set(st.itemId, { count: st.count, refs: [ref] });
+    });
+  const grouped = [...byItem.entries()].map(([itemId, g]) => ({
+    ...g.refs[0]!,
+    item: itemView(sim, { itemId, count: g.count }),
+    refs: g.refs,
+  }));
+  return [...grouped, ...out];
 }
 
 function marketView(sim: GameSimulation): NonNullable<UiSnapshot['market']> {
@@ -607,6 +635,10 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
     standAttack: c.flags.standAttack === true,
+    goingTo: (() => {
+      const t = sim.goToId ? w.heroes.get(sim.goToId) : undefined;
+      return t ? { name: t.character.name, distance: Math.max(Math.abs(t.x - w.human.x), Math.abs(t.y - w.human.y)) } : null;
+    })(),
     selectedActor: (() => {
       const a = selectedActor(w);
       return a ? { id: a.id, name: a.character.name } : null;
@@ -697,9 +729,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
           title: bags.length === 1 ? `Loot: ${bags[0]!.sourceName}` : `Loot ao redor (${bags.length} sacos)`,
           bags: bags.length,
           gold: bags.reduce((s, b) => s + b.gold, 0),
-          items: bags.flatMap((b) =>
-            b.items.map((st, index) => ({ bagId: b.id, index, item: itemView(sim, st) })),
-          ),
+          items: groupLoot(sim, bags),
         }
       : null,
     region: region?.name ?? null,

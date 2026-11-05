@@ -402,6 +402,19 @@ export class GameSession {
     return ok;
   }
   private travelGoal: { x: number; y: number } | null = null;
+  /** "Ir até" o personagem (lista de online): fecha o painel e vai andando até ele. */
+  goToActor(id: string): boolean {
+    const ok = this.sim.goToActor(id);
+    this.audio.play(ok ? 'ui' : 'error');
+    if (ok) this.setPanel(null);
+    this.dirty = true;
+    return ok;
+  }
+  stopGoTo(): void {
+    this.sim.goToId = null;
+    this.sim.stop();
+    this.dirty = true;
+  }
   /** Posições para o mini mapa (lidas a cada poucos décimos de segundo, fora do snapshot). */
   minimapState(): {
     width: number;
@@ -761,7 +774,7 @@ export class GameSession {
     if (this.sim.sellAll()) this.audio.play('coin');
     this.dirty = true;
   }
-  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number }): void {
+  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] }): void {
     this.sim.takeLoot(which);
     this.audio.play('pickup');
     this.dirty = true;

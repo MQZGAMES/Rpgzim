@@ -14,8 +14,9 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
       <div data-testid="players-panel">
         <p className="text-[12px] text-muted">
           {heroes.length + 1} no mundo. Chame para o grupo: a pessoa entra e vem andando até você (aparece no
-          mini mapa). Logar/Deslogar: o personagem entra ou sai do jogo; logado, ele joga sozinho com a IA da
-          vocação e do nível dele.
+          mini mapa). "Ir até": você vai andando até ela, onde estiver, e para ao chegar perto.
+          Logar/Deslogar: o personagem entra ou sai do jogo; logado, ele joga sozinho com a IA da vocação e do
+          nível dele.
         </p>
         <div className="mt-2 flex flex-col gap-2">
           <div className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1 text-[12px] opacity-80">
@@ -26,7 +27,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
           {heroes.map((h) => (
             <div
               key={h.id}
-              className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1"
+              className="frame-slot flex flex-wrap items-center gap-2 !border-[6px] px-1 py-1"
               data-testid={`player-row-${h.id}`}
             >
               <div className="relative flex h-[40px] w-[32px] shrink-0 items-end justify-center overflow-hidden">
@@ -54,34 +55,46 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                 </div>
                 <Bar className="mt-[2px]" value={h.hp} max={h.maxHp} color="var(--color-heal)" height={3} />
               </div>
-              <PixelButton
-                className="shrink-0 !border-[6px] px-1 text-[11px]"
-                title={`Tirar ${h.name} do jogo (o progresso é salvo)`}
-                onClick={() => void session.logoutCharacter(h.id)}
-                data-testid={`player-logout-${h.id}`}
-              >
-                Deslogar
-              </PixelButton>
-              {h.inParty ? (
+              {/* no celular os botões vão para a linha de baixo (o nome e a atividade ficam legíveis) */}
+              <div className="flex w-full justify-end gap-1 sm:w-auto">
                 <PixelButton
-                  className="shrink-0 !border-[6px] px-1 text-[11px]"
-                  onClick={() => session.setPartyPanel(true)}
-                  data-testid={`player-party-${h.id}`}
-                >
-                  No grupo
-                </PixelButton>
-              ) : (
-                <PixelButton
-                  variant="gold"
                   className="shrink-0 !border-[6px] px-1 text-[11px]"
                   disabled={h.dead}
-                  title={`Chamar ${h.name} para o grupo`}
-                  onClick={() => session.partyInvite(h.id)}
-                  data-testid={`player-invite-${h.id}`}
+                  title={`Ir andando até ${h.name}, onde estiver (para ao chegar perto; não ataca)`}
+                  onClick={() => session.goToActor(h.id)}
+                  data-testid={`player-goto-${h.id}`}
                 >
-                  + Grupo
+                  Ir até
                 </PixelButton>
-              )}
+                <PixelButton
+                  className="shrink-0 !border-[6px] px-1 text-[11px]"
+                  title={`Tirar ${h.name} do jogo (o progresso é salvo)`}
+                  onClick={() => void session.logoutCharacter(h.id)}
+                  data-testid={`player-logout-${h.id}`}
+                >
+                  Deslogar
+                </PixelButton>
+                {h.inParty ? (
+                  <PixelButton
+                    className="shrink-0 !border-[6px] px-1 text-[11px]"
+                    onClick={() => session.setPartyPanel(true)}
+                    data-testid={`player-party-${h.id}`}
+                  >
+                    No grupo
+                  </PixelButton>
+                ) : (
+                  <PixelButton
+                    variant="gold"
+                    className="shrink-0 !border-[6px] px-1 text-[11px]"
+                    disabled={h.dead}
+                    title={`Chamar ${h.name} para o grupo`}
+                    onClick={() => session.partyInvite(h.id)}
+                    data-testid={`player-invite-${h.id}`}
+                  >
+                    + Grupo
+                  </PixelButton>
+                )}
+              </div>
             </div>
           ))}
         </div>
