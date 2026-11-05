@@ -315,6 +315,7 @@ export function damageMonster(
   amount: number,
   element: Element,
   sourceId: string | null,
+  opts?: { guard?: boolean },
 ): void {
   if (!m.alive) return;
   if (sourceId && actorById(w, sourceId)) touchCombat(w, sourceId); // lutar renova a caveira que está acabando
@@ -328,11 +329,12 @@ export function damageMonster(
     blocked: dmg === 0,
     position: { x: m.x, y: m.y },
   });
-  if (m.hp <= 0) killMonster(w, m);
-  else aggro(w, m);
+  // abatida pela guarda da cidade: sem XP nem loot, e a criatura não vira a atenção para ninguém
+  if (m.hp <= 0) killMonster(w, m, opts?.guard);
+  else if (!opts?.guard) aggro(w, m);
 }
 
-function killMonster(w: World, m: MonsterEntity): void {
+function killMonster(w: World, m: MonsterEntity, byGuard = false): void {
   m.alive = false;
   m.hp = 0;
   m.state = 'dead';
@@ -351,6 +353,10 @@ function killMonster(w: World, m: MonsterEntity): void {
     facing: m.facing,
     expiresAt: w.now + w.data.balance.world.corpseDecayMs,
   });
+  if (byGuard) {
+    for (const a of [w.human, ...w.heroes.values()]) if (a.targetId === m.id) a.targetId = null;
+    return;
+  }
   const loot = w.loot.roll(m.def);
   if (loot.items.length || loot.gold > 0) {
     const id = nextId(w, 'loot');

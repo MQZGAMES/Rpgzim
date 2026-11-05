@@ -95,3 +95,9 @@ export function castFailMessage(reason: CastFailReason, detail?: string): string
       return detail === 'melee' ? 'Requer uma arma corpo a corpo.' : 'Requer uma arma de distância.';
   }
 }
+
+/** Graus de uma magia (I, II, III), do mais fraco ao mais forte (os ids II/III terminam em _2 e _3). */
+export function spellTiers(spells: Readonly<Record<string, SpellDef>>, id: string): string[] {
+  const root = spells[id]?.baseId ?? id;
+  return [root, `${root}_2`, `${root}_3`].filter((x) => spells[x]?.baseId === root || x === root);
+}

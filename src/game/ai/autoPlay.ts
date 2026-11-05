@@ -5,6 +5,8 @@ import { castCheck, castSpell } from '../abilities/spells';
 import { nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
+import { canDrink } from '../../domain/rules/potions';
+import { spellTiers } from '../../domain/rules/spells';
 
 export interface AutoSettings {
   /** Pegar o loot ao alcance sozinho. */
@@ -62,9 +64,11 @@ export function choosePotion(
   missing: number,
   prefer: AutoSettings['prefer'],
 ): number {
+  const level = w.player.character.level;
   const owned = w.player.character.inventory
     .map((st, i) => {
-      const use = st ? w.data.items[st.itemId]?.use : undefined;
+      // poção acima do nível dele não conta (não dá para beber)
+      const use = st && canDrink(w.data.items[st.itemId], level) ? w.data.items[st.itemId]?.use : undefined;
       return {
         i,
         v: kind === 'heal' ? (use?.heal ?? 0) : (use?.mana ?? 0),
@@ -105,7 +109,11 @@ function autoHealSpell(w: World, a: AutoSettings): boolean {
     castCheck(w, sap).ok
   )
     return castSpell(w, sap.id);
-  const light = w.data.spells.light_heal;
+  // a cura no maior grau já liberado (Respiro Vital III, II ou I) que a mana paga
+  const light = spellTiers(w.data.spells, 'light_heal')
+    .map((id) => w.data.spells[id]!)
+    .reverse()
+    .find((sp) => castCheck(w, sp).ok);
   const mine = p.character.health / Math.max(1, p.stats.maxHealth);
   if (a.spellHeal && mine < a.healBelow && light && castCheck(w, light).ok) return castSpell(w, light.id);
   return false;

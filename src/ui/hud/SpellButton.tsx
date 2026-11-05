@@ -38,6 +38,7 @@ export function SpellButton({ spell, size = 48, keyHint, onCast }: { spell: Spel
       {locked && <span className="text-outline absolute inset-0 flex items-center justify-center text-[9px] text-gold-light">Nv {spell.minLevel}</span>}
       <span className={`text-outline absolute -bottom-[7px] right-[-4px] text-[9px] leading-none ${noMana ? 'text-hp-light' : 'text-mana-light'}`}>{spell.manaCost}</span>
       {keyHint && <span className="text-outline absolute -left-[4px] -top-[6px] text-[10px] leading-none text-gold-light">{keyHint}</span>}
+      {spell.tier > 1 && <span className="text-outline absolute -right-[4px] -top-[6px] text-[9px] leading-none text-heal">{spell.tier === 2 ? 'II' : 'III'}</span>}
     </button>
   );
 }

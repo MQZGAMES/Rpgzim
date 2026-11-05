@@ -4,12 +4,14 @@ import tiles from '../../assets/generated/tiles.json';
 import { PROPS } from '../props';
 import { MapBuilder, Terrain } from '../../game/world/MapBuilder';
 import { buildExpansion } from './expansion';
+import { buildSouth } from './south';
 import type { GameMap } from '../../game/world/GameMap';
 
 export const WORLD_W = 300;
 /** Início das Terras Altas (expansão leste, faixas 3 a 6). */
 const EAST = 104;
-export const WORLD_H = 128;
+/** Altura do mundo: a área original, as Terras Distantes e, abaixo de tudo, as Terras do Sul. */
+export const WORLD_H = 160;
 /** Altura da área original (vila, bosque, pântano, ruínas e Terras Altas). */
 const BASE_H = 118;
 /** Linha da cerca sul da vila: acima dela fica a área original (vila + bosque). */
@@ -184,6 +186,7 @@ export function buildWorld(): GameMap {
   for (let x = 3; x < 72; x++) if (x < 36 || x > 39) b.prop('palisade', x, SOUTH);
   b.path([[35, 48], [36, 60], [37, 70], [37, 80], [32, 86], [24, 92], [20, 100]], 2);
   b.prop('lamp_post', 35, SOUTH - 1).prop('lamp_post', 40, SOUTH - 1);
+  b.npc('guard_south', 41, SOUTH - 2, 'down');
   b.sign(41, SOUTH + 1, 'Pântano Sombrio — sapos venenosos. Ao leste: Colinas dos Lobos e Ruínas Antigas.');
   // trilhas: acampamento goblin -> colinas -> ruínas; pântano -> ruínas
   b.path([[88, 66], [88, 74], [85, 82], [80, 90], [76, 98], [74, 106]], 2);
@@ -289,6 +292,8 @@ export function buildWorld(): GameMap {
 
   // ------------------------------------------------------------------ expansão leste (vilas e zonas do nível 44 ao 100)
   buildExpansion(b);
+  // ------------------------------------------------------------------ Terras do Sul (faixa nova de caça, sem cidade)
+  buildSouth(b, WORLD_H);
 
   // ------------------------------------------------------------------ vegetação e decoração procedural
   b.forestBorder(3, WILD_TREES);

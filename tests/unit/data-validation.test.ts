@@ -44,9 +44,13 @@ describe('magias', () => {
       expect(s.cooldownMs).toBeGreaterThan(0);
       expect(s.words.length).toBeGreaterThan(3);
       if (s.effect === 'conjure') {
-        // custo = 4 vezes o que a poção criada recupera
-        const use = D.items[s.conjure!.itemId]!.use!;
-        expect(s.manaCost, s.id).toBe(4 * (use.heal ?? use.mana ?? 0) * s.conjure!.count);
+        // custo bem acima do que a poção criada recupera (de 2,4x nas divinas a 3,4x nas pequenas) e só depois do
+        // nível em que a poção pode ser bebida
+        const item = D.items[s.conjure!.itemId]!;
+        const back = (item.use!.heal ?? item.use!.mana ?? 0) * s.conjure!.count;
+        expect(s.manaCost / back, s.id).toBeGreaterThanOrEqual(2.4);
+        expect(s.manaCost / back, s.id).toBeLessThanOrEqual(3.4);
+        expect(s.minLevel, s.id).toBeGreaterThan(item.minLevel ?? 1);
       } else if (s.effect !== 'buff') expect(s.formula, s.id).toBeDefined();
       if (s.effect === 'buff') expect(s.buff, s.id).toBeDefined();
       if (s.target === 'target' || s.target === 'areaTarget') expect(s.range).toBeGreaterThan(0);

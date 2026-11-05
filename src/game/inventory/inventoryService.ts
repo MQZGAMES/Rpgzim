@@ -23,6 +23,11 @@ export function useInventoryItem(w: World, index: number): boolean {
     warnThrottled(w, 'nouse', 'Este item não pode ser usado.', 800);
     return false;
   }
+  // poções têm nível mínimo (as pequenas servem para todos)
+  if (def.minLevel && c.level < def.minLevel) {
+    warnThrottled(w, 'potionlvl', `${def.name}: requer nível ${def.minLevel}.`, 1000);
+    return false;
+  }
   if (!isReady(p.cooldowns, POTION, w.now)) {
     warnThrottled(w, 'potioncd', 'Aguarde um instante para usar outro item.', 600);
     return false;

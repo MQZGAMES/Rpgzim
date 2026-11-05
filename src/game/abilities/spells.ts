@@ -87,7 +87,12 @@ export function castSpell(w: World, spellId: string): boolean {
   // magia ofensiva com alvo e sem alvo selecionado: mira automaticamente o inimigo mais próximo
   // (golpes corpo a corpo também: mira o mais próximo por perto e o golpe sai ao chegar nele)
   // Alvo morto, sumido ou fora da tela (ex.: segurando o botão da magia): passa para o inimigo mais próximo.
-  if (spell.effect === 'damage' && (spell.target === 'target' || spell.target === 'areaTarget') && !p.dead) {
+  // Toda magia de ataque também é o "botão de ataque": mira (como acima) e começa o ataque básico, mesmo que a magia
+  // não saia (sem mana, em recarga ou ainda bloqueada) — as de área em volta dele também miram o mais próximo.
+  // (a área em volta só mira pelo jogador humano: a IA dos heróis escolhe o alvo dela)
+  const offensive =
+    spell.effect === 'damage' && !p.dead && (spell.target !== 'areaSelf' || p === w.human);
+  if (offensive) {
     // personagem selecionado no botão de seleção: a magia vai nele
     const sel = selectedActor(w);
     if (sel && p.targetId !== sel.id) setTarget(w, sel.id);
@@ -107,6 +112,7 @@ export function castSpell(w: World, spellId: string): boolean {
   }
   if (!check.ok) {
     warnThrottled(w, `cast:${check.reason}`, castFailMessage(check.reason, check.detail), 600);
+    if (offensive && p.targetId) p.chasePaused = false; // a magia não saiu, mas o ataque básico segue no alvo
     return false;
   }
   const voc = w.data.vocations[c.vocation];

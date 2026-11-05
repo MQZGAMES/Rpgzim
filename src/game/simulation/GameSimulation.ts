@@ -75,6 +75,7 @@ import {
   type PartySetting,
 } from '../social/social';
 import { addHero } from '../ai/heroes';
+import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
 import { marketAutoList, marketBuy, marketCancel, marketCollect, marketList } from '../economy/marketService';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
@@ -305,6 +306,7 @@ export class GameSimulation {
         this.tickActor(step);
       });
     for (const m of w.monsters.values()) updateMonster(w, m);
+    updateCityGuards(w);
     updateNpcs(w);
     this.updateWorldTimers();
     updateDoors(w);
@@ -714,6 +716,11 @@ export class GameSimulation {
     const asLeader = party && party.members.includes(w.player.id) ? party.leaderId : w.player.id;
     const fail = configureParty(w, asLeader, patch);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
+    // regras do grupo ficam guardadas no personagem: o próximo grupo que ele liderar já começa com elas
+    else if (asLeader === w.human.id) {
+      const c = w.human.character;
+      c.settings = { ...c.settings, party: { ...c.settings?.party, ...(patch as Record<string, string | boolean>) } };
+    }
   }
   disbandParty(): void {
     const w = this.world;

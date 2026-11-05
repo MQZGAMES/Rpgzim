@@ -38,7 +38,7 @@ describe('criaturas tardias', () => {
     const onMap = new Set(sim.world.map.spawns.map((s) => s.monsterId));
     const sheets = new Set(Object.keys(manifest.sheets));
     const late = CREATURE_LADDER.filter((r) => r.tier >= 6);
-    expect(late.length).toBe(16);
+    expect(late.length).toBe(20); // 16 das Terras Distantes + 4 das Terras do Sul
     expect(Math.max(...Object.values(GAME_DATA.monsters).map((m) => m.level ?? 0))).toBeGreaterThanOrEqual(
       100,
     );

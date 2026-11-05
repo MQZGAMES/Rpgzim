@@ -177,7 +177,7 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   // nenhum elemento essencial do HUD fora da tela
   for (const id of [
     'status-panel',
-    'attack-button',
+    'select-actor-button',
     'joystick-zone',
     'btn-inventory',
     'btn-settings',
@@ -209,14 +209,12 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   const after = await api(page, (a) => a.player());
   expect(after.x).toBeGreaterThan(before.x);
-  // botão de ataque seleciona o alvo mais próximo
+  // sem botão de ataque: a magia de ataque mira o mais próximo, lança e começa o ataque básico
   await api(page, (a) => a.teleport(80, 22));
   await api(page, (a) => a.teleportNear('slime', 2));
-  await page.getByTestId('attack-button').tap();
-  await expect.poll(async () => (await api(page, (a) => a.player())).target).not.toBeNull();
-  // magia por toque
   const mana = (await api(page, (a) => a.player())).mana;
   await page.getByTestId('spell-arcane_bolt').tap();
+  await expect.poll(async () => (await api(page, (a) => a.player())).target).not.toBeNull();
   await expect.poll(async () => (await api(page, (a) => a.player())).mana).toBeLessThan(mana);
 });
 
@@ -337,11 +335,11 @@ test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado'
     null,
     { timeout: 30_000 },
   );
-  expect((await heroes()).map((h) => h.id).sort()).toEqual([
-    'hero:distanciado',
-    'hero:maguim',
-    'hero:mano_cura',
-  ]); // sem herói duplicado
+  // sem herói duplicado; o personagem criado antes (Parceiro) agora entra logado, jogando com a IA
+  const ids = (await heroes()).map((h) => h.id);
+  expect(ids.filter((id) => id === 'hero:boladex')).toHaveLength(0);
+  expect(ids.filter((id) => ['hero:distanciado', 'hero:maguim', 'hero:mano_cura'].includes(id))).toHaveLength(3);
+  expect(ids).toHaveLength(4);
   expect((await api(page, (a) => a.player())).inventory.length).toBeGreaterThan(0);
 });
 
@@ -473,7 +471,8 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
       (window as unknown as { __RPGZIM__: { clearCastLog(): void } }).__RPGZIM__.clearCastLog(),
     );
 
-  // 1) teclado 3x3 de atalhos + coluna do ataque: nenhum ponto dentro dele (botões e vãos) cai na camada do mapa
+  // 1) teclado 3x3 de atalhos no canto inferior direito (sem botão de ataque; a seleção de jogador fica acima):
+  // nenhum ponto dentro dele (botões e vãos) cai na camada do mapa
   const gaps = await page.evaluate(() => {
     const grid = document.querySelector('[data-testid=touch-grid]')!;
     const b = grid.getBoundingClientRect();
@@ -484,28 +483,28 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
         total++;
         if (document.elementFromPoint(x, y)?.closest('[data-testid=map-input]')) onMap++;
       }
-    const atk = document.querySelector('[data-testid=attack-button]')!.getBoundingClientRect();
-    const slots = [...grid.querySelectorAll('button')].filter(
-      (e) => e.getAttribute('data-testid') !== 'attack-button',
-    );
+    const sel = document.querySelector('[data-testid=select-actor-button]')!.getBoundingClientRect();
+    const slots = [...grid.querySelectorAll('button')];
     // ordem de leitura 1 2 3 / 4 5 6 / 7 8 9: cada número à direita ou abaixo do anterior
     const cells = [...grid.querySelectorAll('[data-testid^=slot-], [data-testid^=spell-], [data-testid^=potion-]')].map((e) => e.getBoundingClientRect());
     const ordered = cells.every((r, i) => i === 0 || (i % 3 === 0 ? r.top > cells[i - 1]!.top : r.left > cells[i - 1]!.left));
     return {
       onMap,
       total,
-      attack: Math.round(atk.width),
-      slots: slots.filter((e) => e.getAttribute('data-testid') !== 'select-actor-button').length,
+      slots: slots.length,
       ordered,
-      atkRight: atk.left > Math.max(...cells.map((r) => r.right)),
+      noAttack: !document.querySelector('[data-testid=attack-button]'),
+      selAbove: sel.bottom <= b.top + 1,
+      corner: window.innerWidth - b.right < 24 && window.innerHeight - b.bottom < 40,
     };
   });
   expect(gaps.total).toBeGreaterThan(100);
   expect(gaps.onMap).toBe(0);
-  expect(gaps.slots).toBe(9); // 9 atalhos (1–9) e, à direita, o botão de ataque
-  expect(gaps.attack).toBeLessThanOrEqual(56);
+  expect(gaps.slots).toBe(9); // só os 9 atalhos (1–9)
   expect(gaps.ordered).toBe(true);
-  expect(gaps.atkRight).toBe(true);
+  expect(gaps.noAttack).toBe(true);
+  expect(gaps.selAbove).toBe(true);
+  expect(gaps.corner).toBe(true);
 
   // 2) segurar o atalho da magia repete a cada recarga; soltar encerra (nada dispara depois)
   const box = (await page.getByTestId('spell-earth_thorn').boundingBox())!;

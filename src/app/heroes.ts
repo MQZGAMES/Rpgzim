@@ -22,7 +22,8 @@ export async function ensureHeroSaves(saves: SaveService, data: GameData): Promi
 
 /**
  * Todos os outros personagens salvos, separados em quem entra logado (jogando com a IA) e quem fica fora do jogo.
- * Os heróis entram por padrão; os criados pelo jogador só se ele os deixou logados (preferência no aparelho).
+ * Todos entram logados por padrão (heróis e personagens criados); fica fora só quem o jogador deslogou no menu de
+ * personagens (preferência no aparelho).
  */
 export async function loadRosterFor(
   saves: SaveService,
@@ -40,7 +41,7 @@ export async function loadRosterFor(
     if (s.slotId === playingId) continue;
     const c = await saves.load(s.slotId).catch(() => null);
     if (!c) continue;
-    const on = prefs[c.id] ?? isHeroSlot(data, c.id);
+    const on = prefs[c.id] ?? true; // todos entram logados (com vida própria), a menos que o jogador os tenha deslogado
     (on ? online : offline).push(c);
   }
   return { online, offline };

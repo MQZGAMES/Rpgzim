@@ -163,6 +163,7 @@ describe('combate e progressão', () => {
     // goblin atrás de uma casa: posiciona o jogador do outro lado da Casa do Caçador (fora da construção)
     const house = w.map.buildings.find((b) => b.id === 'house_hunter')!;
     const boar = nearestMonster(sim, 'boar');
+    for (const n of w.npcs.values()) n.def = { ...n.def, guard: false }; // sem a guarda da vila (ela abateria o javali)
     sim.teleportPlayer(house.x + 2, house.y - 3); // atrás (ao norte) da casa
     w.occupancy.delete(boar.y * w.map.width + boar.x);
     boar.x = house.x + 2;
@@ -291,7 +292,7 @@ describe('inventário, lojas e save', () => {
     const p = sim.world.player;
     p.character.health = 50;
     expect(sim.useItemById('potion_health')).toBe(true);
-    expect(p.character.health).toBe(120);
+    expect(p.character.health).toBe(125); // Poção de Vida Pequena: 75
     p.character.health = 50;
     expect(sim.useItemById('potion_health')).toBe(false);
     advance(sim, 2100); // exaustão da poção básica: 2 s

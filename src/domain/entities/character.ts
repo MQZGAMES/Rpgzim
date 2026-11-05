@@ -15,6 +15,12 @@ export interface SkillState {
   tries: number;
 }
 
+export type SettingValue = string | number | boolean;
+export interface CharacterSettings {
+  auto?: Record<string, SettingValue>;
+  party?: Record<string, SettingValue>;
+}
+
 export interface CharacterState {
   id: string;
   name: string;
@@ -41,6 +47,11 @@ export interface CharacterState {
   /** Estado de PK (caveira, PZ lock, mortes injustas), em tempo real para valer entre sessões. */
   pk?: { skull: 'white' | 'yellow' | 'red' | null; skullUntil: number; pzLockUntil: number; unjust: number[] };
   stats: { monstersKilled: number; deaths: number; playTimeMs: number };
+  /**
+   * Configurações individuais deste personagem (valem só para ele e vão junto no save): ajudas automáticas
+   * (cura/poção/loot) e as regras de grupo que ele usa quando lidera. Só valores simples.
+   */
+  settings?: CharacterSettings;
   createdAt: number;
   updatedAt: number;
 }

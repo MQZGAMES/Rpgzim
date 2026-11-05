@@ -143,9 +143,19 @@ function createParty(w: World, leaderId: string, memberId: string): Party {
     friendlyFire: false,
     trail: [],
   };
+  // o jogador liderando: o grupo nasce com as regras que ele escolheu da última vez (salvas no personagem)
+  if (leaderId === w.human.id) applyPartyPrefs(p, w.human.character.settings?.party);
   if (leaderId === w.human.id || memberId === w.human.id) w.social.party = p;
   else w.social.heroParties.push(p);
   return p;
+}
+
+function applyPartyPrefs(p: Party, prefs: Record<string, string | number | boolean> | undefined): void {
+  if (!prefs) return;
+  if (prefs.formation === 'free' || prefs.formation === 'follow' || prefs.formation === 'line') p.formation = prefs.formation;
+  if (prefs.targeting === 'leader' || prefs.targeting === 'nearest' || prefs.targeting === 'lure') p.targeting = prefs.targeting;
+  if (typeof prefs.friendlyFire === 'boolean') p.friendlyFire = prefs.friendlyFire;
+  if (prefs.sparMode === 'training' || prefs.sparMode === 'duel') p.sparMode = prefs.sparMode;
 }
 
 function notify(w: World, text: string, party?: Party | null): void {

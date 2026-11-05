@@ -6,6 +6,8 @@ import type { LootEntry, MonsterDef } from '../domain/entities/definitions';
 import type { Element } from '../domain/value-objects/element';
 import { BALANCE } from './balance';
 import { LATE_SPECIES } from './monsters.late';
+import { southSpecies } from './monsters.south';
+import { GEAR_TIERS } from './gearTiers';
 
 export interface Species {
   id: string;
@@ -550,7 +552,7 @@ const list: Species[] = [
   },
 ];
 
-const all: Species[] = [...list, ...LATE_SPECIES];
+const all: Species[] = [...list, ...LATE_SPECIES, ...southSpecies(GEAR_TIERS)];
 export const MONSTERS: Readonly<Record<string, MonsterDef>> = Object.fromEntries(
   all.map((s) => [s.id, build(s)]),
 );

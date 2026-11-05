@@ -34,6 +34,13 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
   const spot = process.env.HERO_HUMAN?.split(',').map(Number);
   if (spot) sim.teleportPlayer(spot[0]!, spot[1]!);
   sim.events.on('entityDied', (e) => e.kind === 'monster' && kills++);
+  // economia: o que ele gasta em poções (pelo preço da loja) e quanto vale o patrimônio (bolsa + banco) a cada 30 min
+  const used: Record<string, number> = {};
+  h.scope.events.on('itemUsed', (e) => (used[e.itemId] = (used[e.itemId] ?? 0) + 1));
+  const shopPrice = (id: string) =>
+    Math.min(Infinity, ...Object.values(GAME_DATA.shops).flatMap((sh) => sh.sells.filter((o) => o.itemId === id).map((o) => o.price)));
+  const econ: string[] = [];
+  let spentSeen = 0;
   let manaDrunk = 0;
   let manaSeen = -Infinity;
   const t0 = performance.now();
@@ -41,6 +48,15 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
     advance(sim, 1000, 50);
     sim.world.player.character.health = sim.world.player.stats.maxHealth; // o jogador humano fica parado no templo
     modeMs[h.brain.mode] = (modeMs[h.brain.mode] ?? 0) + 1;
+    if ((s + 1) % 1800 === 0) {
+      const spent = Object.entries(used).reduce((a, [id, n]) => a + (Number.isFinite(shopPrice(id)) ? shopPrice(id) * n : 0), 0);
+      econ.push(
+        `${t()} nv ${h.character.level} patrimônio ${h.character.gold + h.character.bankGold} poções +${spent - spentSeen} de ouro [${Object.entries(used)
+          .map(([k, v]) => `${k.replace('potion_', '')}:${v}`)
+          .join(' ')}]`,
+      );
+      spentSeen = spent;
+    }
     for (const e of h.brain.manaLog) if (e.at > manaSeen) manaDrunk++;
     manaSeen = h.brain.manaLog[h.brain.manaLog.length - 1]?.at ?? manaSeen;
     if (h.brain.mode !== mode) {
@@ -66,7 +82,7 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
     .join(' · ');
   process.stderr.write(
     (process.env.HERO_QUIET ? '' : log.join('\n')) +
-      `\n\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths} | ml ${ch.skills.magic.level} poçõesMana ${manaDrunk}\nequip: ${eq}\nmochila: ${ch.inventory
+      `\n\nECONOMIA\n${econ.join('\n')}\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths} | ml ${ch.skills.magic.level} poçõesMana ${manaDrunk}\nequip: ${eq}\nmochila: ${ch.inventory
         .filter(Boolean)
         .map((s) => `${s!.itemId}x${s!.count}`)
         .join(', ')}\n`,

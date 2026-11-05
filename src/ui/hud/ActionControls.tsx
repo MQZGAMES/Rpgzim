@@ -1,6 +1,7 @@
-// Controles de ação. Os 9 atalhos (magias/itens/poções) seguem a mesma ordem 1–9 no celular e no desktop:
-// no toque, um teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9) ao lado do botão de ataque; no desktop, a barra inferior
-// com as teclas 1–9. Os atalhos são configuráveis (painel "Atalhos").
+// Controles de ação. Os 9 atalhos (magias/itens/poções) seguem a mesma ordem 1–9 no celular e no desktop, sempre no
+// canto inferior direito: no toque, um teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9, de cima para baixo); no desktop, a barra
+// com as teclas 1–9. Os atalhos são configuráveis (painel "Atalhos"). Não há botão de ataque: as magias de ataque
+// também iniciam o ataque básico.
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
@@ -76,19 +77,21 @@ function InteractButton({ size = 56 }: { size?: number }) {
 }
 
 /**
- * Atalhos no celular: um teclado 3x3 em ordem de leitura (1 2 3 / 4 5 6 / 7 8 9, igual às teclas do desktop),
- * com o número em cada botão, e à direita a coluna da seleção de personagem e do botão de ataque (no canto).
+ * Atalhos no celular: um teclado 3x3 no canto inferior direito, em ordem de leitura de cima para baixo
+ * (1 2 3 / 4 5 6 / 7 8 9, igual às teclas do desktop), com o número em cada botão. Não há botão de ataque: qualquer
+ * magia de ataque também mira e começa o ataque básico (mesmo sem mana). A seleção de jogador fica logo acima.
  * O bloco inteiro captura o toque (os vãos nunca andam pelo mapa).
  * Célula de cada atalho: [linha, coluna] (1–3).
  */
 export const TOUCH_CELLS: readonly (readonly [number, number])[] = Array.from({ length: 9 }, (_, i) => [Math.floor(i / 3) + 1, (i % 3) + 1] as const);
-export const TOUCH_SLOT = 42;
-export const TOUCH_ATTACK = 54;
+export const TOUCH_SLOT = 46;
 export const TOUCH_GAP = 5;
+/** Largura do teclado de atalhos no toque (para o registro de mensagens não passar por baixo dele). */
+export const TOUCH_GRID_W = TOUCH_SLOT * 3 + TOUCH_GAP * 2 + 8;
 
 /**
  * Seleção de personagem (jogador ou herói): cada toque marca o próximo por perto e, depois do último, desmarca.
- * Com alguém marcado, o botão de ataque e as magias de ataque vão nele.
+ * Com alguém marcado, as magias de ataque (e o ataque básico) vão nele.
  */
 function SelectActorButton({ width, height }: { width: number; height: number }) {
   const session = useSession();
@@ -103,32 +106,30 @@ function SelectActorButton({ width, height }: { width: number; height: number })
         session.audio.unlock();
         session.cycleActorSelection();
       }}
-      className={`${sel ? 'btn-gold anim-glow' : 'btn-pixel'} pointer-events-auto relative flex flex-col items-center justify-center !border-[6px]`}
+      className={`${sel ? 'btn-gold anim-glow' : 'btn-pixel'} pointer-events-auto relative flex items-center justify-center gap-1 !border-[6px]`}
       style={{ width, height }}
       data-testid="select-actor-button"
     >
-      <ItemIcon icon="ui_players" size={18} />
-      <span className="max-w-full truncate px-[2px] text-[9px] leading-none">{sel ? sel.name : 'Jogador'}</span>
+      <ItemIcon icon="ui_players" size={16} />
+      <span className="max-w-full truncate px-[2px] text-[10px] leading-none">{sel ? sel.name : 'Jogador'}</span>
     </button>
   );
 }
 
 export function TouchActions() {
-  const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
-  const hasTarget = useSnap((s) => s.target !== null);
-  const hasSel = useSnap((s) => s.selectedActor !== null);
-  const cols = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
-  const rows = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_ATTACK}px`;
+  const cols = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_SLOT}px`;
   return (
     <div className="safe-bottom pointer-events-none absolute bottom-0 right-0 z-20 pb-1 pr-[max(6px,env(safe-area-inset-right))]">
-      <div className="pointer-events-none flex flex-col items-end" data-testid="touch-actions">
-        <div className="flex flex-col items-end pb-1">
-          <InteractButton />
+      <div className="pointer-events-none flex flex-col items-end gap-1" data-testid="touch-actions">
+        <InteractButton />
+        {/* seleção de jogador/herói logo acima dos atalhos */}
+        <div className="px-[4px]">
+          <SelectActorButton width={TOUCH_GRID_W - 8} height={30} />
         </div>
         <div
           className="pointer-events-auto grid items-center justify-items-center p-[4px]"
-          style={{ gridTemplateColumns: cols, gridTemplateRows: rows, gap: TOUCH_GAP }}
+          style={{ gridTemplateColumns: cols, gridTemplateRows: cols, gap: TOUCH_GAP }}
           data-testid="touch-grid"
         >
           {hotbar.map((slot) => (
@@ -136,51 +137,26 @@ export function TouchActions() {
               <HotbarSlot slot={slot} size={TOUCH_SLOT} keyHint={String(slot.index + 1)} />
             </div>
           ))}
-          {/* coluna do ataque: a seleção de jogador/herói logo acima do botão de ataque */}
-          <div style={{ gridRow: 2, gridColumn: 4 }}>
-            <SelectActorButton width={TOUCH_ATTACK} height={TOUCH_SLOT} />
-          </div>
-          <button
-            type="button"
-            aria-label={hasSel ? 'Atacar o personagem selecionado' : hasTarget ? 'Trocar alvo' : 'Selecionar alvo mais próximo'}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              session.audio.unlock();
-              session.cycleTarget();
-            }}
-            className={`btn-gold relative flex flex-col items-center justify-center ${hasTarget ? 'anim-glow' : ''}`}
-            style={{ gridRow: 3, gridColumn: 4, width: TOUCH_ATTACK, height: TOUCH_ATTACK }}
-            data-testid="attack-button"
-          >
-            <ItemIcon icon={hasTarget ? 'ui_target' : 'ui_attack'} size={24} />
-            <span className="text-[10px] leading-none">{hasSel ? 'Atacar' : hasTarget ? 'Trocar' : 'Atacar'}</span>
-          </button>
         </div>
       </div>
     </div>
   );
 }
 
+/** Desktop: a barra 1–9 no canto inferior direito, com a seleção de jogador acima (Tab/Espaço miram o mais próximo). */
 export function DesktopActionBar() {
   const session = useSession();
   const hotbar = useSnap((s) => s.hotbar);
   return (
-    <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
-      <div className="flex items-center gap-2">
-        <InteractButton size={44} />
-      </div>
-      <div className="frame-dark pointer-events-auto flex items-end gap-[6px] !border-[10px]">
+    <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex flex-col items-end gap-2">
+      <InteractButton size={44} />
+      <SelectActorButton width={150} height={34} />
+      <div className="frame-dark pointer-events-auto flex items-end gap-[6px] !border-[10px]" data-testid="desktop-hotbar">
         {hotbar.map((slot) => (
           <HotbarSlot key={slot.index} slot={slot} size={46} keyHint={String(slot.index + 1)} />
         ))}
         <button type="button" onClick={() => session.setPanel('hotbar')} className="btn-pixel flex h-[46px] w-7 items-center justify-center !border-[6px] text-[10px]" title="Configurar atalhos" data-testid="btn-hotbar-config">
           <ItemIcon icon="ui_gear" size={14} />
-        </button>
-        <div className="mx-1 h-10 w-[2px] bg-dusk" />
-        <SelectActorButton width={58} height={46} />
-        <button type="button" onClick={() => session.cycleTarget()} className="btn-gold flex h-[46px] flex-col items-center justify-center px-1 text-[10px]" title="Alvo mais próximo (Tab/Espaço)">
-          <ItemIcon icon="ui_target" size={22} />
-          Tab
         </button>
       </div>
     </div>

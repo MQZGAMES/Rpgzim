@@ -2,6 +2,7 @@
 import type { ItemDef } from '../domain/entities/definitions';
 import { GEAR_ITEMS } from './items.gear';
 import { TROPHY_ITEMS } from './monsters.late';
+import { SOUTH_TROPHY_ITEMS } from './monsters.south';
 
 const MAGES = ['sorcerer', 'druid'] as const;
 const FIGHTERS = ['knight', 'paladin'] as const;
@@ -1083,19 +1084,19 @@ const list: ItemDef[] = [
   },
   {
     id: 'potion_health',
-    name: 'Poção de Vida',
-    description: 'Restaura 70 pontos de vida.',
+    name: 'Poção de Vida Pequena',
+    description: 'Restaura 75 pontos de vida. Qualquer nível.',
     type: 'potion',
     icon: 'item_potion_health',
     value: 40,
     stackable: true,
     maxStack: 100,
-    use: { heal: 70, cooldownMs: 2000 },
+    use: { heal: 75, cooldownMs: 2000 },
   },
   {
     id: 'potion_mana',
-    name: 'Poção de Mana',
-    description: 'Restaura 60 pontos de mana.',
+    name: 'Poção de Mana Pequena',
+    description: 'Restaura 60 pontos de mana. Qualquer nível.',
     type: 'potion',
     icon: 'item_potion_mana',
     value: 45,
@@ -1105,47 +1106,51 @@ const list: ItemDef[] = [
   },
   {
     id: 'potion_health_great',
-    name: 'Poção de Vida Forte',
-    description: 'Restaura 160 pontos de vida.',
+    name: 'Poção de Vida Média',
+    description: 'Restaura 180 pontos de vida. A partir do nível 12.',
     type: 'potion',
     icon: 'item_potion_health_great',
-    value: 110,
+    value: 100,
     stackable: true,
     maxStack: 100,
-    use: { heal: 160, cooldownMs: 4000 },
+    minLevel: 12,
+    use: { heal: 180, cooldownMs: 4000 },
   },
   {
     id: 'potion_mana_great',
-    name: 'Poção de Mana Forte',
-    description: 'Restaura 140 pontos de mana.',
+    name: 'Poção de Mana Média',
+    description: 'Restaura 150 pontos de mana. A partir do nível 12.',
     type: 'potion',
     icon: 'item_potion_mana_great',
     value: 120,
     stackable: true,
     maxStack: 100,
-    use: { mana: 140, cooldownMs: 4000 },
+    minLevel: 12,
+    use: { mana: 150, cooldownMs: 4000 },
   },
   {
     id: 'potion_health_supreme',
-    name: 'Poção de Vida Suprema',
-    description: 'Restaura 320 pontos de vida.',
+    name: 'Poção de Vida Grande',
+    description: 'Restaura 380 pontos de vida. A partir do nível 28.',
     type: 'potion',
     icon: 'item_potion_health_supreme',
-    value: 260,
+    value: 200,
     stackable: true,
     maxStack: 100,
-    use: { heal: 320, cooldownMs: 6000 },
+    minLevel: 28,
+    use: { heal: 380, cooldownMs: 4000 },
   },
   {
     id: 'potion_mana_supreme',
-    name: 'Poção de Mana Suprema',
-    description: 'Restaura 280 pontos de mana.',
+    name: 'Poção de Mana Grande',
+    description: 'Restaura 300 pontos de mana. A partir do nível 28.',
     type: 'potion',
     icon: 'item_potion_mana_supreme',
-    value: 270,
+    value: 240,
     stackable: true,
     maxStack: 100,
-    use: { mana: 280, cooldownMs: 6000 },
+    minLevel: 28,
+    use: { mana: 300, cooldownMs: 4000 },
   },
   {
     id: 'meat',
@@ -1352,5 +1357,5 @@ const list: ItemDef[] = [
 ];
 
 export const ITEMS: Readonly<Record<string, ItemDef>> = Object.fromEntries(
-  [...list, ...GEAR_ITEMS, ...TROPHY_ITEMS].map((i) => [i.id, i]),
+  [...list, ...GEAR_ITEMS, ...TROPHY_ITEMS, ...SOUTH_TROPHY_ITEMS].map((i) => [i.id, i]),
 );

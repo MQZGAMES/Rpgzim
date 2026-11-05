@@ -1,6 +1,7 @@
 // Vocações: novas vocações podem ser adicionadas apenas com dados (atributos, curvas, magias e equipamentos).
 import type { VocationDef } from '../domain/entities/definitions';
 import type { VocationId } from '../domain/value-objects/ids';
+import { extraSpellsFor } from './spells';
 
 const mage = { sword: 2, axe: 2, club: 2, distance: 2, shielding: 1.8, magic: 1 };
 
@@ -17,11 +18,11 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     regen: { health: 1, mana: 4 },
     skillMultipliers: mage,
     magicGrowth: 1.18,
-    damage: { melee: 0.6, distance: 0.6, magic: 0.85, healing: 1.05 },
+    damage: { melee: 0.6, distance: 0.6, magic: 0.82, healing: 1.05 },
     physicalReduction: 0,
     baseSpeed: 3,
     attackIntervalMs: 1600,
-    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal', 'mana_shield', 'haste', 'conjure_mana', 'thunder_strike', 'inferno_rain'],
+    spells: ['arcane_bolt', 'flame_lance', 'fire_nova', 'light_heal', 'mana_shield', 'haste', 'conjure_mana', 'thunder_strike', 'inferno_rain'].concat(extraSpellsFor('sorcerer')),
     startingEquipment: {
       mainHand: { itemId: 'wand_ember' },
       body: { itemId: 'robe_apprentice' },
@@ -61,7 +62,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
       'conjure_health',
       'ice_shard',
       'stone_skin',
-    ],
+    ].concat(extraSpellsFor('druid')),
     startingEquipment: {
       mainHand: { itemId: 'rod_sprout' },
       body: { itemId: 'robe_druid' },
@@ -87,11 +88,11 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     regen: { health: 2, mana: 2 },
     skillMultipliers: { sword: 1.5, axe: 1.5, club: 1.5, distance: 1, shielding: 1.3, magic: 1.4 },
     magicGrowth: 1.3,
-    damage: { melee: 0.8, distance: 1.25, magic: 0.9, healing: 1 },
-    physicalReduction: 0.05,
+    damage: { melee: 0.8, distance: 1.32, magic: 0.9, healing: 1 },
+    physicalReduction: 0.08,
     baseSpeed: 3.1,
     attackIntervalMs: 1500,
-    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal', 'stunning_arrow', 'haste', 'divine_shot', 'holy_light', 'sacred_fire'],
+    spells: ['holy_arrow', 'arrow_rain', 'hunters_focus', 'light_heal', 'stunning_arrow', 'haste', 'divine_shot', 'holy_light', 'sacred_fire'].concat(extraSpellsFor('paladin')),
     startingEquipment: {
       mainHand: { itemId: 'bow_hunting' },
       body: { itemId: 'armor_leather' },
@@ -122,7 +123,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     physicalReduction: 0.12,
     baseSpeed: 2.9,
     attackIntervalMs: 1400,
-    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste', 'crippling_blow', 'berserk', 'second_wind'],
+    spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste', 'crippling_blow', 'berserk', 'second_wind'].concat(extraSpellsFor('knight')),
     startingEquipment: {
       mainHand: { itemId: 'sword_short' },
       offHand: { itemId: 'shield_wood' },

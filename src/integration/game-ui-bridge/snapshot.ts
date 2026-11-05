@@ -13,7 +13,10 @@ import type { ItemStack } from '../../domain/entities/character';
 import { levelProgress, totalXpForLevel } from '../../domain/rules/experience';
 import { skillProgress } from '../../domain/rules/skills';
 import { castFailMessage } from '../../domain/rules/spells';
+import type { GameData } from '../../domain/entities/gameData';
+import type { MarketState } from '../../domain/rules/market';
 import { countItem } from '../../domain/rules/inventory';
+import { bestPotionFor, usablePotionCount } from '../../domain/rules/potions';
 import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { spellManaCost } from '../../domain/rules/spells';
@@ -66,6 +69,10 @@ export interface ItemView {
   locked: boolean;
   /** Fora do "vender tudo" (travado ou munição da arma equipada). */
   kept: boolean;
+  /** Quanto a melhor loja paga por uma unidade (e qual), ou null se nenhuma compra. */
+  npcSell: { price: number; shop: string } | null;
+  /** Anúncio mais barato no mercado do banco (preço por unidade e quantos anúncios há), ou null. */
+  market: { price: number; listings: number } | null;
 }
 
 /** Um atalho da barra de ações (magia, item da mochila, poção automática ou vazio). */
@@ -98,6 +105,8 @@ export interface SpellView {
   reason: string | null;
   target: string;
   color: string;
+  /** Grau da magia (2 = II, 3 = III); 0 nas magias sem graus. */
+  tier: number;
 }
 
 export interface UiSnapshot {
@@ -277,6 +286,21 @@ function itemLines(def: ItemDef): string[] {
   return l;
 }
 
+/** O que a melhor loja paga pelo item. */
+function bestNpcBuy(data: GameData, itemId: string): ItemView['npcSell'] {
+  let best: ItemView['npcSell'] = null;
+  for (const shop of Object.values(data.shops))
+    for (const o of shop.buys) if (o.itemId === itemId && (!best || o.price > best.price)) best = { price: o.price, shop: shop.name };
+  return best;
+}
+
+/** O anúncio mais barato do item no mercado do banco. */
+function marketLow(market: MarketState, itemId: string): ItemView['market'] {
+  const ls = market.listings.filter((l) => l.itemId === itemId);
+  if (!ls.length) return null;
+  return { price: Math.min(...ls.map((l) => l.price)), listings: ls.length };
+}
+
 export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
   const w = sim.world;
   const def = w.data.items[stack.itemId]!;
@@ -304,13 +328,11 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     better: isUpgrade(w.data, c, def),
     locked: isSellLocked(c, def.id),
     kept: keptFromSellAll(c, def.id),
+    npcSell: bestNpcBuy(w.data, def.id),
+    market: marketLow(w.market, def.id),
   };
 }
 
-const POTION_IDS = {
-  health: ['potion_health', 'potion_health_great', 'potion_health_supreme'],
-  mana: ['potion_mana', 'potion_mana_great', 'potion_mana_supreme'],
-} as const;
 
 function hotbarView(sim: GameSimulation): HotbarSlotView[] {
   const w = sim.world;
@@ -336,14 +358,14 @@ function hotbarView(sim: GameSimulation): HotbarSlotView[] {
       else
         out.push({ ...empty, kind: 'spell', spell: spellView(sim, e.id), name: w.data.spells[e.id]!.name });
     } else if (e.kind === 'potion') {
-      const ids = POTION_IDS[e.id];
       out.push({
         ...empty,
         kind: 'potion',
         itemId: e.id,
-        icon: e.id === 'health' ? 'item_potion_health' : 'item_potion_mana',
+        // ícone da maior poção que ele já pode beber (a do nível dele)
+        icon: bestPotionFor(w.data, c.level, e.id === 'health' ? 'heal' : 'mana')?.icon ?? (e.id === 'health' ? 'item_potion_health' : 'item_potion_mana'),
         name: e.id === 'health' ? 'Poção de vida (automática)' : 'Poção de mana (automática)',
-        count: ids.reduce((s, id) => s + countItem(c.inventory, id), 0),
+        count: usablePotionCount(w.data, c, e.id === 'health' ? 'heal' : 'mana'), // só as que ele já pode beber
         cooldownRemaining: potionCd,
         cooldownMs: 1000,
       });
@@ -388,6 +410,7 @@ function spellView(sim: GameSimulation, id: string): SpellView {
     reason: check.ok ? null : castFailMessage(check.reason, check.detail),
     target: s.target,
     color: s.vfx.color,
+    tier: s.baseId ? (s.tier ?? 0) : 0,
   };
 }
 

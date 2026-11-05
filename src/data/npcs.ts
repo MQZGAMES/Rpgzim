@@ -119,11 +119,28 @@ const list: NpcDef[] = [
     title: 'Sentinela do portão leste',
     sprite: 'npc_guard',
     wanderRadius: 0,
+    guard: true,
     greeting: 'Alto lá! Ah, é você.',
     dialog: [
       {
         id: 'start',
         text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A leste do bosque ficam as Terras Altas: bandidos, ursos, escorpiões, a Fortaleza Orc, o Bosque Gélido, a Cidadela Sombria e o Covil do Dragão — só para os mais fortes. Atenção: só dentro das casas, lojas, banco e templo ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
+        options: [close],
+      },
+    ],
+  },
+  {
+    id: 'guard_south',
+    name: 'Guarda Lia',
+    title: 'Sentinela do portão sul',
+    sprite: 'npc_guard',
+    wanderRadius: 0,
+    guard: true,
+    greeting: 'Tudo calmo por aqui.',
+    dialog: [
+      {
+        id: 'start',
+        text: 'Ao sul fica o Pântano Sombrio e, mais além, as terras do sul: o Brejo das Sanguessugas, o Ninho das Aranhas, a Savana Rachada e o Desfiladeiro das Serpes. Se alguma criatura passar do portão, a guarda dá conta — mas quem a trouxe não leva nada por isso.',
         options: [close],
       },
     ],
@@ -218,7 +235,7 @@ const potionSells: [string, number][] = [
   ['training_wand', 40],
   ['potion_health', 40],
   ['potion_mana', 45],
-  ['potion_health_great', 110],
+  ['potion_health_great', 100],
   ['potion_mana_great', 120],
   ['wand_ember', 150],
   ['rod_sprout', 150],
@@ -230,8 +247,8 @@ const potionSells: [string, number][] = [
   ['robe_druid', 130],
   ['ring_vigor', 380],
   ['amulet_mana', 420],
-  ['potion_health_supreme', 260],
-  ['potion_mana_supreme', 270],
+  ['potion_health_supreme', 200],
+  ['potion_mana_supreme', 240],
   // nível 8+
   ['legs_silk', 600],
   ['hat_wizard', 900],
@@ -279,7 +296,7 @@ const list2: ShopDef[] = [
     sells: [
       { itemId: 'amulet_loss', price: 10000 },
       { itemId: 'meat', price: 8 },
-      { itemId: 'potion_health', price: 45 },
+      { itemId: 'potion_health', price: 40 },
     ],
     buys: [
       { itemId: 'boar_tusk', price: 18 },

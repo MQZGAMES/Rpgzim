@@ -31,7 +31,9 @@ import {
   SAFE_MARGIN,
 } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
-import { spellManaCost } from '../../domain/rules/spells';
+import { spellManaCost, spellTiers } from '../../domain/rules/spells';
+
+import { bestPotionFor, canDrink, potionAmount, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
 import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
@@ -339,7 +341,7 @@ function manaRestockCost(w: World, h: HeroEntity): number {
   if (deficit <= 0) return 0;
   let perMana = Infinity;
   for (const shop of Object.values(w.data.shops))
-    for (const o of potionOffers(w, shop, 'mana'))
+    for (const o of potionOffers(w, shop, 'mana', h))
       perMana = Math.min(perMana, o.price / (w.data.items[o.itemId]?.use?.mana ?? 60));
   return Number.isFinite(perMana) ? Math.ceil(deficit * perMana) : 0;
 }
@@ -359,6 +361,11 @@ export const heroHelpers = {
   collectLoot: (w: World, h: HeroEntity): void => collectLootWhileFighting(w, h),
   fightSpells: (w: World, h: HeroEntity, target: MonsterEntity): void => fightSpells(w, h, target, 0),
   useMarket: (w: World, h: HeroEntity): void => useMarket(w, h),
+  /** Compra de poções numa loja já aberta (w.ui.shop), como na etapa de loja da vila. */
+  buyPotions: (w: World, h: HeroEntity, npcId: string): void => shopping(w, h, { kind: 'shop', npcId, buyPotions: true }),
+  tryCast: (w: World, h: HeroEntity, id: string): boolean => tryCast(w, h, id),
+  pickPotion: (w: World, h: HeroEntity): number => pickPotion(w, h),
+  conjurePotions: (w: World, h: HeroEntity): void => conjurePotions(w, h),
 };
 
 /** Poções de vida que restam quando ele decide ir repor o estoque (antes de ficar seco no meio das criaturas). */
@@ -379,24 +386,29 @@ function lowOnPotions(w: World, h: HeroEntity): boolean {
   );
 }
 
+/** Poções de vida que ele pode beber (as acima do nível dele não contam). */
 function potionsOf(w: World, h: HeroEntity): number {
-  return Object.values(w.data.items)
-    .filter((i) => i.type === 'potion' && i.use?.heal && !i.use.mana)
-    .reduce((s, i) => s + countItem(h.character.inventory, i.id), 0);
+  return usablePotionCount(w.data, h.character, 'heal');
 }
 
-/** Cura total guardada em poções de vida (todas as pilhas). */
+/** Uso da poção, se ele já pode bebê-la (nível mínimo). */
+function drinkable(w: World, h: HeroEntity, itemId: string) {
+  const def = w.data.items[itemId];
+  return canDrink(def, h.character.level) ? def?.use : undefined;
+}
+
+/** Cura total guardada em poções de vida (todas as pilhas que ele pode beber). */
 function potionHeal(w: World, h: HeroEntity): number {
   return h.character.inventory.reduce((s, st) => {
-    const use = st && w.data.items[st.itemId]?.use;
+    const use = st && drinkable(w, h, st.itemId);
     return st && use?.heal && !use.mana ? s + use.heal * st.count : s;
   }, 0);
 }
 
-/** Mana guardada em poções de mana. */
+/** Mana guardada em poções de mana (que ele pode beber). */
 function manaStock(w: World, h: HeroEntity): number {
   return h.character.inventory.reduce((s, st) => {
-    const use = st && w.data.items[st.itemId]?.use;
+    const use = st && drinkable(w, h, st.itemId);
     return st && use?.mana && !use.heal ? s + use.mana * st.count : s;
   }, 0);
 }
@@ -481,14 +493,16 @@ function monsterIdByName(w: World, name: string | null): string | null {
   return Object.values(w.data.monsters).find((d) => d.name === name)?.id ?? null;
 }
 
-/** Poções à venda (vida ou mana), da mais fraca para a mais forte. */
+/** Poções à venda (vida ou mana) que ele já pode beber, da mais fraca para a mais forte. */
 function potionOffers(
   w: World,
   shop: { sells: readonly { itemId: string; price: number }[] },
   kind: 'heal' | 'mana',
+  h?: HeroEntity,
 ) {
   return shop.sells
     .filter((o) => {
+      if (h && !canDrink(w.data.items[o.itemId], h.character.level)) return false;
       const use = w.data.items[o.itemId]?.use;
       return kind === 'heal' ? !!use?.heal && !use.mana : !!use?.mana && !use.heal;
     })
@@ -1005,7 +1019,7 @@ function pickPotion(w: World, h: HeroEntity, panic = false): number {
   const owned = h.character.inventory
     .map((st, i) => ({
       i,
-      heal: st ? (w.data.items[st.itemId]?.use?.heal ?? 0) : 0,
+      heal: st ? (drinkable(w, h, st.itemId)?.heal ?? 0) : 0,
       mana: st ? w.data.items[st.itemId]?.use?.mana : 0,
     }))
     .filter((p) => p.heal > 0 && !p.mana)
@@ -1020,7 +1034,7 @@ function pickManaPotion(w: World, h: HeroEntity): number {
   const owned = h.character.inventory
     .map((st, i) => ({
       i,
-      mana: st ? (w.data.items[st.itemId]?.use?.mana ?? 0) : 0,
+      mana: st ? (drinkable(w, h, st.itemId)?.mana ?? 0) : 0,
       heal: st ? (w.data.items[st.itemId]?.use?.heal ?? 0) : 0,
     }))
     .filter((p) => p.mana > 0 && !p.heal)
@@ -1031,6 +1045,18 @@ function pickManaPotion(w: World, h: HeroEntity): number {
 function tryCast(w: World, h: HeroEntity, spellId: string): boolean {
   const spell = w.data.spells[spellId];
   if (!spell || !spell.vocations.includes(h.character.vocation)) return false;
+  // graus II/III: a cura sai sempre no maior grau liberado; o ataque, no maior só com mana sobrando (eles gastam mais
+  // mana por ponto de dano — com a mana curta o I rende mais)
+  const tiers = spellTiers(w.data.spells, spellId);
+  if (tiers.length > 1) {
+    const rich = h.character.mana >= h.stats.maxMana * 0.45;
+    for (const id of [...tiers].reverse()) {
+      const t = w.data.spells[id]!;
+      if ((t.tier ?? 1) > 1 && t.effect === 'damage' && !rich) continue;
+      if (t.vocations.includes(h.character.vocation) && castCheck(w, t).ok) return castSpell(w, id);
+    }
+    return false;
+  }
   if (!castCheck(w, spell).ok) return false;
   return castSpell(w, spellId);
 }
@@ -1192,7 +1218,8 @@ function expectedRate(w: World, h: HeroEntity, id: string): number {
   const sp = w.map.spawns
     .filter((s) => s.monsterId === id)
     .sort((a, b) => chebyshev(a, h) - chebyshev(b, h))[0];
-  if (sp) prior /= 1 + chebyshev(sp, h) / 600;
+  // (com as Terras do Sul o mapa ficou bem mais fundo: a viagem pesa mais — fugir de longe sem poção mata)
+  if (sp) prior /= 1 + chebyshev(sp, h) / 250;
   if (!st || st.ms < 90000) return prior;
   const learned = (st.xp / st.ms) * 60000;
   return learned * 0.7 + prior * 0.3;
@@ -2354,21 +2381,23 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
   if (step.trainingWeapon && countItem(c.inventory, TRAINING_WEAPON) === 0) buyItem(w, TRAINING_WEAPON, 1);
   if (step.buyPotions) {
     // mana primeiro para os magos (é o dano deles); os demais gastam menos nisso
-    const manaOffers = potionOffers(w, shop, 'mana');
+    const manaOffers = potionOffers(w, shop, 'mana', h);
     const manaOffer = pickPotionOffer(w, manaOffers, h.stats.maxMana * 0.5);
     if (manaOffer && manaGoal(w, h)) {
       const per = w.data.items[manaOffer.itemId]?.use?.mana ?? 60;
       const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' ? 0.7 : 0.2;
+      // o que falta em poções do tamanho dele (as pequenas que sobraram serão vendidas)
       const qty = Math.min(
-        Math.ceil((manaGoal(w, h) - manaStock(w, h)) / per),
+        Math.ceil((manaGoal(w, h) - goodStock(w, h, 'mana', per)) / per),
         Math.floor((c.gold * share) / manaOffer.price),
         40,
       );
       if (qty > 0 && buyItem(w, manaOffer.itemId, qty)) heroSay(w, h, 'buy', {}, 60000);
     }
-    const healOffers = potionOffers(w, shop, 'heal');
+    const healOffers = potionOffers(w, shop, 'heal', h);
     const basic = healOffers[0]; // a mais barata: tapa-buraco
-    const great = pickPotionOffer(w, healOffers, h.stats.maxHealth * 0.55); // a mais forte que ainda cura "pouco por vez"
+    // a do nível dele: a mais forte que ainda cura "pouco por vez" (sem desperdiçar a cura com a vida quase cheia)
+    const great = pickPotionOffer(w, healOffers, h.stats.maxHealth * 0.7);
     if (basic) {
       let missing = healGoal(h, w.now) - potionHeal(w, h);
       // sobra pouco para um upgrade já planejado; o estoque de cura vem primeiro
@@ -2380,12 +2409,14 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
         Math.max(Math.min(3, Math.floor(c.gold / basic.price)) * basic.price, c.gold * 0.85),
       );
       let bought = false;
-      // vida alta: parte do estoque em poções fortes (curam 160 em 1 s, a básica só 70)
+      // a poção do nível dele primeiro (cura bem mais por gole); a pequena só completa o estoque
       const greatHeal = great ? (w.data.items[great.itemId]?.use?.heal ?? 160) : 0;
-      if (great && great.itemId !== basic.itemId && h.stats.maxHealth >= 180 && missing > 0) {
+      // (conta só o estoque das poções do tamanho dele: com ouro, troca as pequenas pelas do nível)
+      const missingGood = healGoal(h, w.now) - goodStock(w, h, 'heal', greatHeal);
+      if (great && great.itemId !== basic.itemId && h.stats.maxHealth >= 180 && missingGood > 0) {
         const qty = Math.min(
-          Math.floor((missing * 0.5) / greatHeal),
-          Math.floor((budget * 0.6) / great.price),
+          Math.floor((missingGood * 0.85) / greatHeal),
+          Math.floor((budget * 0.75) / great.price),
         );
         if (qty > 0 && buyItem(w, great.itemId, qty)) {
           missing -= qty * greatHeal;
@@ -2401,6 +2432,7 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       if (qty > 0 && buyItem(w, basic.itemId, qty)) bought = true;
       if (bought) heroSay(w, h, 'buy', {}, 60000);
     }
+    sellSmallPotions(w, h, shop);
   }
   if (step.upgrades) {
     for (let i = 0; i < 3; i++) {
@@ -2749,12 +2781,20 @@ function conjurePotions(w: World, h: HeroEntity): void {
   const voc = h.character.vocation;
   if (voc !== 'sorcerer' && voc !== 'druid') return;
   if (h.targetId || engagedByMonsters(w, h) || freeSlots(h.character.inventory) < 3) return;
-  const spellId = voc === 'sorcerer' ? 'conjure_mana' : 'conjure_health';
-  const spell = w.data.spells[spellId];
-  if (!spell || h.character.mana - spellManaCost(spell, h.character.level) < h.stats.maxMana * 0.5) return;
   const lacking =
     voc === 'sorcerer' ? manaStock(w, h) < manaGoal(w, h) : potionHeal(w, h) < healGoal(h, w.now);
-  if (lacking) tryCast(w, h, spellId);
+  if (!lacking) return;
+  // a maior poção que ele já pode beber e criar sem deixar a mana abaixo da metade
+  const options = w.data.vocations[voc].spells
+    .map((id) => w.data.spells[id]!)
+    .filter(
+      (sp) =>
+        sp?.effect === 'conjure' &&
+        canDrink(w.data.items[sp.conjure!.itemId], h.character.level) &&
+        h.character.mana - spellManaCost(sp, h.character.level) >= h.stats.maxMana * 0.5,
+    )
+    .sort((a, b) => (b.tier ?? 0) - (a.tier ?? 0));
+  for (const sp of options) if (tryCast(w, h, sp.id)) return;
 }
 
 /** Mantém a Corrida ativa (renova antes de acabar) enquanto segue ou persegue: usa sempre que possível. */
@@ -3675,7 +3715,7 @@ function marketDeals(w: World, h: HeroEntity): MarketListing[] {
     const total = l.price * l.count;
     if (!def || total > money) continue;
     if (def.type === 'potion') {
-      if (l.price > npcPrice(w, l.itemId)) continue;
+      if (l.price > npcPrice(w, l.itemId) || !canDrink(def, c.level)) continue;
       const heal = !!def.use?.heal && !def.use.mana;
       const mana = !!def.use?.mana && !def.use.heal;
       if (heal && potionHeal(w, h) < healGoal(h, w.now)) out.push(l);
@@ -3743,6 +3783,36 @@ function listLootOnMarket(w: World, h: HeroEntity): void {
     if (marketAutoList(w, 'inventory', i)) {
       listed++;
       open++;
+    }
+  }
+}
+
+/** Estoque (vida ou mana) só das poções que recuperam pelo menos metade da do tamanho dele. */
+function goodStock(w: World, h: HeroEntity, kind: 'heal' | 'mana', size: number): number {
+  return h.character.inventory.reduce((sum, st) => {
+    const use = st && drinkable(w, h, st.itemId);
+    const v = use?.[kind] ?? 0;
+    return st && v >= size * 0.5 && !use?.[kind === 'heal' ? 'mana' : 'heal'] ? sum + v * st.count : sum;
+  }, 0);
+}
+
+/**
+ * Com o estoque da poção do nível dele em dia, vende as poções bem menores que sobraram na mochila (curam menos da
+ * metade da dele: só ocupam espaço e gole). Fica com algumas para emergência e para dar aos colegas.
+ */
+function sellSmallPotions(w: World, h: HeroEntity, shop: { buys: readonly { itemId: string; price: number }[] }): void {
+  const c = h.character;
+  for (const kind of ['heal', 'mana'] as const) {
+    const best = bestPotionFor(w.data, c.level, kind);
+    if (!best) continue;
+    const bestAmt = potionAmount(best, kind);
+    const goal = kind === 'heal' ? healGoal(h, w.now) : manaGoal(w, h);
+    if (!goal || countItem(c.inventory, best.id) * bestAmt < goal * 0.8) continue;
+    for (const def of potionsByKind(w.data, kind)) {
+      if (def.id === best.id || potionAmount(def, kind) >= bestAmt * 0.5) continue;
+      const keep = kind === 'heal' && def.id === 'potion_health' ? 3 : 0;
+      const n = countItem(c.inventory, def.id) - keep;
+      if (n > 0 && shop.buys.some((o) => o.itemId === def.id)) sellItem(w, def.id, n);
     }
   }
 }

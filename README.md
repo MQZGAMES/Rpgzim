@@ -25,9 +25,10 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Controles
 - **Toque:** joystick invisível na metade esquerda (aparece só ao pressionar e arrastar); toque no chão para
-  andar (também na área do joystick); toque no monstro (ou botão *Atacar*) para selecionar alvo; **9 atalhos numerados** num teclado 3×3
-  (1 2 3 / 4 5 6 / 7 8 9, a mesma ordem das teclas do computador) com a coluna de seleção de personagem e do botão de
-  ataque à direita (no canto); botão de ação contextual. Na mochila, toque duplo equipa/usa.
+  andar (também na área do joystick); toque no monstro para selecionar alvo; **9 atalhos numerados** num teclado 3×3
+  no canto inferior direito (1 2 3 / 4 5 6 / 7 8 9 de cima para baixo, a mesma ordem das teclas do computador), com o
+  botão de seleção de jogador logo acima. **Não há botão de ataque**: qualquer magia de ataque mira o mais próximo e
+  começa o ataque básico, mesmo sem mana. Botão de ação contextual. Na mochila, toque duplo equipa/usa.
   Andar por conta própria pausa a perseguição do alvo (tocar/escolher o alvo de novo retoma).
 - **Entrada do mapa unificada** (`src/ui/controls/MapInput.tsx`): uma camada única trata toque e mouse (andar,
   selecionar, joystick, cursor), medindo a posição do canvas a cada toque. O input do Phaser usava uma posição em
@@ -121,10 +122,54 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Caveira amarela de vingança**: quem foi morto injustamente vê o assassino com caveira amarela por 15 min e pode atacá-lo e matá-lo **sem caveira nem morte injusta** (só o PZ lock).
 - **Loot sem trava**: qualquer um pega qualquer saco a qualquer momento. O saco do **seu próprio corpo** não é dividido com o grupo; o saco de morte de outro personagem é dividido como um loot comum.
 - **Poções vendidas pela metade do preço** na Alquimia (o "vender tudo" não leva poções).
-- **Botão de seleção de jogador/herói** (acima do botão de ataque no celular; ao lado do Tab no computador): cada toque marca o próximo personagem por perto (nome em laranja) e, depois do último, desmarca. Com alguém marcado, o botão de ataque e as magias de ataque vão nele.
+- **Botão de seleção de jogador/herói** (acima dos atalhos, no canto inferior direito): cada toque marca o próximo personagem por perto (nome em laranja) e, depois do último, desmarca. Com alguém marcado, as magias de ataque (e o ataque básico) vão nele.
 - **Ninguém é empurrado nem puxado para dentro da PZ** (a troca de lugar não acontece na borda da área protegida).
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
+
+## Poções por tamanho, magias I/II/III, Terras do Sul e guardas da vila
+- **Poções por tamanho e nível mínimo** (as pequenas servem para todos):
+
+  | Poção | Nível | Vida / mana | Recarga | Preço |
+  |---|---|---|---|---|
+  | Pequena | 1 | 75 / 60 | 2 s | 40 / 45 |
+  | Média | 12 | 180 / 150 | 4 s | 100 / 120 |
+  | Grande | 28 | 380 / 300 | 4 s | 200 / 240 |
+  | Espiritual | 50 | 650 / 500 | 6 s | 340 / 400 |
+  | Divina | 75 | 1100 / 900 | 6 s | 560 / 720 |
+
+  Sem o nível a poção não é bebida; o atalho automático, a cura automática e a IA só contam (e usam) as que o
+  personagem já pode beber. Os ícones crescem com o tamanho (frasco, garrafa, garrafão com detalhes dourados).
+- **Magias de criação de cada poção**: o Druid cria as 5 de vida e o Sorcerer as 5 de mana (6 níveis depois do nível
+  da poção), por 2,4× a 3,4× a mana que ela devolve. A IA cria a maior que ela já bebe sem ficar com menos de metade da
+  mana.
+- **Magias de grau II e III** (mesmo nome com I/II/III): cada vocação ganha II (nível 20/30) e III (nível 45/60) da
+  magia de alvo único e da de área, e todos ganham o *Respiro Vital II/III* (níveis 25 e 50). Cada grau bate +40% /
+  +85% e gasta +60% / +130% de mana — o I continua rendendo mais por ponto de mana. A IA usa o maior grau com a mana
+  acima de 45% e o I com a mana curta (a cura, sempre o maior grau).
+- **Magia de ataque = ataque básico**: o botão de ataque saiu; qualquer magia de ataque (inclusive as de área em
+  volta) mira o inimigo mais próximo e começa o ataque básico, mesmo que a magia não saia (sem mana ou em recarga).
+- **Terras do Sul** (o mapa cresceu de 128 para 160 tiles de altura; nenhuma cidade nova): 6 áreas de caça com 12
+  criaturas inéditas e não humanas — Brejo das Sanguessugas (slime do brejo e sapo-boi, nível 6–12), Ninho das Aranhas
+  (aranha das cavernas e viúva-negra, 12–20), Savana Rachada (hiena e javali couraçado, 20–28), Desfiladeiro das Serpes
+  (urso das cavernas e serpe verde, 28–44), Estepe dos Basiliscos (basilisco e lobo da tempestade, 68–76) e Cratera
+  Cristalina (escorpião de cristal e slime de magma, 84–92). Cada uma deixa um troféu próprio (vendido na Alquimia e na
+  Banca), a poção do nível e, raramente, equipamento. Trilhas descem do pântano, das ruínas, do covil e das Terras
+  Distantes até a estrada do sul. A IA pesa mais a viagem ao escolher a caça (longe da vila, sem poção, fugir mata).
+- **Guardas da vila**: criatura que entra nas ruas (lurada ou perseguindo alguém) é abatida pela guarda — lanças a
+  cada 0,7 s, 3 acertos derrubam qualquer uma — sem XP nem loot. Nova guarda no portão sul (Guarda Lia).
+- **Preço do item**: ao selecionar um item na mochila ou na loja aparece quanto a melhor loja paga e o anúncio mais
+  barato no mercado do banco (com o número de anúncios).
+- **Todos os personagens criados entram logados** jogando com a IA (vida própria), a menos que você os deslogue em
+  *Personagens online*.
+- **Câmera nas bordas**: perto da borda do mapa a câmera não trava mais — o personagem fica sempre no centro e as
+  criaturas não somem embaixo do HUD e dos atalhos (além da borda aparece a mata fechada).
+- **Configurações por personagem**: as ajudas automáticas (cura em X%, poções, loot) e as regras de grupo que você usa
+  como líder ficam salvas no próprio personagem (e vão junto na sincronização com o GitHub).
+- **Economia** (medida em 3 h de jogo de cada vocação): as poções grandes custavam *mais* ouro por ponto que as
+  pequenas e os magos gastavam até ~30 mil de ouro a cada meia hora só em mana. Agora o preço por ponto cai um pouco
+  com o tamanho (vida ~0,53 → 0,51; mana ~0,75 → 0,80 estável) e a IA compra a poção do nível dela e vende as pequenas
+  que sobram quando o estoque das maiores está em dia.
 
 ## Personagens logados com IA, mercado do banco, magos e criaturas mais espertas
 - **Logar e deslogar personagens** (lista de *Personagens online*, tecla O): todo personagem salvo pode entrar no jogo
@@ -341,7 +386,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **321 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **334 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

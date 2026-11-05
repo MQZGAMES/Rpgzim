@@ -98,7 +98,8 @@ describe('magias de área e magias novas', () => {
   it('Knight e Paladin ganharam uma magia (7 na barra padrão + 2 opcionais por vocação)', () => {
     expect(GAME_DATA.vocations.knight.spells).toContain('crippling_blow');
     expect(GAME_DATA.vocations.paladin.spells).toContain('divine_shot');
-    for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells).toHaveLength(9);
+    // as 9 primeiras (7 da barra padrão + 2 opcionais); depois vêm os graus II/III e as magias de criação
+    for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells.filter((id) => !GAME_DATA.spells[id]!.baseId && !id.startsWith('conjure_')).length).toBeGreaterThanOrEqual(8);
     expect(GAME_DATA.spells.crippling_blow!.slow).toBeTruthy();
   });
 

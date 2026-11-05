@@ -4,7 +4,7 @@ import type { PixelCanvas} from './lib/canvas.ts';
 import { rgb } from './lib/canvas.ts';
 import { P, type Ramp } from './lib/palette.ts';
 import { GEAR_TIERS } from '../../src/data/gearTiers.ts';
-import { TROPHIES, type TrophyShape } from '../../src/data/trophies.ts';
+import { SOUTH_TROPHIES, TROPHIES, type TrophyShape } from '../../src/data/trophies.ts';
 
 type Draw = (c: PixelCanvas) => void;
 const rampOf = (hex: readonly string[]): Ramp => hex.map((h) => rgb(h));
@@ -112,7 +112,7 @@ export function gearIcons(fns: {
   rows: { TORSO: string[]; ROBE: string[]; HELMET: string[]; HAT: string[]; LEGS: string[]; BOOTS: string[] };
   ring: (gem: Ramp) => Draw;
   amulet: (gem: Ramp) => Draw;
-  potion: (liquid: Ramp, big?: boolean) => Draw;
+  potion: (liquid: Ramp, size?: boolean | number) => Draw;
 }): [string, Draw][] {
   const out: [string, Draw][] = [];
   const { rows } = fns;
@@ -142,11 +142,11 @@ export function gearIcons(fns: {
   }
   const tier = (id: string) => rampOf(GEAR_TIERS.find((t) => t.id === id)!.ramp);
   out.push(
-    ['potion_health_spirit', fns.potion(tier('ruby'), true)],
-    ['potion_health_divine', fns.potion(tier('celestial'), true)],
-    ['potion_mana_spirit', fns.potion(tier('crystal'), true)],
-    ['potion_mana_divine', fns.potion(tier('primordial'), true)],
+    ['potion_health_spirit', fns.potion(tier('ruby'), 3)],
+    ['potion_health_divine', fns.potion(tier('celestial'), 4)],
+    ['potion_mana_spirit', fns.potion(tier('crystal'), 3)],
+    ['potion_mana_divine', fns.potion(tier('primordial'), 4)],
   );
-  for (const t of TROPHIES) out.push([t.id, TROPHY_SHAPES[t.shape](rampOf(t.ramp))]);
+  for (const t of [...TROPHIES, ...SOUTH_TROPHIES]) out.push([t.id, TROPHY_SHAPES[t.shape](rampOf(t.ramp))]);
   return out;
 }

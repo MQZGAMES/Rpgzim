@@ -14,6 +14,7 @@ import { heroSnapshot } from '../../game/ai/heroes';
 import { customHeroDef } from '../../data/heroes';
 import { parseMarket } from '../../domain/rules/market';
 import type { HeroDef } from '../../domain/entities/definitions';
+import { canDrink } from '../../domain/rules/potions';
 
 /** Herói fixo do jogo (Boladex, Maguim...) ou um personagem criado pelo jogador jogando com a IA. */
 function heroDefOf(data: GameData, c: CharacterState): HeroDef {
@@ -43,7 +44,7 @@ export interface SessionOptions {
 
 const AUTO_KEY = 'rpgzim:auto';
 const MARKET_KEY = 'rpgzim:market';
-/** Quem o jogador deixou logado/deslogado (id do personagem -> logado?). Sem registro, só os heróis entram. */
+/** Quem o jogador deixou logado/deslogado (id do personagem -> logado?). Sem registro, todos entram logados. */
 export const ONLINE_KEY = 'rpgzim:online';
 
 /** Preferência de login com IA salva neste aparelho. */
@@ -109,12 +110,16 @@ export class GameSession {
       character.health = this.sim.world.player.stats.maxHealth;
       character.mana = this.sim.world.player.stats.maxMana;
     }
-    try {
-      const saved = JSON.parse(localStorage.getItem(AUTO_KEY) ?? 'null') as Record<string, unknown> | null;
-      if (saved) this.sim.setAuto(migrateAuto(saved));
-    } catch {
-      // sem armazenamento: usa os padrões
-    }
+    // ajudas automáticas: as deste personagem (salvas nele); sem nada salvo, as antigas do aparelho
+    const own = character.settings?.auto;
+    if (own) this.sim.setAuto(migrateAuto(own));
+    else
+      try {
+        const saved = JSON.parse(localStorage.getItem(AUTO_KEY) ?? 'null') as Record<string, unknown> | null;
+        if (saved) this.sim.setAuto(migrateAuto(saved));
+      } catch {
+        // sem armazenamento: usa os padrões
+      }
     this.saves = opts.saves;
     this.audio = opts.audio;
     this.onExit = opts.onExit;
@@ -170,17 +175,15 @@ export class GameSession {
     }
   }
 
-  /** Ajudas automáticas (loot e poção): ficam no aparelho, valem para qualquer personagem. */
+  /** Ajudas automáticas (loot, poção e cura): de cada personagem — salvas nele e mantidas entre as sessões. */
   getAuto(): AutoSettings {
     return { ...this.sim.world.auto };
   }
   setAuto(patch: Partial<AutoSettings>): void {
     this.sim.setAuto(patch);
-    try {
-      localStorage.setItem(AUTO_KEY, JSON.stringify(this.sim.world.auto));
-    } catch {
-      // ignora
-    }
+    const c = this.sim.world.human.character;
+    c.settings = { ...c.settings, auto: { ...this.sim.world.auto } };
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
   }
 
   private wireEvents(): void {
@@ -553,6 +556,7 @@ export class GameSession {
     this.sim.configureParty(patch);
     this.audio.play('ui');
     this.dirty = true;
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
   }
   disbandParty(): void {
     this.sim.disbandParty();
@@ -637,7 +641,7 @@ export class GameSession {
         v: (kind === 'health' ? w.data.items[id]?.use?.heal : w.data.items[id]?.use?.mana) ?? 0,
         other: kind === 'health' ? w.data.items[id]?.use?.mana : w.data.items[id]?.use?.heal,
       }))
-      .filter((p) => p.v > 0 && !p.other && w.data.items[p.id]?.type === 'potion')
+      .filter((p) => p.v > 0 && !p.other && w.data.items[p.id]?.type === 'potion' && canDrink(w.data.items[p.id], c.level))
       .sort((a, b) => a.v - b.v);
     return (owned.find((p) => p.v >= missing * 0.8) ?? owned[owned.length - 1])?.id;
   }

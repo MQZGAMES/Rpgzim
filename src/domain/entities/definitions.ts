@@ -149,7 +149,11 @@ export interface SpellDef {
   buff?: { kind: BuffKind; value: number; durationMs: number };
   /** Efeito adicional aplicado aos alvos atingidos. */
   slow?: { factor: number; durationMs: number };
-  /** Magia de criação: coloca este item na mochila (custo = 4× o que a poção recupera). */
+  /** Grau da magia (I = 1, II = 2, III = 3; criação: tamanho da poção). */
+  tier?: number;
+  /** Magia de grau II/III: id da versão I. */
+  baseId?: string;
+  /** Magia de criação: coloca este item na mochila. */
   conjure?: { itemId: string; count: number };
   /** Cura/bênção também alcança os membros do grupo neste raio (tiles). */
   partyRadius?: number;
@@ -268,6 +272,8 @@ export interface NpcDef {
   wanderRadius: number;
   /** Fala curta exibida ao se aproximar. */
   greeting: string;
+  /** Guarda da cidade: abate as criaturas que entram nas ruas da vila. */
+  guard?: boolean;
 }
 
 export interface ShopOffer {

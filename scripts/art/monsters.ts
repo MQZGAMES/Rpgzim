@@ -10,9 +10,8 @@ const sel = (n: Color) => mix(n, P.outline, 0.8);
 export const SLIME_W = 24;
 export const SLIME_H = 24;
 
-function slimeFrame(rx: number, ry: number, eyeDy = 0, dead = false): PixelCanvas {
+function slimeFrame(rx: number, ry: number, eyeDy = 0, dead = false, n: readonly Color[] = P.nature): PixelCanvas {
   const c = new PixelCanvas(SLIME_W, SLIME_H);
-  const n = P.nature;
   const cx = 12;
   const bottom = 21;
   const cy = bottom - ry;
@@ -149,9 +148,8 @@ export function buildBoarFrames(): PixelCanvas[] {
 }
 
 // ------------------------------------------------------------------ Sapo do Pântano (quadros 24x24, "blob")
-function toadFrame(sq: number, dead = false): PixelCanvas {
+function toadFrame(sq: number, dead = false, g: readonly Color[] = P.forest): PixelCanvas {
   const c = new PixelCanvas(24, 24);
-  const g = P.forest;
   const cx = 12;
   if (dead) {
     c.ellipse(12, 19, 8, 2.8, (x, y, nx, ny) => (ny < -0.2 ? g[3]! : g[1]!));
@@ -469,4 +467,62 @@ export function buildElderDragonFrames(): PixelCanvas[] {
 export function buildVoidHorrorFrames(): PixelCanvas[] {
   const body = mixRamp(P.purple, P.black, 0.65);
   return frames5((s, d) => spiderFrame(s, d, body, P.blue));
+}
+
+// ------------------------------------------------------------------ criaturas das terras do sul (mesmos corpos, cores novas)
+/** Slime do Brejo: lodo roxo-acastanhado. */
+export function buildBogSlimeFrames(): PixelCanvas[] {
+  const n = mixRamp(P.purple, P.dirt, 0.45);
+  return [slimeFrame(7, 5.5, 0, false, n), slimeFrame(7.6, 4.9, 1, false, n), slimeFrame(6.6, 6.2, 0, false, n), slimeFrame(6.1, 7, -1, false, n), slimeFrame(0, 0, 0, true, n)];
+}
+/** Slime de Magma: rocha derretida. */
+export function buildMagmaSlimeFrames(): PixelCanvas[] {
+  const n = P.fire;
+  return [slimeFrame(7, 5.5, 0, false, n), slimeFrame(7.6, 4.9, 1, false, n), slimeFrame(6.6, 6.2, 0, false, n), slimeFrame(6.1, 7, -1, false, n), slimeFrame(0, 0, 0, true, n)];
+}
+/** Sapo-Boi do Brejo: pele marrom-oliva. */
+export function buildMarshToadFrames(): PixelCanvas[] {
+  const g = mixRamp(P.leather, P.green, 0.45);
+  return [toadFrame(0, false, g), toadFrame(1, false, g), toadFrame(-0.5, false, g), toadFrame(-1, false, g), toadFrame(0, true, g)];
+}
+/** Aranha das Cavernas: carapaça cinza-azulada, marcas verde-água. */
+export function buildCaveSpiderFrames(): PixelCanvas[] {
+  return frames5((s, d) => spiderFrame(s, d, P.stone, P.teal));
+}
+/** Viúva-Negra: preta com a ampulheta vermelha. */
+export function buildWidowSpiderFrames(): PixelCanvas[] {
+  const body = mixRamp(P.stone, P.black, 0.6);
+  return frames5((s, d) => spiderFrame(s, d, body, P.red));
+}
+/** Hiena Risonha: pelagem de areia, olho dourado. */
+export function buildHyenaFrames(): PixelCanvas[] {
+  const fur = mixRamp(P.dirt, P.sand, 0.55);
+  return [0, 1, 2].map((s) => wolfFrame(s, false, fur, P.gold[4]!)).concat(wolfFrame(0, true, fur, P.gold[4]!));
+}
+/** Lobo da Tempestade: azul elétrico. */
+export function buildStormWolfFrames(): PixelCanvas[] {
+  const fur = mixRamp(P.blue, P.arcane, 0.3);
+  return [0, 1, 2].map((s) => wolfFrame(s, false, fur, P.ice[4]!)).concat(wolfFrame(0, true, fur, P.ice[4]!));
+}
+/** Javali Couraçado: couro de pedra. */
+export function buildRhinoBoarFrames(): PixelCanvas[] {
+  return frames4((s, d) => boarFrame(s, d, P.stone));
+}
+/** Urso das Cavernas: pelagem quase negra. */
+export function buildCaveBearFrames(): PixelCanvas[] {
+  const fur = mixRamp(P.leather, P.black, 0.45);
+  return frames4((s, d) => bearFrame(s, d, fur));
+}
+/** Serpe Verde. */
+export function buildWyvernFrames(): PixelCanvas[] {
+  return frames4((s, d) => dragonFrame(s, d, P.green));
+}
+/** Basilisco: escamas verde-douradas. */
+export function buildBasiliskFrames(): PixelCanvas[] {
+  const sc = mixRamp(P.nature, P.gold, 0.3);
+  return frames5((s, d) => scorpionFrame(s, d, sc));
+}
+/** Escorpião de Cristal. */
+export function buildCrystalScorpionFrames(): PixelCanvas[] {
+  return frames5((s, d) => scorpionFrame(s, d, P.ice));
 }

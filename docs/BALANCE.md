@@ -191,3 +191,26 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - **Mana que acompanha o nível** (`manaPerLevel`): as magias de ataque de Sorcerer e Druid custam
   `mana base + nível × fator` (Faísca/Espinho +0,25; Lança de Chamas +0,45; Rajada Glacial +0,35; Explosão Ígnea +0,65;
   Cura Intensa +0,3 — o dobro disso estrangulava o Druid: nível 31 em vez de 52 em 3 h). O dano delas cresce com o nível e o ML; o custo agora também, e a poção de mana volta a contar.
+
+## Poções por tamanho, graus II/III e economia (nov/2026)
+- **Poções**: Pequena (nv 1) 75 vida / 60 mana, 2 s; Média (12) 180/150, 4 s; Grande (28) 380/300, 4 s; Espiritual (50)
+  650/500, 6 s; Divina (75) 1100/900, 6 s. Preço por ponto: vida 0,53 → 0,51; mana ~0,75–0,80 (estável). Antes as
+  maiores custavam mais por ponto (mana divina 1,22 de ouro por ponto contra 0,75 da pequena).
+- **Criação**: 2,4× (divina) a 3,4× (pequena) a mana devolvida; liberada 6 níveis depois do nível da poção.
+- **Graus II/III**: efeito ×1,4 / ×1,85, mana ×1,6 / ×2,3 (o I rende mais por ponto de mana); níveis 20/45 (alvo único
+  e cura 25/50) e 30/60 (área). Ajustes de vocação junto: Sorcerer magia 0,85 → 0,82; Paladin distância 1,25 → 1,32 e
+  redução física 5% → 8%.
+- **Medição** (`tests/tools/hero-life.test.ts`, 3 h, heróis sozinhos, nível / mortes):
+
+  | Herói | Publicado (2 sementes) | Novo (2–4 sementes) |
+  |---|---|---|
+  | Boladex (Knight) | 48 / 1 | 51 / 1,5 |
+  | Maguim (Sorcerer) | 54,5 / 1,5 | 62,5 / 0 |
+  | Mano Cura (Druid) | 48 / 1 | 57 / 1,5 |
+  | Distanciado (Paladin) | 40,5 / 4,5 | 41 / 5,25 |
+
+  Patrimônio no fim (bolsa + banco): os magos passaram de ~6–35 mil para ~17–41 mil (pagavam caro demais pela mana);
+  o Knight fica entre 2,5 e 12 mil. O Paladin continua o mais lento e o que mais morre (morre fugindo depois de cercado
+  — já acontecia antes); testada a regra "cercado e com poções, luta", ela piorou e foi descartada.
+- **Viagem**: a escolha da caça divide o XP/min por 1 + distância/250 (era /600): com as Terras do Sul o mapa ficou
+  mais fundo e um nível 2 chegou a descer até o Brejo e morrer fugindo sem poção.

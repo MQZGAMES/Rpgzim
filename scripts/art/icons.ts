@@ -423,19 +423,36 @@ function arrow(metal = false) {
   };
 }
 
-function potion(liquid: Ramp, big = false) {
+/**
+ * Frasco de poção pelo tamanho: 0 pequena (frasquinho), 1 média, 2 grande, 3 espiritual (anel dourado no gargalo),
+ * 4 divina (garrafão com tampa dourada e brilho). `true`/`false` (antigo) = grande/pequena.
+ */
+function potion(liquid: Ramp, size: boolean | number = 0) {
+  const k = typeof size === 'boolean' ? (size ? 2 : 0) : size;
   return (c: PixelCanvas) => {
-    const r = big ? 5.4 : 4.6;
-    const cy = big ? 9.5 : 10;
+    const r = [3.4, 4.4, 5.3, 5.8, 6.3][k]!;
+    const cy = [11.2, 10.5, 9.6, 9.4, 9.2][k]!;
+    const top = Math.round(cy - r);
     c.disc(8, cy, r, (x, y, nx, ny) => {
       if (ny < -0.35) return mix(P.ice[3]!, P.white, 0.3);
       return nx + ny < -0.4 ? liquid[4]! : nx + ny < 0.6 ? liquid[3]! : liquid[2]!;
     });
-    c.rect(6, big ? 2 : 3, 4, 3, P.ice[3]!);
-    c.rect(6, big ? 1 : 2, 4, 2, P.wood[3]!);
-    c.set(6, big ? 1 : 2, P.wood[4]!);
-    c.set(5, Math.round(cy) - 1, P.white);
-    c.set(5, Math.round(cy), mix(P.white, liquid[4]!, 0.3));
+    const neckW = k >= 3 ? 4 : k >= 1 ? 4 : 2;
+    const nx = 8 - neckW / 2;
+    c.rect(nx, top - 2, neckW, 3, P.ice[3]!);
+    c.rect(nx, top - 3, neckW, 2, k >= 4 ? P.gold[3]! : P.wood[3]!);
+    c.set(nx, top - 3, k >= 4 ? P.gold[4]! : P.wood[4]!);
+    if (k >= 3) c.hline(nx - 1, nx + neckW, top, P.gold[3]!); // anel dourado no gargalo
+    c.set(Math.round(8 - r * 0.55), Math.round(cy) - 1, P.white);
+    c.set(Math.round(8 - r * 0.55), Math.round(cy), mix(P.white, liquid[4]!, 0.3));
+    if (k >= 4) {
+      // brilho de estrela da divina
+      c.set(13, 3, P.white);
+      c.set(12, 3, P.gold[4]!);
+      c.set(14, 3, P.gold[4]!);
+      c.set(13, 2, P.gold[4]!);
+      c.set(13, 4, P.gold[4]!);
+    }
   };
 }
 
@@ -514,8 +531,8 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
   ['ring_life', ring(R.emerald)],
   ['amulet_guard', amulet(R.royal)],
   ['amulet_archmage', amulet(R.dragon)],
-  ['potion_health_supreme', potion(R.dragon, true)],
-  ['potion_mana_supreme', potion(R.voidc, true)],
+  ['potion_health_supreme', potion(R.dragon, 2)],
+  ['potion_mana_supreme', potion(R.voidc, 2)],
   ['arrow', arrow()],
   ['arrow_metal', arrow(true)],
   [
@@ -533,10 +550,10 @@ const ICONS_ITEMS: [string, (c: PixelCanvas) => void][] = [
         c.set(x, y, P.white);
     },
   ],
-  ['potion_health', potion(P.red)],
-  ['potion_mana', potion(P.blue)],
-  ['potion_health_great', potion(P.red, true)],
-  ['potion_mana_great', potion(P.purple, true)],
+  ['potion_health', potion(P.red, 0)],
+  ['potion_mana', potion(P.blue, 0)],
+  ['potion_health_great', potion(P.red, 1)],
+  ['potion_mana_great', potion(P.purple, 1)],
   [
     'slime_gel',
     (c) => {

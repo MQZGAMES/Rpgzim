@@ -108,6 +108,17 @@ export function ItemDetails({
         </div>
       )}
       {item.blockedReason && <div className="mt-1 text-[11px] text-hp-light">{item.blockedReason}</div>}
+      {/* quanto vale: o que a loja paga e o preço mais baixo anunciado no mercado do banco */}
+      <div className="mt-1 flex flex-wrap gap-x-3 text-[11px]" data-testid="item-prices">
+        <span className="text-gold-light">
+          Loja paga: {item.npcSell ? `${item.npcSell.price} de ouro (${item.npcSell.shop})` : 'nenhuma compra'}
+        </span>
+        {item.market && (
+          <span className="text-mana-light">
+            Mercado: a partir de {item.market.price} de ouro ({item.market.listings} {item.market.listings > 1 ? 'anúncios' : 'anúncio'})
+          </span>
+        )}
+      </div>
       {item.slot && equipped !== undefined && <Comparison item={item} equipped={equipped} />}
       {actions && <div className="mt-2 flex flex-wrap gap-1">{actions}</div>}
     </div>

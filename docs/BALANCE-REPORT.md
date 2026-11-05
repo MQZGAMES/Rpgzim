@@ -11,42 +11,42 @@ Magic Level de magos = 1,3 por nível). É uma estimativa para comparar vocaçõ
 
 | Nv | Vocação | Monstro | Vida | Mana | Arm. | DPS auto | DPS regen | DPS máx. | Cura/s | Cura/mana | Recebido/s | Matar | Morrer |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Knight | Slime do Musgo | 210 | 70 | 8 | 6.3 | 7.2 | 15.7 | 9.0 | 0.90 | 2.5 | 2.5 s | 210 s |
-| 1 | Paladin | Slime do Musgo | 175 | 90 | 8 | 5.2 | 6.6 | 15.9 | 11.3 | 1.13 | 2.5 | 2.5 s | 117 s |
-| 1 | Sorcerer | Slime do Musgo | 145 | 175 | 5 | 7.3 | 8.0 | 11.8 | 10.0 | 1.00 | 2.5 | 3.4 s | 73 s |
-| 1 | Druid | Slime do Musgo | 145 | 175 | 5 | 4.4 | 4.9 | 7.8 | 14.8 | 1.48 | 2.5 | 5.1 s | 73 s |
-| 3 | Knight | Javali Espinhento | 240 | 80 | 13 | 8.9 | 10.2 | 21.8 | 9.5 | 0.95 | 0.0 | 2.8 s | 2400 s |
-| 3 | Paladin | Javali Espinhento | 195 | 120 | 13 | 5.8 | 7.2 | 23.2 | 13.0 | 1.30 | 0.0 | 2.7 s | 1950 s |
-| 3 | Sorcerer | Javali Espinhento | 161 | 235 | 5 | 6.6 | 7.5 | 20.0 | 13.5 | 1.35 | 1.9 | 3.1 s | 114 s |
-| 3 | Druid | Javali Espinhento | 161 | 231 | 5 | 5.6 | 6.4 | 17.0 | 19.5 | 1.95 | 1.9 | 3.6 s | 114 s |
-| 5 | Knight | Goblin Saqueador | 270 | 90 | 13 | 11.2 | 14.5 | 27.5 | 10.8 | 1.07 | 0.1 | 2.9 s | 2700 s |
-| 5 | Paladin | Goblin Saqueador | 215 | 150 | 13 | 11.0 | 14.0 | 45.8 | 14.5 | 1.45 | 0.1 | 1.7 s | 2150 s |
-| 5 | Sorcerer | Goblin Saqueador | 177 | 295 | 5 | 7.2 | 9.0 | 23.7 | 15.8 | 1.57 | 2.3 | 3.4 s | 135 s |
-| 5 | Druid | Goblin Saqueador | 177 | 287 | 5 | 6.1 | 7.6 | 18.9 | 22.8 | 2.27 | 2.3 | 4.2 s | 135 s |
-| 8 | Knight | Lobo Cinzento | 290 | 105 | 17 | 18.8 | 26.2 | 43.7 | 11.5 | 1.15 | 0.1 | 2.3 s | 2900 s |
-| 8 | Paladin | Lobo Cinzento | 220 | 195 | 17 | 15.3 | 19.9 | 55.4 | 17.5 | 1.75 | 0.1 | 1.8 s | 2200 s |
-| 8 | Sorcerer | Lobo Cinzento | 176 | 405 | 6 | 13.8 | 16.6 | 41.6 | 22.0 | 2.20 | 4.0 | 2.4 s | 58 s |
-| 8 | Druid | Lobo Cinzento | 176 | 391 | 6 | 10.4 | 12.5 | 30.3 | 31.8 | 3.17 | 4.0 | 3.3 s | 58 s |
-| 10 | Knight | Aranha das Ruínas | 370 | 75 | 23 | 21.9 | 30.6 | 50.9 | 12.8 | 1.27 | 8.2 | 2.4 s | 65 s |
-| 10 | Paladin | Aranha das Ruínas | 290 | 185 | 23 | 22.1 | 28.7 | 79.9 | 19.0 | 1.90 | 8.2 | 1.6 s | 47 s |
-| 10 | Sorcerer | Aranha das Ruínas | 192 | 545 | 9 | 14.9 | 18.4 | 50.4 | 26.0 | 2.60 | 8.2 | 2.5 s | 29 s |
-| 10 | Druid | Aranha das Ruínas | 192 | 527 | 9 | 15.4 | 17.9 | 38.7 | 37.8 | 3.77 | 8.2 | 3.2 s | 29 s |
-| 12 | Knight | Esqueleto Guerreiro | 400 | 85 | 26 | 29.0 | 43.3 | 64.7 | 13.5 | 1.35 | 0.1 | 2.5 s | 4000 s |
-| 12 | Paladin | Esqueleto Guerreiro | 310 | 215 | 24 | 25.4 | 36.9 | 105.6 | 20.5 | 2.05 | 0.9 | 1.5 s | 3100 s |
-| 12 | Sorcerer | Esqueleto Guerreiro | 208 | 605 | 9 | 23.7 | 26.9 | 59.8 | 28.3 | 2.83 | 5.0 | 2.7 s | 59 s |
-| 12 | Druid | Esqueleto Guerreiro | 208 | 583 | 9 | 16.2 | 18.5 | 40.9 | 41.0 | 4.10 | 5.0 | 3.9 s | 59 s |
-| 15 | Knight | Chefe Goblin | 515 | 100 | 29 | 32.3 | 48.5 | 72.9 | 14.8 | 1.48 | 17.5 | 9.5 s | 35 s |
-| 15 | Paladin | Chefe Goblin | 410 | 260 | 26 | 33.4 | 45.6 | 118.5 | 22.5 | 2.25 | 35.6 | 5.9 s | 12 s |
-| 15 | Sorcerer | Chefe Goblin | 232 | 775 | 10 | 22.8 | 26.6 | 65.0 | 33.8 | 3.38 | 33.0 | 10.7 s | 7 s |
-| 15 | Druid | Chefe Goblin | 232 | 747 | 10 | 18.3 | 21.4 | 50.7 | 48.8 | 4.88 | 33.0 | 13.7 s | 7 s |
-| 18 | Knight | Chefe Goblin | 600 | 115 | 34 | 43.3 | 69.1 | 94.8 | 15.5 | 1.55 | 16.5 | 7.3 s | 44 s |
-| 18 | Paladin | Chefe Goblin | 440 | 305 | 26 | 38.3 | 55.1 | 135.9 | 25.3 | 2.52 | 35.6 | 5.1 s | 13 s |
-| 18 | Sorcerer | Chefe Goblin | 256 | 965 | 11 | 30.8 | 34.8 | 81.8 | 40.0 | 4.00 | 30.6 | 8.5 s | 9 s |
-| 18 | Druid | Chefe Goblin | 256 | 931 | 11 | 29.0 | 32.3 | 68.4 | 57.8 | 5.78 | 30.6 | 10.1 s | 9 s |
-| 20 | Knight | Chefe Goblin | 630 | 125 | 34 | 47.1 | 80.8 | 103.3 | 17.0 | 1.70 | 16.5 | 6.7 s | 48 s |
-| 20 | Paladin | Chefe Goblin | 460 | 335 | 26 | 41.6 | 62.8 | 147.5 | 27.0 | 2.70 | 35.6 | 4.7 s | 14 s |
-| 20 | Sorcerer | Chefe Goblin | 272 | 1025 | 11 | 31.6 | 38.4 | 87.0 | 43.0 | 4.30 | 30.3 | 8.0 s | 10 s |
-| 20 | Druid | Chefe Goblin | 272 | 987 | 11 | 29.8 | 35.3 | 72.6 | 62.5 | 6.25 | 30.3 | 9.6 s | 10 s |
+| 1 | Knight | Slime do Musgo | 210 | 70 | 8 | 7.2 | 8.3 | 15.3 | 7.8 | 0.78 | 2.5 | 2.6 s | 210 s |
+| 1 | Paladin | Slime do Musgo | 175 | 90 | 8 | 7.6 | 9.3 | 20.6 | 10.0 | 1.00 | 2.5 | 1.9 s | 117 s |
+| 1 | Sorcerer | Slime do Musgo | 145 | 175 | 5 | 7.0 | 7.7 | 11.3 | 10.8 | 1.07 | 2.5 | 3.5 s | 73 s |
+| 1 | Druid | Slime do Musgo | 145 | 175 | 5 | 4.4 | 4.9 | 7.8 | 13.0 | 1.30 | 2.5 | 5.1 s | 73 s |
+| 3 | Knight | Javali Espinhento | 240 | 80 | 13 | 10.3 | 11.8 | 21.2 | 7.8 | 0.78 | 0.0 | 2.9 s | 2400 s |
+| 3 | Paladin | Javali Espinhento | 195 | 120 | 13 | 8.8 | 9.9 | 32.7 | 12.0 | 1.20 | 0.0 | 1.9 s | 1950 s |
+| 3 | Sorcerer | Javali Espinhento | 161 | 235 | 5 | 6.4 | 7.3 | 19.3 | 16.0 | 1.60 | 1.9 | 3.2 s | 114 s |
+| 3 | Druid | Javali Espinhento | 161 | 231 | 5 | 5.6 | 6.1 | 23.7 | 20.0 | 2.00 | 1.9 | 2.6 s | 114 s |
+| 5 | Knight | Goblin Saqueador | 270 | 90 | 13 | 12.9 | 16.6 | 26.8 | 9.3 | 0.93 | 0.1 | 3.0 s | 2700 s |
+| 5 | Paladin | Goblin Saqueador | 215 | 150 | 13 | 15.3 | 17.7 | 59.2 | 14.0 | 1.40 | 0.1 | 1.4 s | 2150 s |
+| 5 | Sorcerer | Goblin Saqueador | 177 | 295 | 5 | 6.9 | 8.7 | 23.2 | 19.5 | 1.95 | 2.3 | 3.5 s | 135 s |
+| 5 | Druid | Goblin Saqueador | 177 | 287 | 5 | 6.1 | 6.9 | 25.8 | 35.5 | 0.89 | 2.3 | 3.1 s | 135 s |
+| 8 | Knight | Lobo Cinzento | 290 | 105 | 17 | 21.6 | 27.0 | 53.5 | 9.5 | 0.95 | 0.1 | 1.9 s | 2900 s |
+| 8 | Paladin | Lobo Cinzento | 220 | 195 | 17 | 21.0 | 25.1 | 91.2 | 17.5 | 1.75 | 0.1 | 1.1 s | 2200 s |
+| 8 | Sorcerer | Lobo Cinzento | 176 | 405 | 6 | 13.3 | 16.0 | 40.2 | 30.3 | 3.02 | 4.0 | 2.5 s | 58 s |
+| 8 | Druid | Lobo Cinzento | 176 | 391 | 6 | 10.4 | 11.5 | 38.6 | 53.5 | 1.34 | 4.0 | 2.6 s | 58 s |
+| 10 | Knight | Aranha das Ruínas | 370 | 75 | 23 | 25.2 | 31.6 | 62.5 | 11.0 | 1.10 | 8.2 | 2.0 s | 65 s |
+| 10 | Paladin | Aranha das Ruínas | 290 | 185 | 23 | 29.3 | 35.0 | 127.8 | 23.5 | 0.94 | 8.2 | 1.0 s | 47 s |
+| 10 | Sorcerer | Aranha das Ruínas | 192 | 545 | 9 | 14.3 | 17.8 | 48.6 | 37.3 | 3.73 | 8.2 | 2.5 s | 29 s |
+| 10 | Druid | Aranha das Ruínas | 192 | 527 | 9 | 15.4 | 16.8 | 52.6 | 65.5 | 1.64 | 8.2 | 2.4 s | 29 s |
+| 12 | Knight | Esqueleto Guerreiro | 400 | 85 | 26 | 33.2 | 43.7 | 79.3 | 11.3 | 1.13 | 0.1 | 2.0 s | 4000 s |
+| 12 | Paladin | Esqueleto Guerreiro | 310 | 215 | 24 | 33.7 | 44.1 | 175.8 | 25.8 | 1.03 | 0.9 | 0.9 s | 3100 s |
+| 12 | Sorcerer | Esqueleto Guerreiro | 208 | 605 | 9 | 22.8 | 25.6 | 71.7 | 41.0 | 4.10 | 5.0 | 2.2 s | 59 s |
+| 12 | Druid | Esqueleto Guerreiro | 208 | 583 | 9 | 16.2 | 17.5 | 66.0 | 72.0 | 1.80 | 5.0 | 2.4 s | 59 s |
+| 15 | Knight | Chefe Goblin | 515 | 100 | 29 | 37.3 | 49.3 | 89.8 | 12.8 | 1.27 | 17.5 | 7.7 s | 35 s |
+| 15 | Paladin | Chefe Goblin | 410 | 260 | 26 | 43.6 | 54.3 | 190.2 | 28.3 | 1.13 | 34.5 | 3.6 s | 13 s |
+| 15 | Sorcerer | Chefe Goblin | 232 | 775 | 10 | 22.0 | 25.2 | 79.3 | 50.0 | 5.00 | 33.0 | 8.8 s | 7 s |
+| 15 | Druid | Chefe Goblin | 232 | 747 | 10 | 18.3 | 20.0 | 84.6 | 87.3 | 2.18 | 33.0 | 8.2 s | 7 s |
+| 18 | Knight | Chefe Goblin | 600 | 115 | 34 | 49.8 | 68.7 | 115.9 | 13.0 | 1.30 | 16.5 | 6.0 s | 44 s |
+| 18 | Paladin | Chefe Goblin | 440 | 305 | 26 | 49.8 | 64.5 | 217.2 | 32.3 | 1.29 | 34.5 | 3.2 s | 14 s |
+| 18 | Sorcerer | Chefe Goblin | 256 | 965 | 11 | 29.7 | 33.1 | 98.8 | 60.5 | 6.05 | 30.6 | 7.0 s | 9 s |
+| 18 | Druid | Chefe Goblin | 256 | 931 | 11 | 29.0 | 30.9 | 109.5 | 105.5 | 2.64 | 30.6 | 6.3 s | 9 s |
+| 20 | Knight | Chefe Goblin | 630 | 125 | 34 | 54.1 | 82.6 | 194.4 | 14.5 | 1.45 | 16.5 | 3.6 s | 48 s |
+| 20 | Paladin | Chefe Goblin | 460 | 335 | 26 | 53.9 | 76.4 | 350.3 | 34.5 | 1.38 | 34.5 | 2.0 s | 15 s |
+| 20 | Sorcerer | Chefe Goblin | 272 | 1025 | 11 | 30.5 | 35.1 | 167.7 | 65.8 | 6.58 | 30.3 | 4.1 s | 10 s |
+| 20 | Druid | Chefe Goblin | 272 | 987 | 11 | 29.8 | 33.4 | 152.1 | 114.5 | 2.86 | 30.3 | 4.6 s | 10 s |
 
 ## Equipamento considerado
 

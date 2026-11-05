@@ -60,19 +60,16 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
   return (
     <Panel title="Atalhos" icon="ui_book" onClose={onClose}>
       <div data-testid="hotbar-panel">
-        <p className="text-[12px] text-muted">Toque numa posição e escolha o que ela usa: os atalhos vão de 1 a 9, na mesma ordem da tela{touch ? ' (1 2 3 / 4 5 6 / 7 8 9, ao lado do ataque)' : ' (teclas 1–9)'}. Depois de escolher, a seleção passa para o próximo número.</p>
+        <p className="text-[12px] text-muted">Toque numa posição e escolha o que ela usa: os atalhos vão de 1 a 9, na mesma ordem da tela{touch ? ' (1 2 3 / 4 5 6 / 7 8 9, no canto inferior direito)' : ' (teclas 1–9)'}. Depois de escolher, a seleção passa para o próximo número.</p>
         <div className="mt-2 flex justify-center">
           {touch ? (
-            // mesmo teclado 3x3 da tela (ordem de leitura) com o botão de ataque à direita
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(3, 48px) 56px', gridTemplateRows: 'repeat(2, 48px) 56px' }}>
+            // mesmo teclado 3x3 da tela (ordem de leitura, de cima para baixo)
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(3, 48px)' }}>
               {hotbar.map((slot) => (
                 <div key={slot.index} className="flex items-center justify-center" style={{ gridRow: TOUCH_CELLS[slot.index]![0], gridColumn: TOUCH_CELLS[slot.index]![1] }}>
                   <SlotPreview slot={slot} selected={sel === slot.index} onSelect={() => setSel(slot.index)} />
                 </div>
               ))}
-              <div className="btn-gold flex items-center justify-center opacity-70" style={{ gridRow: 3, gridColumn: 4 }} aria-hidden>
-                <ItemIcon icon="ui_attack" size={24} />
-              </div>
             </div>
           ) : (
             <div className="flex gap-2">

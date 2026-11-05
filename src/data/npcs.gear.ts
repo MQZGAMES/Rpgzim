@@ -2,7 +2,11 @@
 // para a Ferraria e as de mago para a Alquimia; as lojas também compram os troféus das criaturas pelo valor cheio.
 import type { ShopDef } from '../domain/entities/definitions';
 import { GEAR_ITEMS } from './items.gear';
-import { TROPHY_ITEMS } from './monsters.late';
+import { TROPHY_ITEMS as LATE_TROPHIES } from './monsters.late';
+import { SOUTH_TROPHY_ITEMS } from './monsters.south';
+
+/** Troféus que a Alquimia e a Banca compram pelo valor cheio (faixas tardias e terras do sul). */
+const TROPHY_ITEMS = [...LATE_TROPHIES, ...SOUTH_TROPHY_ITEMS];
 
 const sellPct = (price: number) => Math.max(1, Math.round(price * 0.35));
 const MAGE_KINDS = ['wand_', 'rod_', 'spellbook_', 'robe_', 'hat_', 'legs_mage_', 'ring_wisdom_', 'amulet_mage_'];
@@ -10,7 +14,7 @@ const isMageGear = (id: string) => MAGE_KINDS.some((k) => id.startsWith(k));
 
 const fighter = GEAR_ITEMS.filter((i) => !!i.slot && !isMageGear(i.id));
 const mage = GEAR_ITEMS.filter((i) => !!i.slot && isMageGear(i.id));
-const POTIONS: [string, number][] = [['potion_health_spirit', 520], ['potion_health_divine', 1100], ['potion_mana_spirit', 540], ['potion_mana_divine', 1100]];
+const POTIONS: [string, number][] = [['potion_health_spirit', 340], ['potion_health_divine', 560], ['potion_mana_spirit', 400], ['potion_mana_divine', 720]];
 
 /** Acrescenta as faixas tardias às lojas de Pedraluz. */
 export function withLateStock(shops: ShopDef[]): ShopDef[] {

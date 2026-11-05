@@ -131,10 +131,26 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
     },
     createdAt: num(c.createdAt, Date.now()),
     updatedAt: num(c.updatedAt, Date.now()),
+    ...(isObj(c.settings) ? { settings: parseSettings(c.settings) } : {}),
   };
   // magos só com varinha: arma errada sai do slot e entra a varinha/cajado do nível
   fixMageWeapon(data, character);
   return { version: SAVE_VERSION, savedAt: num(file.savedAt, Date.now()), character };
+}
+
+/** Configurações individuais: só grupos conhecidos e valores simples (texto curto, número finito, sim/não). */
+function parseSettings(raw: Record<string, unknown>): NonNullable<CharacterState['settings']> {
+  const out: NonNullable<CharacterState['settings']> = {};
+  for (const group of ['auto', 'party'] as const) {
+    const g = raw[group];
+    if (!isObj(g)) continue;
+    const vals: Record<string, string | number | boolean> = {};
+    for (const [k, v] of Object.entries(g))
+      if (typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 24))
+        vals[k] = v;
+    out[group] = vals;
+  }
+  return out;
 }
 
 function parsePk(raw: unknown): CharacterState['pk'] {

@@ -53,7 +53,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                             <span className="block truncate text-[15px]">{s.name}</span>
                             <span className="block text-[11px] text-parchment">
                               {data.vocations[s.vocation as keyof typeof data.vocations]?.name ?? s.vocation} · Nível {s.level}
-                              {isHeroSlot(data, s.slotId) && <span className="ml-1 text-heal">· tem vida própria</span>}
+                              <span className="ml-1 text-heal">· tem vida própria</span>
                             </span>
                           </span>
                         </button>
