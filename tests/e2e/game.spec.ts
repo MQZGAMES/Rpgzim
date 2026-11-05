@@ -246,7 +246,7 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await expect(page.getByTestId('loot-window')).toBeVisible();
 });
 
-test('mercado do banco: venda automática anuncia o item; personagens online: deslogar e logar', async ({ page }, info) => {
+test('mercado do banco: anunciar (venda rápida), ver a ordem e cancelar; personagens online: deslogar e logar', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await createCharacter(page, 'knight', 'Feira');
   const banker = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:banker')!;
@@ -255,11 +255,16 @@ test('mercado do banco: venda automática anuncia o item; personagens online: de
   await page.getByRole('button', { name: 'Abrir depósito' }).click();
   await page.getByTestId('depot-tab-market').click();
   await expect(page.getByTestId('market-tab')).toBeVisible();
-  const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
-  await page.getByTestId(`market-bag-${axe}`).click();
-  await page.getByTestId('market-auto').click();
-  await expect(page.locator('[data-testid^=market-row-]')).toHaveCount(1);
-  await expect(page.locator('[data-testid^=market-cancel-]')).toHaveCount(1); // é o seu anúncio: dá para retirar
+  // procura o item, escolhe "Vender", usa a venda rápida e anuncia
+  await page.getByTestId('market-filter-mine').click();
+  await page.getByTestId('market-search').fill('Machad');
+  await page.locator('[data-testid^=market-item-]').first().click();
+  await page.getByTestId('market-mode-sell').click();
+  await page.getByTestId('market-quick').click();
+  await page.getByTestId('market-place-ask').click();
+  await expect(page.locator('[data-testid^=market-order-]')).toHaveCount(1); // a sua ordem aparece, com Cancelar
+  await page.locator('[data-testid^=market-cancel-]').first().click();
+  await expect(page.locator('[data-testid^=market-order-]')).toHaveCount(0);
   await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
   // lista de online: o Boladex sai do jogo e volta
   await page.getByTestId('btn-players').click();

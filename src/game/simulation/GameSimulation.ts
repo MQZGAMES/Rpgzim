@@ -77,7 +77,18 @@ import {
 import { addHero } from '../ai/heroes';
 import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
-import { marketAutoList, marketBuy, marketCancel, marketCollect, marketList } from '../economy/marketService';
+import {
+  marketAutoList,
+  marketBid,
+  marketBuy,
+  marketBuyNow,
+  marketCancel,
+  marketCollect,
+  marketList,
+  marketSell,
+  marketSellNow,
+  marketTakeParcels,
+} from '../economy/marketService';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, summonHero, updateHeroBrain } from '../ai/heroBrain';
@@ -588,8 +599,27 @@ export class GameSimulation {
   marketBuy(listingId: string): boolean {
     return marketBuy(this.world, listingId);
   }
-  marketCancel(listingId: string): boolean {
-    return marketCancel(this.world, listingId);
+  marketCancel(orderId: string): boolean {
+    return marketCancel(this.world, orderId);
+  }
+  /** Compra agora pelo menor preço à venda. */
+  marketBuyNow(itemId: string, qty: number): boolean {
+    return marketBuyNow(this.world, itemId, qty);
+  }
+  /** Vende agora para as maiores ofertas de compra. */
+  marketSellNow(itemId: string, qty: number): boolean {
+    return marketSellNow(this.world, itemId, qty);
+  }
+  /** Anuncia a venda (o que já tem comprador por esse preço vende na hora). */
+  marketSell(itemId: string, qty: number, price: number): boolean {
+    return marketSell(this.world, itemId, qty, price);
+  }
+  /** Oferta de compra (o que já está à venda por esse preço compra na hora). */
+  marketBid(itemId: string, qty: number, price: number): boolean {
+    return marketBid(this.world, itemId, qty, price);
+  }
+  marketTakeParcels(): boolean {
+    return marketTakeParcels(this.world);
   }
   depotWithdraw(depotIndex: number): boolean {
     return depotWithdraw(this.world, depotIndex);

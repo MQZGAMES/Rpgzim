@@ -20,7 +20,7 @@ import { bestPotionFor, usablePotionCount } from '../../domain/rules/potions';
 import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { spellManaCost } from '../../domain/rules/spells';
-import { MARKET_AUTO_RATE, MARKET_MAX_PER_SELLER } from '../../domain/rules/market';
+import { MARKET_AUTO_RATE, MARKET_MAX_PER_SELLER, asksFor, autoPrice, bidsFor, openOrders, ownedCount } from '../../domain/rules/market';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -107,6 +107,20 @@ export interface SpellView {
   color: string;
   /** Grau da magia (2 = II, 3 = III); 0 nas magias sem graus. */
   tier: number;
+}
+
+/** Um item no mercado: preços de quem vende (do menor) e de quem compra (do maior), sem as suas próprias ordens. */
+export interface MarketItemView {
+  itemId: string;
+  item: ItemView;
+  /** Unidades que você tem (mochila + depósito). */
+  owned: number;
+  asks: { price: number; count: number }[];
+  bids: { price: number; count: number }[];
+  /** O que a melhor loja (NPC) paga por unidade. */
+  npcBuy: number;
+  /** Preço da venda rápida (75% do valor). */
+  quick: number;
 }
 
 export interface UiSnapshot {
@@ -229,21 +243,17 @@ export interface UiSnapshot {
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
   depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
-  /** Mercado do banco (só com a janela do banco aberta). */
+  /** Mercado do banco (só com a janela do banco aberta): livro de ofertas por item. */
   market: {
-    listings: {
-      id: string;
-      item: ItemView;
-      count: number;
-      price: number;
-      total: number;
-      sellerName: string;
-      mine: boolean;
-      canAfford: boolean;
-    }[];
-    mine: number;
+    items: MarketItemView[];
+    /** Suas ordens abertas (venda e compra). */
+    orders: { id: string; side: 'sell' | 'buy'; item: ItemView; count: number; price: number; total: number }[];
+    /** Unidades compradas esperando espaço no depósito. */
+    parcels: number;
+    open: number;
     max: number;
-    /** Preço da venda automática (75% do valor) por item, para a tela sugerir. */
+    /** Ouro disponível para comprar (bolsa + banco). */
+    money: number;
     autoRate: number;
   } | null;
   loot: {
@@ -284,6 +294,54 @@ function itemLines(def: ItemDef): string[] {
   if (def.use?.regen) l.push(`Regenera por ${Math.round(def.use.regen.durationMs / 1000)}s`);
   if (def.minLevel) l.push(`Nível mínimo: ${def.minLevel}`);
   return l;
+}
+
+/** Níveis de preço do livro (soma as unidades de cada preço). */
+function levels(orders: readonly { price: number; count: number }[]): { price: number; count: number }[] {
+  const out: { price: number; count: number }[] = [];
+  for (const o of orders) {
+    const last = out[out.length - 1];
+    if (last && last.price === o.price) last.count += o.count;
+    else out.push({ price: o.price, count: o.count });
+  }
+  return out;
+}
+
+function marketView(sim: GameSimulation): NonNullable<UiSnapshot['market']> {
+  const w = sim.world;
+  const c = w.player.character;
+  const m = w.market;
+  const ids = new Set<string>([...m.listings.map((l) => l.itemId), ...m.bids.map((b) => b.itemId)]);
+  for (const st of [...c.inventory, ...c.depot]) if (st && (w.data.items[st.itemId]?.value ?? 0) > 0) ids.add(st.itemId);
+  const items = [...ids]
+    .filter((id) => w.data.items[id])
+    .map((itemId): MarketItemView => {
+      const owned = ownedCount(c, itemId);
+      return {
+        itemId,
+        item: itemView(sim, { itemId, count: Math.max(1, owned) }),
+        owned,
+        asks: levels(asksFor(m, itemId, c.id)),
+        bids: levels(bidsFor(m, itemId, c.id)),
+        npcBuy: bestNpcBuy(w.data, itemId)?.price ?? 0,
+        quick: autoPrice(w.data, itemId),
+      };
+    })
+    // com ofertas primeiro; depois por nome
+    .sort((a, b) => Number(!!(b.asks.length || b.bids.length)) - Number(!!(a.asks.length || a.bids.length)) || a.item.name.localeCompare(b.item.name));
+  const orders = [
+    ...m.listings.filter((l) => l.sellerId === c.id).map((l) => ({ id: l.id, side: 'sell' as const, itemId: l.itemId, count: l.count, price: l.price })),
+    ...m.bids.filter((b) => b.buyerId === c.id).map((b) => ({ id: b.id, side: 'buy' as const, itemId: b.itemId, count: b.count, price: b.price })),
+  ].map((o) => ({ ...o, item: itemView(sim, { itemId: o.itemId, count: o.count }), total: o.count * o.price }));
+  return {
+    items,
+    orders,
+    parcels: (m.parcels[c.id] ?? []).reduce((s, p) => s + p.count, 0),
+    open: openOrders(m, c.id),
+    max: MARKET_MAX_PER_SELLER,
+    money: c.gold + c.bankGold,
+    autoRate: MARKET_AUTO_RATE,
+  };
 }
 
 /** O que a melhor loja paga pelo item. */
@@ -633,25 +691,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
           items: c.depot.map((st) => (st ? itemView(sim, st) : null)),
         }
       : null,
-    market: depotNpc
-      ? {
-          listings: [...w.market.listings]
-            .sort((a, b) => b.listedAt - a.listedAt)
-            .map((l) => ({
-              id: l.id,
-              item: itemView(sim, { itemId: l.itemId, count: l.count }),
-              count: l.count,
-              price: l.price,
-              total: l.price * l.count,
-              sellerName: l.sellerName,
-              mine: l.sellerId === c.id,
-              canAfford: c.gold + c.bankGold >= l.price * l.count,
-            })),
-          mine: w.market.listings.filter((l) => l.sellerId === c.id).length,
-          max: MARKET_MAX_PER_SELLER,
-          autoRate: MARKET_AUTO_RATE,
-        }
-      : null,
+    market: depotNpc ? marketView(sim) : null,
     loot: bags.length
       ? {
           title: bags.length === 1 ? `Loot: ${bags[0]!.sourceName}` : `Loot ao redor (${bags.length} sacos)`,

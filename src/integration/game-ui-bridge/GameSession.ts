@@ -710,11 +710,31 @@ export class GameSession {
     this.dirty = true;
     return ok;
   }
-  marketCancel(listingId: string): boolean {
-    const ok = this.sim.marketCancel(listingId);
+  marketCancel(orderId: string): boolean {
+    const ok = this.sim.marketCancel(orderId);
     this.audio.play(ok ? 'pickup' : 'error');
     this.dirty = true;
     return ok;
+  }
+  private marketAct(ok: boolean, sound: 'coin' | 'pickup' = 'coin'): boolean {
+    this.audio.play(ok ? sound : 'error');
+    this.dirty = true;
+    return ok;
+  }
+  marketBuyNow(itemId: string, qty: number): boolean {
+    return this.marketAct(this.sim.marketBuyNow(itemId, qty));
+  }
+  marketSellNow(itemId: string, qty: number): boolean {
+    return this.marketAct(this.sim.marketSellNow(itemId, qty));
+  }
+  marketSell(itemId: string, qty: number, price: number): boolean {
+    return this.marketAct(this.sim.marketSell(itemId, qty, price));
+  }
+  marketBid(itemId: string, qty: number, price: number): boolean {
+    return this.marketAct(this.sim.marketBid(itemId, qty, price));
+  }
+  marketTakeParcels(): boolean {
+    return this.marketAct(this.sim.marketTakeParcels(), 'pickup');
   }
   depotDepositAll(): void {
     if (this.sim.depotDepositAll()) this.audio.play('pickup');

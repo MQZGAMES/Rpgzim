@@ -86,7 +86,7 @@ describe('mercado do banco', () => {
     });
     expect(sim.marketCancel(id)).toBe(true);
     expect(countItem(p.character.depot, 'sword_iron')).toBe(1);
-    expect(buildSnapshot(sim, 1).market?.listings).toHaveLength(0);
+    expect(buildSnapshot(sim, 1).market?.orders).toHaveLength(0);
   });
 
   it('venda de quem está fora do jogo fica guardada e entra no banco quando ele loga', () => {

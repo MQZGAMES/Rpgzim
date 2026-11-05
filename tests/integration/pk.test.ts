@@ -52,7 +52,9 @@ function kill(
   const w = sim.world;
   victim.invulnerableUntil = 0;
   registerAggression(w, killer.id, victim.id);
-  asActor(w, victim, () => damagePlayer(w, 999999, 'physical', actorSource(killer), true));
+  // (o escudo pode bloquear um golpe: bate até cair)
+  for (let i = 0; i < 20 && !victim.dead; i++)
+    asActor(w, victim, () => damagePlayer(w, 999999, 'physical', actorSource(killer), true));
 }
 
 describe('PK: caveiras e PZ lock', () => {

@@ -1114,7 +1114,7 @@ const list: ItemDef[] = [
     stackable: true,
     maxStack: 100,
     minLevel: 12,
-    use: { heal: 180, cooldownMs: 4000 },
+    use: { heal: 180, cooldownMs: 2000 },
   },
   {
     id: 'potion_mana_great',
@@ -1126,7 +1126,7 @@ const list: ItemDef[] = [
     stackable: true,
     maxStack: 100,
     minLevel: 12,
-    use: { mana: 150, cooldownMs: 4000 },
+    use: { mana: 150, cooldownMs: 2000 },
   },
   {
     id: 'potion_health_supreme',
@@ -1138,7 +1138,7 @@ const list: ItemDef[] = [
     stackable: true,
     maxStack: 100,
     minLevel: 28,
-    use: { heal: 380, cooldownMs: 4000 },
+    use: { heal: 380, cooldownMs: 2000 },
   },
   {
     id: 'potion_mana_supreme',
@@ -1150,7 +1150,7 @@ const list: ItemDef[] = [
     stackable: true,
     maxStack: 100,
     minLevel: 28,
-    use: { mana: 300, cooldownMs: 4000 },
+    use: { mana: 300, cooldownMs: 2000 },
   },
   {
     id: 'meat',

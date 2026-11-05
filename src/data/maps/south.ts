@@ -192,9 +192,9 @@ export function buildSouth(b: MapBuilder, height: number): void {
     .prop('rock_large', 70, 150)
     .prop('rock_medium', 90, 148);
   b.prop('bones', 80, 138).prop('bones', 88, 142).prop('bones', 84, 136).prop('totem', 62, 142);
-  b.spawn('cavespiders_a', 'cave_spider', 62, 134, 4, 4);
-  b.spawn('cavespiders_b', 'cave_spider', 60, 148, 3, 3);
-  b.spawn('widows_a', 'widow_spider', 84, 140, 3, 3);
+  b.spawn('cavespiders_a', 'cave_spider', 62, 134, 4, 3);
+  b.spawn('cavespiders_b', 'cave_spider', 60, 148, 3, 2);
+  b.spawn('widows_a', 'widow_spider', 84, 140, 3, 2);
   b.spawn('widows_b', 'widow_spider', 96, 150, 3, 2);
 
   // ------------------------------------------------------------------ Savana Rachada (faixa 4): terra seca e pedras
@@ -204,7 +204,7 @@ export function buildSouth(b: MapBuilder, height: number): void {
     .prop('rock_medium', 112, 150)
     .prop('rock_large', 130, 152)
     .prop('bones', 120, 144);
-  b.spawn('hyenas_a', 'hyena', 112, 136, 4, 4);
+  b.spawn('hyenas_a', 'hyena', 112, 136, 4, 3);
   b.spawn('hyenas_b', 'hyena', 114, 150, 4, 3);
   b.spawn('rhinoboars_a', 'rhino_boar', 128, 140, 3, 3);
   b.spawn('rhinoboars_b', 'rhino_boar', 130, 150, 3, 2);

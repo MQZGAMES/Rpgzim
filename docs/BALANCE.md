@@ -193,8 +193,8 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   Cura Intensa +0,3 — o dobro disso estrangulava o Druid: nível 31 em vez de 52 em 3 h). O dano delas cresce com o nível e o ML; o custo agora também, e a poção de mana volta a contar.
 
 ## Poções por tamanho, graus II/III e economia (nov/2026)
-- **Poções**: Pequena (nv 1) 75 vida / 60 mana, 2 s; Média (12) 180/150, 4 s; Grande (28) 380/300, 4 s; Espiritual (50)
-  650/500, 6 s; Divina (75) 1100/900, 6 s. Preço por ponto: vida 0,53 → 0,51; mana ~0,75–0,80 (estável). Antes as
+- **Poções**: Pequena (nv 1) 75 vida / 60 mana; Média (12) 180/150; Grande (28) 380/300; Espiritual (50) 650/500;
+  Divina (75) 1100/900 — todas com 2 s de exaustão (antes da última rodada eram 2/4/4/6/6 s). Preço por ponto: vida 0,53 → 0,51; mana ~0,75–0,80 (estável). Antes as
   maiores custavam mais por ponto (mana divina 1,22 de ouro por ponto contra 0,75 da pequena).
 - **Criação**: 2,4× (divina) a 3,4× (pequena) a mana devolvida; liberada 6 níveis depois do nível da poção.
 - **Graus II/III**: efeito ×1,4 / ×1,85, mana ×1,6 / ×2,3 (o I rende mais por ponto de mana); níveis 20/45 (alvo único
@@ -214,3 +214,13 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   — já acontecia antes); testada a regra "cercado e com poções, luta", ela piorou e foi descartada.
 - **Viagem**: a escolha da caça divide o XP/min por 1 + distância/250 (era /600): com as Terras do Sul o mapa ficou
   mais fundo e um nível 2 chegou a descer até o Brejo e morrer fugindo sem poção.
+
+## Exaustão única das poções, mercado novo e ajustes do sul (nov/2026)
+- Todas as poções com 2 s de exaustão. Medido isoladamente, isso não mudou o resultado de forma consistente; o que
+  derrubava magos e Paladin eram criaturas novas do sul e uma espiral de "desarmado":
+  - **Hiena Risonha** 3,6 → 3,1 de velocidade e faro 8 → 6; **Lobo da Tempestade** 4 → 3,5 e faro 9 → 7 (fugir delas
+    era impossível); **Aranha das Cavernas** 3 → 2,6 (cega) e bandos menores no Ninho e na Savana.
+  - Herói que perde a arma numa morte agora volta à vila para comprar outra assim que tiver ouro, e a arma é a primeira
+    compra (antes do estoque de poções). O Druid chegava a passar 2 h desarmado (nível 20 em 3 h).
+- Medição final (3 h, nível / mortes, média das sementes): Boladex 57 / 0,5 · Maguim 58 / 1,5 · Mano Cura 58,5 / 0,5 ·
+  Distanciado 39 / 4,75 (4 sementes).

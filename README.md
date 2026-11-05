@@ -127,16 +127,40 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Mercado novo: livro de ofertas
+- **Comprar sempre pelo menor preço e vender sempre pela maior oferta.** O mercado do banco virou um livro de ofertas
+  por item: de um lado os **anúncios de venda** (preço pedido por unidade), do outro as **ofertas de compra** (preço
+  oferecido por unidade, com o ouro já reservado).
+- **Tela por item** (aba *Mercado* do banco): busca por nome e filtros (*Todos*, *Meus itens*, *À venda*,
+  *Procurados*); cada linha mostra o menor preço à venda, a maior oferta de compra e quanto você tem. Ao tocar num item:
+  - **Comprar**: escolha a quantidade (−, +, *Máx*) e *Comprar agora* — paga o menor preço disponível, atravessando
+    vários anúncios do mais barato para o mais caro (o botão já mostra o total). Ou deixe uma **oferta de compra** a um
+    preço seu: o ouro fica reservado até alguém vender (ou você cancelar).
+  - **Vender**: *Vender agora* para as maiores ofertas, ou **anuncie** a um preço seu (com *Venda rápida* a 75% do
+    valor e *Igualar* o menor anúncio). As unidades saem da mochila e, faltando, do depósito.
+  - Ordem que alcança o outro lado **fecha na hora pelo preço de quem já esperava** (anunciar a 8 quando alguém oferece
+    12 vende a 12; ofertar 20 quando há anúncio a 8 compra a 8); o que sobra fica no livro.
+- **Suas ordens** (vendas e compras) aparecem embaixo com *Cancelar* (o anúncio volta para o depósito; a oferta devolve
+  o ouro ao banco). Até 12 ordens abertas por personagem.
+- **Entregas**: compras vão para o depósito e o ouro das vendas para o banco. Quem estava fora do jogo recebe ao logar;
+  com o depósito cheio, a compra fica como **entrega a retirar** no banco (botão *Retirar*).
+- **Heróis no mercado**: compram poções do nível deles pelo menor preço (nunca acima da loja) e upgrades no orçamento;
+  vendem o loot direto para quem oferece mais que a loja e anunciam o resto em venda rápida.
+- **Ajustes**: todas as poções com **2 s de exaustão**; Hiena, Lobo da Tempestade e Aranha das Cavernas mais lentas
+  (fugir delas era impossível); herói que perde a arma numa morte volta para comprar outra antes de tudo.
+
 ## Poções por tamanho, magias I/II/III, Terras do Sul e guardas da vila
 - **Poções por tamanho e nível mínimo** (as pequenas servem para todos):
 
   | Poção | Nível | Vida / mana | Recarga | Preço |
   |---|---|---|---|---|
   | Pequena | 1 | 75 / 60 | 2 s | 40 / 45 |
-  | Média | 12 | 180 / 150 | 4 s | 100 / 120 |
-  | Grande | 28 | 380 / 300 | 4 s | 200 / 240 |
-  | Espiritual | 50 | 650 / 500 | 6 s | 340 / 400 |
-  | Divina | 75 | 1100 / 900 | 6 s | 560 / 720 |
+  | Média | 12 | 180 / 150 | 2 s | 100 / 120 |
+  | Grande | 28 | 380 / 300 | 2 s | 200 / 240 |
+  | Espiritual | 50 | 650 / 500 | 2 s | 340 / 400 |
+  | Divina | 75 | 1100 / 900 | 2 s | 560 / 720 |
+
+  Todas as poções têm a mesma exaustão de 2 s.
 
   Sem o nível a poção não é bebida; o atalho automático, a cura automática e a IA só contam (e usam) as que o
   personagem já pode beber. Os ícones crescem com o tamanho (frasco, garrafa, garrafão com detalhes dourados).
@@ -177,10 +201,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   (Boladex, Maguim, Mano Cura, Distanciado) entram logados por padrão; os criados por você ficam em *Fora do jogo* até
   você logá-los. A escolha fica gravada no aparelho. Logados, eles formam grupos, caçam, usam a vila, o mercado e o PK
   como os heróis (personagens criados ganham um temperamento próprio e falas neutras).
-- **Mercado do banco** (aba *Mercado* na janela do banqueiro): anuncie um item da mochila ou do depósito pelo preço que
-  quiser ou use a **venda automática** (75% do valor — o NPC paga 50%). Os anúncios de todos os personagens aparecem
-  para todos; ao comprar, o item vai direto para o **depósito** (sem espaço, não compra) e o ouro vai para o **banco**
-  de quem vendeu — se ele estiver fora do jogo, entra no banco dele quando logar. Até 12 anúncios por personagem.
+- **Mercado do banco**: substituído pelo livro de ofertas (ver *Mercado novo* acima).
 - **Heróis usam o mercado primeiro**: na vila passam no banco antes das lojas e compram as poções anunciadas pelo
   preço do NPC ou menos e os upgrades que cabem no orçamento; só o que faltar compram no NPC. Também anunciam o
   equipamento do loot que venderiam barato ao NPC (e retiram o que ficar 30 min sem comprador).
@@ -386,7 +407,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **334 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **341 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
