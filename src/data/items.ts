@@ -1089,7 +1089,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_health',
     value: 40,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { heal: 70, cooldownMs: 2000 },
   },
   {
@@ -1100,7 +1100,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_mana',
     value: 45,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { mana: 60, cooldownMs: 2000 },
   },
   {
@@ -1111,7 +1111,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_health_great',
     value: 110,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { heal: 160, cooldownMs: 4000 },
   },
   {
@@ -1122,7 +1122,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_mana_great',
     value: 120,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { mana: 140, cooldownMs: 4000 },
   },
   {
@@ -1133,7 +1133,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_health_supreme',
     value: 260,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { heal: 320, cooldownMs: 6000 },
   },
   {
@@ -1144,7 +1144,7 @@ const list: ItemDef[] = [
     icon: 'item_potion_mana_supreme',
     value: 270,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { mana: 280, cooldownMs: 6000 },
   },
   {
@@ -1155,7 +1155,7 @@ const list: ItemDef[] = [
     icon: 'item_meat',
     value: 8,
     stackable: true,
-    maxStack: 50,
+    maxStack: 100,
     use: { regen: { health: 4, mana: 2, durationMs: 30000 }, cooldownMs: 1000 },
   },
   // ---------------------------------------------------------------- loot

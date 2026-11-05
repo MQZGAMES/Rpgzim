@@ -218,6 +218,8 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   lento em quem foge ou está com pouca vida e, no resto, a magia que mais tira vida naquele momento (a de área quando
   pega mais de um inimigo sem acordar criaturas; com pouca mana, a que rende mais dano por mana). Apanhando de um
   personagem, bebem poção e se curam cedo, como contra criaturas.
+- **Pilhas de 100**: todo item agrupável (poções incluídas, que antes paravam em 50) junta até 100 por espaço, na
+  mochila, no depósito e no chão.
 - **Ataque entre membros** (painel do grupo, só o líder muda): **Bloqueado**, **Treino** ou **Duelo**. No *treino* cada um usa a arma que tem (sem trocas); nenhum golpe (básico, magia ou área) leva um colega abaixo de 50% de vida e o ataque espera ele se curar acima disso. No *duelo* vale até morrer. Nos dois: sem caveira, sem PZ lock e sem perder a mochila.
 - **Velocidade por nível**: cada nível soma +0,0125 tiles/s (teto +1,0), então o nível 60 anda ~0,5 tiles/s mais que o 18 — dá para fugir com Corrida, mas não de graça.
 - **Corrida**: +0,7 de velocidade por **30 s** e exaustão de **2 s**. Os heróis que seguem o grupo ou perseguem um alvo mantêm a Corrida ativa e a renovam antes de acabar.
@@ -339,7 +341,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **320 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **321 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

@@ -2,7 +2,7 @@
 import type { EquipSlot } from '../../domain/entities/definitions';
 import { POTION, isReady, startCooldown } from '../../domain/rules/cooldowns';
 import { EQUIP_FAIL_MESSAGE, equipFromInventory, unequip } from '../../domain/rules/equipment';
-import { addItem, removeAt } from '../../domain/rules/inventory';
+import { addItem, maxStackOf, removeAt } from '../../domain/rules/inventory';
 import type { World } from '../simulation/World';
 import type { LootContainer } from '../entities/types';
 import { message, nextId, warnThrottled } from '../simulation/World';
@@ -228,7 +228,7 @@ export function dropItem(w: World, index: number): void {
     w.events.emit('lootDropped', { containerId: id, position: { x: p.x, y: p.y } });
   }
   let left = st.count;
-  const max = def?.maxStack ?? 1;
+  const max = def?.stackable ? maxStackOf(w.data, st.itemId) : 1;
   for (const s of bag.items) {
     if (s.itemId !== st.itemId || s.count >= max) continue;
     const room = Math.min(left, max - s.count);

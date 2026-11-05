@@ -321,7 +321,7 @@ function build(): ItemDef[] {
       icon: 'item_potion_health_spirit',
       value: 520,
       stackable: true,
-      maxStack: 50,
+      maxStack: 100,
       use: { heal: 560, cooldownMs: 8000 },
     },
     {
@@ -332,7 +332,7 @@ function build(): ItemDef[] {
       icon: 'item_potion_health_divine',
       value: 1100,
       stackable: true,
-      maxStack: 50,
+      maxStack: 100,
       use: { heal: 1100, cooldownMs: 8000 },
     },
     {
@@ -343,7 +343,7 @@ function build(): ItemDef[] {
       icon: 'item_potion_mana_spirit',
       value: 540,
       stackable: true,
-      maxStack: 50,
+      maxStack: 100,
       use: { mana: 480, cooldownMs: 8000 },
     },
     {
@@ -354,7 +354,7 @@ function build(): ItemDef[] {
       icon: 'item_potion_mana_divine',
       value: 1100,
       stackable: true,
-      maxStack: 50,
+      maxStack: 100,
       use: { mana: 900, cooldownMs: 8000 },
     },
   );

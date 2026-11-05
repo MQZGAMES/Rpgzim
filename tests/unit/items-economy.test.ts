@@ -217,3 +217,13 @@ describe('geração de loot', () => {
     expect(ears / 2000).toBeLessThan(0.56);
   });
 });
+
+describe('pilhas de 100', () => {
+  it('todo item agrupável (poções incluídas) junta até 100 por espaço', () => {
+    for (const it of Object.values(D.items).filter((i) => i.stackable)) {
+      const inv: (null | { itemId: string; count: number })[] = [null, null];
+      expect(addItem(D, inv, it.id, 150), it.id).toBe(150);
+      expect(inv[0], it.id).toEqual({ itemId: it.id, count: 100 });
+    }
+  });
+});

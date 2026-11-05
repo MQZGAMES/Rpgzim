@@ -78,7 +78,7 @@ describe('formato de save', () => {
     c.experience = 5000;
     const parsed = parseSave(D, { version: SAVE_VERSION, savedAt: 0, character: c }).character;
     expect(parsed.inventory[0]).toBeNull();
-    expect(parsed.inventory[1]?.count).toBe(50);
+    expect(parsed.inventory[1]?.count).toBe(100);
     expect(parsed.equipment.head).toBeUndefined();
     expect(parsed.level).toBeGreaterThan(1);
   });
