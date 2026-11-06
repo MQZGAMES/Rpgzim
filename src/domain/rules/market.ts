@@ -13,6 +13,7 @@ import type { ItemDef } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
 import { ensureDepotSize } from './depot';
 import { addItem, capacityFor, countItem, removeItem } from './inventory';
+import { SEASON } from './season';
 
 export type OfferSide = 'sell' | 'buy';
 
@@ -452,26 +453,20 @@ export function addParcel(m: MarketState, characterId: string, itemId: string, c
 }
 
 // ------------------------------------------------------------------ persistência
-/**
- * Lê um mercado salvo (descarta o que não reconhece). Aceita o formato antigo (anúncios + ofertas de compra separados):
- * o que o mercado novo não negocia (materiais etc.) volta para o dono como entrega, e o ouro reservado volta ao banco.
- */
+/** Lê um mercado salvo (descarta o que não reconhece; de outra temporada, recomeça vazio). */
 export function parseMarket(data: GameData, raw: unknown): MarketState {
   const m = emptyMarket();
   if (!raw || typeof raw !== 'object') return m;
   const r = raw as Record<string, unknown>;
+  // temporada nova: o mercado recomeça vazio (as ofertas antigas eram de personagens que recomeçaram)
+  if (r.season !== SEASON) return m;
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
   const take = (o: Record<string, unknown>, side: OfferSide, owner: unknown, name: unknown, at: unknown) => {
     const itemId = typeof o.itemId === 'string' ? o.itemId : '';
     const count = Math.floor(num(o.count));
     const price = Math.floor(num(o.price));
     if (typeof owner !== 'string' || !data.items[itemId] || !(count > 0) || !(price > 0)) return;
-    if (!marketable(data.items[itemId])) {
-      // o mercado não negocia mais esse item: devolve ao dono
-      if (side === 'sell') addParcel(m, owner, itemId, count);
-      else m.proceeds[owner] = (m.proceeds[owner] ?? 0) + count * price;
-      return;
-    }
+    if (!marketable(data.items[itemId])) return;
     m.offers.push({
       id: typeof o.id === 'string' ? o.id : `mo${++m.seq}`,
       side,
@@ -486,9 +481,6 @@ export function parseMarket(data: GameData, raw: unknown): MarketState {
   if (Array.isArray(r.offers))
     for (const o of r.offers as Record<string, unknown>[])
       if (o && (o.side === 'sell' || o.side === 'buy')) take(o, o.side, o.ownerId, o.ownerName, o.at);
-  // formato antigo
-  if (Array.isArray(r.listings)) for (const l of r.listings as Record<string, unknown>[]) if (l) take(l, 'sell', l.sellerId, l.sellerName, l.listedAt);
-  if (Array.isArray(r.bids)) for (const b of r.bids as Record<string, unknown>[]) if (b) take(b, 'buy', b.buyerId, b.buyerName, b.placedAt);
   if (r.history && typeof r.history === 'object')
     for (const [itemId, list] of Object.entries(r.history as Record<string, unknown>)) {
       if (!data.items[itemId] || !Array.isArray(list)) continue;

@@ -8,7 +8,8 @@ import { isHeroSlot } from '../heroes';
 import { InstallHint } from './InstallHint';
 
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
-  const { saves, data, audio } = useServices();
+  const { saves, data, audio, seasonReset } = useServices();
+  const [seasonSeen, setSeasonSeen] = useState(false);
   const [slots, setSlots] = useState<SaveSlotSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cloudOpen, setCloudOpen] = useState(false);
@@ -36,6 +37,17 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
           <h1 className="font-pixel text-outline text-6xl tracking-wide text-gold-light drop-shadow-[0_4px_0_#33121f] sm:text-7xl">Rpgzim</h1>
           <p className="text-outline mt-2 text-[15px] text-parchment">Crônicas de Pedraluz</p>
         </div>
+        {seasonReset > 0 && !seasonSeen && (
+          <div className="frame-parchment w-full max-w-[420px] text-[13px] text-[#3a2416]" data-testid="season-notice">
+            <b>Nova temporada!</b> Todos os personagens recomeçaram do nível 1 com o equipamento básico, 50 poções de vida
+            e 50 de mana. A experiência das criaturas agora é a metade, e os heróis estão mais parecidos com gente.
+            <div className="mt-1 text-right">
+              <PixelButton className="px-2 text-[12px]" onClick={() => setSeasonSeen(true)}>
+                Bora!
+              </PixelButton>
+            </div>
+          </div>
+        )}
         <div className="frame-dark w-full max-w-[420px]" data-testid="title-menu">
           {slots === null ? (
             <p className="text-center text-muted">Carregando…</p>

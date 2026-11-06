@@ -9,6 +9,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
   const heroes = useSnap((s) => s.heroes);
   const me = useSnap((s) => ({ name: s.player.name, region: s.region }));
   const offline = useLocal((s) => s.offline);
+  const resting = useSnap((s) => s.resting);
   return (
     <Panel title="Personagens online" icon="ui_players" onClose={onClose}>
       <div data-testid="players-panel">
@@ -98,6 +99,32 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+        {resting.length > 0 && (
+          <>
+            <h3 className="mb-1 mt-3 text-[13px] text-gold">Numa pausa (voltam sozinhos)</h3>
+            <div className="flex flex-col gap-2" data-testid="resting-list">
+              {resting.map((r) => (
+                <div key={r.id} className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1 opacity-80" data-testid={`resting-row-${r.id}`}>
+                  <div className="relative flex h-[40px] w-[32px] shrink-0 items-end justify-center overflow-hidden">
+                    <SpriteFrame sheet={r.vocation} scale={1.2} className="opacity-70" />
+                  </div>
+                  <div className="min-w-0 flex-1 text-[12px]">
+                    <b className="text-parchment">{r.name}</b> <span className="text-muted">· nv {r.level}</span>
+                    <div className="text-[11px] text-muted">volta em ~{r.backInMin} min</div>
+                  </div>
+                  <PixelButton
+                    className="shrink-0 !border-[6px] px-1 text-[11px]"
+                    title={`Deslogar ${r.name} de vez (não volta sozinho)`}
+                    onClick={() => void session.logoutCharacter(r.id)}
+                    data-testid={`resting-logout-${r.id}`}
+                  >
+                    Deslogar
+                  </PixelButton>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
         {offline.length > 0 && (
           <>
             <h3 className="mb-1 mt-3 text-[13px] text-gold">Fora do jogo</h3>

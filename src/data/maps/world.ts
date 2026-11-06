@@ -8,6 +8,8 @@ import { buildSouth } from './south';
 import type { GameMap } from '../../game/world/GameMap';
 
 export const WORLD_W = 300;
+/** Ponto de partida (dentro do Templo da Aurora): onde nasce todo personagem novo ou recomeçado. */
+export const PLAYER_START = { x: 47, y: 11 } as const;
 /** Início das Terras Altas (expansão leste, faixas 3 a 6). */
 const EAST = 104;
 /** Altura do mundo: a área original, as Terras Distantes e, abaixo de tudo, as Terras do Sul. */
@@ -76,7 +78,7 @@ export function buildWorld(): GameMap {
   b.prop('banner', 43, 5, { force: true }).prop('banner', 51, 5, { force: true });
   b.prop('candle', 41, 6).prop('candle', 53, 6).prop('plant', 41, 13).prop('plant', 53, 13);
   b.npc('priest', 48, 8, 'down');
-  b.playerStart = { x: 47, y: 11 };
+  b.playerStart = { ...PLAYER_START };
   for (const [x, n] of [[46, 'steps_l'], [47, 'steps_m'], [48, 'steps_r']] as const) b.floorTile(x, 16, n);
   b.prop('brazier', 44, 17).prop('brazier', 50, 17);
   b.prop('planter', 42, 19).prop('planter', 52, 19);

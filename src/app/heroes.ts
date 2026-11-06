@@ -3,9 +3,22 @@ import type { CharacterState } from '../domain/entities/character';
 import type { GameData } from '../domain/entities/gameData';
 import { createCharacter } from '../domain/rules/character';
 import type { SaveService } from '../game/persistence/SaveService';
-import { buildWorld } from '../data/maps/world';
+import { PLAYER_START } from '../data/maps/world';
 
-export async function ensureHeroSaves(saves: SaveService, data: GameData): Promise<void> {
+/**
+ * Prepara os saves ao abrir o jogo: quem era de uma temporada anterior recomeça do nível 1 e já é gravado (a lista da
+ * tela inicial e a sincronização mostram o recomeço); os heróis que ainda não têm save são criados. Devolve quantos
+ * personagens recomeçaram.
+ */
+export async function ensureHeroSaves(saves: SaveService, data: GameData): Promise<number> {
+  let reset = 0;
+  for (const s of await saves.list().catch(() => [])) {
+    const f = await saves.loadFile(s.slotId).catch(() => null);
+    if (f?.reset) {
+      await saves.save(f.character).catch(() => undefined);
+      reset++;
+    }
+  }
   const existing = new Set((await saves.list().catch(() => [])).map((s) => s.slotId));
   for (const hero of Object.values(data.heroes)) {
     if (existing.has(hero.slotId)) continue;
@@ -14,10 +27,11 @@ export async function ensureHeroSaves(saves: SaveService, data: GameData): Promi
       name: hero.name,
       vocation: hero.vocation,
       now: Date.now(),
-      position: buildWorld().playerStart,
+      position: { ...PLAYER_START },
     });
     await saves.save(c).catch(() => undefined);
   }
+  return reset;
 }
 
 /**

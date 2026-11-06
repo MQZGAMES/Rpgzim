@@ -109,7 +109,8 @@ describe('Corrida e morte', () => {
     expect(castSpell(w, 'haste')).toBe(true);
     expect(p.buffs.some((b) => b.kind === 'haste')).toBe(true);
     p.invulnerableUntil = 0;
-    damagePlayer(w, 999999, 'physical', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true);
+    // (fogo: o escudo não bloqueia)
+    damagePlayer(w, 999999, 'fire', { id: 'mon:x', name: 'Troll', kind: 'monster' }, true);
     expect(p.dead).toBe(true);
     expect(p.buffs).toHaveLength(0);
   });

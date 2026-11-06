@@ -30,8 +30,8 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
       feet: { itemId: 'boots_leather' },
     },
     startingInventory: [
-      { itemId: 'potion_mana', count: 4 },
-      { itemId: 'potion_health', count: 2 },
+      { itemId: 'potion_health', count: 50 },
+      { itemId: 'potion_mana', count: 50 },
     ],
     startingGold: 40,
     strengths: ['Maior dano mágico', 'Magias em área', 'Varinhas de longo alcance'],
@@ -70,8 +70,8 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
       feet: { itemId: 'boots_leather' },
     },
     startingInventory: [
-      { itemId: 'potion_mana', count: 4 },
-      { itemId: 'potion_health', count: 2 },
+      { itemId: 'potion_health', count: 50 },
+      { itemId: 'potion_mana', count: 50 },
     ],
     startingGold: 40,
     strengths: ['Melhores curas', 'Lentidão com gelo', 'Flexível entre dano e suporte'],
@@ -101,8 +101,8 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     },
     startingInventory: [
       { itemId: 'spear_throwing', count: 1 },
-      { itemId: 'potion_health', count: 3 },
-      { itemId: 'potion_mana', count: 1 },
+      { itemId: 'potion_health', count: 50 },
+      { itemId: 'potion_mana', count: 50 },
     ],
     startingGold: 40,
     strengths: ['Alcance longo', 'Equilíbrio entre vida e mana', 'Dano sagrado'],
@@ -134,7 +134,8 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     },
     startingInventory: [
       { itemId: 'axe_hand', count: 1 },
-      { itemId: 'potion_health', count: 4 },
+      { itemId: 'potion_health', count: 50 },
+      { itemId: 'potion_mana', count: 50 },
     ],
     startingGold: 40,
     strengths: ['Mais vida e defesa', 'Bloqueio com escudo', 'Golpes em área'],

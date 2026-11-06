@@ -336,6 +336,8 @@ export interface BalanceConfig {
     leashMultiplier: number;
     /** Escala da velocidade de todas as criaturas (ritmo do jogo no celular). */
     speedScale: number;
+    /** Escala da experiência que todas as criaturas dão (0,5 = metade). */
+    xpRate?: number;
   };
 }
 
@@ -400,7 +402,18 @@ export type HeroLineKey =
   | 'healAlly'
   | 'holdPos'
   | 'orderAttack'
-  | 'marketBuy';
+  | 'marketBuy'
+  | 'bye'
+  | 'back'
+  | 'afk'
+  | 'greetHero'
+  | 'replyHero'
+  | 'tradeSell'
+  | 'tradeBuy'
+  | 'lfg'
+  | 'tired'
+  | 'congrats'
+  | 'rip';
 
 export interface HeroDef {
   id: string;

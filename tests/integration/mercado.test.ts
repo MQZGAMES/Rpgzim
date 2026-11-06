@@ -6,6 +6,7 @@ import { GAME_DATA } from '../../src/data';
 import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
 import { escrowOf, marketable, offersFor, parseMarket, priceGuide } from '../../src/domain/rules/market';
+import { SEASON } from '../../src/domain/rules/season';
 import { buildCatalog, categoryOf, compareItem } from '../../src/domain/rules/marketCatalog';
 import { chebyshev } from '../../src/domain/value-objects/position';
 import type { HeroEntity } from '../../src/game/entities/types';
@@ -163,24 +164,17 @@ describe('mercado: livro de ofertas', () => {
     expect(g.ref).toBeLessThanOrEqual(250);
   });
 
-  it('salvo e lido de novo (o formato antigo vira o novo; o que o mercado não negocia volta ao dono)', () => {
-    const old = {
-      listings: [
-        { id: 'mk1', sellerId: 's', sellerName: 'S', itemId: 'sword_iron', count: 1, price: 200, listedAt: 5 },
-        { id: 'mk2', sellerId: 's', sellerName: 'S', itemId: 'bone_fragment', count: 7, price: 9, listedAt: 5 },
-      ],
-      bids: [{ id: 'mb1', buyerId: 'b', buyerName: 'B', itemId: 'wolf_pelt', count: 2, price: 30, placedAt: 1 }],
-      proceeds: { s: 10 },
-      parcels: {},
-      seq: 3,
-    };
-    const m = parseMarket(D, JSON.parse(JSON.stringify(old)));
-    expect(m.offers).toHaveLength(1);
-    expect(m.offers[0]).toMatchObject({ side: 'sell', ownerId: 's', itemId: 'sword_iron', price: 200 });
-    expect(m.parcels.s).toEqual([{ itemId: 'bone_fragment', count: 7 }]);
-    expect(m.proceeds).toEqual({ s: 10, b: 60 });
-    const again = parseMarket(D, JSON.parse(JSON.stringify(m)));
-    expect(again).toEqual(m);
+  it('salvo e lido de novo; mercado de outra temporada recomeça vazio', () => {
+    const { w } = setup();
+    offer(w, 'sell', 's', 'sword_iron', 1, 200);
+    offer(w, 'buy', 'b', 'helmet_iron', 2, 90);
+    w.market.history.sword_iron = [{ price: 210, count: 1, at: 3 }];
+    w.market.proceeds = { s: 10 };
+    const saved = JSON.parse(JSON.stringify({ ...w.market, season: SEASON }));
+    expect(parseMarket(D, saved)).toEqual(w.market);
+    // temporada anterior (ou formato antigo, sem temporada): vazio
+    expect(parseMarket(D, { ...saved, season: SEASON - 1 }).offers).toHaveLength(0);
+    expect(parseMarket(D, { listings: [{ id: 'mk1', sellerId: 's', itemId: 'sword_iron', count: 1, price: 200 }] }).offers).toHaveLength(0);
   });
 });
 

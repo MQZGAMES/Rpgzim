@@ -30,6 +30,11 @@ export interface UiState {
 export interface World {
   /** Ajudas automáticas do jogador (loot e poção). */
   auto: AutoSettings;
+  /**
+   * Jogo de verdade: os heróis têm sessões de jogo (saem para uma pausa e voltam) e ficam AFK de vez em quando. Nos
+   * testes e simulações de balanceamento fica desligado (eles jogam sem parar).
+   */
+  lifelike?: boolean;
   readonly data: GameData;
   readonly map: GameMap;
   readonly rng: Rng;

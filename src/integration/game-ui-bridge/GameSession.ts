@@ -13,6 +13,7 @@ import { buildSnapshot, catalogOf, type UiSnapshot } from './snapshot';
 import { heroSnapshot } from '../../game/ai/heroes';
 import { customHeroDef } from '../../data/heroes';
 import { parseMarket } from '../../domain/rules/market';
+import { SEASON } from '../../domain/rules/season';
 import type { CatalogItem } from '../../domain/rules/marketCatalog';
 import type { HeroDef } from '../../domain/entities/definitions';
 import { canDrink } from '../../domain/rules/potions';
@@ -104,6 +105,8 @@ export class GameSession {
       heroes,
       clock: Date.now,
       market,
+      // jogo de verdade: os heróis têm sessões (saem para uma pausa e voltam) e ficam AFK de vez em quando
+      lifelike: true,
     });
     this.offline = (opts.offline ?? []).filter((c) => c.id !== character.id);
     character = this.sim.world.player.character;
@@ -155,9 +158,11 @@ export class GameSession {
   /** Desloga um personagem que joga com IA: salva o progresso e tira do mundo. */
   async logoutCharacter(heroId: string): Promise<boolean> {
     const h = [...this.sim.world.heroes.values()].find((x) => x.hero.id === heroId || x.id === heroId);
-    if (!h) return false;
-    const snap = heroSnapshot(this.sim.world, h);
-    this.sim.removeHero(h.hero.id);
+    // em pausa: sai de vez (não volta sozinho)
+    const resting = h ? null : this.sim.dropResting(heroId);
+    if (!h && !resting) return false;
+    const snap = h ? heroSnapshot(this.sim.world, h) : resting!;
+    if (h) this.sim.removeHero(h.hero.id);
     this.offline = [...this.offline, snap];
     setOnlinePref(snap.id, false);
     this.publishOffline();
@@ -170,7 +175,7 @@ export class GameSession {
 
   private saveMarket(): void {
     try {
-      localStorage.setItem(MARKET_KEY, JSON.stringify(this.sim.world.market));
+      localStorage.setItem(MARKET_KEY, JSON.stringify({ ...this.sim.world.market, season: SEASON }));
     } catch {
       // sem armazenamento: o mercado vale só nesta partida
     }
@@ -241,6 +246,10 @@ export class GameSession {
       ),
       ev.on('saveRequested', () => this.saves.requestSave(() => this.sim.snapshotCharacter())),
       ev.on('heroSaveRequested', (e) => this.saveHero(e.heroId)),
+      ev.on('heroLoggedOut', (e) => {
+        this.pushMessage(`${e.character.name} saiu do jogo (volta daqui a pouco).`, 'system');
+        void this.saves.save(e.character).catch(() => undefined);
+      }),
       ev.on('marketChanged', () => this.saveMarket()),
       ev.on('partyChanged', () => {
         const has = !!this.sim.world.social.party;

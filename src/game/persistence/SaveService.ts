@@ -13,6 +13,8 @@ export class SaveService {
   constructor(
     private readonly repo: SaveRepository<SaveFile>,
     private readonly data: GameData,
+    /** Ponto de partida do mapa: onde nasce quem recomeça numa temporada nova. */
+    private readonly start?: { x: number; y: number },
   ) {}
 
   list(): Promise<SaveSlotSummary[]> {
@@ -20,9 +22,14 @@ export class SaveService {
   }
 
   async load(slotId: string): Promise<CharacterState | null> {
+    return (await this.loadFile(slotId))?.character ?? null;
+  }
+
+  /** Lê o save com o aviso de recomeço (temporada anterior). */
+  async loadFile(slotId: string): Promise<SaveFile | null> {
     const raw = await this.repo.load(slotId);
     if (!raw) return null;
-    return parseSave(this.data, raw).character;
+    return parseSave(this.data, raw, this.start);
   }
 
   /** Grava imediatamente (serializado: gravações concorrentes entram em fila). */

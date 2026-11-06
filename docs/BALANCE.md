@@ -251,3 +251,18 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   (até 32% do tempo na vila, sem guardar ouro) e o loot parado em anúncio sem comprador deixava os heróis sem dinheiro
   (nível médio 20% a 38% menor em 2 h).
 
+
+## Temporada 2: XP pela metade e jeito de gente (nov/2026)
+- **XP**: `BALANCE.creatures.xpRate = 0.5` multiplica a experiência de toda criatura (mínimo 1). As curvas de nível não
+  mudaram. Recomeço (`SEASON = 2`): saves antigos voltam ao nível 1 com o kit básico + 50 Poções de Vida e 50 de Mana
+  pequenas (≈ 4.250 de ouro pelo preço da loja). Mercado, depósito e banco zeram.
+- **Perfil humano** (`src/game/ai/heroHuman.ts`): reação = 230 + (1 − cautela)·260 + sorteio fixo·140 ms; magias fora de
+  aperto = 86% + disciplina·12%; sessão = 45 + disc·30 a 80 + disc·35 min; pausa = 6 a 14 + (1 − disc)·10 min; AFK
+  depois da vila = 4% + sociabilidade·8% (1 a 3,5 min). Nos heróis da casa: Boladex 394 ms / sessão 62–99 min,
+  Maguim 415 / 60–98, Mano Cura 405 / 63–101, Distanciado 436 / 68–106.
+- **Medição sozinho** (`hero-life`, 3 h, 2 sementes, nível / mortes): Boladex 35,5 / 1 · Maguim 40,5 / 0,5 ·
+  Mano Cura 43,5 / 0 · Distanciado 28 / 0,5 (antes 57,5 / 0 · 52,5 / 1 · 56 / 1 · 46,5 / 5). A queda acompanha a XP
+  pela metade (~70% do nível) e as mortes caíram.
+- **Medição "de verdade"** (`human-life`, os quatro juntos com `lifelike`, 3 h, sementes 11 e 23): cada um faz uma
+  pausa entre 63 e 101 min e volta; 3,6 de 4 online em média; da despedida ao deslogar, 4 a 49 s; AFK somado de 1 a
+  13 min em 3 h; ~250–280 falas por herói (≈ 1,5 por minuto). Níveis no fim: 26 a 36.

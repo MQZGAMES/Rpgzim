@@ -35,6 +35,7 @@ import { spellManaCost, spellTiers } from '../../domain/rules/spells';
 
 import { bestPotionFor, canDrink, potionAmount, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
 import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
+import { humanProfile, styleLine, type HumanProfile } from './heroHuman';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
   aggro,
@@ -193,6 +194,51 @@ export interface HeroBrainState {
     | null;
   /** Treino de nível mágico no tempo ocioso (mana cheia sem nada para fazer). */
   nextIdleTrainAt: number;
+  /** Jeito de gente: reação, pausas, sessão de jogo, AFK, conversa (ver heroHuman). */
+  human: HumanState;
+}
+
+export interface HumanState {
+  /** Quando ele percebeu cada coisa que pede reação (vida baixa, mana baixa): reage depois do tempo de reação. */
+  noticed: Partial<Record<'potion' | 'mana', number>>;
+  /** Último alvo (para notar quando ele morre e dar uma olhada na tela antes do próximo). */
+  lastTarget: string | null;
+  /** Olhando a tela (loot, próximo alvo) até este instante. */
+  lookUntil: number;
+  /** Fim da sessão de jogo atual (0 = ainda não sorteado). */
+  sessionEnds: number;
+  /** Saindo do jogo: indo para um lugar seguro para deslogar. */
+  leaving: boolean;
+  /** Pronto para deslogar (a simulação tira do mundo e marca a volta). */
+  logoutReady: boolean;
+  /** Ausente (AFK) até este instante. */
+  afkUntil: number;
+  /** Acabou de voltar de uma pausa: avisa no chat. */
+  justBack: boolean;
+  /** Fala marcada para depois (resposta "digitando"). */
+  pendingSay: { key: HeroLineKey; vars: Record<string, string | number>; at: number } | null;
+  /** Último cumprimento trocado com cada personagem. */
+  greeted: Record<string, number>;
+  /** Pequenas pausas na vila (olhando a loja, conferindo a mochila). */
+  pauseUntil: number;
+  nextFidgetAt: number;
+}
+
+export function newHumanState(): HumanState {
+  return {
+    noticed: {},
+    lastTarget: null,
+    lookUntil: 0,
+    sessionEnds: 0,
+    leaving: false,
+    logoutReady: false,
+    afkUntil: 0,
+    justBack: false,
+    pendingSay: null,
+    greeted: {},
+    pauseUntil: 0,
+    nextFidgetAt: 0,
+  };
 }
 
 export function newHeroBrain(): HeroBrainState {
@@ -256,6 +302,7 @@ export function newHeroBrain(): HeroBrainState {
     nextHelpCallAt: 0,
     order: null,
     nextIdleTrainAt: 0,
+    human: newHumanState(),
   };
 }
 
@@ -263,6 +310,8 @@ export function newHeroBrain(): HeroBrainState {
 export function heroActivity(w: World, h: HeroEntity): string {
   const b = h.brain;
   if (h.dead) return 'morto (renascendo)';
+  if (b.human.afkUntil > w.now) return 'ausente (AFK)';
+  if (b.human.leaving) return 'saindo do jogo';
   switch (b.mode) {
     case 'hunt':
       return `caçando ${w.data.monsters[b.quarry ?? '']?.name ?? 'monstros'}`;
@@ -307,16 +356,30 @@ export function heroSay(
   key: HeroLineKey,
   vars: Record<string, string | number> = {},
   cooldownMs = 15000,
-): void {
+): boolean {
   const last = h.brain.lastSpeech[key] ?? -Infinity;
-  if (w.now - last < cooldownMs || w.now - h.brain.lastSpokeAt < 2500) return;
+  if (w.now - last < cooldownMs || w.now - h.brain.lastSpokeAt < 2500) return false;
   const lines = h.hero.lines[key];
-  if (!lines?.length) return;
+  if (!lines?.length) return false;
   let text = lines[w.rng.int(0, lines.length - 1)]!;
   for (const [k, v] of Object.entries(vars)) text = text.split(`{${k}}`).join(String(v));
+  // cada um escreve do seu jeito (gírias, sem acento, exclamações...), e nunca do mesmo jeito duas vezes
+  text = styleLine(text, profileOf(h).style, () => w.rng.next(), LIGHT_LINES.has(key));
   h.brain.lastSpeech[key] = w.now;
   h.brain.lastSpokeAt = w.now;
-  w.events.emit('speech', { entityId: h.id, name: h.character.name, text, position: { x: h.x, y: h.y } });
+  w.events.emit('speech', { entityId: h.id, name: h.character.name, text, position: { x: h.x, y: h.y }, key });
+  return true;
+}
+
+/** Falas de brincadeira (ganham um "kkk"/"haha" de quem escreve assim). */
+const LIGHT_LINES = new Set<HeroLineKey>(['kill', 'death', 'rareLoot', 'pkWin', 'levelUp', 'replyHero']);
+
+/** Perfil humano do herói (fixo; calculado uma vez). */
+const profiles = new WeakMap<HeroEntity['hero'], HumanProfile>();
+export function profileOf(h: HeroEntity): HumanProfile {
+  let p = profiles.get(h.hero);
+  if (!p) profiles.set(h.hero, (p = humanProfile(h.hero)));
+  return p;
 }
 
 /** Resposta quando o jogador toca no herói. */
@@ -364,6 +427,10 @@ export const heroHelpers = {
   fightSpells: (w: World, h: HeroEntity, target: MonsterEntity): void => fightSpells(w, h, target, 0),
   /** Etapa do mercado (com a janela do corretor aberta). */
   marketing: (w: World, h: HeroEntity): void => marketing(w, h),
+  /** Um passo da sobrevivência (poções, curas, fuga). */
+  survive: (w: World, h: HeroEntity): void => survive(w, h),
+  /** Um passo da caça (escolha do próximo alvo). */
+  huntTick: (w: World, h: HeroEntity): void => hunt(w, h, false),
   /** Compra de poções numa loja já aberta (w.ui.shop), como na etapa de loja da vila. */
   buyPotions: (w: World, h: HeroEntity, npcId: string): void => shopping(w, h, { kind: 'shop', npcId, buyPotions: true }),
   tryCast: (w: World, h: HeroEntity, id: string): boolean => tryCast(w, h, id),
@@ -675,6 +742,8 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
       b.pkLostTo = null;
       restoreMainWeapon(w, h);
       setMode(w, h, 'decide');
+      // como gente: depois de morrer, às vezes dá uma respirada no templo antes de voltar
+      if (w.lifelike && w.rng.chance(0.3)) b.human.afkUntil = w.now + (30 + w.rng.next() * 60) * 1000;
     }
     return;
   }
@@ -690,6 +759,8 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     if (goal) goTo(w, h, goal.x, goal.y);
   }
   survive(w, h);
+  // jeito de gente: resposta "digitando", AFK, fim de sessão (sair e voltar depois)
+  if (humanRoutine(w, h)) return;
   callForHelp(w, h);
   if (partyOf(w, h.id)) supportParty(w, h); // a cura do grupo vem antes de qualquer outra decisão
   // chamado pelo grupo: larga tudo (caça, vila, loot) e vai até o líder; só as poções continuam valendo
@@ -724,6 +795,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   conjurePotions(w, h);
   idleTraining(w, h);
   whims(w, h);
+  greetNearby(w, h);
   switch (b.mode) {
     case 'decide':
       decide(w, h);
@@ -875,7 +947,8 @@ function fightBack(w: World, h: HeroEntity): void {
     setTarget(w, target.id);
   }
   // em hunt/follow o próprio modo já lança as magias; nos demais a luta é aqui
-  if (b.mode !== 'hunt' && b.mode !== 'follow' && b.mode !== 'train') fightSpells(w, h, target, adjacent);
+  if (b.mode !== 'hunt' && b.mode !== 'follow' && b.mode !== 'train' && castsNow(w, h, adjacent))
+    fightSpells(w, h, target, adjacent);
 }
 
 function survive(w: World, h: HeroEntity): void {
@@ -902,14 +975,15 @@ function survive(w: World, h: HeroEntity): void {
   // em grupo age mais cedo (os colegas seguram a briga enquanto ele se cura): não espera chegar perto do fim
   const grouped = alliesNear(w, h) > 0;
   const persona = personaOf(t);
-  if (
-    (pct < 0.45 + t.caution * 0.15 + (grouped ? 0.1 : 0) + persona.drink && (attackers.length || pvpHit)) ||
-    pct < 0.25 ||
-    danger
-  ) {
+  // como gente: ele percebe a vida baixa e reage um instante depois (no aperto — vida no fim ou golpe que mata —, na hora)
+  const urgent = pct < 0.3 || danger;
+  const wantsPotion =
+    (pct < 0.45 + t.caution * 0.15 + (grouped ? 0.1 : 0) + persona.drink && (attackers.length || pvpHit)) || pct < 0.25 || danger;
+  if (wantsPotion && (urgent || reacted(w, h, 'potion'))) {
     const idx = pickPotion(w, h, danger || pct < 0.25);
     if (idx >= 0) drinkHealth(w, h, idx);
-  }
+    delete h.brain.human.noticed.potion;
+  } else if (!wantsPotion) delete h.brain.human.noticed.potion;
   if (pct < (grouped ? 0.75 : 0.65) && h.character.vocation === 'druid' && tryCast(w, h, 'sap_blessing')) {
     // Bênção da Seiva: cura forte + regeneração (e cura o grupo)
   } else if (
@@ -936,9 +1010,13 @@ function survive(w: World, h: HeroEntity): void {
   // mana baixa no meio da luta: bebe poção de mana para não ficar inútil (magias são o principal dano)
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
   if (manaPct < (isRanged(h.character.vocation) ? (shielded ? 0.6 : 0.4) : 0.35)) {
-    const idx = pickManaPotion(w, h);
-    if (idx >= 0) drinkMana(w, h, idx);
-  }
+    // mana no fim (ou com o Escudo de Mana segurando a vida) é emergência; fora disso, o tempo de reação dele
+    if (manaPct < 0.15 || shielded || reacted(w, h, 'mana')) {
+      const idx = pickManaPotion(w, h);
+      if (idx >= 0) drinkMana(w, h, idx);
+      delete h.brain.human.noticed.mana;
+    }
+  } else delete h.brain.human.noticed.mana;
   // foge ainda com vida: luta perdida (a régua diz que não dá), cercado de criaturas ou sem poção e metade da vida
   const noPotions = potionsOf(w, h) === 0;
   // com o Escudo de Mana a vida só cai quando a mana acaba: o perigo aparece na mana, não na vida
@@ -1353,13 +1431,13 @@ function startHunt(w: World, h: HeroEntity, quarry = chooseQuarry(w, h)): void {
         .filter((r) => spawn.x >= r.x && spawn.x < r.x + r.w && spawn.y >= r.y && spawn.y < r.y + r.h)
         .sort((a, b) => b.priority - a.priority)[0]
     : undefined;
-  heroSay(w, h, 'hunt', { monster: def?.name ?? quarry, area: region?.name ?? 'a caça' }, 60000);
+  heroSay(w, h, 'hunt', { monster: def?.name ?? quarry, area: region?.name ?? 'a caça' }, 4 * 60000);
 }
 
 function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): void {
   const b = h.brain;
   if (!training && b.mode === 'hunt' && (needsTown(w, h) || (b.modeUntil && w.now > b.modeUntil))) {
-    heroSay(w, h, 'town', {}, 30000);
+    heroSay(w, h, 'town', {}, 4 * 60000);
     return planTown(w, h);
   }
   if (!training && b.mode === 'hunt') {
@@ -1388,13 +1466,20 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     if (!t || chebyshev(t, h) > 1) return;
   }
   const target = currentTarget(w);
+  const hm = b.human;
+  if (target) hm.lastTarget = target.id;
+  else if (hm.lastTarget) {
+    // o alvo caiu: como gente, olha a tela (o loot, a próxima criatura) antes de puxar outra
+    hm.lastTarget = null;
+    hm.lookUntil = w.now + profileOf(h).reactionMs * (1.2 + w.rng.next() * 1.6);
+  }
   if (target) {
     // alvo fora do alcance: persegue com Corrida ativa (renovando sempre que possível)
     if (chebyshev(target, h) > Math.max(1, h.stats.weapon.range)) keepHaste(w, h);
     // golpes especiais quando vale a pena
     const adjacent = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
     if (!training || assisting) {
-      fightSpells(w, h, target, adjacent.length);
+      if (castsNow(w, h, adjacent.length)) fightSpells(w, h, target, adjacent.length);
       keepDistance(w, h);
     }
     // Loot no mesmo passo do combate: o que já está ao alcance é pego sem largar a criatura e, se for
@@ -1412,6 +1497,8 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     return;
   }
   if (assisting) return;
+  // (olhando a tela depois da última: só não espera se uma criatura já estiver batendo nele)
+  if (w.now < hm.lookUntil && !engagedByMonsters(w, h)) return;
   // modo lurar do grupo: puxa as criaturas da tela até os colegas antes de escolher vítimas sozinho
   const lureParty = partyOf(w, h.id);
   if (
@@ -1593,6 +1680,11 @@ function wakesIdle(w: World, at: { x: number; y: number }, radius: number): bool
  * Magias de combate de cada vocação. A de área só sai quando compensa (conta de dano por mana contra a de alvo único,
  * ver aoeWorth); quem foge leva primeiro a magia que deixa lento; o Druid em grupo guarda mana para curar.
  */
+/** Ninguém aperta todo botão a cada segundo: fora de aperto, às vezes ele deixa passar uma brecha para magia. */
+function castsNow(w: World, h: HeroEntity, adjacent: number): boolean {
+  return hpPct(h) <= 0.6 || adjacent >= 2 || !w.rng.chance(1 - profileOf(h).apm);
+}
+
 function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: number): void {
   const voc = h.character.vocation;
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
@@ -2320,6 +2412,15 @@ function town(w: World, h: HeroEntity): void {
     b.nextTownAt = w.now + (manaGoal(w, h) ? 3 : 5) * 60000;
     b.prepare = false;
     dropJunk(w, h);
+    // às vezes, como gente, fica um pouco AFK antes de voltar a caçar
+    if (maybeAfk(w, h)) {
+      w.ui.shop = null;
+      w.ui.depot = null;
+      w.ui.market = null;
+      w.ui.dialog = null;
+      b.after = 'decide';
+      return setMode(w, h, 'decide');
+    }
     w.ui.shop = null;
     w.ui.depot = null;
     w.ui.market = null;
@@ -2330,7 +2431,10 @@ function town(w: World, h: HeroEntity): void {
     if (after === 'decide') return startHunt(w, h); // terminou a vila: direto para a caça
     return setMode(w, h, 'decide');
   }
+  // pequena pausa entre uma parada e outra (olhando a loja, conferindo a mochila)
+  if (w.now < b.human.pauseUntil) return;
   const done = () => {
+    b.human.pauseUntil = w.now + 400 + w.rng.next() * 1100;
     b.failures = 0;
     b.town.shift();
     b.stepStartedAt = w.now;
@@ -2405,7 +2509,7 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
     const before = c.gold;
     if (sellItem(w, o.itemId, n)) earned += c.gold - before;
   }
-  if (earned > 0) heroSay(w, h, 'sell', { gold: earned }, 20000);
+  if (earned > 0 && w.rng.chance(0.35)) heroSay(w, h, 'sell', { gold: earned }, 5 * 60000);
   if (step.trainingWeapon && countItem(c.inventory, TRAINING_WEAPON) === 0) buyItem(w, TRAINING_WEAPON, 1);
   // sem arma: a arma vem antes das poções (com o ouro do banco, se precisar)
   if (unarmed(h)) {
@@ -2429,7 +2533,7 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
         Math.floor((c.gold * share) / manaOffer.price),
         40,
       );
-      if (qty > 0 && buyItem(w, manaOffer.itemId, qty)) heroSay(w, h, 'buy', {}, 60000);
+      if (qty > 0 && buyItem(w, manaOffer.itemId, qty)) heroSay(w, h, 'buy', {}, 5 * 60000);
     }
     const healOffers = potionOffers(w, shop, 'heal', h);
     const basic = healOffers[0]; // a mais barata: tapa-buraco
@@ -2467,7 +2571,7 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
         40,
       );
       if (qty > 0 && buyItem(w, basic.itemId, qty)) bought = true;
-      if (bought) heroSay(w, h, 'buy', {}, 60000);
+      if (bought) heroSay(w, h, 'buy', {}, 5 * 60000);
     }
     sellSmallPotions(w, h, shop);
   }
@@ -2526,7 +2630,7 @@ function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit' | 'settle',
       ? Math.floor((c.gold - reserve) * Math.min(0.9, 0.3 + h.hero.temperament.greed * 0.2 + saving))
       : 0;
   const amount = Math.max(surplus, savings);
-  if (amount >= 20 && bankGold(w, 'deposit', amount)) heroSay(w, h, 'bank', {}, 120000);
+  if (amount >= 20 && bankGold(w, 'deposit', amount)) heroSay(w, h, 'bank', {}, 8 * 60000);
 }
 
 /**
@@ -2650,6 +2754,7 @@ function social(w: World, h: HeroEntity): void {
   if (!human.dead && chebyshev(human, h) <= 5)
     heroSay(w, h, 'greetPlayer', { player: human.character.name }, 90000);
   if (isMoving(h, w.now) || h.path?.length) return;
+  fidget(w, h);
   if (w.rng.chance(0.08)) heroSay(w, h, 'idle', {}, 25000);
   if (w.rng.chance(0.15)) {
     // passeia pela praça da vila
@@ -2678,6 +2783,7 @@ export function heroOnEvent(
     return;
   }
   if (type === 'killedBy') {
+    reactNearby(w, h, 'rip', { player: h.character.name });
     if (payload.byPlayer && payload.sourceId) {
       // morto por um jogador: vira rival e quer revanche (planejada: só vai quando estiver mais forte ou em grupo)
       changeAffinity(h, payload.sourceId, -0.6);
@@ -2701,15 +2807,18 @@ export function heroOnEvent(
   }
   if (type === 'levelUp') {
     b.mood = Math.min(1, b.mood + 0.5);
-    heroSay(w, h, 'levelUp', { level: payload.level ?? h.character.level }, 0);
-  } else if (type === 'skillUp') heroSay(w, h, 'skillUp', { skill: payload.skill ?? '' }, 45000);
+    // comemora os níveis redondos sempre; os outros, às vezes (no começo eles vêm rápido)
+    const lv = payload.level ?? h.character.level;
+    if (lv % 5 === 0 || w.rng.chance(0.35)) heroSay(w, h, 'levelUp', { level: lv }, 0);
+    if (lv % 5 === 0 || lv >= 15) reactNearby(w, h, 'congrats', { player: h.character.name, level: lv });
+  } else if (type === 'skillUp' && w.rng.chance(0.4)) heroSay(w, h, 'skillUp', { skill: payload.skill ?? '' }, 6 * 60000);
   else if (type === 'damage' && payload.sourceName) {
     b.lastHitBy = payload.sourceName;
     if ((payload.amount ?? 0) > 0) b.lastHurtAt = w.now;
   } else if (type === 'kill') {
     b.mood = Math.min(1, b.mood + 0.03);
     b.bold = Math.min(1, b.bold + 0.015); // venceu: ganha confiança
-    if (w.rng.chance(0.15)) heroSay(w, h, 'kill', {}, 40000);
+    if (w.rng.chance(0.08)) heroSay(w, h, 'kill', {}, 4 * 60000);
   }
 }
 
@@ -2974,7 +3083,7 @@ function summoned(w: World, h: HeroEntity): void {
   if (chebyshev(to, h) <= 2) {
     b.summonedUntil = 0;
     h.path = null;
-    heroSay(w, h, 'followLeader', { player: to.character.name }, 0);
+    heroSay(w, h, 'followLeader', { player: to.character.name }, 5 * 60000);
     return setMode(w, h, followingHuman(w, h) ? 'follow' : 'decide');
   }
   keepHaste(w, h);
@@ -3017,7 +3126,7 @@ function follow(w: World, h: HeroEntity): void {
     return planTown(w, h, undefined, 'follow');
   }
   giftPotion(w, h);
-  heroSay(w, h, 'followLeader', { player: leader.character.name }, 180000);
+  heroSay(w, h, 'followLeader', { player: leader.character.name }, 8 * 60000);
   // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
   if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
   keepHaste(w, h); // seguindo: Corrida sempre ativa (depois de proteger o grupo)
@@ -3395,6 +3504,9 @@ function whims(w: World, h: HeroEntity): void {
   ) {
     heroSay(w, h, 'pkWish', { player: human.character.name }, 600000);
   }
+  // caçando sozinho, quem é sociável às vezes chama gente para caçar junto
+  if (b.mode === 'hunt' && !partyOf(w, h.id) && b.quarry && w.rng.chance(t.sociability * 0.15))
+    heroSay(w, h, 'lfg', { monster: w.data.monsters[b.quarry]?.name ?? 'monstros', area: heroActivity(w, h) }, 12 * 60000);
   // às vezes muda de ideia no meio da caça (outra área com mais monstros)
   if (b.mode === 'hunt' && w.rng.chance(0.08)) {
     const q = chooseQuarry(w, h, w.rng.chance(0.4));
@@ -3904,7 +4016,10 @@ function marketing(w: World, h: HeroEntity): void {
     if (!left || listings >= HERO_MAX_LISTINGS) continue;
     const g = priceGuide(w.data, w.market, id, c.id);
     if (g.sellSuggest < floor * 1.4) continue;
-    if (marketOffer(w, 'sell', id, left, g.sellSuggest)) listings++;
+    if (marketOffer(w, 'sell', id, left, g.sellSuggest)) {
+      listings++;
+      heroSay(w, h, 'tradeSell', { item: w.data.items[id]?.name ?? id, gold: g.sellSuggest }, 3 * 60000);
+    }
   }
   // 4) poções: do nível dele, pelo menor preço (nunca acima da loja); anuncia as pequenas que sobraram
   for (const kind of ['heal', 'mana'] as const) {
@@ -3973,7 +4088,7 @@ function marketing(w: World, h: HeroEntity): void {
     const mine = bids.find((o) => o.itemId === target.id);
     if (price >= fair * 0.6 && (!mine || mine.price < price * 0.9)) {
       if (mine) marketCancel(w, mine.id);
-      if (marketOffer(w, 'buy', target.id, 1, price)) heroSay(w, h, 'marketBuy', {}, 60000);
+      if (marketOffer(w, 'buy', target.id, 1, price)) heroSay(w, h, 'tradeBuy', { item: target.name, gold: price }, 3 * 60000);
     }
   }
 }
@@ -4005,5 +4120,147 @@ function sellSmallPotions(w: World, h: HeroEntity, shop: { buys: readonly { item
       const n = countItem(c.inventory, def.id) - keep;
       if (n > 0 && shop.buys.some((o) => o.itemId === def.id)) sellItem(w, def.id, n);
     }
+  }
+}
+
+// ------------------------------------------------------------------ jeito de gente (reação, sessões, AFK, conversa)
+/**
+ * Reage como gente: na primeira vez que percebe a situação marca o momento, e só age depois do tempo de reação dele
+ * (alguns décimos de segundo, varia um pouco a cada vez).
+ */
+function reacted(w: World, h: HeroEntity, what: 'potion' | 'mana'): boolean {
+  const n = h.brain.human.noticed;
+  const since = n[what];
+  if (since === undefined) {
+    n[what] = w.now;
+    return false;
+  }
+  return w.now - since >= profileOf(h).reactionMs * (0.8 + w.rng.next() * 0.5);
+}
+
+/** Pode deslogar/ficar AFK sem atrapalhar ninguém nem correr risco: fora de luta, de grupo com você e de PK. */
+function freeToLeave(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  return (
+    !h.dead &&
+    b.mode !== 'pk' &&
+    b.mode !== 'retreat' &&
+    b.mode !== 'dead' &&
+    b.mode !== 'recover' &&
+    !humanInParty(w, h) &&
+    !engagedByMonsters(w, h) &&
+    !isPzLocked(w, h.id) &&
+    !h.targetId
+  );
+}
+
+/** Lugar seguro mais perto para deslogar ou ficar AFK: o templo (onde todo mundo nasce). */
+function safeSpot(w: World): { x: number; y: number } {
+  return w.map.playerStart;
+}
+
+/**
+ * A rotina de quem joga de verdade (só no jogo, com `lifelike`): responde o que ficou "digitando", fica AFK de vez em
+ * quando (e volta se alguém o ataca), e ao fim da sessão avisa que vai sair, vai a um lugar seguro e desloga — a
+ * simulação o tira do mundo e ele volta depois de uma pausa, dizendo que voltou. Nunca sai de um grupo com você.
+ * Retorna true se tomou conta do turno.
+ */
+function humanRoutine(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  const hm = b.human;
+  const prof = profileOf(h);
+  // fala marcada ("digitando" a resposta)
+  // (se acabou de falar outra coisa, espera a vez; depois de 10 s a conversa já passou)
+  if (hm.pendingSay && w.now >= hm.pendingSay.at) {
+    const p = hm.pendingSay;
+    if (heroSay(w, h, p.key, p.vars, 0) || w.now - p.at > 10000) hm.pendingSay = null;
+  }
+  if (hm.justBack) {
+    hm.justBack = false;
+    heroSay(w, h, 'back', {}, 0);
+  }
+  if (!w.lifelike) return false;
+  if (!hm.sessionEnds) hm.sessionEnds = w.now + (prof.sessionMin[0] + w.rng.next() * (prof.sessionMin[1] - prof.sessionMin[0])) * 60000;
+  // AFK: parado no lugar seguro; volta na hora se alguém bate nele
+  if (hm.afkUntil > w.now) {
+    if (engagedByMonsters(w, h) || h.targetId) hm.afkUntil = 0;
+    else return true;
+  }
+  // fim da sessão: avisa (cansado, depois tchau), vai ao templo e desloga
+  if (!hm.leaving && w.now >= hm.sessionEnds - 5 * 60000 && w.now < hm.sessionEnds) heroSay(w, h, 'tired', {}, 10 * 60000);
+  if (!hm.leaving && w.now >= hm.sessionEnds && freeToLeave(w, h)) {
+    hm.leaving = true;
+    heroSay(w, h, 'bye', {}, 0);
+    if (partyOf(w, h.id)) leaveParty(w, h.id);
+  }
+  if (hm.leaving) {
+    if (humanInParty(w, h)) {
+      // (alguém o chamou para um grupo com você no caminho: fica mais um pouco)
+      hm.leaving = false;
+      hm.sessionEnds = w.now + 20 * 60000;
+      return false;
+    }
+    if (isPz(w.map, h.x, h.y) && !engagedByMonsters(w, h)) {
+      hm.logoutReady = true;
+      return true;
+    }
+    if (!isMoving(h, w.now) && !h.path?.length) {
+      const spot = safeSpot(w);
+      goTo(w, h, spot.x, spot.y, 150000, 2);
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Termina uma visita à vila: às vezes fica AFK uns minutos (numa loja ou no templo, em lugar seguro). */
+function maybeAfk(w: World, h: HeroEntity): boolean {
+  if (!w.lifelike || !isPz(w.map, h.x, h.y) || !freeToLeave(w, h) || !w.rng.chance(profileOf(h).afkChance)) return false;
+  h.brain.human.afkUntil = w.now + (60 + w.rng.next() * 150) * 1000;
+  heroSay(w, h, 'afk', {}, 0);
+  return true;
+}
+
+/** Cumprimenta quem chega perto na vila (e o outro responde depois de "digitar"); um cumprimento por pessoa a cada 10 min. */
+function greetNearby(w: World, h: HeroEntity): void {
+  const hm = h.brain.human;
+  if (h.brain.mode !== 'social' && h.brain.mode !== 'town') return;
+  if (!w.rng.chance(h.hero.temperament.sociability * 0.4)) return;
+  for (const o of w.heroes.values()) {
+    if (o === h || o.dead || chebyshev(o, h) > 4 || o.brain.human.afkUntil > w.now) continue;
+    if (w.now - (hm.greeted[o.id] ?? -Infinity) < 10 * 60000) continue;
+    if (!heroSay(w, h, 'greetHero', { player: o.character.name }, 30000)) return;
+    hm.greeted[o.id] = w.now;
+    o.brain.human.greeted[h.id] = w.now;
+    if (!o.brain.human.pendingSay)
+      o.brain.human.pendingSay = { key: 'replyHero', vars: { player: h.character.name }, at: w.now + 1500 + w.rng.next() * 2500 };
+    return;
+  }
+}
+
+/** Parado, ninguém fica estático: olha para os lados de vez em quando. */
+function fidget(w: World, h: HeroEntity): void {
+  const hm = h.brain.human;
+  if (w.now < hm.nextFidgetAt || isMoving(h, w.now) || h.path?.length) return;
+  hm.nextFidgetAt = w.now + 2500 + w.rng.next() * 5000;
+  const dirs = ['down', 'left', 'right', 'up'] as const;
+  h.facing = dirs[w.rng.int(0, dirs.length - 1)]!;
+}
+
+/**
+ * Quem está por perto reage ao que acontece com alguém (como num MMO de verdade): "gz" no nível novo, "F" na morte.
+ * Cada um responde depois de "digitar" (1 a 4 s), e nem todo mundo fala (depende de quão sociável ele é).
+ */
+export function reactNearby(
+  w: World,
+  who: { id: string; x: number; y: number },
+  key: 'congrats' | 'rip',
+  vars: Record<string, string | number>,
+): void {
+  for (const o of w.heroes.values()) {
+    if (o.id === who.id || o.dead || chebyshev(o, who) > 8 || o.brain.human.afkUntil > w.now || o.brain.human.pendingSay) continue;
+    if (w.now - (o.brain.lastSpeech[key] ?? -Infinity) < 3 * 60000) continue;
+    if (!w.rng.chance(0.25 + o.hero.temperament.sociability * 0.5)) continue;
+    o.brain.human.pendingSay = { key, vars, at: w.now + 1000 + w.rng.next() * 3000 };
   }
 }

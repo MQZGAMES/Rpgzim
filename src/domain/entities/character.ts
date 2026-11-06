@@ -52,6 +52,8 @@ export interface CharacterState {
    * (cura/poção/loot) e as regras de grupo que ele usa quando lidera. Só valores simples.
    */
   settings?: CharacterSettings;
+  /** Temporada em que o personagem joga (um save de temporada anterior recomeça do nível 1). */
+  season?: number;
   createdAt: number;
   updatedAt: number;
 }

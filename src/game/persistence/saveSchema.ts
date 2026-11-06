@@ -4,6 +4,7 @@ import type { CharacterState, ItemStack } from '../../domain/entities/character'
 import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/definitions';
 import type { GameData } from '../../domain/entities/gameData';
 import { normalizeHotbar } from '../../domain/rules/hotbar';
+import { SEASON, isOldSeason, seasonReset } from '../../domain/rules/season';
 import { addItem } from '../../domain/rules/inventory';
 import { fixMageWeapon } from '../../domain/rules/equipment';
 import { isVocationId } from '../../domain/value-objects/ids';
@@ -16,6 +17,8 @@ export interface SaveFile {
   version: number;
   savedAt: number;
   character: CharacterState;
+  /** Só na leitura: o save era de uma temporada anterior e o personagem recomeçou (não é gravado). */
+  reset?: boolean;
 }
 
 export class SaveValidationError extends Error {}
@@ -64,8 +67,11 @@ function validStack(data: GameData, v: unknown): ItemStack | null {
   return { itemId: v.itemId, count };
 }
 
-/** Converte dados desconhecidos (de armazenamento) em um CharacterState consistente, ou lança erro. */
-export function parseSave(data: GameData, raw: unknown): SaveFile {
+/**
+ * Converte dados desconhecidos (de armazenamento) em um CharacterState consistente, ou lança erro. Save de uma
+ * temporada anterior volta ao nível 1 com o kit básico, em `start` (o ponto de partida do mapa).
+ */
+export function parseSave(data: GameData, raw: unknown, start?: { x: number; y: number }): SaveFile {
   const file = migrate(raw);
   const c = file.character;
   if (!isObj(c)) throw new SaveValidationError('Personagem ausente no save.');
@@ -135,6 +141,11 @@ export function parseSave(data: GameData, raw: unknown): SaveFile {
   };
   // magos só com varinha: arma errada sai do slot e entra a varinha/cajado do nível
   fixMageWeapon(data, character);
+  if (isOldSeason({ season: typeof c.season === 'number' ? c.season : undefined })) {
+    const fresh = seasonReset(data, character, start ?? character.position, Date.now());
+    return { version: SAVE_VERSION, savedAt: Date.now(), character: fresh, reset: true };
+  }
+  character.season = typeof c.season === 'number' ? c.season : SEASON;
   return { version: SAVE_VERSION, savedAt: num(file.savedAt, Date.now()), character };
 }
 

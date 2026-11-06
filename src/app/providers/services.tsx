@@ -9,6 +9,7 @@ import { AudioService } from '../../game/audio/AudioService';
 import { SyncedSaveRepository } from '../../game/persistence/SyncedSaveRepository';
 import { CloudAccount } from '../cloud';
 import { ensureHeroSaves } from '../heroes';
+import { PLAYER_START } from '../../data/maps/world';
 
 export interface Services {
   data: GameData;
@@ -17,6 +18,8 @@ export interface Services {
   touch: boolean;
   /** Conta GitHub opcional para sincronizar os saves entre aparelhos. */
   cloud: CloudAccount;
+  /** Personagens que recomeçaram do nível 1 ao abrir o jogo (temporada nova). */
+  seasonReset: number;
 }
 
 const ServicesContext = createContext<Services | null>(null);
@@ -49,11 +52,11 @@ export function ServicesProvider({ children, fallback }: { children: ReactNode; 
         // ignora carimbos de tempo: parado na cidade não gera commits a cada minuto
         (f) => JSON.stringify({ ...f.character, updatedAt: 0, stats: { ...f.character.stats, playTimeMs: 0 } }),
       );
-      const saves = new SaveService(repo, GAME_DATA);
+      const saves = new SaveService(repo, GAME_DATA, { ...PLAYER_START });
       const cloud = new CloudAccount(repo);
-      await ensureHeroSaves(saves, GAME_DATA);
+      const reset = await ensureHeroSaves(saves, GAME_DATA);
       if (!alive) return;
-      setServices({ data: GAME_DATA, saves, audio: new AudioService(), touch: detectTouch(), cloud });
+      setServices({ data: GAME_DATA, saves, audio: new AudioService(), touch: detectTouch(), cloud, seasonReset: reset });
     })();
     return () => {
       alive = false;

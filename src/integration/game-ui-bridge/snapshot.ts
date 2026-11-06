@@ -208,6 +208,8 @@ export interface UiSnapshot {
   /** PK estilo Tibia: caveira atual (tipo e tempo restante) e PZ lock restante. */
   pk: { skull: 'white' | 'yellow' | 'red' | null; skullMs: number; pzLockMs: number };
   /** Heróis no mundo (para o menu ao tocar neles). */
+  /** Heróis numa pausa (saíram e voltam sozinhos daqui a pouco). */
+  resting: { id: string; name: string; vocation: string; level: number; backInMin: number }[];
   heroes: {
     id: string;
     name: string;
@@ -652,6 +654,13 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       skullMs: Math.max(0, (skullOf(w, p.id)?.until ?? 0) - pkNow(w)),
       pzLockMs: pzLockMs(w, p.id),
     },
+    resting: sim.resting.map((r) => ({
+      id: r.hero.id,
+      name: r.character.name,
+      vocation: r.character.vocation,
+      level: r.character.level,
+      backInMin: Math.max(1, Math.ceil((r.backAt - w.now) / 60000)),
+    })),
     heroes: [...w.heroes.values()].map((h) => ({
       id: h.id,
       name: h.character.name,

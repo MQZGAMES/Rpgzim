@@ -1,3 +1,4 @@
+import type { CharacterState } from '../entities/character';
 // Catálogo de eventos de jogo. Payloads contêm apenas dados serializáveis (prontos para trafegar em rede no futuro).
 import type { Element } from '../value-objects/element';
 import type { TilePos } from '../value-objects/position';
@@ -44,12 +45,15 @@ export interface GameEventMap extends Record<string, unknown> {
   saveRequested: { reason: string };
   // ---- heróis (personagens com vida própria)
   /** Fala de um personagem (balão acima da cabeça e registro de mensagens quando perto do jogador). */
-  speech: { entityId: string; name: string; text: string; position: TilePos };
+  /** Fala de um personagem (balão e registro); `key` = situação da fala (heróis), para estatísticas e testes. */
+  speech: { entityId: string; name: string; text: string; position: TilePos; key?: string };
   /** Texto flutuante de um ator que não é o jogador (subiu de nível, skill, XP). */
   actorFx: { entityId: string; text: string; tone: 'level' | 'skill' | 'xp' };
   actorRespawned: { entityId: string };
   /** Um herói pediu para salvar o próprio progresso. */
   heroSaveRequested: { heroId: string; reason: string };
+  /** Um herói saiu para uma pausa (o progresso dele vai junto para ser salvo). */
+  heroLoggedOut: { heroId: string; character: CharacterState };
   /** Anúncios do mercado mudaram (salvar e atualizar a tela). */
   marketChanged: Record<string, never>;
   /** Um personagem entrou ou saiu do jogo (logado com IA). */

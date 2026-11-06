@@ -127,6 +127,37 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Temporada 2: recomeço, XP pela metade e heróis com jeito de gente
+- **Todo mundo recomeça do nível 1** (`src/domain/rules/season.ts`): os seus personagens e os heróis voltam com o
+  equipamento básico da vocação, 40 de ouro e **50 Poções de Vida e 50 Poções de Mana** pequenas. Skills, Magic Level,
+  depósito e ouro do banco zeram; ficam o nome, a vocação e as configurações de cada personagem (curas automáticas e
+  grupo). Cada save guarda a temporada: um save antigo recomeça ao ser aberto, inclusive o que chega pela sincronização
+  do GitHub. O mercado também começa vazio. A tela inicial avisa uma vez (*Nova temporada!*).
+- **Experiência pela metade**: toda criatura dá 50% da XP de antes (`BALANCE.creatures.xpRate = 0.5`).
+- **Heróis que parecem gente jogando** (`src/game/ai/heroHuman.ts`). Cada herói tem um perfil fixo, tirado do
+  temperamento:
+  - **Reação humana**: fora de aperto ele leva de 0,23 a 0,63 s para beber a poção (abaixo de 30% de vida ou em
+    perigo, bebe na hora). Depois de matar, dá uma olhada no loot antes de puxar a próxima criatura, a não ser que algo
+    o ataque. Também não aproveita toda brecha para magia (86% a 98% delas).
+  - **Jeito de escrever**: Boladex é animado ("!!", "haha"), Maguim é casual (vc, pq, tb, vlw, pra, sem acento, "kkk"),
+    Mano Cura é educado e Distanciado é seco (sem exclamação). Personagens criados ganham um jeito pelo id.
+  - **Sessões e pausas**: joga de 45 a 115 min, avisa que está cansado, se despede, sai do grupo, vai ao templo e
+    desloga. Volta sozinho depois de 6 a 24 min ("voltei"). Em *Personagens online*, quem está fora aparece em *Numa
+    pausa (voltam sozinhos)*, com os minutos que faltam; dá para deslogá-lo por lá. **Quem está no seu grupo nunca sai
+    para a pausa.**
+  - **AFK de vez em quando**: às vezes, depois da vila, fica de 1 a 3,5 min parado na área protegida (4% a 12% das
+    visitas). Depois de morrer, fica 30 a 90 s (3 vezes em 10). Na lista ele aparece como *ausente (AFK)* e volta na
+    hora se for atacado.
+  - **Conversa de MMO**:
+    - cumprimenta quem encontra na vila, e o outro responde depois de "digitar" (1,5 a 4 s);
+    - dá "gz" nos níveis redondos (e a partir do 15), inclusive os seus;
+    - manda "F" quando alguém cai por perto;
+    - comenta o que anunciou ou comprou no mercado e às vezes chama gente para caçar;
+    - olha para os lados quando está parado e dá pequenas pausas entre uma compra e outra.
+  - **Menos falatório**: as frases de caça, vila, venda, compra, banco, skill e abate têm intervalos de 4 a 8 min, e o
+    nível novo só é comemorado nos redondos (ou às vezes). Fica em ~1,5 fala por minuto por herói.
+  - Tudo isso vale só no jogo (`lifelike`). Testes e ferramentas usam a IA determinística de sempre.
+
 ## "Ir até" e materiais agrupados no loot
 - **Ir até** (lista de *Personagens online*): você vai andando até o personagem, onde ele estiver no mapa — a rota é
   refeita quando ele muda de lugar — e para a 2 tiles dele. Não ataca nada no caminho. No topo da tela aparece
@@ -441,7 +472,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **349 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **362 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada, IA com jeito de gente e recomeço da temporada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

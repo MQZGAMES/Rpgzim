@@ -3,6 +3,7 @@ import type { CharacterState } from '../entities/character';
 import { SKILL_IDS, type SkillId } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
 import { defaultHotbar } from './hotbar';
+import { SEASON } from './season';
 import type { VocationId } from '../value-objects/ids';
 import { addItem } from './inventory';
 import { computeStats } from './stats';
@@ -49,6 +50,7 @@ export function createCharacter(
     stats: { monstersKilled: 0, deaths: 0, playTimeMs: 0 },
     createdAt: opts.now,
     updatedAt: opts.now,
+    season: SEASON,
   };
   for (const [slot, st] of Object.entries(voc.startingEquipment)) {
     if (st) c.equipment[slot as keyof typeof c.equipment] = { itemId: st.itemId, count: st.count ?? 1 };

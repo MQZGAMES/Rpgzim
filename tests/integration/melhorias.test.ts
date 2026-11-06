@@ -126,7 +126,8 @@ describe('herói em grupo: cura, poções e loot', () => {
     const { sim, h } = withHero('knight');
     h.character.mana = 0;
     h.stats.maxMana = 100;
-    // dá uma poção de mana na mochila
+    // só 3 poções de mana na mochila (o kit inicial já traz 50: tira para o teste)
+    h.character.inventory = h.character.inventory.map(() => null);
     h.character.inventory[0] = { itemId: 'potion_mana', count: 3 };
     expect(countItem(h.character.inventory, 'potion_mana')).toBe(3);
     // o cérebro roda e percebe a mana baixa

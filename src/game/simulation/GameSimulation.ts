@@ -75,7 +75,7 @@ import {
   updateSocial,
   type PartySetting,
 } from '../social/social';
-import { addHero } from '../ai/heroes';
+import { addHero, heroSnapshot } from '../ai/heroes';
 import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
 import {
@@ -89,7 +89,7 @@ import {
 import type { OfferSide } from '../../domain/rules/market';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
-import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, summonHero, updateHeroBrain } from '../ai/heroBrain';
+import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, profileOf, reactNearby, summonHero, updateHeroBrain } from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -109,6 +109,8 @@ export interface SimulationOptions {
   heroes?: { hero: HeroDef; character: CharacterState }[];
   /** Mercado salvo (anúncios e vendas a receber). */
   market?: MarketState;
+  /** Jogo de verdade: heróis com sessões (saem para uma pausa e voltam) e AFK de vez em quando. */
+  lifelike?: boolean;
 }
 
 /** Depois de atacar, quem segue o líder fica caçando em paz por este tempo antes de voltar a segui-lo. */
@@ -187,6 +189,7 @@ export class GameSimulation {
       npcs: new Map(),
       lootBags: new Map(),
       market: opts.market ?? emptyMarket(),
+      lifelike: opts.lifelike ?? false,
       corpses: new Map(),
       occupancy: new Map(),
       doorsOpen: new Map(),
@@ -239,6 +242,9 @@ export class GameSimulation {
     updateRegion(w);
     for (const hc of opts.heroes ?? []) this.addHero(hc.hero, hc.character);
     marketCollect(w, w.human);
+    // os heróis por perto reagem ao jogador: "gz" no nível novo, "F" quando ele cai
+    w.human.scope.events.on('levelUp', (e) => reactNearby(w, w.human, 'congrats', { player: w.human.character.name, level: e.level }));
+    w.human.scope.events.on('playerDied', () => reactNearby(w, w.human, 'rip', { player: w.human.character.name }));
   }
 
   /** Coloca um herói (personagem com vida própria) no mundo. */
@@ -258,6 +264,39 @@ export class GameSimulation {
    * Desloga um herói: sai do grupo, larga alvos e convites e some do mundo (o progresso deve ser salvo antes por quem
    * chama). Retorna o herói removido.
    */
+  /** Heróis numa pausa (fora do mundo): voltam sozinhos quando ela acaba. */
+  readonly resting: { hero: HeroDef; character: CharacterState; backAt: number }[] = [];
+
+  /** O herói que terminou a sessão sai para uma pausa: o progresso vai para ser salvo e ele volta depois. */
+  private restHero(h: HeroEntity): void {
+    const w = this.world;
+    const prof = profileOf(h);
+    const snap = heroSnapshot(w, h);
+    this.removeHero(h.hero.id);
+    const minutes = prof.breakMin[0] + w.rng.next() * (prof.breakMin[1] - prof.breakMin[0]);
+    this.resting.push({ hero: h.hero, character: snap, backAt: w.now + minutes * 60000 });
+    w.events.emit('heroLoggedOut', { heroId: h.hero.id, character: snap });
+  }
+
+  /** Pausas: quem está pronto para sair sai; quem terminou a pausa volta (avisando no chat). */
+  private updateRest(): void {
+    const w = this.world;
+    for (const h of [...w.heroes.values()]) if (h.brain.human.logoutReady) this.restHero(h);
+    for (const r of [...this.resting]) {
+      if (w.now < r.backAt) continue;
+      this.resting.splice(this.resting.indexOf(r), 1);
+      const h = this.addHero(r.hero, r.character);
+      h.brain.human.justBack = true;
+    }
+  }
+
+  /** Tira um herói em pausa da fila (o jogador o deslogou de vez pela lista de online). */
+  dropResting(heroId: string): CharacterState | null {
+    const i = this.resting.findIndex((r) => r.hero.id === heroId || r.character.id === heroId);
+    if (i < 0) return null;
+    return this.resting.splice(i, 1)[0]!.character;
+  }
+
   removeHero(heroId: string): HeroEntity | null {
     const w = this.world;
     const h = [...w.heroes.values()].find((x) => x.hero.id === heroId || x.id === heroId);
@@ -318,6 +357,7 @@ export class GameSimulation {
     for (const m of w.monsters.values()) updateMonster(w, m);
     updateCityGuards(w);
     updateNpcs(w);
+    this.updateRest();
     this.updateWorldTimers();
     updateDoors(w);
     updateSocial(w);

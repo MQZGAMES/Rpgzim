@@ -115,6 +115,22 @@ const boladex: HeroDef = {
     holdPos: ['Posição segurada. Daqui não saio!', 'Fico aqui. Quem chegar, apanha.'],
     orderAttack: ['Entendido! Todo mundo nesse alvo!', 'Foco nele!'],
     marketBuy: ['Deixei minha oferta com o Corretor Tadeu. Uma hora alguém vende!', 'Mercado primeiro, loja depois. Economia é tudo.'],
+    bye: [
+      'Vou nessa, pessoal. Até mais!',
+      'Bateu a fome... vou jantar. Já volto!',
+      'Chega por hoje. Falou, galera!',
+      'Preciso sair um pouco. Depois eu volto!',
+    ],
+    back: ['Voltei!', 'Cheguei de novo, galera.', 'Opa, de volta. Perdi alguma coisa?', 'De volta ao trabalho!'],
+    afk: ['Afk rapidinho.', 'Já volto, 2 minutos.', 'Vou pegar um café, já volto.', 'Segura aí, volto já.'],
+    greetHero: ['Eae, {player}!', 'Salve, {player}!', 'Opa, {player}, bom te ver.', 'Fala, {player}! Caçando o quê hoje?'],
+    replyHero: ['Eae, {player}! Tudo certo?', 'Salve! Tô de boa, e você?', 'Opa, {player}! Bora upar!', 'Fala! Hoje tá rendendo.'],
+    tradeSell: ['Vendendo {item} por {gold} no mercado!', 'Anunciei {item} a {gold}. Tá barato, hein!', 'Alguém quer {item}? Tá no corretor por {gold}.'],
+    tradeBuy: ['Compro {item}! Pago {gold}, oferta no mercado.', 'Alguém tem {item}? Pago {gold}.', 'Procuro {item}. Deixei {gold} no corretor.'],
+    lfg: ['Alguém pra caçar {monster} comigo?', 'Procuro grupo pra {monster}!', 'Bora caçar junto? Tô em {area}.'],
+    tired: ['Tô ficando cansado... mais uma caçada e paro.', 'Bocejei aqui. Mais um pouquinho só.', 'Já tá tarde, hein... última volta.'],
+    congrats: ['gz, {player}!', 'Parabéns, {player}! Nível {level}!', 'Aê, {player}! Up!', 'Boa, {player}! Tá voando.'],
+    rip: ['F, {player}...', 'Eita, {player} caiu!', 'Volta logo, {player}!', 'Ih... foi mal, {player}.'],
   },
 };
 
