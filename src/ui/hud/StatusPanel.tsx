@@ -26,6 +26,9 @@ export function StatusPanel() {
         <div className="flex items-baseline gap-1 leading-none">
           {p.skull && <ItemIcon icon={`ui_skull_${p.skull}`} size={13} title="Você está marcado (PK)" />}
           <span className="truncate text-[12px] text-parchment sm:text-[13px]">{p.name}</span>
+          <span className="shrink-0 text-[11px] font-bold text-gold-light sm:text-[12px]" data-testid="status-level" title={`Nível ${p.level}`}>
+            Nv {p.level}
+          </span>
           <span className="hidden text-[10px] sm:inline" style={{ color: p.color }}>
             {p.vocationName}
           </span>
