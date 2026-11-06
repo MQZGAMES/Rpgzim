@@ -26,17 +26,17 @@ export function StatusPanel() {
         <div className="flex items-baseline gap-1 leading-none">
           {p.skull && <ItemIcon icon={`ui_skull_${p.skull}`} size={13} title="Você está marcado (PK)" />}
           <span className="truncate text-[12px] text-parchment sm:text-[13px]">{p.name}</span>
-          <span className="shrink-0 text-[11px] font-bold text-gold-light sm:text-[12px]" data-testid="status-level" title={`Nível ${p.level}`}>
-            Nv {p.level}
-          </span>
           <span className="hidden text-[10px] sm:inline" style={{ color: p.color }}>
             {p.vocationName}
           </span>
           {p.inPz && (
-            <span className="ml-auto text-[9px] text-heal" title="Área protegida: sem combate">
+            <span className="text-[9px] text-heal" title="Área protegida: sem combate">
               PZ
             </span>
           )}
+          <span className="ml-auto shrink-0 text-[11px] font-bold text-gold-light sm:text-[12px]" data-testid="status-level" title={`Nível ${p.level}`}>
+            Nv {p.level}
+          </span>
         </div>
         <Bar className="mt-[3px]" value={p.hp} max={p.maxHp} color="var(--color-hp)" label={`${p.hp}/${p.maxHp}`} height={10} />
         <Bar className="mt-[2px]" value={p.mana} max={p.maxMana} color="var(--color-mana)" label={`${p.mana}/${p.maxMana}`} height={10} />

@@ -2,6 +2,7 @@
 import type { CharacterState } from '../domain/entities/character';
 import type { GameData } from '../domain/entities/gameData';
 import { createCharacter } from '../domain/rules/character';
+import { SEASON } from '../domain/rules/season';
 import type { SaveService } from '../game/persistence/SaveService';
 import { PLAYER_START } from '../data/maps/world';
 
@@ -18,6 +19,14 @@ export async function ensureHeroSaves(saves: SaveService, data: GameData): Promi
       await saves.save(f.character).catch(() => undefined);
       reset++;
     }
+  }
+  // os personagens da casa só são criados uma vez por temporada: se o jogador apagar um, ele não volta
+  const seededKey = `rpgzim.heroesSeeded.${SEASON}`;
+  try {
+    if (localStorage.getItem(seededKey)) return reset;
+    localStorage.setItem(seededKey, '1');
+  } catch {
+    /* sem armazenamento: cria o que faltar, como antes */
   }
   const existing = new Set((await saves.list().catch(() => [])).map((s) => s.slotId));
   for (const hero of Object.values(data.heroes)) {
