@@ -42,6 +42,7 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
     w.ui.dialog = { npcId: n.id, pageId: n.def.dialog[0]!.id };
     w.ui.shop = null;
     w.ui.depot = null;
+    w.ui.market = null;
     w.ui.lootId = null;
     w.events.emit('dialogOpened', { npcId: n.id });
   } else if (target.kind === 'loot') {
@@ -52,6 +53,7 @@ export function interactWith(w: World, target: { kind: 'npc' | 'loot' | 'sign'; 
     w.ui.dialog = null;
     w.ui.shop = null;
     w.ui.depot = null;
+    w.ui.market = null;
     w.events.emit('lootChanged', { containerId: l.id });
   } else {
     const s = w.map.signs[Number(target.id)];
@@ -118,13 +120,14 @@ export function updatePendingInteraction(w: World): void {
 /** Fecha diálogos/lojas/loot quando o jogador se afasta. */
 export function updateUiDistance(w: World): void {
   const p = w.player;
-  const npcId = w.ui.dialog?.npcId ?? w.ui.shop?.npcId ?? w.ui.depot?.npcId;
+  const npcId = w.ui.dialog?.npcId ?? w.ui.shop?.npcId ?? w.ui.depot?.npcId ?? w.ui.market?.npcId;
   if (npcId) {
     const n = w.npcs.get(npcId);
     if (!n || chebyshev(n, p) > NPC_RANGE + 1) {
       w.ui.dialog = null;
       w.ui.shop = null;
       w.ui.depot = null;
+      w.ui.market = null;
     }
   }
   if (w.ui.lootId) {
@@ -161,6 +164,11 @@ export function chooseDialogOption(w: World, index: number): void {
       w.ui.dialog = null;
       w.ui.depot = { npcId: npc.id };
       w.events.emit('depotOpened', { npcId: npc.id });
+      break;
+    case 'openMarket':
+      w.ui.dialog = null;
+      w.ui.market = { npcId: npc.id };
+      w.events.emit('marketOpened', { npcId: npc.id });
       break;
     case 'heal': {
       const c = w.player.character;
@@ -222,7 +230,8 @@ export function updateNpcs(w: World): void {
         (a) =>
           a.scope.ui.dialog?.npcId === n.id ||
           a.scope.ui.shop?.npcId === n.id ||
-          a.scope.ui.depot?.npcId === n.id,
+          a.scope.ui.depot?.npcId === n.id ||
+          a.scope.ui.market?.npcId === n.id,
       )
     )
       continue;

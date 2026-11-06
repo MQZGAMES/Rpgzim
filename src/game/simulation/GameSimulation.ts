@@ -79,17 +79,14 @@ import { addHero } from '../ai/heroes';
 import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
 import {
-  marketAutoList,
-  marketBid,
-  marketBuy,
   marketBuyNow,
   marketCancel,
   marketCollect,
-  marketList,
-  marketSell,
+  marketOffer,
   marketSellNow,
   marketTakeParcels,
 } from '../economy/marketService';
+import type { OfferSide } from '../../domain/rules/market';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, summonHero, updateHeroBrain } from '../ai/heroBrain';
@@ -130,6 +127,7 @@ export class GameSimulation {
       dialog: null,
       shop: null,
       depot: null,
+      market: null,
       lootId: null,
       regionId: null,
       buildingId: null,
@@ -645,36 +643,26 @@ export class GameSimulation {
   depotDeposit(invIndex: number): boolean {
     return depotDeposit(this.world, invIndex);
   }
-  marketList(from: 'inventory' | 'depot', index: number, price: number): boolean {
-    return marketList(this.world, from, index, price);
+  /** Compra agora pelo menor preço anunciado (até `maxPrice`). */
+  marketBuyNow(itemId: string, qty: number, maxPrice = Infinity): boolean {
+    return marketBuyNow(this.world, itemId, qty, maxPrice);
   }
-  marketAutoList(from: 'inventory' | 'depot', index: number): boolean {
-    return marketAutoList(this.world, from, index);
+  /** Vende agora para as maiores ofertas de compra (a partir de `minPrice`). */
+  marketSellNow(itemId: string, qty: number, minPrice = 0): boolean {
+    return marketSellNow(this.world, itemId, qty, minPrice);
   }
-  marketBuy(listingId: string): boolean {
-    return marketBuy(this.world, listingId);
+  /** Cria uma oferta de venda ou de compra (o que cruza com o outro lado fecha na hora). */
+  marketOffer(side: OfferSide, itemId: string, qty: number, price: number): boolean {
+    return marketOffer(this.world, side, itemId, qty, price);
   }
-  marketCancel(orderId: string): boolean {
-    return marketCancel(this.world, orderId);
-  }
-  /** Compra agora pelo menor preço à venda. */
-  marketBuyNow(itemId: string, qty: number): boolean {
-    return marketBuyNow(this.world, itemId, qty);
-  }
-  /** Vende agora para as maiores ofertas de compra. */
-  marketSellNow(itemId: string, qty: number): boolean {
-    return marketSellNow(this.world, itemId, qty);
-  }
-  /** Anuncia a venda (o que já tem comprador por esse preço vende na hora). */
-  marketSell(itemId: string, qty: number, price: number): boolean {
-    return marketSell(this.world, itemId, qty, price);
-  }
-  /** Oferta de compra (o que já está à venda por esse preço compra na hora). */
-  marketBid(itemId: string, qty: number, price: number): boolean {
-    return marketBid(this.world, itemId, qty, price);
+  marketCancel(offerId: string): boolean {
+    return marketCancel(this.world, offerId);
   }
   marketTakeParcels(): boolean {
     return marketTakeParcels(this.world);
+  }
+  closeMarket(): void {
+    this.world.ui.market = null;
   }
   depotWithdraw(depotIndex: number): boolean {
     return depotWithdraw(this.world, depotIndex);

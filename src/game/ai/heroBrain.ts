@@ -33,7 +33,7 @@ import {
 import { castCheck, castSpell } from '../abilities/spells';
 import { spellManaCost, spellTiers } from '../../domain/rules/spells';
 
-import { bestPotionFor, canDrink, potionAmount, potionKind, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
+import { bestPotionFor, canDrink, potionAmount, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
 import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
@@ -47,9 +47,10 @@ import {
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
 import { equipItem, nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
-import { bankGold, depotWithdraw } from '../economy/depotService';
-import { marketAutoList, marketBuyNow, marketCancel, marketSellNow } from '../economy/marketService';
-import { asksFor, bidsFor } from '../../domain/rules/market';
+import { bankGold } from '../economy/depotService';
+import { marketBuyNow, marketCancel, marketOffer, marketSellNow } from '../economy/marketService';
+import { collectParcels, escrowOf, marketable, offersFor, ownOffers, parcelUnits, priceGuide, shopPrices } from '../../domain/rules/market';
+import { withdrawItem } from '../../domain/rules/depot';
 import { lureTankId, sparMode } from '../social/social';
 import {
   acceptInvite,
@@ -74,7 +75,8 @@ export type HeroMode =
 
 type TownStep =
   | { kind: 'shop'; npcId: string; buyPotions?: boolean; upgrades?: boolean; trainingWeapon?: boolean }
-  | { kind: 'bank'; op: 'withdraw' | 'deposit'; local?: boolean; amount?: number }
+  | { kind: 'bank'; op: 'withdraw' | 'deposit' | 'settle'; local?: boolean; amount?: number }
+  | { kind: 'market' }
   | { kind: 'heal' };
 
 export interface HeroBrainState {
@@ -360,7 +362,8 @@ export const heroHelpers = {
   upgradeBudget: (h: HeroEntity, budget: number): number => upgradeBudget(h, budget),
   collectLoot: (w: World, h: HeroEntity): void => collectLootWhileFighting(w, h),
   fightSpells: (w: World, h: HeroEntity, target: MonsterEntity): void => fightSpells(w, h, target, 0),
-  useMarket: (w: World, h: HeroEntity): void => useMarket(w, h),
+  /** Etapa do mercado (com a janela do corretor aberta). */
+  marketing: (w: World, h: HeroEntity): void => marketing(w, h),
   /** Compra de poções numa loja já aberta (w.ui.shop), como na etapa de loja da vila. */
   buyPotions: (w: World, h: HeroEntity, npcId: string): void => shopping(w, h, { kind: 'shop', npcId, buyPotions: true }),
   tryCast: (w: World, h: HeroEntity, id: string): boolean => tryCast(w, h, id),
@@ -1795,7 +1798,9 @@ function distOf(
       ? w.npcs.get(step.npcId)
       : step.kind === 'bank'
         ? npcByAction(w, 'openDepot', step.local ? from : (anchor ?? from))
-        : npcByAction(w, 'heal', anchor ?? from);
+        : step.kind === 'market'
+          ? npcByAction(w, 'openMarket', anchor ?? from)
+          : npcByAction(w, 'heal', anchor ?? from);
   return n ? chebyshev(n, from) : 0;
 }
 
@@ -2232,22 +2237,32 @@ function planTown(w: World, h: HeroEntity, only?: TownStep[], then: HeroMode = '
     ordered.sort((a, b2) => rank(b2) - rank(a));
     steps.length = 0;
     steps.push(...ordered);
-    // saque antes das compras: para um upgrade ou para um bom estoque de poções
+    // o mercado antes de tudo (os heróis preferem negociar lá: equipamento e poções) e, no mesmo prédio, o banco:
+    // acerta a bolsa de uma vez — guarda o excedente ou saca o que as lojas vão pedir (upgrade, estoque de poções)
     const needBank = noWeapon
       ? c.gold + earn < (up?.price ?? 0) + price * 10
       : !!up && c.gold + earn - 30 < up.price;
-    if (
-      (c.bankGold > 0 && (needBank || ((wantPotions || !!manaGoal(w, h)) && c.gold + earn < price * 14))) ||
-      marketDeals(w, h).length // o mercado antes das lojas
-    )
-      steps.unshift({ kind: 'bank', op: 'withdraw' });
+    // com PK ligado guarda quase tudo (quem morre no PK deixa parte do ouro da bolsa no chão)
+    const bankAbove = w.social.pvp ? 30 : 150 + c.level * 8 + h.hero.temperament.greed * 60;
+    const market = !!npcByAction(w, 'openMarket', anchor) && marketErrands(w, h);
+    const withdraw = c.bankGold > 0 && (needBank || ((wantPotions || !!manaGoal(w, h)) && c.gold + earn < price * 14));
+    const bank = withdraw || c.gold + earn - keepGold(w, h) > bankAbove;
+    // mercado e banco ficam no mesmo prédio: entram juntos na rota (o mercado antes do banco), antes das lojas se for
+    // preciso sacar para as compras; senão na ordem do caminho mais curto. Se o prédio ficar para o fim, as lojas não
+    // vendem o que vai ao mercado nem compram o upgrade mais barato lá (ver shopping).
+    const bankStops: TownStep[] = [
+      ...(market ? [{ kind: 'market' } as TownStep] : []),
+      ...(bank ? [{ kind: 'bank', op: 'settle' } as TownStep] : []),
+    ];
+    if (bankStops.length) {
+      const bankNpc = npcByAction(w, 'openDepot', anchor);
+      const from = { x: h.x, y: h.y };
+      const dBank = bankNpc ? chebyshev(bankNpc, from) : 0;
+      const at = withdraw ? 0 : steps.findIndex((st) => distOf(w, st, from, anchor) > dBank);
+      steps.splice(at < 0 ? steps.length : at, 0, ...bankStops);
+    }
     // não volta à vila só por causa de upgrade nos próximos minutos
     h.brain.nextUpgradeTripAt = w.now + 8 * 60000;
-    // banco só quando sobra bastante ouro; bênção do sacerdote só se estiver bem ferido
-    // com PK ligado guarda quase tudo (quem morre no PK deixa parte do ouro da bolsa no chão)
-    // (o banco é mais uma parada a pé: só vale quando o ouro na bolsa já pesa)
-    const bankAbove = w.social.pvp ? 30 : 150 + c.level * 8 + h.hero.temperament.greed * 60;
-    if (c.gold + earn - keepGold(w, h) > bankAbove) steps.push({ kind: 'bank', op: 'deposit' });
     // ferido e sem poções: a bênção (grátis, no templo) vem primeiro
     // (a bênção só cura vida e a ida ao sacerdote custa tempo de caça: só vale com a vida bem baixa)
     if (hpPct(h) < 0.65 || (heal && hpPct(h) < 0.8)) steps.unshift({ kind: 'heal' });
@@ -2307,6 +2322,7 @@ function town(w: World, h: HeroEntity): void {
     dropJunk(w, h);
     w.ui.shop = null;
     w.ui.depot = null;
+    w.ui.market = null;
     w.ui.dialog = null;
     const after = b.after;
     b.after = 'decide';
@@ -2320,6 +2336,7 @@ function town(w: World, h: HeroEntity): void {
     b.stepStartedAt = w.now;
     w.ui.shop = null;
     w.ui.depot = null;
+    w.ui.market = null;
     w.ui.dialog = null;
   };
   // cada etapa tem um limite de tempo (caminho bloqueado, NPC ocupado...)
@@ -2329,16 +2346,21 @@ function town(w: World, h: HeroEntity): void {
       ? w.npcs.get(step.npcId)
       : step.kind === 'bank'
         ? npcByAction(w, 'openDepot', step.local ? h : (b.townAnchor ?? h))
-        : npcByAction(w, 'heal', b.townAnchor ?? h);
+        : step.kind === 'market'
+          ? npcByAction(w, 'openMarket', b.townAnchor ?? h)
+          : npcByAction(w, 'heal', b.townAnchor ?? h);
   if (!npc) return done();
-  const action = step.kind === 'shop' ? 'openShop' : step.kind === 'bank' ? 'openDepot' : 'heal';
+  const action =
+    step.kind === 'shop' ? 'openShop' : step.kind === 'bank' ? 'openDepot' : step.kind === 'market' ? 'openMarket' : 'heal';
   // 1) chegar e abrir o diálogo; 2) escolher a opção; 3) negociar
   const opened =
     step.kind === 'shop'
       ? w.ui.shop?.npcId === npc.id
       : step.kind === 'bank'
         ? w.ui.depot?.npcId === npc.id
-        : false;
+        : step.kind === 'market'
+          ? w.ui.market?.npcId === npc.id
+          : false;
   if (!opened) {
     if (w.ui.dialog?.npcId === npc.id) {
       const idx =
@@ -2361,6 +2383,7 @@ function town(w: World, h: HeroEntity): void {
   }
   if (step.kind === 'shop') shopping(w, h, step);
   else if (step.kind === 'bank') banking(w, h, step.op, step.amount);
+  else if (step.kind === 'market') marketing(w, h);
   done();
 }
 
@@ -2373,9 +2396,11 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
     .flatMap((st) => (st.kind === 'shop' ? [w.data.shops[w.npcs.get(st.npcId)?.def.shopId ?? '']] : []))
     .filter((x): x is NonNullable<typeof x> => !!x);
   let earned = 0;
+  const marketAhead = h.brain.town.slice(1).some((st) => st.kind === 'market');
   for (const o of shop.buys) {
     const n = countItem(c.inventory, o.itemId);
     if (!n || !sellable(w, h, o.itemId)) continue;
+    if (marketAhead && worthMarket(w, h, o.itemId)) continue; // vai ser anunciado no mercado
     if (later.some((sh) => (sh.buys.find((b2) => b2.itemId === o.itemId)?.price ?? 0) > o.price)) continue;
     const before = c.gold;
     if (sellItem(w, o.itemId, n)) earned += c.gold - before;
@@ -2454,6 +2479,9 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       const up =
         (unarmed(h) && bestUpgrade(w, h, c.gold - 5, 'mainHand')) || nextUpgrade(w, h, c.gold - 30 - reserve);
       if (!up || up.shopId !== shop.id) break;
+      // mais barato no mercado (e o mercado ainda está na rota): compra lá
+      const ask = offersFor(w.market, up.itemId, 'sell', c.id)[0];
+      if (marketAhead && ask && ask.price <= up.price) break;
       if (!buyItem(w, up.itemId, 1)) break;
       const idx = c.inventory.findIndex((s) => s?.itemId === up.itemId);
       if (idx >= 0 && equipItem(w, idx)) {
@@ -2475,36 +2503,21 @@ function isUsableLater(w: World, h: HeroEntity, itemId: string): boolean {
   return !!def && (!def.vocations || def.vocations.includes(h.character.vocation));
 }
 
-function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit', ticket?: number): void {
+function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit' | 'settle', ticket?: number): void {
   const c = h.character;
-  // no banco, o mercado primeiro: o que os outros anunciam pelo preço do NPC (ou menos) sai daqui, não da loja
-  useMarket(w, h);
-  listLootOnMarket(w, h);
   if (op === 'withdraw' && ticket) {
     // saque para uma finalidade exata
     if (ticket > 0) bankGold(w, 'withdraw', Math.min(ticket, c.bankGold));
     return;
   }
-  if (op === 'withdraw') {
-    const room = c.gold + c.bankGold - keepGold(w, h) - 40;
-    const up = nextUpgrade(w, h, room);
-    const potionNeed = potionHeal(w, h) < healGoal(h, w.now) * 0.6 ? potionPrice(w) * 14 - c.gold : 0;
-    // quem vive de mana (Sorcerer/Druid) também saca o ouro do estoque de mana: uma ida só, em vez de uma a cada 3 minutos
-    const manaNeed =
-      manaGoal(w, h) && manaStock(w, h) < manaGoal(w, h) * 0.6
-        ? Math.round(manaRestockCost(w, h) / 0.7) - c.gold
-        : 0;
-    let need = Math.max(up ? up.price + 40 - c.gold : 0, potionNeed, manaNeed);
-    if (unarmed(h)) {
-      // sem arma: saca o preço da melhor arma que o saldo paga mais um estoque de poções
-      const wp = bestUpgrade(w, h, c.gold + c.bankGold - 15, 'mainHand');
-      if (wp) need = Math.max(need, wp.price + potionPrice(w) * 10 - c.gold);
-    }
-    if (need > 0) bankGold(w, 'withdraw', Math.min(need, c.bankGold));
+  // mercado e banco no mesmo prédio, antes das lojas: a bolsa fica com o que as lojas vão pedir; o resto vai para o banco
+  const purse = shopPurse(w, h);
+  if (op === 'withdraw' || (op === 'settle' && c.gold < purse)) {
+    if (purse > c.gold) bankGold(w, 'withdraw', Math.min(purse - c.gold, c.bankGold));
     return;
   }
-  // guarda o excedente, sem mexer no dinheiro das poções (senão saca de novo na próxima visita)
-  const reserve = keepGold(w, h);
+  // guarda o excedente, sem mexer no dinheiro das compras desta visita (senão saca de novo na próxima)
+  const reserve = Math.max(keepGold(w, h), op === 'settle' ? purse : 0);
   const surplus = c.gold - reserve;
   // juntando para a meta de equipamento: guarda mais
   const saving = h.brain.goal ? 0.3 : 0;
@@ -2514,6 +2527,30 @@ function banking(w: World, h: HeroEntity, op: 'withdraw' | 'deposit', ticket?: n
       : 0;
   const amount = Math.max(surplus, savings);
   if (amount >= 20 && bankGold(w, 'deposit', amount)) heroSay(w, h, 'bank', {}, 120000);
+}
+
+/**
+ * Ouro que a bolsa precisa ter para as compras das lojas: completar o estoque de cura e de mana (com a poção do nível
+ * dele) e o upgrade planejado; sem arma, a arma. (O banco fica no começo da visita: o depósito não pode levar o
+ * dinheiro das poções.)
+ */
+function shopPurse(w: World, h: HeroEntity): number {
+  const c = h.character;
+  const room = c.gold + c.bankGold - keepGold(w, h) - 40;
+  const up = nextUpgrade(w, h, room);
+  const best = bestPotionFor(w.data, c.level, 'heal');
+  const missing = Math.max(0, healGoal(h, w.now) - potionHeal(w, h));
+  const perHeal = best ? (shopPrices(w.data, best.id).sells ?? potionPrice(w)) / Math.max(1, potionAmount(best, 'heal')) : 0.6;
+  const potions = Math.ceil(missing * perHeal * 1.1);
+  // quem vive de mana (Sorcerer/Druid) também leva o ouro do estoque de mana: uma ida só, em vez de uma a cada 3 minutos
+  const mana = manaGoal(w, h) ? Math.round(manaRestockCost(w, h) * 1.1) : 0;
+  let purse = Math.max(up ? up.price + 40 : 0, potions + mana);
+  if (unarmed(h)) {
+    // sem arma: o preço da melhor arma que o saldo paga mais um estoque de poções
+    const wp = bestUpgrade(w, h, c.gold + c.bankGold - 15, 'mainHand');
+    if (wp) purse = Math.max(purse, wp.price + potionPrice(w) * 10);
+  }
+  return purse;
 }
 
 // ------------------------------------------------------------------ recuo, praça
@@ -3600,7 +3637,7 @@ function plannedRevenge(w: World, h: HeroEntity): boolean {
 
 /** Ouro total (bolsa, banco e o loot da mochila). */
 function wealthOf(w: World, h: HeroEntity): number {
-  return h.character.gold + h.character.bankGold + lootValue(w, h);
+  return h.character.gold + h.character.bankGold + lootValue(w, h) + escrowOf(w.market, h.character.id);
 }
 
 /**
@@ -3704,94 +3741,239 @@ function idleTraining(w: World, h: HeroEntity): void {
   if (!tryCast(w, h, 'light_heal')) tryCast(w, h, 'haste');
 }
 
-// ------------------------------------------------------------------ mercado do banco
-/** Menor preço de um item nas lojas dos NPCs (Infinity se nenhuma vende). */
-function npcPrice(w: World, itemId: string): number {
-  let best = Infinity;
-  for (const shop of Object.values(w.data.shops))
-    for (const o of shop.sells) if (o.itemId === itemId && o.price < best) best = o.price;
-  return best;
+// ------------------------------------------------------------------ mercado (corretor ao lado da banqueira)
+/** Anúncios de venda abertos que um herói mantém (o resto do loot de equipamento vai para a loja). */
+const HERO_MAX_LISTINGS = 4;
+/** Ofertas de compra (metas de equipamento) abertas por herói. */
+const HERO_MAX_BIDS = 2;
+/** Equipamento barato (até este valor) não vale o anúncio: vai direto para a loja. */
+const MARKET_MIN_VALUE = 150;
+/** Sem baixar o preço por este tempo: depois, ~15% a menos a cada visita. */
+const REPRICE_MS = 10 * 60000;
+
+/** Piso de um anúncio: o que a loja paga (vender no mercado abaixo disso não compensa). */
+function shopFloor(w: World, itemId: string): number {
+  return shopPrices(w.data, itemId).buys ?? Math.round((w.data.items[itemId]?.value ?? 1) * 0.35);
+}
+
+/** Equipamento do loot que ele leva ao mercado em vez da loja: não vai usar e vale anunciar. */
+function marketLoot(w: World, h: HeroEntity, itemId: string): boolean {
+  const def = w.data.items[itemId];
+  return !!def?.slot && marketable(def) && !def.weapon?.training && def.value >= MARKET_MIN_VALUE && sellable(w, h, itemId);
 }
 
 /**
- * Itens do mercado que valem para ele agora (o menor preço à venda de cada um): poções do nível dele pelo preço do
- * NPC ou menos (enquanto falta estoque) e upgrades que cabem no orçamento (respeitando a meta de equipamento).
+ * Vale levar ao mercado (e não à loja)? Alguém já paga mais que a loja, ou o preço sugerido rende bem mais (40%+) que a
+ * loja — e ainda há espaço para mais um anúncio. O resto vai para a loja na hora (dinheiro parado em anúncio sem
+ * comprador atrasa poções e equipamento).
  */
-function marketDeals(w: World, h: HeroEntity): { itemId: string; price: number; want: number }[] {
+function worthMarket(w: World, h: HeroEntity, itemId: string): boolean {
+  if (!marketLoot(w, h, itemId)) return false;
   const c = h.character;
-  const money = c.gold + c.bankGold - keepGold(w, h);
-  const out: { itemId: string; price: number; want: number }[] = [];
-  for (const itemId of new Set(w.market.listings.map((l) => l.itemId))) {
-    const best = asksFor(w.market, itemId, c.id)[0];
-    const def = w.data.items[itemId];
-    if (!best || !def || best.price > money) continue;
-    if (def.type === 'potion') {
-      if (best.price > npcPrice(w, itemId) || !canDrink(def, c.level)) continue;
-      const kind = potionKind(def);
-      const per = kind ? potionAmount(def, kind) : 0;
-      const missing =
-        kind === 'heal' ? healGoal(h, w.now) - potionHeal(w, h) : kind === 'mana' && manaGoal(w, h) ? manaGoal(w, h) - manaStock(w, h) : 0;
-      const want = Math.min(Math.ceil(missing / Math.max(1, per)), Math.floor((money * 0.7) / best.price), 60);
-      if (want > 0) out.push({ itemId, price: best.price, want });
-    } else if (def.slot && weaponFits(w, h, def) && !def.weapon?.training && isUpgrade(w.data, c, def)) {
-      const cur = c.equipment[def.slot];
-      const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
-      if (gain >= 5 && best.price <= Math.max(goalOffer(w, h, money - 40) ? money - 40 : 0, upgradeBudget(h, money - 40)))
-        out.push({ itemId, price: best.price, want: 1 });
-    }
-  }
-  return out;
+  const floor = shopFloor(w, itemId);
+  const bid = offersFor(w.market, itemId, 'buy', c.id)[0];
+  if (bid && bid.price > floor) return true;
+  const listings = ownOffers(w.market, c.id).filter((o) => o.side === 'sell').length;
+  return listings < HERO_MAX_LISTINGS && priceGuide(w.data, w.market, itemId, c.id).sellSuggest >= floor * 1.4;
 }
 
-/** No banco: compra as ofertas boas do mercado pelo menor preço (vão para o depósito) e tira para a mochila / equipa. */
-function useMarket(w: World, h: HeroEntity): void {
+/** Há o que fazer no corretor nesta visita? (senão ele nem passa lá: o banco fica no outro lado da vila) */
+function marketErrands(w: World, h: HeroEntity): boolean {
   const c = h.character;
-  let bought = 0;
-  for (const d of marketDeals(w, h).slice(0, 6)) {
-    const def = w.data.items[d.itemId]!;
-    // poção: nunca acima do preço da loja (anda pelos anúncios do mais barato até esse teto)
-    const cap = def.type === 'potion' ? npcPrice(w, d.itemId) : d.price;
-    if (!marketBuyNow(w, d.itemId, d.want, cap)) continue;
-    bought++;
-    for (let guard = 0; guard < 4; guard++) {
-      const idx = c.depot.findIndex((st) => st?.itemId === d.itemId);
-      if (idx < 0 || !depotWithdraw(w, idx)) break;
-    }
-    if (def.slot) {
-      const bi = c.inventory.findIndex((st) => st?.itemId === d.itemId);
-      if (bi >= 0 && equipItem(w, bi)) heroSay(w, h, 'upgrade', { item: def.name }, 0);
+  const now = pkNow(w);
+  if (parcelUnits(w.market, c.id) > 0) return true;
+  if (c.depot.some((st) => st && wantsGear(w, h, w.data.items[st.itemId]))) return true;
+  for (const o of ownOffers(w.market, c.id)) {
+    if (o.side === 'sell' && now - o.at >= REPRICE_MS) return true;
+    if (o.side === 'buy') {
+      const ask = offersFor(w.market, o.itemId, 'sell', c.id)[0];
+      const shop = shopPrices(w.data, o.itemId).sells;
+      if (!wantsGear(w, h, w.data.items[o.itemId]) || (ask && ask.price <= o.price)) return true;
+      if (shop !== null && c.gold + c.bankGold + o.price * o.count - keepGold(w, h) >= shop) return true;
     }
   }
-  if (bought) heroSay(w, h, 'marketBuy', {}, 60000);
+  if (c.inventory.some((st) => st && worthMarket(w, h, st.itemId))) return true;
+  const money = marketMoney(w, h);
+  for (const o of w.market.offers) {
+    if (o.side !== 'sell' || o.ownerId === c.id) continue;
+    const def = w.data.items[o.itemId];
+    const shop = shopPrices(w.data, o.itemId).sells;
+    if (shop !== null && o.price > shop) continue;
+    if (def?.type === 'potion' && canDrink(def, c.level) && potionHeal(w, h) < healGoal(h, w.now)) return true;
+    if (wantsGear(w, h, def) && o.price <= money) return true;
+  }
+  const g = h.brain.goal;
+  const shop = g ? shopPrices(w.data, g.itemId).sells : null;
+  return (
+    !!g &&
+    (shop === null || c.gold + c.bankGold - keepGold(w, h) < shop) &&
+    !ownOffers(w.market, c.id).some((o) => o.side === 'buy' && o.itemId === g.itemId) &&
+    marketMoney(w, h) * 0.6 >= g.price * 0.45
+  );
+}
+
+/** Ganho (para ele) de trocar o equipado pelo item. */
+function gainOf(w: World, h: HeroEntity, def: ItemDef): number {
+  const cur = def.slot ? h.character.equipment[def.slot] : undefined;
+  return valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
+}
+
+/** Serve como upgrade de equipamento para ele agora? */
+function wantsGear(w: World, h: HeroEntity, def: ItemDef | undefined): boolean {
+  if (!def?.slot || def.weapon?.training || !weaponFits(w, h, def) || !isUpgrade(w.data, h.character, def)) return false;
+  return gainOf(w, h, def) >= 5 || (def.slot === 'mainHand' && unarmed(h));
+}
+
+/** Ouro livre para o mercado: bolsa + banco, menos o que ele guarda e o estoque de poções que ainda falta comprar. */
+function marketMoney(w: World, h: HeroEntity): number {
+  const c = h.character;
+  const potions = potionHeal(w, h) < healGoal(h, w.now) * 0.6 ? potionPrice(w) * 10 : 0;
+  return c.gold + c.bankGold - keepGold(w, h) - 40 - potions;
+}
+
+/** Garante, na visita atual à vila, a parada na loja que vende o item (para comprá-lo como upgrade). */
+function shopStepFor(w: World, h: HeroEntity, itemId: string): void {
+  const shop = Object.values(w.data.shops).find((s) => s.sells.some((o) => o.itemId === itemId));
+  const npc = shop && npcByShop(w, shop.id);
+  if (!npc) return;
+  const step = h.brain.town.find((st) => st.kind === 'shop' && st.npcId === npc.id);
+  if (step && step.kind === 'shop') step.upgrades = true;
+  else h.brain.town.push({ kind: 'shop', npcId: npc.id, upgrades: true });
 }
 
 /**
- * O equipamento do loot que ele venderia barato à loja: se alguém oferece mais que a loja, vende na hora para a maior
- * oferta; senão anuncia (venda rápida, 75% do valor) — no máximo 2 por visita e 4 anúncios abertos. Anúncio parado há
- * mais de 30 min ninguém quer: retira e vende à loja.
+ * Etapa do mercado na vila (antes das lojas). Os heróis preferem negociar aqui:
+ * 1. recebem as compras que chegaram (e já equipam/guardam na mochila o que serve);
+ * 2. cuidam das próprias ofertas (baixam o preço do que não vende; cancelam a compra que perdeu o sentido);
+ * 3. vendem o equipamento do loot para quem já quer comprar (se pagar mais que a loja) ou anunciam;
+ * 4. compram poções do nível deles pelo menor preço (nunca acima da loja) e anunciam as pequenas que sobraram;
+ * 5. compram upgrades à venda que cabem no orçamento;
+ * 6. o que precisam para evoluir e não acharam: deixam uma oferta de compra dizendo quanto pagam — e seguem com o que
+ *    têm (ou com algo mais fraco da loja) até a oferta fechar.
+ * Os materiais de criaturas ficam para as lojas (o mercado não os aceita).
  */
-function listLootOnMarket(w: World, h: HeroEntity): void {
+function marketing(w: World, h: HeroEntity): void {
   const c = h.character;
-  for (const l of w.market.listings.filter((x) => x.sellerId === c.id && pkNow(w) - x.listedAt > 30 * 60000)) {
-    if (!marketCancel(w, l.id)) continue;
-    const idx = c.depot.findIndex((st) => st?.itemId === l.itemId);
-    if (idx >= 0 && freeSlots(c.inventory) > 1) depotWithdraw(w, idx);
-  }
-  let open = w.market.listings.filter((l) => l.sellerId === c.id).length;
-  for (let i = 0, listed = 0; i < c.inventory.length && listed < 2; i++) {
-    const st = c.inventory[i];
+  const now = pkNow(w);
+  // 1) compras que chegaram por oferta (mochila ou depósito) e o que estava guardado e agora serve
+  collectParcels(w.data, w.market, c);
+  for (let i = 0; i < c.depot.length; i++) {
+    const st = c.depot[i];
     const def = st ? w.data.items[st.itemId] : undefined;
-    if (!st || !def?.slot || !sellable(w, h, st.itemId)) continue;
-    const shop = Math.max(0, ...Object.values(w.data.shops).map((s) => s.buys.find((o) => o.itemId === st.itemId)?.price ?? 0));
-    const bid = bidsFor(w.market, st.itemId, c.id)[0];
-    if (bid && bid.price > shop) {
-      if (marketSellNow(w, st.itemId, st.count)) listed++;
+    if (!st || !def) continue;
+    const useful = wantsGear(w, h, def) || (def.type === 'potion' && canDrink(def, c.level));
+    if (useful && freeSlots(c.inventory) > 1) withdrawItem(w.data, c, i);
+  }
+  equipBagUpgrades(w, h);
+  // 2) as próprias ofertas
+  for (const o of ownOffers(w.market, c.id)) {
+    const def = w.data.items[o.itemId];
+    if (o.side === 'buy') {
+      const shop = shopPrices(w.data, o.itemId).sells;
+      const ask = offersFor(w.market, o.itemId, 'sell', c.id)[0];
+      if (!wantsGear(w, h, def)) marketCancel(w, o.id);
+      // alguém anuncia pelo preço da oferta (ou menos): solta o ouro reservado e compra já (passo 5)
+      else if (ask && ask.price <= o.price) marketCancel(w, o.id);
+      // já dá para comprar na loja (contando o ouro reservado): cancela e garante a parada na loja
+      else if (shop !== null && c.gold + c.bankGold + o.price * o.count - keepGold(w, h) >= shop) {
+        marketCancel(w, o.id);
+        shopStepFor(w, h, o.itemId);
+      }
       continue;
     }
-    if (def.value < 150 || open >= 4) continue;
-    if (marketAutoList(w, 'inventory', i)) {
-      listed++;
-      open++;
+    const floor = shopFloor(w, o.itemId);
+    const age = now - o.at;
+    if (age < REPRICE_MS) continue;
+    if (o.price <= Math.ceil(floor * 1.15)) {
+      // ninguém quis nem perto do preço da loja: retira (volta para a mochila; a loja compra)
+      if (age >= REPRICE_MS * 2) marketCancel(w, o.id);
+      continue;
+    }
+    // não vendeu: baixa ~15% (sem ir abaixo do que a loja paga)
+    const price = Math.max(floor + 1, Math.round(o.price * 0.85));
+    if (marketCancel(w, o.id)) marketOffer(w, 'sell', o.itemId, o.count, price);
+  }
+  // 3) equipamento do loot: para quem já quer comprar (pagando mais que a loja) ou anuncia o que rende bem mais que a
+  // loja (o resto vai para a loja)
+  let listings = ownOffers(w.market, c.id).filter((o) => o.side === 'sell').length;
+  for (const id of [...new Set(c.inventory.filter((st) => st && worthMarket(w, h, st.itemId)).map((st) => st!.itemId))]) {
+    const floor = shopFloor(w, id);
+    const bid = offersFor(w.market, id, 'buy', c.id)[0];
+    if (bid && bid.price > floor) marketSellNow(w, id, countItem(c.inventory, id), floor + 1);
+    const left = countItem(c.inventory, id);
+    if (!left || listings >= HERO_MAX_LISTINGS) continue;
+    const g = priceGuide(w.data, w.market, id, c.id);
+    if (g.sellSuggest < floor * 1.4) continue;
+    if (marketOffer(w, 'sell', id, left, g.sellSuggest)) listings++;
+  }
+  // 4) poções: do nível dele, pelo menor preço (nunca acima da loja); anuncia as pequenas que sobraram
+  for (const kind of ['heal', 'mana'] as const) {
+    const best = bestPotionFor(w.data, c.level, kind);
+    if (!best) continue;
+    const goal = kind === 'heal' ? healGoal(h, w.now) : manaGoal(w, h);
+    if (!goal) continue;
+    const bestAmt = potionAmount(best, kind);
+    for (const def of potionsByKind(w.data, kind).reverse()) {
+      if (!canDrink(def, c.level) || potionAmount(def, kind) < bestAmt * 0.5) continue;
+      const missing = goal - goodStock(w, h, kind, bestAmt);
+      const shop = shopPrices(w.data, def.id).sells;
+      const ask = offersFor(w.market, def.id, 'sell', c.id)[0];
+      if (missing <= 0 || !ask || shop === null || ask.price > shop) continue;
+      const qty = Math.min(Math.ceil(missing / potionAmount(def, kind)), Math.floor(Math.max(0, marketMoney(w, h) + potionPrice(w) * 10) / ask.price), 60);
+      if (qty > 0) marketBuyNow(w, def.id, qty, shop);
+    }
+    if (goodStock(w, h, kind, bestAmt) < goal * 0.8 || listings >= HERO_MAX_LISTINGS) continue;
+    for (const def of potionsByKind(w.data, kind)) {
+      if (potionAmount(def, kind) >= bestAmt * 0.5) continue;
+      const keep = kind === 'heal' && def.id === 'potion_health' ? 3 : 0;
+      const n = countItem(c.inventory, def.id) - keep;
+      if (n <= 0) continue;
+      const shop = shopPrices(w.data, def.id);
+      const g = priceGuide(w.data, w.market, def.id, c.id);
+      // um pouco abaixo da loja (quem compra economiza) e acima do que a loja paga de volta
+      const price = Math.max((shop.buys ?? 1) + 1, Math.min(Math.round((shop.sells ?? def.value) * 0.85), g.sellSuggest));
+      if (marketOffer(w, 'sell', def.id, n, price)) listings++;
+    }
+  }
+  // 5) upgrades à venda: o maior ganho por ouro que o orçamento paga (a arma nunca espera; a meta tem prioridade)
+  for (let k = 0; k < 3; k++) {
+    const money = marketMoney(w, h);
+    let pick: { id: string; price: number; score: number } | null = null;
+    for (const id of new Set(w.market.offers.filter((o) => o.side === 'sell' && o.ownerId !== c.id).map((o) => o.itemId))) {
+      const def = w.data.items[id];
+      if (!def || !wantsGear(w, h, def)) continue;
+      const ask = offersFor(w.market, id, 'sell', c.id)[0]!;
+      const shop = shopPrices(w.data, id).sells;
+      if (shop !== null && ask.price > shop) continue; // mais caro que a loja: compra lá
+      const isGoal = h.brain.goal?.itemId === id;
+      const budget = isGoal || def.slot === 'mainHand' ? money : upgradeBudget(h, money);
+      if (ask.price > budget) continue;
+      const score = (gainOf(w, h, def) + (isGoal ? 1000 : 0)) / ask.price;
+      if (!pick || score > pick.score) pick = { id, price: ask.price, score };
+    }
+    if (!pick || !marketBuyNow(w, pick.id, 1, pick.price)) break;
+    const bi = c.inventory.findIndex((st) => st?.itemId === pick!.id);
+    if (bi >= 0 && equipItem(w, bi)) heroSay(w, h, 'upgrade', { item: w.data.items[pick.id]!.name }, 0);
+    if (h.brain.goal?.itemId === pick.id) h.brain.goal = null;
+  }
+  // 6) o que precisa para evoluir e não achou: oferta de compra (quanto ele paga), sem prender o ouro das poções
+  // (se já dá para comprar na loja, a loja resolve hoje)
+  const bids = ownOffers(w.market, c.id).filter((o) => o.side === 'buy');
+  const target = h.brain.goal ? w.data.items[h.brain.goal.itemId] : undefined;
+  const targetShop = target ? shopPrices(w.data, target.id).sells : null;
+  const affordable = targetShop !== null && c.gold + c.bankGold - keepGold(w, h) >= targetShop;
+  if (target && affordable) shopStepFor(w, h, target.id);
+  if (target && !affordable && wantsGear(w, h, target) && bids.length < HERO_MAX_BIDS) {
+    const g = priceGuide(w.data, w.market, target.id, c.id);
+    const shop = targetShop;
+    // preço justo: abaixo da loja (quem vende ganha mais que vendendo à loja) e perto do que o mercado pratica
+    const fair = Math.max(shopFloor(w, target.id) + 1, Math.min(shop !== null ? Math.round(shop * 0.8) : g.ref, g.ref));
+    const cap = Math.floor(Math.max(0, marketMoney(w, h)) * 0.6);
+    const price = Math.min(fair, cap);
+    const mine = bids.find((o) => o.itemId === target.id);
+    if (price >= fair * 0.6 && (!mine || mine.price < price * 0.9)) {
+      if (mine) marketCancel(w, mine.id);
+      if (marketOffer(w, 'buy', target.id, 1, price)) heroSay(w, h, 'marketBuy', {}, 60000);
     }
   }
 }

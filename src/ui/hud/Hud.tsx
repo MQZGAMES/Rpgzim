@@ -9,6 +9,7 @@ import { PlayersPanel } from '../map/PlayersPanel';
 import { NpcDialog, LootWindow } from '../dialogs/NpcDialog';
 import { ShopPanel } from '../shops/ShopPanel';
 import { DepotPanel } from '../shops/DepotPanel';
+import { MarketPanel } from '../market/MarketPanel';
 import { HelpPanel, SettingsPanel } from '../settings/SettingsPanel';
 import { BuffBar, StatusPanel } from './StatusPanel';
 import { ActorMenu, GoingTo, HudButton as MenuButton, InvitePrompt, PartyPanel, PkBadge, QuickToggles } from './Social';
@@ -68,6 +69,7 @@ export function Hud({ zoomBias, setZoomBias, showFps, setShowFps, showLog, setSh
       <LootWindow />
       <ShopPanel />
       <DepotPanel />
+      <MarketPanel />
       {panel === 'inventory' && <InventoryPanel onClose={close} />}
       {panel === 'character' && <CharacterPanel onClose={close} />}
       {panel === 'spells' && <SpellBookPanel onClose={close} />}

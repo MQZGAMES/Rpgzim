@@ -1,10 +1,9 @@
-// Banco de Pedraluz: ouro (depositar/sacar), depósito de itens e o mercado entre personagens (MarketTab). No
-// depósito, toque num item da mochila para guardar e num item do depósito para retirar.
+// Banco de Pedraluz: ouro (depositar/sacar) e depósito de itens. Toque num item da mochila para guardar e num item do
+// depósito para retirar. (O mercado entre personagens fica com o corretor, ao lado da banqueira.)
 import { useState } from 'react';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemCell } from '../inventory/ItemCell';
-import { MarketTab } from './MarketTab';
 
 function GoldRow() {
   const session = useSession();
@@ -62,34 +61,13 @@ export function DepotPanel() {
   const depot = useSnap((s) => s.depot);
   const inv = useSnap((s) => s.inventory);
   const [last, setLast] = useState<string | null>(null);
-  const [tab, setTab] = useState<'depot' | 'market'>('depot');
   if (!depot) return null;
   const used = depot.items.filter(Boolean).length;
   return (
     <Panel title="Banco de Pedraluz" onClose={() => session.closeDepot()} icon="ui_save" wide>
       <div data-testid="depot-panel">
         <GoldRow />
-        <div className="mb-2 flex gap-1">
-          <PixelButton
-            variant={tab === 'depot' ? 'gold' : undefined}
-            className="flex-1 !border-[6px] text-[12px]"
-            onClick={() => setTab('depot')}
-            data-testid="depot-tab-depot"
-          >
-            Depósito
-          </PixelButton>
-          <PixelButton
-            variant={tab === 'market' ? 'gold' : undefined}
-            className="flex-1 !border-[6px] text-[12px]"
-            onClick={() => setTab('market')}
-            data-testid="depot-tab-market"
-          >
-            Mercado
-          </PixelButton>
-        </div>
-        {tab === 'market' ? (
-          <MarketTab />
-        ) : (
+        {
           <>
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="min-w-0 flex-1">
@@ -142,7 +120,7 @@ export function DepotPanel() {
                 'Toque num item da mochila para guardar e num item do depósito para retirar. O depósito e o ouro do banco nunca se perdem.'}
             </p>
           </>
-        )}
+        }
       </div>
     </Panel>
   );

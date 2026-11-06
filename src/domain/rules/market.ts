@@ -1,49 +1,54 @@
-// Mercado do banco como livro de ofertas (por item): anúncios de VENDA (preço pedido por unidade) e ofertas de
-// COMPRA (preço oferecido por unidade, com o ouro já reservado). Quem compra paga sempre o menor preço à venda; quem
-// vende recebe sempre a maior oferta de compra. Uma oferta que cruza o livro executa na hora pelo preço de quem já
-// estava esperando; o que sobra fica no livro. Compras chegam no depósito; o ouro das vendas cai no banco. Quem não
-// está no jogo recebe ao logar (ouro em `proceeds`, itens em `parcels`), e quem está com o depósito cheio retira a
-// entrega depois, no banco.
+// Mercado de Pedraluz: livro de ofertas por item (inspirado no Market do Tibia e no Grand Exchange do RuneScape).
+// - Só equipamentos e poções: materiais, comida e munição são das lojas.
+// - Ofertas de VENDA (o item fica guardado pelo mercado) e de COMPRA (o ouro fica reservado), sem limite de quantidade.
+// - Quem compra paga sempre o menor preço anunciado; quem vende recebe sempre a maior oferta de compra. Uma oferta que
+//   alcança o preço do outro lado fecha na hora pelo preço de quem já estava esperando (como no Grand Exchange).
+// - Todas as ofertas ficam visíveis (como no Tibia) e cada negócio fecha entra no histórico do item: o último preço e a
+//   média recente viram o "preço de referência" que a tela usa para sugerir valores (oferta e demanda).
+// - Entregas: o ouro das vendas vai para o banco; os itens comprados na hora vão para a mochila (sem espaço, para o
+//   depósito). Quem não estava no jogo (ou estava com o depósito cheio) recebe depois: ouro em `proceeds` e itens em
+//   `parcels`, retirados no mercado.
 import type { CharacterState, ItemStack } from '../entities/character';
+import type { ItemDef } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
-import { addItem, countItem, removeItem } from './inventory';
 import { ensureDepotSize } from './depot';
+import { addItem, capacityFor, countItem, removeItem } from './inventory';
 
-/** Anúncio de venda (o item já saiu da mochila/depósito do vendedor). */
-export interface MarketListing {
+export type OfferSide = 'sell' | 'buy';
+
+export interface MarketOffer {
   id: string;
-  sellerId: string;
-  sellerName: string;
+  side: OfferSide;
+  ownerId: string;
+  ownerName: string;
   itemId: string;
+  /** Unidades restantes. */
   count: number;
-  /** Preço pedido por unidade. */
+  /** Preço por unidade. */
   price: number;
-  listedAt: number;
+  /** Quando foi criada (relógio de parede do jogo). */
+  at: number;
 }
 
-/** Oferta de compra (o ouro `price × count` já saiu da bolsa/banco do comprador). */
-export interface MarketBid {
-  id: string;
-  buyerId: string;
-  buyerName: string;
-  itemId: string;
-  count: number;
-  /** Preço oferecido por unidade. */
+/** Um negócio fechado (para o histórico de preços). */
+export interface MarketTrade {
   price: number;
-  placedAt: number;
+  count: number;
+  at: number;
 }
 
 export interface MarketState {
-  listings: MarketListing[];
-  bids: MarketBid[];
-  /** Ouro de vendas (ou de ofertas retiradas) de quem não estava no jogo, por id de personagem. */
+  offers: MarketOffer[];
+  /** Últimos negócios de cada item (do mais antigo ao mais recente). */
+  history: Record<string, MarketTrade[]>;
+  /** Ouro de vendas (ou de ofertas canceladas) de quem não estava no jogo, por id de personagem. */
   proceeds: Record<string, number>;
-  /** Itens comprados que ainda não couberam no depósito (ou de quem estava fora do jogo). */
+  /** Itens comprados ainda não entregues (fora do jogo ou depósito cheio). */
   parcels: Record<string, ItemStack[]>;
   seq: number;
 }
 
-/** Um negócio fechado: quem estava do outro lado, quantas unidades e a que preço. */
+/** Um lado de um negócio: quem estava do outro lado, quantas unidades e a que preço. */
 export interface MarketFill {
   otherId: string;
   itemId: string;
@@ -51,90 +56,182 @@ export interface MarketFill {
   price: number;
 }
 
-/** Ordens abertas (venda + compra) por personagem. */
-export const MARKET_MAX_PER_SELLER = 12;
-/** Venda rápida: anuncia a 75% do valor do item (o NPC paga bem menos). */
-export const MARKET_AUTO_RATE = 0.75;
+/** Negócios guardados por item no histórico. */
+export const HISTORY_KEEP = 20;
 
-export const emptyMarket = (): MarketState => ({ listings: [], bids: [], proceeds: {}, parcels: {}, seq: 0 });
+export const emptyMarket = (): MarketState => ({ offers: [], history: {}, proceeds: {}, parcels: {}, seq: 0 });
 
-export type MarketFail = 'empty' | 'price' | 'limit' | 'own' | 'gone' | 'gold' | 'room' | 'none';
+/** O mercado só aceita equipamentos e poções (os itens diversos ficam com as lojas). */
+export function marketable(def: ItemDef | undefined): boolean {
+  return !!def && (!!def.slot || def.type === 'potion');
+}
+
+export type MarketFail = 'notMarketable' | 'empty' | 'price' | 'qty' | 'gone' | 'gold' | 'room' | 'none';
 
 export const MARKET_FAIL_MESSAGE: Record<MarketFail, string> = {
+  notMarketable: 'O mercado só negocia equipamentos e poções. Materiais e outros itens vão para as lojas.',
   empty: 'Você não tem esse item (mochila ou depósito).',
-  price: 'Defina um preço de pelo menos 1 de ouro.',
-  limit: `Você já tem ${MARKET_MAX_PER_SELLER} ordens abertas no mercado.`,
-  own: 'Essa ordem é sua (use "Cancelar").',
-  gone: 'Essa ordem não está mais disponível.',
+  price: 'Escolha um preço de pelo menos 1 de ouro.',
+  qty: 'Escolha a quantidade.',
+  gone: 'Essa oferta não está mais disponível.',
   gold: 'Ouro insuficiente (bolsa + banco).',
-  room: 'Sem espaço no depósito para receber o item.',
-  none: 'Ninguém está vendendo (ou comprando) esse item agora.',
+  room: 'Sem espaço na mochila nem no depósito.',
+  none: 'Não há oferta nesse preço agora.',
 };
 
-/** Preço da venda rápida (por unidade). */
-export function autoPrice(data: GameData, itemId: string): number {
-  return Math.max(1, Math.round((data.items[itemId]?.value ?? 1) * MARKET_AUTO_RATE));
+// ------------------------------------------------------------------ consultas
+/** Ofertas de um lado para o item, da melhor para a pior (venda: mais barata; compra: mais cara; empate: a mais antiga). */
+export function offersFor(m: MarketState, itemId: string, side: OfferSide, exceptOwner?: string): MarketOffer[] {
+  return m.offers
+    .filter((o) => o.itemId === itemId && o.side === side && o.ownerId !== exceptOwner)
+    .sort((a, b) => (side === 'sell' ? a.price - b.price : b.price - a.price) || a.at - b.at);
 }
 
-/** Quanto de `itemId` ainda cabe no depósito (sem mexer nele). */
-export function depotSpace(data: GameData, c: CharacterState, itemId: string, want: number): number {
-  ensureDepotSize(data, c);
-  const trial = c.depot.map((s) => (s ? { ...s } : null));
-  return addItem(data, trial, itemId, want);
+/** Níveis de preço (unidades somadas por preço), na ordem recebida. */
+export function priceLevels(offers: readonly { price: number; count: number }[]): { price: number; count: number }[] {
+  const out: { price: number; count: number }[] = [];
+  for (const o of offers) {
+    const last = out[out.length - 1];
+    if (last && last.price === o.price) last.count += o.count;
+    else out.push({ price: o.price, count: o.count });
+  }
+  return out;
 }
 
-/** Cabe `count` de `itemId` no depósito (sem mexer nele)? */
-export function depotRoom(data: GameData, c: CharacterState, itemId: string, count: number): boolean {
-  return depotSpace(data, c, itemId, count) === count;
-}
+export const ownOffers = (m: MarketState, ownerId: string): MarketOffer[] => m.offers.filter((o) => o.ownerId === ownerId);
 
-/** Quantas unidades o personagem tem (mochila + depósito). */
+/** Unidades que o personagem tem (mochila + depósito). */
 export const ownedCount = (c: CharacterState, itemId: string): number =>
   countItem(c.inventory, itemId) + countItem(c.depot, itemId);
 
-export const openOrders = (m: MarketState, characterId: string): number =>
-  m.listings.filter((l) => l.sellerId === characterId).length + m.bids.filter((b) => b.buyerId === characterId).length;
+/** Ouro reservado nas ofertas de compra do personagem. */
+export const escrowOf = (m: MarketState, ownerId: string): number =>
+  m.offers.reduce((s, o) => (o.ownerId === ownerId && o.side === 'buy' ? s + o.price * o.count : s), 0);
 
-/** Anúncios de venda de um item, do mais barato ao mais caro (empate: o mais antigo primeiro). */
-export function asksFor(m: MarketState, itemId: string, exceptId?: string): MarketListing[] {
-  return m.listings
-    .filter((l) => l.itemId === itemId && l.sellerId !== exceptId)
-    .sort((a, b) => a.price - b.price || a.listedAt - b.listedAt);
+export function lastTrade(m: MarketState, itemId: string): MarketTrade | null {
+  const h = m.history[itemId];
+  return h?.length ? h[h.length - 1]! : null;
 }
 
-/** Ofertas de compra de um item, da maior para a menor (empate: a mais antiga primeiro). */
-export function bidsFor(m: MarketState, itemId: string, exceptId?: string): MarketBid[] {
-  return m.bids
-    .filter((b) => b.itemId === itemId && b.buyerId !== exceptId)
-    .sort((a, b) => b.price - a.price || a.placedAt - b.placedAt);
+/** Preço médio (por unidade) dos últimos `n` negócios, pesado pela quantidade. */
+export function averagePrice(m: MarketState, itemId: string, n = 8): number | null {
+  const h = (m.history[itemId] ?? []).slice(-n);
+  const units = h.reduce((s, t) => s + t.count, 0);
+  return units ? Math.round(h.reduce((s, t) => s + t.price * t.count, 0) / units) : null;
 }
 
-/** Quanto custaria comprar `qty` agora (andando do menor preço para cima, até `maxPrice`). */
+/** Preços das lojas por item (fixos para os dados do jogo: calculados uma vez). */
+const shopCache = new WeakMap<GameData, Map<string, { sells: number | null; buys: number | null }>>();
+
+/** Preço da loja: o que as lojas cobram (menor) e o que pagam (maior). */
+export function shopPrices(data: GameData, itemId: string): { sells: number | null; buys: number | null } {
+  let map = shopCache.get(data);
+  if (!map) {
+    map = new Map();
+    for (const s of Object.values(data.shops)) {
+      for (const o of s.sells) {
+        const e = map.get(o.itemId) ?? { sells: null, buys: null };
+        if (e.sells === null || o.price < e.sells) e.sells = o.price;
+        map.set(o.itemId, e);
+      }
+      for (const o of s.buys) {
+        const e = map.get(o.itemId) ?? { sells: null, buys: null };
+        if (e.buys === null || o.price > e.buys) e.buys = o.price;
+        map.set(o.itemId, e);
+      }
+    }
+    shopCache.set(data, map);
+  }
+  return map.get(itemId) ?? { sells: null, buys: null };
+}
+
+/**
+ * Guia de preços do item para quem está olhando (sem contar as próprias ofertas): menor venda, maior compra, último
+ * negócio, média recente, a referência (oferta e demanda) e as sugestões para anunciar e para ofertar.
+ */
+export interface PriceGuide {
+  ask: number | null;
+  askUnits: number;
+  bid: number | null;
+  bidUnits: number;
+  last: number | null;
+  avg: number | null;
+  trades: number;
+  /** Preço justo estimado: negócios recentes; sem negócios, o meio do livro; sem nada, uma fração do valor. */
+  ref: number;
+  /** Sugestão para anunciar a venda: um pouco abaixo do menor anúncio (sem ir abaixo da maior oferta). */
+  sellSuggest: number;
+  /** Sugestão para a oferta de compra: um pouco acima da maior oferta (sem chegar no menor anúncio). */
+  buySuggest: number;
+  shopSells: number | null;
+  shopBuys: number | null;
+}
+
+export function priceGuide(data: GameData, m: MarketState, itemId: string, viewer?: string): PriceGuide {
+  const asks = offersFor(m, itemId, 'sell', viewer);
+  const bids = offersFor(m, itemId, 'buy', viewer);
+  const ask = asks[0]?.price ?? null;
+  const bid = bids[0]?.price ?? null;
+  const last = lastTrade(m, itemId)?.price ?? null;
+  const avg = averagePrice(m, itemId);
+  const shop = shopPrices(data, itemId);
+  const def = data.items[itemId];
+  const potion = def?.type === 'potion';
+  // sem negócios nem ofertas: entre o que a loja paga e o que ela cobra (poções: um pouco abaixo da loja)
+  const base = potion
+    ? Math.round((shop.sells ?? def?.value ?? 1) * 0.85)
+    : Math.round(Math.max(shop.buys ?? 0, (def?.value ?? 1) * 0.6));
+  let ref = base;
+  if (last !== null) ref = avg !== null ? Math.round(last * 0.5 + avg * 0.5) : last;
+  else if (ask !== null && bid !== null) ref = Math.round((ask + bid) / 2);
+  else if (ask !== null) ref = Math.min(ask, Math.max(base, Math.round(ask * 0.9)));
+  else if (bid !== null) ref = Math.max(bid, base);
+  ref = Math.max(1, ref);
+  const sellSuggest = Math.max(1, bid !== null ? bid + 1 : 1, ask !== null ? ask - 1 : ref);
+  const buySuggest = Math.max(1, Math.min(ask !== null ? ask - 1 : Infinity, bid !== null ? bid + 1 : Math.round(ref * 0.9)));
+  return {
+    ask,
+    askUnits: asks.reduce((s, o) => s + o.count, 0),
+    bid,
+    bidUnits: bids.reduce((s, o) => s + o.count, 0),
+    last,
+    avg,
+    trades: m.history[itemId]?.length ?? 0,
+    ref,
+    sellSuggest,
+    buySuggest: Math.max(1, buySuggest),
+    shopSells: shop.sells,
+    shopBuys: shop.buys,
+  };
+}
+
+/** Custo de comprar `qty` agora (do mais barato, até `maxPrice`) — sem as próprias ofertas. */
 export function quoteBuy(m: MarketState, itemId: string, qty: number, buyerId: string, maxPrice = Infinity) {
   let count = 0;
   let total = 0;
-  for (const l of asksFor(m, itemId, buyerId)) {
-    if (count >= qty || l.price > maxPrice) break;
-    const n = Math.min(l.count, qty - count);
+  for (const o of offersFor(m, itemId, 'sell', buyerId)) {
+    if (count >= qty || o.price > maxPrice) break;
+    const n = Math.min(o.count, qty - count);
     count += n;
-    total += n * l.price;
+    total += n * o.price;
   }
   return { count, total };
 }
 
-/** Quanto renderia vender `qty` agora (andando da maior oferta para baixo, até `minPrice`). */
+/** Quanto renderia vender `qty` agora (da maior oferta, até `minPrice`) — sem as próprias ofertas. */
 export function quoteSell(m: MarketState, itemId: string, qty: number, sellerId: string, minPrice = 0) {
   let count = 0;
   let total = 0;
-  for (const b of bidsFor(m, itemId, sellerId)) {
-    if (count >= qty || b.price < minPrice) break;
-    const n = Math.min(b.count, qty - count);
+  for (const o of offersFor(m, itemId, 'buy', sellerId)) {
+    if (count >= qty || o.price < minPrice) break;
+    const n = Math.min(o.count, qty - count);
     count += n;
-    total += n * b.price;
+    total += n * o.price;
   }
   return { count, total };
 }
 
+// ------------------------------------------------------------------ movimentos de itens e ouro
 /** Paga com a bolsa e, faltando, com o banco. */
 function pay(c: CharacterState, total: number): void {
   const fromPurse = Math.min(c.gold, total);
@@ -142,145 +239,178 @@ function pay(c: CharacterState, total: number): void {
   c.bankGold -= total - fromPurse;
 }
 
-/** Tira `qty` unidades do item: primeiro da mochila (ou do depósito, se preferido), depois do outro. */
-function takeItems(c: CharacterState, itemId: string, qty: number, prefer: 'inventory' | 'depot' = 'inventory'): number {
-  const [first, second] = prefer === 'depot' ? [c.depot, c.inventory] : [c.inventory, c.depot];
-  const a = removeItem(first, itemId, qty);
-  return a + removeItem(second, itemId, qty - a);
+/** Tira `qty` unidades do item: primeiro da mochila, depois do depósito. */
+function takeItems(c: CharacterState, itemId: string, qty: number): number {
+  const a = removeItem(c.inventory, itemId, qty);
+  return a + removeItem(c.depot, itemId, qty - a);
 }
 
-/** Executa contra os anúncios de venda (do mais barato) até `qty` ou `maxPrice`: o comprador paga, recebe no depósito. */
-function takeAsks(data: GameData, m: MarketState, buyer: CharacterState, itemId: string, qty: number, maxPrice: number): MarketFill[] {
+/** Quanto do item ainda cabe no depósito (sem mexer nele). */
+export function depotSpace(data: GameData, c: CharacterState, itemId: string, want: number): number {
+  ensureDepotSize(data, c);
+  const trial = c.depot.map((s) => (s ? { ...s } : null));
+  return addItem(data, trial, itemId, want);
+}
+
+/** Cabe `count` unidades entre mochila e depósito? */
+export function roomFor(data: GameData, c: CharacterState, itemId: string, count: number): boolean {
+  return Math.min(count, capacityFor(data, c.inventory, itemId)) + depotSpace(data, c, itemId, count) >= count;
+}
+
+/** Entrega para quem está presente: mochila primeiro, o resto no depósito. Devolve quantas foram para a mochila. */
+function deliverHere(data: GameData, c: CharacterState, itemId: string, count: number): number {
+  const bag = addItem(data, c.inventory, itemId, count);
+  if (bag < count) addItem(data, c.depot, itemId, count - bag);
+  return bag;
+}
+
+function record(m: MarketState, itemId: string, price: number, count: number, at: number): void {
+  const h = (m.history[itemId] ??= []);
+  h.push({ price, count, at });
+  if (h.length > HISTORY_KEEP) h.splice(0, h.length - HISTORY_KEEP);
+}
+
+/** Executa contra as ofertas de venda (da mais barata) até `qty`/`maxPrice`: o comprador paga e recebe. */
+function takeSellOffers(data: GameData, m: MarketState, buyer: CharacterState, itemId: string, qty: number, maxPrice: number, now: number): MarketFill[] {
   const fills: MarketFill[] = [];
   let left = qty;
-  for (const l of asksFor(m, itemId, buyer.id)) {
-    if (left <= 0 || l.price > maxPrice) break;
-    const n = Math.min(l.count, left);
-    pay(buyer, n * l.price);
-    addItem(data, buyer.depot, itemId, n);
-    l.count -= n;
+  for (const o of offersFor(m, itemId, 'sell', buyer.id)) {
+    if (left <= 0 || o.price > maxPrice) break;
+    const n = Math.min(o.count, left);
+    pay(buyer, n * o.price);
+    deliverHere(data, buyer, itemId, n);
+    o.count -= n;
     left -= n;
-    fills.push({ otherId: l.sellerId, itemId, count: n, price: l.price });
+    record(m, itemId, o.price, n, now);
+    fills.push({ otherId: o.ownerId, itemId, count: n, price: o.price });
   }
-  m.listings = m.listings.filter((l) => l.count > 0);
+  m.offers = m.offers.filter((o) => o.count > 0);
   return fills;
 }
 
-/** Executa contra as ofertas de compra (da maior) até `qty` ou `minPrice`: o vendedor recebe no banco. */
-function takeBids(m: MarketState, seller: CharacterState, itemId: string, qty: number, minPrice: number): MarketFill[] {
+/** Executa contra as ofertas de compra (da mais cara) até `qty`/`minPrice`: o vendedor recebe no banco. */
+function takeBuyOffers(m: MarketState, seller: CharacterState, itemId: string, qty: number, minPrice: number, now: number): MarketFill[] {
   const fills: MarketFill[] = [];
   let left = qty;
-  for (const b of bidsFor(m, itemId, seller.id)) {
-    if (left <= 0 || b.price < minPrice) break;
-    const n = Math.min(b.count, left);
-    seller.bankGold += n * b.price; // o ouro já estava reservado na oferta
-    b.count -= n;
+  for (const o of offersFor(m, itemId, 'buy', seller.id)) {
+    if (left <= 0 || o.price < minPrice) break;
+    const n = Math.min(o.count, left);
+    seller.bankGold += n * o.price; // o ouro já estava reservado na oferta de compra
+    o.count -= n;
     left -= n;
-    fills.push({ otherId: b.buyerId, itemId, count: n, price: b.price });
+    record(m, itemId, o.price, n, now);
+    fills.push({ otherId: o.ownerId, itemId, count: n, price: o.price });
   }
-  m.bids = m.bids.filter((b) => b.count > 0);
+  m.offers = m.offers.filter((o) => o.count > 0);
   return fills;
 }
 
 export type MarketResult<T = object> = ({ ok: true; fills: MarketFill[] } & T) | { ok: false; reason: MarketFail };
 
+const validQty = (n: number) => Number.isFinite(n) && Math.floor(n) >= 1;
+
 /**
- * Compra agora até `qty` unidades pelo menor preço disponível (vários anúncios, do mais barato). O que couber no
- * depósito; sem espaço ou sem ouro para tudo, não compra nada.
+ * Compra agora até `qty` unidades pagando o menor preço (várias ofertas, da mais barata, até `maxPrice`). Sem ouro ou
+ * sem espaço para tudo, não compra nada.
  */
-export function buyNow(data: GameData, m: MarketState, buyer: CharacterState, itemId: string, qty: number, maxPrice = Infinity): MarketResult<{ total: number; count: number }> {
-  const q = quoteBuy(m, itemId, qty, buyer.id, maxPrice);
-  if (!q.count) return { ok: false, reason: asksFor(m, itemId).some((l) => l.sellerId === buyer.id) && !asksFor(m, itemId, buyer.id).length ? 'own' : 'none' };
+export function buyNow(data: GameData, m: MarketState, buyer: CharacterState, itemId: string, qty: number, maxPrice: number, now: number): MarketResult<{ count: number; total: number }> {
+  if (!marketable(data.items[itemId])) return { ok: false, reason: 'notMarketable' };
+  if (!validQty(qty)) return { ok: false, reason: 'qty' };
+  const q = quoteBuy(m, itemId, Math.floor(qty), buyer.id, maxPrice);
+  if (!q.count) return { ok: false, reason: 'none' };
   if (buyer.gold + buyer.bankGold < q.total) return { ok: false, reason: 'gold' };
-  if (!depotRoom(data, buyer, itemId, q.count)) return { ok: false, reason: 'room' };
-  const fills = takeAsks(data, m, buyer, itemId, q.count, maxPrice);
-  return { ok: true, fills, total: q.total, count: q.count };
+  if (!roomFor(data, buyer, itemId, q.count)) return { ok: false, reason: 'room' };
+  const fills = takeSellOffers(data, m, buyer, itemId, q.count, maxPrice, now);
+  return { ok: true, fills, count: q.count, total: q.total };
 }
 
-/** Vende agora até `qty` unidades (mochila primeiro, depois depósito) para as maiores ofertas de compra. */
-export function sellNow(m: MarketState, seller: CharacterState, itemId: string, qty: number, minPrice = 0): MarketResult<{ total: number; count: number }> {
+/** Vende agora até `qty` unidades (mochila primeiro, depois depósito) para as maiores ofertas de compra (≥ `minPrice`). */
+export function sellNow(data: GameData, m: MarketState, seller: CharacterState, itemId: string, qty: number, minPrice: number, now: number): MarketResult<{ count: number; total: number }> {
+  if (!marketable(data.items[itemId])) return { ok: false, reason: 'notMarketable' };
+  if (!validQty(qty)) return { ok: false, reason: 'qty' };
   const have = ownedCount(seller, itemId);
   if (!have) return { ok: false, reason: 'empty' };
-  const q = quoteSell(m, itemId, Math.min(qty, have), seller.id, minPrice);
+  const q = quoteSell(m, itemId, Math.min(Math.floor(qty), have), seller.id, minPrice);
   if (!q.count) return { ok: false, reason: 'none' };
   takeItems(seller, itemId, q.count);
-  const fills = takeBids(m, seller, itemId, q.count, minPrice);
-  return { ok: true, fills, total: q.total, count: q.count };
+  const fills = takeBuyOffers(m, seller, itemId, q.count, minPrice, now);
+  return { ok: true, fills, count: q.count, total: q.total };
 }
 
 /**
- * Anuncia `qty` unidades a `price` cada. Se já há quem pague isso ou mais, vende na hora pela oferta (maior primeiro);
- * o resto fica anunciado.
+ * Cria uma oferta de `qty` unidades a `price` cada. A parte que já tem par do outro lado (venda ≤ oferta de compra;
+ * compra ≥ anúncio) fecha na hora pelo preço de quem esperava; o resto fica no livro (o item guardado pelo mercado ou o
+ * ouro reservado).
  */
-export function placeAsk(data: GameData, m: MarketState, seller: CharacterState, itemId: string, qty: number, price: number, now: number, prefer: 'inventory' | 'depot' = 'inventory'): MarketResult<{ sold: number; total: number; listing: MarketListing | null }> {
+export function placeOffer(
+  data: GameData,
+  m: MarketState,
+  c: CharacterState,
+  side: OfferSide,
+  itemId: string,
+  qty: number,
+  price: number,
+  now: number,
+): MarketResult<{ matched: number; total: number; offer: MarketOffer | null }> {
+  if (!marketable(data.items[itemId])) return { ok: false, reason: 'notMarketable' };
   const unit = Math.floor(price);
   if (!Number.isFinite(unit) || unit < 1) return { ok: false, reason: 'price' };
-  const n = Math.min(Math.floor(qty), ownedCount(seller, itemId));
-  if (!data.items[itemId] || n < 1) return { ok: false, reason: 'empty' };
-  const q = quoteSell(m, itemId, n, seller.id, unit);
-  if (q.count < n && openOrders(m, seller.id) >= MARKET_MAX_PER_SELLER) return { ok: false, reason: 'limit' };
+  if (!validQty(qty)) return { ok: false, reason: 'qty' };
+  let n = Math.floor(qty);
   let fills: MarketFill[] = [];
-  if (q.count) {
-    takeItems(seller, itemId, q.count, prefer);
-    fills = takeBids(m, seller, itemId, q.count, unit);
+  let matched = 0;
+  let total = 0;
+  if (side === 'sell') {
+    n = Math.min(n, ownedCount(c, itemId));
+    if (n < 1) return { ok: false, reason: 'empty' };
+    const q = quoteSell(m, itemId, n, c.id, unit);
+    if (q.count) {
+      takeItems(c, itemId, q.count);
+      fills = takeBuyOffers(m, c, itemId, q.count, unit, now);
+      ({ count: matched, total } = q);
+    }
+    const rest = n - matched;
+    let offer: MarketOffer | null = null;
+    if (rest > 0) {
+      takeItems(c, itemId, rest);
+      offer = { id: `mo${++m.seq}`, side, ownerId: c.id, ownerName: c.name, itemId, count: rest, price: unit, at: now };
+      m.offers.push(offer);
+    }
+    return { ok: true, fills, matched, total, offer };
   }
-  let listing: MarketListing | null = null;
+  const q = quoteBuy(m, itemId, n, c.id, unit);
   const rest = n - q.count;
-  if (rest > 0) {
-    takeItems(seller, itemId, rest, prefer);
-    listing = { id: `mk${++m.seq}`, sellerId: seller.id, sellerName: seller.name, itemId, count: rest, price: unit, listedAt: now };
-    m.listings.push(listing);
+  if (c.gold + c.bankGold < q.total + rest * unit) return { ok: false, reason: 'gold' };
+  if (q.count && !roomFor(data, c, itemId, q.count)) return { ok: false, reason: 'room' };
+  if (q.count) {
+    fills = takeSellOffers(data, m, c, itemId, q.count, unit, now);
+    ({ count: matched, total } = q);
   }
-  return { ok: true, fills, sold: q.count, total: q.total, listing };
+  let offer: MarketOffer | null = null;
+  if (rest > 0) {
+    pay(c, rest * unit);
+    offer = { id: `mo${++m.seq}`, side, ownerId: c.id, ownerName: c.name, itemId, count: rest, price: unit, at: now };
+    m.offers.push(offer);
+  }
+  return { ok: true, fills, matched, total, offer };
 }
 
 /**
- * Oferta de compra de `qty` unidades a até `price` cada. Se já há anúncio por esse preço ou menos, compra na hora pelo
- * preço anunciado (menor primeiro); o resto vira oferta com o ouro reservado.
+ * Cancela uma oferta própria: a de venda devolve o item (mochila, senão depósito, senão fica como entrega); a de compra
+ * devolve o ouro reservado ao banco.
  */
-export function placeBid(data: GameData, m: MarketState, buyer: CharacterState, itemId: string, qty: number, price: number, now: number): MarketResult<{ bought: number; total: number; bid: MarketBid | null }> {
-  const unit = Math.floor(price);
-  if (!Number.isFinite(unit) || unit < 1) return { ok: false, reason: 'price' };
-  const n = Math.floor(qty);
-  if (!data.items[itemId] || n < 1) return { ok: false, reason: 'empty' };
-  const q = quoteBuy(m, itemId, n, buyer.id, unit);
-  const rest = n - q.count;
-  if (rest > 0 && openOrders(m, buyer.id) >= MARKET_MAX_PER_SELLER) return { ok: false, reason: 'limit' };
-  if (buyer.gold + buyer.bankGold < q.total + rest * unit) return { ok: false, reason: 'gold' };
-  if (q.count && !depotRoom(data, buyer, itemId, q.count)) return { ok: false, reason: 'room' };
-  const fills = q.count ? takeAsks(data, m, buyer, itemId, q.count, unit) : [];
-  let bid: MarketBid | null = null;
-  if (rest > 0) {
-    pay(buyer, rest * unit);
-    bid = { id: `mb${++m.seq}`, buyerId: buyer.id, buyerName: buyer.name, itemId, count: rest, price: unit, placedAt: now };
-    m.bids.push(bid);
+export function cancelOffer(data: GameData, m: MarketState, c: CharacterState, offerId: string): MarketResult<{ offer: MarketOffer; refund: number }> {
+  const o = m.offers.find((x) => x.id === offerId && x.ownerId === c.id);
+  if (!o) return { ok: false, reason: 'gone' };
+  m.offers = m.offers.filter((x) => x !== o);
+  if (o.side === 'buy') {
+    c.bankGold += o.price * o.count;
+    return { ok: true, fills: [], offer: o, refund: o.price * o.count };
   }
-  return { ok: true, fills, bought: q.count, total: q.total, bid };
-}
-
-/** Anuncia a pilha inteira da posição `index` (mochila ou depósito) a `price` por unidade. */
-export function listItem(data: GameData, m: MarketState, seller: CharacterState, from: 'inventory' | 'depot', index: number, price: number, now: number): MarketResult<{ listing: MarketListing | null; sold: number; total: number }> {
-  const inv = from === 'inventory' ? seller.inventory : seller.depot;
-  const st = inv[index];
-  if (!st || !data.items[st.itemId]) return { ok: false, reason: 'empty' };
-  // (a quantidade é a da pilha escolhida; as unidades saem da mochila primeiro, depois do depósito)
-  return placeAsk(data, m, seller, st.itemId, st.count, price, now, from);
-}
-
-/** Cancela uma ordem própria: o anúncio volta para o depósito (sem espaço, continua); a oferta devolve o ouro ao banco. */
-export function cancelOrder(data: GameData, m: MarketState, c: CharacterState, orderId: string): MarketResult<{ itemId: string; count: number; refund: number }> {
-  const l = m.listings.find((x) => x.id === orderId && x.sellerId === c.id);
-  if (l) {
-    if (!depotRoom(data, c, l.itemId, l.count)) return { ok: false, reason: 'room' };
-    addItem(data, c.depot, l.itemId, l.count);
-    m.listings = m.listings.filter((x) => x !== l);
-    return { ok: true, fills: [], itemId: l.itemId, count: l.count, refund: 0 };
-  }
-  const b = m.bids.find((x) => x.id === orderId && x.buyerId === c.id);
-  if (!b) return { ok: false, reason: 'gone' };
-  c.bankGold += b.price * b.count;
-  m.bids = m.bids.filter((x) => x !== b);
-  return { ok: true, fills: [], itemId: b.itemId, count: b.count, refund: b.price * b.count };
+  const bag = addItem(data, c.inventory, o.itemId, o.count);
+  const depot = bag < o.count ? addItem(data, c.depot, o.itemId, o.count - bag) : 0;
+  if (bag + depot < o.count) addParcel(m, c.id, o.itemId, o.count - bag - depot);
+  return { ok: true, fills: [], offer: o, refund: 0 };
 }
 
 /** Recebe o ouro guardado (vendas de quando estava fora) no banco. */
@@ -292,22 +422,26 @@ export function collectProceeds(m: MarketState, c: CharacterState): number {
   return amount;
 }
 
-/** Coloca no depósito o que couber das entregas pendentes; devolve quantas unidades entraram. */
-export function collectParcels(data: GameData, m: MarketState, c: CharacterState): number {
+/** Entrega o que couber das compras pendentes (mochila, depois depósito); devolve quantas unidades saíram. */
+export function collectParcels(data: GameData, m: MarketState, c: CharacterState, toBag = true): number {
   const list = m.parcels[c.id];
   if (!list?.length) return 0;
   ensureDepotSize(data, c);
   let got = 0;
   const left: ItemStack[] = [];
   for (const st of list) {
-    const n = addItem(data, c.depot, st.itemId, st.count);
-    got += n;
-    if (n < st.count) left.push({ itemId: st.itemId, count: st.count - n });
+    const bag = toBag ? addItem(data, c.inventory, st.itemId, st.count) : 0;
+    const depot = bag < st.count ? addItem(data, c.depot, st.itemId, st.count - bag) : 0;
+    got += bag + depot;
+    if (bag + depot < st.count) left.push({ itemId: st.itemId, count: st.count - bag - depot });
   }
   if (left.length) m.parcels[c.id] = left;
   else delete m.parcels[c.id];
   return got;
 }
+
+export const parcelUnits = (m: MarketState, characterId: string): number =>
+  (m.parcels[characterId] ?? []).reduce((s, p) => s + p.count, 0);
 
 /** Guarda uma entrega para depois (fora do jogo ou depósito cheio). */
 export function addParcel(m: MarketState, characterId: string, itemId: string, count: number): void {
@@ -317,29 +451,62 @@ export function addParcel(m: MarketState, characterId: string, itemId: string, c
   else list.push({ itemId, count });
 }
 
-/** Valida e lê um mercado salvo (descarta o que não reconhece). */
+// ------------------------------------------------------------------ persistência
+/**
+ * Lê um mercado salvo (descarta o que não reconhece). Aceita o formato antigo (anúncios + ofertas de compra separados):
+ * o que o mercado novo não negocia (materiais etc.) volta para o dono como entrega, e o ouro reservado volta ao banco.
+ */
 export function parseMarket(data: GameData, raw: unknown): MarketState {
   const m = emptyMarket();
   if (!raw || typeof raw !== 'object') return m;
-  const r = raw as Partial<MarketState>;
-  const okOrder = (o: { itemId?: unknown; count?: unknown; price?: unknown } | null | undefined) =>
-    !!o && typeof o.itemId === 'string' && !!data.items[o.itemId] && Number.isFinite(o.count) && Number(o.count) > 0 && Number.isFinite(o.price) && Number(o.price) > 0;
-  if (Array.isArray(r.listings))
-    for (const l of r.listings)
-      if (okOrder(l) && typeof l.id === 'string' && typeof l.sellerId === 'string')
-        m.listings.push({ ...l, sellerName: String(l.sellerName ?? '?'), listedAt: Number(l.listedAt) || 0 });
-  if (Array.isArray(r.bids))
-    for (const b of r.bids)
-      if (okOrder(b) && typeof b.id === 'string' && typeof b.buyerId === 'string')
-        m.bids.push({ ...b, buyerName: String(b.buyerName ?? '?'), placedAt: Number(b.placedAt) || 0 });
+  const r = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+  const take = (o: Record<string, unknown>, side: OfferSide, owner: unknown, name: unknown, at: unknown) => {
+    const itemId = typeof o.itemId === 'string' ? o.itemId : '';
+    const count = Math.floor(num(o.count));
+    const price = Math.floor(num(o.price));
+    if (typeof owner !== 'string' || !data.items[itemId] || !(count > 0) || !(price > 0)) return;
+    if (!marketable(data.items[itemId])) {
+      // o mercado não negocia mais esse item: devolve ao dono
+      if (side === 'sell') addParcel(m, owner, itemId, count);
+      else m.proceeds[owner] = (m.proceeds[owner] ?? 0) + count * price;
+      return;
+    }
+    m.offers.push({
+      id: typeof o.id === 'string' ? o.id : `mo${++m.seq}`,
+      side,
+      ownerId: owner,
+      ownerName: String(name ?? '?'),
+      itemId,
+      count,
+      price,
+      at: num(at) || 0,
+    });
+  };
+  if (Array.isArray(r.offers))
+    for (const o of r.offers as Record<string, unknown>[])
+      if (o && (o.side === 'sell' || o.side === 'buy')) take(o, o.side, o.ownerId, o.ownerName, o.at);
+  // formato antigo
+  if (Array.isArray(r.listings)) for (const l of r.listings as Record<string, unknown>[]) if (l) take(l, 'sell', l.sellerId, l.sellerName, l.listedAt);
+  if (Array.isArray(r.bids)) for (const b of r.bids as Record<string, unknown>[]) if (b) take(b, 'buy', b.buyerId, b.buyerName, b.placedAt);
+  if (r.history && typeof r.history === 'object')
+    for (const [itemId, list] of Object.entries(r.history as Record<string, unknown>)) {
+      if (!data.items[itemId] || !Array.isArray(list)) continue;
+      const ok = (list as Record<string, unknown>[])
+        .filter((t) => t && num(t.price) > 0 && num(t.count) > 0)
+        .map((t) => ({ price: Math.floor(num(t.price)), count: Math.floor(num(t.count)), at: num(t.at) || 0 }))
+        .slice(-HISTORY_KEEP);
+      if (ok.length) m.history[itemId] = ok;
+    }
   if (r.proceeds && typeof r.proceeds === 'object')
-    for (const [k, v] of Object.entries(r.proceeds)) if (Number.isFinite(v) && v > 0) m.proceeds[k] = Math.floor(v);
+    for (const [k, v] of Object.entries(r.proceeds as Record<string, unknown>))
+      if (num(v) > 0) m.proceeds[k] = (m.proceeds[k] ?? 0) + Math.floor(num(v));
   if (r.parcels && typeof r.parcels === 'object')
-    for (const [k, v] of Object.entries(r.parcels))
-      if (Array.isArray(v)) {
-        const ok = v.filter((s) => okOrder({ ...s, price: 1 }));
-        if (ok.length) m.parcels[k] = ok.map((s) => ({ itemId: s.itemId, count: Math.floor(s.count) }));
-      }
-  m.seq = Number.isFinite(r.seq) ? Number(r.seq) : m.listings.length + m.bids.length;
+    for (const [k, v] of Object.entries(r.parcels as Record<string, unknown>))
+      if (Array.isArray(v))
+        for (const s of v as Record<string, unknown>[])
+          if (s && typeof s.itemId === 'string' && data.items[s.itemId] && num(s.count) > 0)
+            addParcel(m, k, s.itemId, Math.floor(num(s.count)));
+  m.seq = Math.max(m.seq, Number.isFinite(num(r.seq)) ? num(r.seq) : 0, m.offers.length);
   return m;
 }

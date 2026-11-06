@@ -1093,6 +1093,14 @@ export const CHARACTERS: CharacterSpec[] = [
     ramps: { skin: P.skinTan, hair: P.hairBlond, cloth: P.blue, accent: P.gold, pants: P.iron, boots: P.leather },
   },
   {
+    id: 'npc_broker',
+    head: 'short',
+    body: 'tunic',
+    gear: 'featherCap',
+    held: 'book',
+    ramps: { skin: P.skinDark, hair: P.hairBlack, cloth: P.teal, accent: P.gold, pants: P.wood, boots: P.leather },
+  },
+  {
     id: 'skeleton',
     head: 'skull',
     body: 'tunic',

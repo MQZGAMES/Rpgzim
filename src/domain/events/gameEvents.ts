@@ -30,6 +30,7 @@ export interface GameEventMap extends Record<string, unknown> {
   dialogOpened: { npcId: string };
   shopOpened: { shopId: string; npcId: string };
   depotOpened: { npcId: string };
+  marketOpened: { npcId: string };
   doorChanged: { doorId: string; open: boolean };
   regionEntered: { regionId: string; name: string };
   buildingChanged: { buildingId: string | null };

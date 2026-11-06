@@ -16,6 +16,8 @@ export interface UiState {
   shop: { shopId: string; npcId: string } | null;
   /** Banco/depósito aberto junto a um NPC banqueiro. */
   depot: { npcId: string } | null;
+  /** Mercado aberto junto ao corretor (ao lado da banqueira). */
+  market?: { npcId: string } | null;
   lootId: string | null;
   regionId: string | null;
   buildingId: string | null;
@@ -52,7 +54,7 @@ export interface World {
   monsters: Map<string, MonsterEntity>;
   npcs: Map<string, NpcEntity>;
   lootBags: Map<string, LootContainer>;
-  /** Mercado do banco (anúncios de todos os personagens, salvo à parte no aparelho). */
+  /** Mercado de Pedraluz (ofertas de todos os personagens, salvo à parte no aparelho). */
   market: MarketState;
   corpses: Map<string, Corpse>;
   /** Célula -> id da entidade que a ocupa. */

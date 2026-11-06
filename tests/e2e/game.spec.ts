@@ -246,25 +246,31 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await expect(page.getByTestId('loot-window')).toBeVisible();
 });
 
-test('mercado do banco: anunciar (venda rápida), ver a ordem e cancelar; personagens online: deslogar e logar', async ({ page }, info) => {
+test('mercado: corretor ao lado da banqueira, vender (categoria → item → anunciar), minhas ofertas e cancelar; online: deslogar e logar', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await createCharacter(page, 'knight', 'Feira');
-  const banker = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:banker')!;
-  await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).teleport(x!, y!), [banker.x, banker.y + 2]);
+  const broker = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:broker')!;
+  await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).teleport(x!, y!), [broker.x, broker.y + 2]);
   await page.getByTestId('interact-button').click();
-  await page.getByRole('button', { name: 'Abrir depósito' }).click();
-  await page.getByTestId('depot-tab-market').click();
-  await expect(page.getByTestId('market-tab')).toBeVisible();
-  // procura o item, escolhe "Vender", usa a venda rápida e anuncia
-  await page.getByTestId('market-filter-mine').click();
-  await page.getByTestId('market-search').fill('Machad');
-  await page.locator('[data-testid^=market-item-]').first().click();
+  await page.getByRole('button', { name: 'Abrir mercado' }).click();
+  await expect(page.getByTestId('market-panel')).toBeVisible();
+  // Vender → Machados → Machadinha: o preço já vem sugerido; anuncia com um toque
   await page.getByTestId('market-mode-sell').click();
-  await page.getByTestId('market-quick').click();
+  await page.getByTestId('market-cat-axe').click();
+  await page.getByTestId('market-item-axe_hand').click();
+  await expect(page.getByTestId('market-guide')).toBeVisible();
   await page.getByTestId('market-place-ask').click();
-  await expect(page.locator('[data-testid^=market-order-]')).toHaveCount(1); // a sua ordem aparece, com Cancelar
+  // minhas ofertas: a venda aparece, com Cancelar
+  await page.getByTestId('market-mode-mine').click();
+  await expect(page.locator('[data-testid^=market-mine-]')).toHaveCount(1);
   await page.locator('[data-testid^=market-cancel-]').first().click();
-  await expect(page.locator('[data-testid^=market-order-]')).toHaveCount(0);
+  await expect(page.locator('[data-testid^=market-mine-]')).toHaveCount(0);
+  // Comprar → filtros da lista (vocação e ordenação)
+  await page.getByTestId('market-mode-buy').click();
+  await page.getByTestId('market-cat-sword').click();
+  await page.getByTestId('market-voc-all').click();
+  await page.getByTestId('market-sort-level-desc').click();
+  await expect(page.locator('[data-testid^=market-item-]').first()).toBeVisible();
   await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
   // lista de online: o Boladex sai do jogo e volta
   await page.getByTestId('btn-players').click();

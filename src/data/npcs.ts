@@ -99,7 +99,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Bem-vindo ao Banco de Pedraluz! Guarde ouro e itens no seu depósito: nada se perde aqui, nem se você cair em batalha.',
+        text: 'Bem-vindo ao Banco de Pedraluz! Guarde ouro e itens no seu depósito: nada se perde aqui, nem se você cair em batalha. Para comprar e vender com outros aventureiros, fale com o Corretor Tadeu, aqui ao lado.',
         options: [
           { label: 'Abrir depósito', action: 'openDepot' },
           { label: 'Como funciona?', action: 'next', goto: 'help' },
@@ -126,6 +126,30 @@ const list: NpcDef[] = [
         id: 'start',
         text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A leste do bosque ficam as Terras Altas: bandidos, ursos, escorpiões, a Fortaleza Orc, o Bosque Gélido, a Cidadela Sombria e o Covil do Dragão — só para os mais fortes. Atenção: só dentro das casas, lojas, banco e templo ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
         options: [close],
+      },
+    ],
+  },
+  {
+    id: 'broker',
+    name: 'Corretor Tadeu',
+    title: 'Mercado de Pedraluz',
+    sprite: 'npc_broker',
+    wanderRadius: 0,
+    greeting: 'Compre e venda com outros aventureiros!',
+    dialog: [
+      {
+        id: 'start',
+        text: 'Aqui no Mercado de Pedraluz os aventureiros negociam equipamentos e poções entre si. Quem compra paga o menor preço anunciado; quem vende recebe a maior oferta. Materiais de criaturas, só nas lojas.',
+        options: [
+          { label: 'Abrir mercado', action: 'openMarket' },
+          { label: 'Como funciona?', action: 'next', goto: 'help' },
+          close,
+        ],
+      },
+      {
+        id: 'help',
+        text: 'Escolha Comprar ou Vender, a categoria e o item. Você vê todas as ofertas: compre na hora pelo menor preço ou deixe uma oferta dizendo quanto paga; venda na hora para quem já quer comprar ou anuncie pelo preço que quiser — eu sugiro os valores pela oferta e procura. O que você compra vai para a mochila; o ouro das vendas, para o banco.',
+        options: [{ label: 'Abrir mercado', action: 'openMarket' }, close],
       },
     ],
   },

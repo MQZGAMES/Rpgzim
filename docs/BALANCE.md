@@ -224,3 +224,30 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
     compra (antes do estoque de poções). O Druid chegava a passar 2 h desarmado (nível 20 em 3 h).
 - Medição final (3 h, nível / mortes, média das sementes): Boladex 57 / 0,5 · Maguim 58 / 1,5 · Mano Cura 58,5 / 0,5 ·
   Distanciado 39 / 4,75 (4 sementes).
+
+## Mercado de Pedraluz (nov/2026)
+- **Preço de referência** (o que a tela sugere): metade do último negócio + metade da média dos últimos 8 (pesada pela
+  quantidade); sem negócios, o meio entre o menor anúncio e a maior oferta; sem ofertas, entre o que a loja paga e o
+  que ela cobra (equipamento: o maior entre 60% do valor e o que a loja paga; poção: 85% do preço da loja).
+- **Sugestões**: anunciar um abaixo do menor anúncio (sem ficar abaixo da maior oferta); ofertar um acima da maior
+  oferta (sem chegar no menor anúncio). Passos de −10%, −1, +1 e +10%.
+- **Heróis**: anunciam só o equipamento que rende 40%+ acima do que a loja paga (valor ≥ 150), até 4 anúncios cada;
+  baixam ~15% a cada 10 min sem venda (nunca abaixo da loja) e, no piso, retiram depois de 20 min e vendem na loja.
+  Ofertas de compra só pela meta de equipamento (até 2), a ~80% do preço da loja e com no máximo 60% do ouro livre;
+  quando juntam o preço da loja (contando o ouro reservado), cancelam e compram lá. Só passam no corretor quando há o
+  que fazer lá; o banco (no mesmo prédio) acerta a bolsa de uma vez, deixando o ouro de completar poções e upgrade.
+- **Medição** (`tests/tools/market-life.test.ts`, os quatro heróis juntos por 2 h, 3 sementes, nível médio):
+
+  | Herói | Versão anterior | Mercado novo |
+  |---|---|---|
+  | Boladex | 39,7 | 39,7 |
+  | Maguim | 40 | 37,3 |
+  | Mano Cura | 35,3 | 34 |
+  | Distanciado | 24,7 | 23,7 |
+
+  Com 10 a 16 anúncios abertos, 1 a 7 negócios fechados e ofertas de compra pelas metas. Sozinhos por 3 h
+  (`hero-life`, 2 sementes): Boladex 57,5, Maguim 52,5, Mano Cura 56, Distanciado 46,5.
+- Primeira versão (descartada): o mercado no começo de toda visita e o depósito no fim faziam a visita estourar o tempo
+  (até 32% do tempo na vila, sem guardar ouro) e o loot parado em anúncio sem comprador deixava os heróis sem dinheiro
+  (nível médio 20% a 38% menor em 2 h).
+

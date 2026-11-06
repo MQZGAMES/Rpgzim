@@ -47,7 +47,7 @@ function heroBus(w: World, h: HeroEntity, main: EventBus<GameEventMap>): EventBu
 
 /** Cria o herói no mundo (posição salva se livre; senão perto do templo). */
 export function addHero(w: World, hero: HeroDef, character: CharacterState, restorePosition = true): HeroEntity {
-  const ui: UiState = { dialog: null, shop: null, depot: null, lootId: null, regionId: null, buildingId: null, pending: null };
+  const ui: UiState = { dialog: null, shop: null, depot: null, market: null, lootId: null, regionId: null, buildingId: null, pending: null };
   const h = {
     id: heroEntityId(hero.id),
     kind: 'player',

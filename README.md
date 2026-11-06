@@ -136,27 +136,52 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   pilha só na janela de loot e é pego de todos os sacos de uma vez, entrando numa pilha só na mochila. Equipamentos
   continuam um por um.
 
-## Mercado novo: livro de ofertas
-- **Comprar sempre pelo menor preço e vender sempre pela maior oferta.** O mercado do banco virou um livro de ofertas
-  por item: de um lado os **anúncios de venda** (preço pedido por unidade), do outro as **ofertas de compra** (preço
-  oferecido por unidade, com o ouro já reservado).
-- **Tela por item** (aba *Mercado* do banco): busca por nome e filtros (*Todos*, *Meus itens*, *À venda*,
-  *Procurados*); cada linha mostra o menor preço à venda, a maior oferta de compra e quanto você tem. Ao tocar num item:
-  - **Comprar**: escolha a quantidade (−, +, *Máx*) e *Comprar agora* — paga o menor preço disponível, atravessando
-    vários anúncios do mais barato para o mais caro (o botão já mostra o total). Ou deixe uma **oferta de compra** a um
-    preço seu: o ouro fica reservado até alguém vender (ou você cancelar).
-  - **Vender**: *Vender agora* para as maiores ofertas, ou **anuncie** a um preço seu (com *Venda rápida* a 75% do
-    valor e *Igualar* o menor anúncio). As unidades saem da mochila e, faltando, do depósito.
-  - Ordem que alcança o outro lado **fecha na hora pelo preço de quem já esperava** (anunciar a 8 quando alguém oferece
-    12 vende a 12; ofertar 20 quando há anúncio a 8 compra a 8); o que sobra fica no livro.
-- **Suas ordens** (vendas e compras) aparecem embaixo com *Cancelar* (o anúncio volta para o depósito; a oferta devolve
-  o ouro ao banco). Até 12 ordens abertas por personagem.
-- **Entregas**: compras vão para o depósito e o ouro das vendas para o banco. Quem estava fora do jogo recebe ao logar;
-  com o depósito cheio, a compra fica como **entrega a retirar** no banco (botão *Retirar*).
-- **Heróis no mercado**: compram poções do nível deles pelo menor preço (nunca acima da loja) e upgrades no orçamento;
-  vendem o loot direto para quem oferece mais que a loja e anunciam o resto em venda rápida.
-- **Ajustes**: todas as poções com **2 s de exaustão**; Hiena, Lobo da Tempestade e Aranha das Cavernas mais lentas
-  (fugir delas era impossível); herói que perde a arma numa morte volta para comprar outra antes de tudo.
+## Mercado de Pedraluz (corretor ao lado da banqueira)
+Refeito do zero, inspirado no **Market do Tibia** (todas as ofertas à vista, categorias, filtro por vocação, atributos
+do item) e no **Grand Exchange do RuneScape** (preço de referência, botões de ±%, ofertas que fecham sozinhas e entregas a
+retirar) — e pensado primeiro para o celular.
+- **NPC próprio**: o **Corretor Tadeu**, na mesa ao lado da Banqueira Clara (Banco de Pedraluz). O depósito do banco não
+  tem mais aba de mercado.
+- **Só equipamentos e poções.** Materiais de criaturas, comida e outros itens diversos são vendidos só nas lojas.
+- **Jornada em 4 toques**: *Comprar / Vender / Minhas ofertas* → **categoria** (Espadas, Machados, Maças, Arcos e
+  lanças, Varinhas, Cajados, Escudos, Livros, Capacetes, Armaduras, Calças, Botas, Anéis, Amuletos, Poções de vida e
+  de mana — cada uma mostra quanto está à venda, ou quanto você tem) → **lista** com filtro por vocação (Todas, a sua
+  ou uma específica) e ordem por **nível** ou **preço** (crescente/decrescente; comprando, *Só à venda*) → **item**.
+  Também dá para procurar pelo nome.
+- **Na lista, ao lado de cada item**: nível para usar, atributos (Atq, Def/Arm, Vida, Mana, ML…), se é **▲ melhor** ou
+  **▼ pior** que o que você usa (com +/− de ataque e defesa), *requer nv X* ou *não usa*, e o preço do modo: comprando, o
+  **menor anúncio** (e quantos há); vendendo, a **maior oferta de compra** e o **último negócio**.
+- **No item**: o guia de preços (menor venda, maior compra, último negócio, média recente, quanto a loja vende e paga)
+  e **todas as ofertas** dos dois lados (preço, quantidade, quem e há quanto tempo).
+  - **Comprar**: *Comprar agora* paga o menor preço; escolha a quantidade (várias unidades do mesmo preço de uma vez;
+    tocar numa oferta à venda escolhe outro preço). Ou deixe uma **oferta de compra** dizendo quanto você paga — o ouro
+    fica reservado até alguém vender (ou você cancelar).
+  - **Vender**: *Vender agora* para quem já quer comprar (a maior oferta), ou **anuncie**: *Último negócio*, *Abaixo do
+    menor* anúncio, *Referência* ou o seu preço.
+  - Tudo com botões: preços sugeridos pela **oferta e procura** (último negócio + média recente; sem negócios, o meio
+    do livro; sem nada, entre o que a loja paga e o que ela cobra), passos de **−10% −1 +1 +10%** e quantidade com
+    **− + Máx**. O preço também pode ser digitado.
+  - Oferta que alcança o outro lado **fecha na hora pelo preço de quem já esperava** (anunciar a 8 quando alguém
+    oferece 12 vende a 12; ofertar 20 quando há anúncio a 8 compra a 8); o que sobra fica no livro. **Sem limite** de
+    ofertas.
+- **Minhas ofertas**: vendas e compras abertas, com o melhor preço do outro lado ao lado de cada uma e *Cancelar* (a
+  venda devolve o item para a mochila; a compra devolve o ouro reservado ao banco).
+- **Entregas**: o que você compra na hora vai para a **mochila** (sem espaço, para o depósito); o ouro das vendas vai
+  para o **banco**. O que chega por uma oferta de compra vai para o depósito; quem estava fora do jogo recebe ao logar,
+  e quem estava com o depósito cheio retira no corretor (*Retirar*).
+- **Os heróis preferem o mercado**: a visita à vila começa no corretor e, no mesmo prédio, no banco (a bolsa fica com o
+  que as lojas vão pedir; o resto é guardado), e só então as lojas. No mercado eles:
+  1. recebem e equipam o que chegou por oferta;
+  2. baixam ~15% o preço do que não vende em 20 min (nunca abaixo do que a loja paga) e retiram o que ficou 1 h no piso;
+  3. vendem o equipamento do loot para quem já paga mais que a loja, ou anunciam (até 8 anúncios por herói);
+  4. compram poções do nível deles pelo menor preço (nunca acima da loja) e anunciam as pequenas que sobraram;
+  5. compram upgrades à venda que cabem no orçamento (a meta de equipamento primeiro; a arma nunca espera);
+  6. o que precisam para evoluir e não acharam: deixam a **oferta de quanto pagam** (abaixo da loja) e seguem com o que
+     têm — ou com algo mais fraco da loja — até a oferta fechar; quando juntam o preço da loja, cancelam e compram lá.
+  Os materiais das criaturas continuam indo para as lojas.
+- **Histórico e persistência**: os últimos negócios de cada item ficam guardados (o último preço e a média viram a
+  referência). O mercado fica salvo no aparelho; o formato antigo é convertido (o que o mercado novo não negocia volta
+  ao dono).
 
 ## Poções por tamanho, magias I/II/III, Terras do Sul e guardas da vila
 - **Poções por tamanho e nível mínimo** (as pequenas servem para todos):
@@ -210,7 +235,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   (Boladex, Maguim, Mano Cura, Distanciado) entram logados por padrão; os criados por você ficam em *Fora do jogo* até
   você logá-los. A escolha fica gravada no aparelho. Logados, eles formam grupos, caçam, usam a vila, o mercado e o PK
   como os heróis (personagens criados ganham um temperamento próprio e falas neutras).
-- **Mercado do banco**: substituído pelo livro de ofertas (ver *Mercado novo* acima).
+- **Mercado do banco**: substituído pelo Mercado de Pedraluz (ver acima).
 - **Heróis usam o mercado primeiro**: na vila passam no banco antes das lojas e compram as poções anunciadas pelo
   preço do NPC ou menos e os upgrades que cabem no orçamento; só o que faltar compram no NPC. Também anunciam o
   equipamento do loot que venderiam barato ao NPC (e retiram o que ficar 30 min sem comprador).
@@ -416,7 +441,7 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **345 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
+- Vitest: **349 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada).
 - Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real

@@ -201,7 +201,7 @@ describe('preço do item e configurações por personagem', () => {
     const sim = makeSim('knight');
     const w = sim.world;
     w.player.character.inventory[0] = { itemId: 'sword_iron', count: 1 };
-    w.market.listings.push({ id: 'mk1', sellerId: 'x', sellerName: 'X', itemId: 'sword_iron', count: 1, price: 200, listedAt: 0 });
+    w.market.offers.push({ id: 'mk1', side: 'sell', ownerId: 'x', ownerName: 'X', itemId: 'sword_iron', count: 1, price: 200, at: 0 });
     const it = buildSnapshot(sim, 1).inventory[0]!;
     expect(it.npcSell?.price).toBe(Math.round(340 * 0.35));
     expect(it.market).toEqual({ price: 200, listings: 1 });

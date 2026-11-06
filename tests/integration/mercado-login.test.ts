@@ -1,20 +1,16 @@
-// Mercado do banco, logar/deslogar personagens com IA, nível mágico por vocação (a cura dos magos), custo de mana que
+// Logar/deslogar personagens com IA, nível mágico por vocação (a cura dos magos), custo de mana que
 // sobe com o nível, magias opcionais, poções à venda, criaturas que cercam e a perseguição que não trava.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
 import { customHeroDef } from '../../src/data/heroes';
 import { createCharacter } from '../../src/domain/rules/character';
-import { countItem } from '../../src/domain/rules/inventory';
 import { defaultHotbar } from '../../src/domain/rules/hotbar';
-import { autoPrice } from '../../src/domain/rules/market';
 import { triesForNextLevel } from '../../src/domain/rules/skills';
 import { spellManaCost } from '../../src/domain/rules/spells';
 import { spellRange } from '../../src/domain/rules/damage';
 import type { HeroEntity, MonsterEntity } from '../../src/game/entities/types';
-import { heroHelpers } from '../../src/game/ai/heroBrain';
 import { placeOccupant, removeOccupant } from '../../src/game/movement/movement';
 import { invite, acceptInvite, partyOf } from '../../src/game/social/social';
-import { asActor } from '../../src/game/simulation/World';
 import { isPz, isSolid } from '../../src/game/world/GameMap';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
 import { advance, makeSim } from '../helpers';
@@ -36,108 +32,6 @@ function withHero(id = 'boladex') {
   h.brain.nextThinkAt = Infinity;
   return { sim, w, h };
 }
-
-/** Abre o banco para quem está agindo (jogador ou herói dentro de asActor). */
-function openBank(w: ReturnType<typeof withHero>['w']) {
-  const npc = [...w.npcs.values()].find((n) =>
-    n.def.dialog[0]?.options.some((o) => o.action === 'openDepot'),
-  )!;
-  w.ui.depot = { npcId: npc.id };
-}
-
-describe('mercado do banco', () => {
-  it('anuncia (venda automática a 75% do valor), outro compra: item no depósito, ouro no banco do vendedor', () => {
-    const { sim, w, h } = withHero();
-    const p = w.human;
-    p.character.inventory[0] = { itemId: 'sword_iron', count: 1 };
-    openBank(w);
-    expect(sim.marketAutoList('inventory', 0)).toBe(true);
-    expect(p.character.inventory[0]).toBeNull();
-    const l = w.market.listings[0]!;
-    expect(l.price).toBe(autoPrice(D, 'sword_iron'));
-    expect(l.price).toBe(Math.round(D.items.sword_iron!.value * 0.75));
-    expect(sim.marketBuy(l.id)).toBe(false); // o próprio anúncio não se compra
-    // o herói compra: vai para o depósito dele; o ouro cai no banco do jogador
-    h.character.gold = 5000;
-    const bank = p.character.bankGold;
-    asActor(w, h, () => {
-      openBank(w);
-      expect(sim.marketBuy(l.id)).toBe(true);
-    });
-    expect(countItem(h.character.depot, 'sword_iron')).toBe(1);
-    expect(p.character.bankGold).toBe(bank + l.price);
-    expect(w.market.listings).toHaveLength(0);
-  });
-
-  it('sem espaço no depósito não compra; retirar o anúncio devolve o item ao depósito', () => {
-    const { sim, w, h } = withHero();
-    const p = w.human;
-    p.character.inventory[0] = { itemId: 'sword_iron', count: 1 };
-    openBank(w);
-    expect(sim.marketList('inventory', 0, 77)).toBe(true);
-    const id = w.market.listings[0]!.id;
-    h.character.gold = 5000;
-    h.character.depot = new Array(D.balance.player.depotSlots)
-      .fill(null)
-      .map(() => ({ itemId: 'bone_fragment', count: 1 }));
-    asActor(w, h, () => {
-      openBank(w);
-      expect(sim.marketBuy(id)).toBe(false);
-    });
-    expect(sim.marketCancel(id)).toBe(true);
-    expect(countItem(p.character.depot, 'sword_iron')).toBe(1);
-    expect(buildSnapshot(sim, 1).market?.orders).toHaveLength(0);
-  });
-
-  it('venda de quem está fora do jogo fica guardada e entra no banco quando ele loga', () => {
-    const { sim, w } = withHero();
-    w.market.listings.push({
-      id: 'mk99',
-      sellerId: 'offline_x',
-      sellerName: 'Fulano',
-      itemId: 'sword_iron',
-      count: 1,
-      price: 50,
-      listedAt: 0,
-    });
-    w.human.character.gold = 100;
-    openBank(w);
-    expect(sim.marketBuy('mk99')).toBe(true);
-    expect(w.market.proceeds.offline_x).toBe(50);
-    const c = createCharacter(D, {
-      id: 'offline_x',
-      name: 'Fulano',
-      vocation: 'paladin',
-      now: 0,
-      position: w.map.playerStart,
-    });
-    const bank = c.bankGold;
-    sim.addHero(customHeroDef(c), c);
-    expect(c.bankGold).toBe(bank + 50);
-    expect(w.market.proceeds.offline_x).toBeUndefined();
-  });
-
-  it('o herói compra no mercado (no preço do NPC ou abaixo) antes de ir à loja', () => {
-    const { w, h } = withHero();
-    w.market.listings.push({
-      id: 'mk1',
-      sellerId: w.human.character.id,
-      sellerName: 'Você',
-      itemId: 'potion_health',
-      count: 10,
-      price: 30,
-      listedAt: 0,
-    });
-    h.character.gold = 1000;
-    h.character.inventory = h.character.inventory.map(() => null);
-    asActor(w, h, () => {
-      openBank(w);
-      heroHelpers.useMarket(w, h);
-    });
-    expect(countItem(h.character.inventory, 'potion_health')).toBe(10);
-    expect(w.market.listings).toHaveLength(0);
-  });
-});
 
 describe('logar e deslogar personagens com IA', () => {
   it('qualquer personagem criado entra jogando sozinho e sai do mundo (e do grupo)', () => {

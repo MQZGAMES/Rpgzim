@@ -114,7 +114,7 @@ const boladex: HeroDef = {
     healAlly: ['Segura, {player}, tô te curando!', 'Cura indo, {player}!'],
     holdPos: ['Posição segurada. Daqui não saio!', 'Fico aqui. Quem chegar, apanha.'],
     orderAttack: ['Entendido! Todo mundo nesse alvo!', 'Foco nele!'],
-    marketBuy: ['Achei mais barato no mercado do banco!', 'Mercado primeiro, loja depois. Economia é tudo.'],
+    marketBuy: ['Deixei minha oferta com o Corretor Tadeu. Uma hora alguém vende!', 'Mercado primeiro, loja depois. Economia é tudo.'],
   },
 };
 

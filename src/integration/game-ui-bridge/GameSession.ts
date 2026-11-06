@@ -9,10 +9,11 @@ import { GameSimulation } from '../../game/simulation/GameSimulation';
 import type { GameMap } from '../../game/world/GameMap';
 import type { SaveService } from '../../game/persistence/SaveService';
 import type { AudioService } from '../../game/audio/AudioService';
-import { buildSnapshot, type UiSnapshot } from './snapshot';
+import { buildSnapshot, catalogOf, type UiSnapshot } from './snapshot';
 import { heroSnapshot } from '../../game/ai/heroes';
 import { customHeroDef } from '../../data/heroes';
 import { parseMarket } from '../../domain/rules/market';
+import type { CatalogItem } from '../../domain/rules/marketCatalog';
 import type { HeroDef } from '../../domain/entities/definitions';
 import { canDrink } from '../../domain/rules/potions';
 
@@ -378,10 +379,11 @@ export class GameSession {
       this.local.update({ partyPanel: false, actorMenu: null });
       return true;
     }
-    if (w.ui.dialog || w.ui.shop || w.ui.depot || w.ui.lootId) {
+    if (w.ui.dialog || w.ui.shop || w.ui.depot || w.ui.market || w.ui.lootId) {
       w.ui.dialog = null;
       w.ui.shop = null;
       w.ui.depot = null;
+      w.ui.market = null;
       w.ui.lootId = null;
       this.dirty = true;
       return true;
@@ -705,49 +707,33 @@ export class GameSession {
     this.dirty = true;
     return ok;
   }
-  marketList(from: 'inventory' | 'depot', index: number, price: number): boolean {
-    const ok = this.sim.marketList(from, index, price);
-    this.audio.play(ok ? 'coin' : 'error');
-    this.dirty = true;
-    return ok;
-  }
-  marketAutoList(from: 'inventory' | 'depot', index: number): boolean {
-    const ok = this.sim.marketAutoList(from, index);
-    this.audio.play(ok ? 'coin' : 'error');
-    this.dirty = true;
-    return ok;
-  }
-  marketBuy(listingId: string): boolean {
-    const ok = this.sim.marketBuy(listingId);
-    this.audio.play(ok ? 'coin' : 'error');
-    this.dirty = true;
-    return ok;
-  }
-  marketCancel(orderId: string): boolean {
-    const ok = this.sim.marketCancel(orderId);
-    this.audio.play(ok ? 'pickup' : 'error');
-    this.dirty = true;
-    return ok;
-  }
   private marketAct(ok: boolean, sound: 'coin' | 'pickup' = 'coin'): boolean {
     this.audio.play(ok ? sound : 'error');
     this.dirty = true;
     return ok;
   }
-  marketBuyNow(itemId: string, qty: number): boolean {
-    return this.marketAct(this.sim.marketBuyNow(itemId, qty));
+  /** Catálogo do mercado (categorias, atributos): fixo para os dados do jogo. */
+  marketCatalog(): CatalogItem[] {
+    return catalogOf(this.sim.world.data);
   }
-  marketSellNow(itemId: string, qty: number): boolean {
-    return this.marketAct(this.sim.marketSellNow(itemId, qty));
+  marketBuyNow(itemId: string, qty: number, maxPrice?: number): boolean {
+    return this.marketAct(this.sim.marketBuyNow(itemId, qty, maxPrice));
   }
-  marketSell(itemId: string, qty: number, price: number): boolean {
-    return this.marketAct(this.sim.marketSell(itemId, qty, price));
+  marketSellNow(itemId: string, qty: number, minPrice?: number): boolean {
+    return this.marketAct(this.sim.marketSellNow(itemId, qty, minPrice));
   }
-  marketBid(itemId: string, qty: number, price: number): boolean {
-    return this.marketAct(this.sim.marketBid(itemId, qty, price));
+  marketOffer(side: 'sell' | 'buy', itemId: string, qty: number, price: number): boolean {
+    return this.marketAct(this.sim.marketOffer(side, itemId, qty, price), side === 'sell' ? 'coin' : 'pickup');
+  }
+  marketCancel(offerId: string): boolean {
+    return this.marketAct(this.sim.marketCancel(offerId), 'pickup');
   }
   marketTakeParcels(): boolean {
     return this.marketAct(this.sim.marketTakeParcels(), 'pickup');
+  }
+  closeMarket(): void {
+    this.sim.closeMarket();
+    this.dirty = true;
   }
   depotDepositAll(): void {
     if (this.sim.depotDepositAll()) this.audio.play('pickup');

@@ -487,6 +487,7 @@ function killPlayer(w: World, killer: DamageSource): void {
   w.ui.pending = null;
   w.ui.shop = null;
   w.ui.depot = null;
+  w.ui.market = null;
   w.ui.dialog = null;
   w.ui.lootId = null;
   const before = c.experience;

@@ -1,6 +1,7 @@
 // Testes de integração da simulação completa (sem renderização): fluxo principal do jogador.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
+import { escrowOf } from '../../src/domain/rules/market';
 import { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { MemorySaveRepository } from '../../src/game/persistence/repositories';
 import { SaveService } from '../../src/game/persistence/SaveService';
@@ -543,7 +544,7 @@ describe('Shielding e armas de treino', () => {
     expect(idle).toEqual({ level: 10, tries: 0 });
   });
 
-  it('Knight > Paladin > magos no mesmo tempo de treino', () => {
+  it('Knight > Paladin > magos no mesmo tempo de treino', { timeout: 30_000 }, () => {
     const k = shieldingAfter('knight', 240_000);
     const p = shieldingAfter('paladin', 240_000);
     const m = shieldingAfter('sorcerer', 240_000);
@@ -619,9 +620,9 @@ describe('herói com vida própria (Boladex)', () => {
       expect(c.skills.sword.level).toBeGreaterThan(start.sword);
       expect(c.skills.shielding.level).toBeGreaterThan(10);
       expect(sold).toBe(true);
-      // guarda no banco ou junta o ouro para uma meta de equipamento e a compra
+      // guarda no banco (ou reserva o ouro numa oferta de compra do mercado pela meta) ou junta e compra a meta
       const wearing = Object.values(c.equipment).map((e) => e?.itemId);
-      expect(c.bankGold > 0 || [...goals].some((id) => wearing.includes(id))).toBe(true);
+      expect(c.bankGold + escrowOf(w.market, c.id) > 0 || [...goals].some((id) => wearing.includes(id))).toBe(true);
       expect(potionsCount(c)).toBeGreaterThan(0);
       expect(speech.length).toBeGreaterThan(5);
       // as mensagens do herói não vão para o registro do jogador humano

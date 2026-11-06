@@ -103,6 +103,9 @@ export function buildWorld(): GameMap {
   b.carpet({ x: 13, y: 11, w: 3, h: 3 });
   b.prop('counter', 13, 10).prop('chest', 10, 9).prop('chest', 18, 9).prop('bookshelf', 16, 9).prop('plant', 10, 13).prop('candle', 18, 13);
   b.npc('banker', 14, 9, 'down');
+  // Mercado de Pedraluz: o corretor fica na mesa ao lado da banqueira
+  b.prop('table_small', 17, 11).prop('sack', 18, 11);
+  b.npc('broker', 17, 10, 'down');
   b.reserve({ x: 7, y: 6, w: 15, h: 12 });
   b.path([[14, 16], [14, 21]], 2);
   b.sign(16, 18, 'Banco de Pedraluz — guarde ouro e itens com segurança.');

@@ -247,7 +247,7 @@ export interface MonsterDef {
 }
 
 // ------------------------------------------------------------------ NPCs e lojas
-export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'heal' | 'next';
+export type DialogAction = 'close' | 'openShop' | 'openDepot' | 'openMarket' | 'heal' | 'next';
 
 export interface DialogOption {
   label: string;

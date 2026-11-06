@@ -20,7 +20,8 @@ import { bestPotionFor, usablePotionCount } from '../../domain/rules/potions';
 import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { spellManaCost } from '../../domain/rules/spells';
-import { MARKET_AUTO_RATE, MARKET_MAX_PER_SELLER, asksFor, autoPrice, bidsFor, openOrders, ownedCount } from '../../domain/rules/market';
+import { escrowOf, marketable, parcelUnits, priceGuide, type MarketOffer, type PriceGuide } from '../../domain/rules/market';
+import { buildCatalog, compareItem, type CatalogItem, type Comparison } from '../../domain/rules/marketCatalog';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -71,7 +72,7 @@ export interface ItemView {
   kept: boolean;
   /** Quanto a melhor loja paga por uma unidade (e qual), ou null se nenhuma compra. */
   npcSell: { price: number; shop: string } | null;
-  /** Anúncio mais barato no mercado do banco (preço por unidade e quantos anúncios há), ou null. */
+  /** Anúncio de venda mais barato no Mercado de Pedraluz (preço por unidade e quantos anúncios há), ou null. */
   market: { price: number; listings: number } | null;
 }
 
@@ -109,19 +110,19 @@ export interface SpellView {
   tier: number;
 }
 
-/** Um item no mercado: preços de quem vende (do menor) e de quem compra (do maior), sem as suas próprias ordens. */
-export interface MarketItemView {
+/** Uma oferta do livro do mercado. */
+export interface MarketOfferView {
+  id: string;
+  side: 'sell' | 'buy';
   itemId: string;
-  item: ItemView;
-  /** Unidades que você tem (mochila + depósito). */
-  owned: number;
-  asks: { price: number; count: number }[];
-  bids: { price: number; count: number }[];
-  /** O que a melhor loja (NPC) paga por unidade. */
-  npcBuy: number;
-  /** Preço da venda rápida (75% do valor). */
-  quick: number;
+  count: number;
+  price: number;
+  owner: string;
+  mine: boolean;
+  at: number;
 }
+
+export type MarketQuoteView = PriceGuide;
 
 export interface UiSnapshot {
   version: number;
@@ -245,18 +246,23 @@ export interface UiSnapshot {
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
   depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
-  /** Mercado do banco (só com a janela do banco aberta): livro de ofertas por item. */
+  /** Mercado de Pedraluz (só com a janela do corretor aberta). */
   market: {
-    items: MarketItemView[];
-    /** Suas ordens abertas (venda e compra). */
-    orders: { id: string; side: 'sell' | 'buy'; item: ItemView; count: number; price: number; total: number }[];
-    /** Unidades compradas esperando espaço no depósito. */
+    npcName: string;
+    /** Todas as ofertas (venda e compra) de todos os itens. */
+    offers: MarketOfferView[];
+    /** Guia de preços de cada item do catálogo (sem contar as suas próprias ofertas). */
+    quotes: Record<string, MarketQuoteView>;
+    /** Equipamentos e poções que você tem (mochila + depósito). */
+    owned: Record<string, number>;
+    /** Comparação de cada item do catálogo com o que você usa (melhor, pior, igual, nível, vocação). */
+    fits: Record<string, Comparison>;
+    /** Unidades compradas esperando para ser retiradas. */
     parcels: number;
-    open: number;
-    max: number;
     /** Ouro disponível para comprar (bolsa + banco). */
     money: number;
-    autoRate: number;
+    /** Ouro reservado nas suas ofertas de compra. */
+    escrow: number;
   } | null;
   loot: {
     title: string;
@@ -299,17 +305,6 @@ function itemLines(def: ItemDef): string[] {
   return l;
 }
 
-/** Níveis de preço do livro (soma as unidades de cada preço). */
-function levels(orders: readonly { price: number; count: number }[]): { price: number; count: number }[] {
-  const out: { price: number; count: number }[] = [];
-  for (const o of orders) {
-    const last = out[out.length - 1];
-    if (last && last.price === o.price) last.count += o.count;
-    else out.push({ price: o.price, count: o.count });
-  }
-  return out;
-}
-
 /** Junta, entre os sacos ao redor, as pilhas do mesmo item agrupável (o equipamento continua um por um). */
 function groupLoot(sim: GameSimulation, bags: readonly { id: string; items: readonly ItemStack[] }[]): NonNullable<UiSnapshot['loot']>['items'] {
   const out: NonNullable<UiSnapshot['loot']>['items'] = [];
@@ -335,41 +330,49 @@ function groupLoot(sim: GameSimulation, bags: readonly { id: string; items: read
   return [...grouped, ...out];
 }
 
-function marketView(sim: GameSimulation): NonNullable<UiSnapshot['market']> {
+function marketView(sim: GameSimulation, npcName: string): NonNullable<UiSnapshot['market']> {
   const w = sim.world;
   const c = w.player.character;
   const m = w.market;
-  const ids = new Set<string>([...m.listings.map((l) => l.itemId), ...m.bids.map((b) => b.itemId)]);
-  for (const st of [...c.inventory, ...c.depot]) if (st && (w.data.items[st.itemId]?.value ?? 0) > 0) ids.add(st.itemId);
-  const items = [...ids]
-    .filter((id) => w.data.items[id])
-    .map((itemId): MarketItemView => {
-      const owned = ownedCount(c, itemId);
-      return {
-        itemId,
-        item: itemView(sim, { itemId, count: Math.max(1, owned) }),
-        owned,
-        asks: levels(asksFor(m, itemId, c.id)),
-        bids: levels(bidsFor(m, itemId, c.id)),
-        npcBuy: bestNpcBuy(w.data, itemId)?.price ?? 0,
-        quick: autoPrice(w.data, itemId),
-      };
-    })
-    // com ofertas primeiro; depois por nome
-    .sort((a, b) => Number(!!(b.asks.length || b.bids.length)) - Number(!!(a.asks.length || a.bids.length)) || a.item.name.localeCompare(b.item.name));
-  const orders = [
-    ...m.listings.filter((l) => l.sellerId === c.id).map((l) => ({ id: l.id, side: 'sell' as const, itemId: l.itemId, count: l.count, price: l.price })),
-    ...m.bids.filter((b) => b.buyerId === c.id).map((b) => ({ id: b.id, side: 'buy' as const, itemId: b.itemId, count: b.count, price: b.price })),
-  ].map((o) => ({ ...o, item: itemView(sim, { itemId: o.itemId, count: o.count }), total: o.count * o.price }));
+  const owned: Record<string, number> = {};
+  for (const st of [...c.inventory, ...c.depot])
+    if (st && marketable(w.data.items[st.itemId])) owned[st.itemId] = (owned[st.itemId] ?? 0) + st.count;
+  const quotes: Record<string, MarketQuoteView> = {};
+  const fits: Record<string, Comparison> = {};
+  // ofertas agrupadas por item uma vez só (o guia de cada item olha só as dele)
+  const byItem = new Map<string, MarketOffer[]>();
+  for (const o of m.offers) byItem.set(o.itemId, [...(byItem.get(o.itemId) ?? []), o]);
+  for (const it of catalogOf(w.data)) {
+    quotes[it.itemId] = priceGuide(w.data, { ...m, offers: byItem.get(it.itemId) ?? [] }, it.itemId, c.id);
+    fits[it.itemId] = compareItem(w.data, c, w.data.items[it.itemId]!);
+  }
   return {
-    items,
-    orders,
-    parcels: (m.parcels[c.id] ?? []).reduce((s, p) => s + p.count, 0),
-    open: openOrders(m, c.id),
-    max: MARKET_MAX_PER_SELLER,
+    npcName,
+    offers: m.offers.map((o) => ({
+      id: o.id,
+      side: o.side,
+      itemId: o.itemId,
+      count: o.count,
+      price: o.price,
+      owner: o.ownerName,
+      mine: o.ownerId === c.id,
+      at: o.at,
+    })),
+    quotes,
+    owned,
+    fits,
+    parcels: parcelUnits(m, c.id),
     money: c.gold + c.bankGold,
-    autoRate: MARKET_AUTO_RATE,
+    escrow: escrowOf(m, c.id),
   };
+}
+
+/** Catálogo do mercado (fixo para os dados do jogo). */
+const catalogCache = new WeakMap<GameData, CatalogItem[]>();
+export function catalogOf(data: GameData): CatalogItem[] {
+  let cat = catalogCache.get(data);
+  if (!cat) catalogCache.set(data, (cat = buildCatalog(data)));
+  return cat;
 }
 
 /** O que a melhor loja paga pelo item. */
@@ -380,9 +383,9 @@ function bestNpcBuy(data: GameData, itemId: string): ItemView['npcSell'] {
   return best;
 }
 
-/** O anúncio mais barato do item no mercado do banco. */
+/** O anúncio de venda mais barato do item no mercado. */
 function marketLow(market: MarketState, itemId: string): ItemView['market'] {
-  const ls = market.listings.filter((l) => l.itemId === itemId);
+  const ls = market.offers.filter((o) => o.itemId === itemId && o.side === 'sell');
   if (!ls.length) return null;
   return { price: Math.min(...ls.map((l) => l.price)), listings: ls.length };
 }
@@ -558,6 +561,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
   const shopDef = w.ui.shop ? w.data.shops[w.ui.shop.shopId] : undefined;
   const shopNpc = w.ui.shop ? w.npcs.get(w.ui.shop.npcId) : undefined;
   const depotNpc = w.ui.depot ? w.npcs.get(w.ui.depot.npcId) : undefined;
+  const marketNpc = w.ui.market ? w.npcs.get(w.ui.market.npcId) : undefined;
   const bags = w.ui.lootId ? nearbyLootBags(w) : [];
   const region = regionAt(w.map, p.x, p.y);
   const building = buildingAt(w.map, p.x, p.y);
@@ -723,7 +727,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
           items: c.depot.map((st) => (st ? itemView(sim, st) : null)),
         }
       : null,
-    market: depotNpc ? marketView(sim) : null,
+    market: marketNpc ? marketView(sim, marketNpc.def.name) : null,
     loot: bags.length
       ? {
           title: bags.length === 1 ? `Loot: ${bags[0]!.sourceName}` : `Loot ao redor (${bags.length} sacos)`,
