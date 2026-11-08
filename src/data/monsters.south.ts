@@ -217,7 +217,7 @@ const defs: South[] = [
     name: 'Basilisco',
     description: 'O olhar paralisa; a cauda faz o resto.',
     sprite: 'basilisk',
-    directions: 1,
+    directions: 2,
     tier: 9,
     step: 0,
     speed: 2.8,

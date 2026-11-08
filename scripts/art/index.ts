@@ -77,7 +77,7 @@ const monsterSheets: [string, PixelCanvas[], number, number, 'blob' | 'quad'][] 
   ['rhino_boar', buildRhinoBoarFrames(), BOAR_W, BOAR_H, 'quad'],
   ['cave_bear', buildCaveBearFrames(), 36, 28, 'quad'],
   ['green_wyvern', buildWyvernFrames(), 44, 34, 'quad'],
-  ['basilisk', buildBasiliskFrames(), 32, 26, 'blob'],
+  ['basilisk', buildBasiliskFrames(), 40, 26, 'quad'],
   ['crystal_scorpion', buildCrystalScorpionFrames(), 32, 26, 'blob'],
 ];
 for (const [key, frames, fw, fh, kind] of monsterSheets) {
@@ -144,8 +144,15 @@ writePng(previewDir, 'preview-tiles.png', tileset.image.scaled(2));
 const cp = new PixelCanvas(charRows[0]!.w, charRows.length * FRAME_H);
 charRows.forEach((s, i) => cp.blit(s, 0, i * FRAME_H));
 writePng(previewDir, 'preview-characters.png', onBg(cp).scaled(3));
-const mons = new PixelCanvas(5 * 32, monsterSheets.length * 24);
-monsterSheets.forEach(([, frames, fw, fh], i) => mons.blit(gridSheet(frames, fw, fh, frames.length), 0, i * 24));
+// uma linha por criatura, cada uma na altura do próprio quadro (dragões 44x34, basilisco 40x26...)
+const monsW = Math.max(...monsterSheets.map(([, frames, fw]) => frames.length * fw));
+const monsH = monsterSheets.reduce((h, [, , , fh]) => h + fh, 0);
+const mons = new PixelCanvas(monsW, monsH);
+let monsY = 0;
+for (const [, frames, fw, fh] of monsterSheets) {
+  mons.blit(gridSheet(frames, fw, fh, frames.length), 0, monsY);
+  monsY += fh;
+}
 writePng(previewDir, 'preview-monsters.png', onBg(mons).scaled(4));
 writePng(previewDir, 'preview-font.png', onBg(font.image, 0x3a4a5aff).scaled(4));
 

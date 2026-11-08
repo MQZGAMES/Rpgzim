@@ -127,6 +127,38 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Criaturas redesenhadas
+Todas as 29 criaturas não humanoides foram redesenhadas em `scripts/art/monsters.ts`, com luz de cima à esquerda
+consistente, contorno colorido (sel-out), olhos com brilho e anatomia mais clara. A prévia fica em
+`docs/art/preview-monsters.png`.
+- **Dragões e serpe**: asas de morcego de verdade (braço, pulso, três dedos e membrana com a borda recortada), pescoço
+  em S, mandíbula, chifres, espinhos no dorso, barriga em placas e cauda em lança.
+  - Gelo: cristais no dorso.
+  - Draco: brasas na barriga.
+  - Ancião: chifres dourados extras.
+  - Serpe: só as patas de trás.
+- **Escorpiões**: de frente, com pinças de dois dedos que abrem e fecham, corpo segmentado e cauda arqueada por cima
+  com o ferrão. Antes pareciam caranguejos. O Rubro tem brasas; o de Cristal, facetas.
+- **Lobos e hiena**: silhueta de canídeo (peito fundo, focinho longo, orelhas, cauda cheia) e passada com joelhos.
+  - Lobo de Gelo: geada nas costas.
+  - Lobo Atroz: crina negra.
+  - Lobo da Tempestade: riscado de raios.
+  - Hiena: manchas, orelhas redondas e costas caídas.
+- **Javalis, Behemoth, ursos**:
+  - Javalis com crina de cerdas, focinho de disco e presas.
+  - Javali Couraçado com placas e chifre.
+  - Behemoth com chifres de carneiro.
+  - Ursos com corcova, focinho claro e garras; o Ancestral tem geada e cicatriz.
+- **Aranhas**: pernas articuladas, abdômen brilhante e oito olhos.
+  - Cruz na aranha comum.
+  - Ampulheta na Viúva-Negra.
+  - Pintas de cristal na das Cavernas.
+  - Runas acesas no Horror do Vazio.
+- **Slimes e sapos**: olhos grandes com brilho e miolo translúcido.
+  - O slime do brejo tem bolhas e um graveto; o de magma, crosta com rachaduras em brasa.
+  - O sapo-boi tem verrugas.
+- **Basilisco**: virou um lagarto de seis patas com crista vermelha. Antes era um escorpião verde.
+
 ## Exaustão por grupo, lojas com filtros e mercado, atalhos 3×3
 - **Exaustão por grupo**: atacar e curar ao mesmo tempo. Cada grupo tem a sua exaustão, sem uma travar a outra:
   - magias de ataque: 2 s entre duas quaisquer (mesmo que outra já esteja pronta);
