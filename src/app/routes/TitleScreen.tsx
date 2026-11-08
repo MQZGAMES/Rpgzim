@@ -5,6 +5,11 @@ import { useServices } from '../providers/services';
 import { PixelButton, SpriteFrame } from '../../ui/common/primitives';
 import { CloudBadge, CloudPanel, useCloud } from './CloudPanel';
 import { InstallHint } from './InstallHint';
+import { MAX_CHARACTERS } from '../../integration/game-ui-bridge/GameSession';
+import { VOCATION_IDS } from '../../domain/value-objects/ids';
+
+/** Sem acento e em minúsculas (o filtro acha "joao" em "João"). */
+const fold = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
   const { saves, data, audio, seasonReset } = useServices();
@@ -12,6 +17,8 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
   const [slots, setSlots] = useState<SaveSlotSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cloudOpen, setCloudOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [vocFilter, setVocFilter] = useState<string>('all');
   const { account } = useCloud();
 
   const refresh = () =>
@@ -26,6 +33,11 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const q = fold(query.trim());
+  const shown = (slots ?? [])
+    .filter((s) => (vocFilter === 'all' || s.vocation === vocFilter) && (!q || fold(s.name).includes(q)))
+    .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name, 'pt-BR'));
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-ink" onPointerDown={() => audio.unlock()}>
@@ -55,8 +67,35 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
               {slots.length > 0 && (
                 <div className="mb-3">
                   <h2 className="mb-2 text-[13px] text-gold">Continuar aventura</h2>
+                  {/* filtros: nome e vocação; a lista vem sempre do maior nível para o menor */}
+                  <div className="mb-2 flex gap-2" data-testid="slot-filters">
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Buscar pelo nome"
+                      aria-label="Buscar personagem pelo nome"
+                      className="frame-slot min-w-0 flex-1 !border-[6px] bg-transparent px-1 py-[2px] text-[13px] text-parchment outline-none placeholder:text-muted"
+                      data-testid="slot-search"
+                      autoComplete="off"
+                    />
+                    <select
+                      value={vocFilter}
+                      onChange={(e) => setVocFilter(e.target.value)}
+                      aria-label="Filtrar por vocação"
+                      className="frame-slot !border-[6px] bg-[#1b1424] px-1 text-[13px] text-parchment outline-none"
+                      data-testid="slot-vocation"
+                    >
+                      <option value="all">Todas</option>
+                      {VOCATION_IDS.map((id) => (
+                        <option key={id} value={id}>
+                          {data.vocations[id].name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="flex flex-col gap-2">
-                    {slots.map((s) => (
+                    {shown.length === 0 && <p className="text-center text-[12px] text-muted">Nenhum personagem com esse filtro.</p>}
+                    {shown.map((s) => (
                       <div key={s.slotId} className="flex items-center gap-2">
                         <button type="button" onClick={() => onLoad(s.slotId)} className="btn-gold flex flex-1 items-center gap-2 text-left" data-testid={`slot-${s.slotId}`}>
                           <SpriteFrame sheet={data.vocations[s.vocation as keyof typeof data.vocations]?.sprite ?? 'knight'} scale={1} className="-my-2" />
@@ -81,7 +120,7 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                   </div>
                 </div>
               )}
-              {slots.length < 10 && (
+              {slots.length < MAX_CHARACTERS && (
                 <PixelButton variant={slots.length ? 'stone' : 'gold'} className="w-full py-1 text-base" onClick={onNew}>
                   Novo personagem
                 </PixelButton>

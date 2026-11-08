@@ -617,3 +617,33 @@ test('PK: caveira e PZ lock no HUD, nome menor no celular e 9 atalhos', async ({
   if (isMobile) expect(css).toBeLessThanOrEqual(12.5);
   else expect(css).toBeGreaterThanOrEqual(15);
 });
+
+test('tela inicial: filtro por nome e vocação, ordem por nível; criar personagem de dentro do jogo (joga com a IA)', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'um projeto basta');
+  await createCharacter(page, 'knight', 'Cavaleira');
+  // de dentro do jogo: Personagens online → Criar personagem (nome + vocação) → nasce jogando com a IA
+  await page.getByTestId('btn-players').click();
+  await page.getByTestId('create-hero-open').click();
+  await page.getByTestId('create-hero-name').fill('Herbalista');
+  await page.getByTestId('create-hero-voc-druid').click();
+  await page.getByTestId('create-hero-submit').click();
+  await expect(page.getByTestId('players-panel')).toContainText('Herbalista');
+  const heroes = await page.evaluate(() => (window.__RPGZIM__ as { heroes(): { name?: string; id: string }[] }).heroes());
+  expect(heroes.some((h) => /herbalista/i.test(h.name ?? h.id))).toBe(true);
+  // nome repetido é recusado
+  await page.getByTestId('create-hero-open').click();
+  await page.getByTestId('create-hero-name').fill('Herbalista');
+  await page.getByTestId('create-hero-submit').click();
+  await expect(page.getByTestId('create-hero-form')).toContainText('Já existe');
+  // a tela inicial mostra o novo personagem; filtros por nome e vocação
+  await page.goto('/?debug');
+  await expect(page.getByTestId('slot-search')).toBeVisible();
+  await page.getByTestId('slot-search').fill('herba');
+  const slots = page.locator('button[data-testid^="slot-"]');
+  await expect(slots).toHaveCount(1);
+  await expect(slots.first()).toContainText('Herbalista');
+  await page.getByTestId('slot-search').fill('');
+  await page.getByTestId('slot-vocation').selectOption('knight');
+  await expect(page.locator('button[data-testid^="slot-"]', { hasText: 'Herbalista' })).toHaveCount(0);
+  await expect(page.locator('button[data-testid^="slot-"]', { hasText: 'Cavaleira' })).toHaveCount(1);
+});

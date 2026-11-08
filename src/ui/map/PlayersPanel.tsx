@@ -1,8 +1,85 @@
 // Personagens online: quem está no mundo (heróis e personagens logados com IA), onde estão e o que fazem.
 // "Chamar para o grupo" convida na hora; quem entra no grupo vem andando até você (aparece no mini mapa).
 // Todo personagem salvo pode ser logado (entra jogando sozinho, com a IA da vocação e do nível dele) ou deslogado.
+import { useState } from 'react';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
+import { VOCATION_IDS, type VocationId } from '../../domain/value-objects/ids';
 import { Bar, ItemIcon, Panel, PixelButton, SpriteFrame } from '../common/primitives';
+
+const VOCATION_NAME: Record<VocationId, string> = { knight: 'Knight', paladin: 'Paladin', sorcerer: 'Sorcerer', druid: 'Druid' };
+
+/** Criar um personagem sem sair do jogo: nome + vocação; ele nasce no templo e já sai jogando com a IA. */
+function CreateHeroForm() {
+  const session = useSession();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [vocation, setVocation] = useState<VocationId>('knight');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!open)
+    return (
+      <PixelButton variant="gold" className="mt-2 w-full !border-[6px] py-[2px] text-[12px]" onClick={() => setOpen(true)} data-testid="create-hero-open">
+        + Criar personagem (joga com a IA)
+      </PixelButton>
+    );
+  return (
+    <form
+      className="frame-slot mt-2 flex flex-col gap-2 !border-[6px] p-1"
+      data-testid="create-hero-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (busy) return;
+        setBusy(true);
+        void session.createAiCharacter(name, vocation).then((err) => {
+          setBusy(false);
+          setError(err);
+          if (!err) {
+            setName('');
+            setOpen(false);
+          }
+        });
+      }}
+    >
+      <input
+        value={name}
+        maxLength={16}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nome do personagem"
+        aria-label="Nome do novo personagem"
+        className="frame-slot !border-[5px] bg-transparent px-1 py-[2px] text-[13px] text-parchment outline-none placeholder:text-muted"
+        data-testid="create-hero-name"
+        autoComplete="off"
+      />
+      <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="Vocação do novo personagem">
+        {VOCATION_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={vocation === id}
+            onClick={() => setVocation(id)}
+            className={`flex flex-col items-center rounded-sm border-2 py-[2px] text-[10px] ${vocation === id ? 'border-gold bg-[#3a2a12] text-gold-light' : 'border-transparent text-muted'}`}
+            data-testid={`create-hero-voc-${id}`}
+          >
+            <span className="flex h-[34px] items-end overflow-hidden">
+              <SpriteFrame sheet={id} scale={1.1} />
+            </span>
+            {VOCATION_NAME[id]}
+          </button>
+        ))}
+      </div>
+      {error && <p className="text-[11px] text-hp-light">{error}</p>}
+      <div className="flex justify-end gap-1">
+        <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => { setOpen(false); setError(null); }}>
+          Cancelar
+        </PixelButton>
+        <PixelButton type="submit" variant="gold" className="!border-[6px] px-1 text-[11px]" disabled={busy} data-testid="create-hero-submit">
+          Criar e colocar no jogo
+        </PixelButton>
+      </div>
+    </form>
+  );
+}
 
 export function PlayersPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
@@ -19,6 +96,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
           Logar/Deslogar: o personagem entra ou sai do jogo; logado, ele joga sozinho com a IA da vocação e do
           nível dele.
         </p>
+        <CreateHeroForm />
         <div className="mt-2 flex flex-col gap-2">
           <div className="frame-slot flex items-center gap-2 !border-[6px] px-1 py-1 text-[12px] opacity-80">
             <span className="h-2 w-2 rounded-full bg-gold" />

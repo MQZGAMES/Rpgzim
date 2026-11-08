@@ -266,3 +266,23 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - **Medição "de verdade"** (`human-life`, os quatro juntos com `lifelike`, 3 h, sementes 11 e 23): cada um faz uma
   pausa entre 63 e 101 min e volta; 3,6 de 4 online em média; da despedida ao deslogar, 4 a 49 s; AFK somado de 1 a
   13 min em 3 h; ~250–280 falas por herói (≈ 1,5 por minuto). Níveis no fim: 26 a 36.
+
+## Cercado e golpe de misericórdia (nov/2026)
+- **Cercado**: sem casa livre em volta e 2+ criaturas encostadas. Quem não é Knight abre caminho pela criatura que cai
+  mais rápido (vida ÷ dano dele contra ela; empate, a que mais machuca) e, aberta a brecha, dá um passo para a casa com
+  menos criaturas encostadas. O Knight só sai com vida < 45%, 5 poções ou menos, ou vida < 70% com margem < 1; fora
+  disso "cercado" também não o faz fugir.
+- **Golpe de misericórdia** antes da sequência de magias de cada vocação (a sequência continua a mesma): não gasta
+  magia se o golpe básico já derruba o alvo; se alguma magia (com os graus II/III e a resistência da criatura) derruba,
+  sai a mais barata, sem deixar a mana abaixo da reserva da vocação.
+- Descartado: trocar a sequência inteira por "mais dano por mana / mais dano com mana sobrando". O Paladino gastava a
+  mana da Luz Restauradora e da Corrida: nível médio caiu de 27,8 para 23,8 e as mortes subiram de 3 para 3,5–5,3
+  (4 sementes).
+- **Medição** (`hero-life`, 3 h sozinho, nível / mortes):
+
+  | Herói | Antes | Agora |
+  |---|---|---|
+  | Boladex (11, 23) | 37 / 2 · 34 / 0 | 38 / 1 · 39 / 0 |
+  | Maguim (11, 23) | 45 / 0 · 36 / 1 | 43 / 0 · 47 / 0 |
+  | Mano Cura (11, 23) | 44 / 0 · 43 / 0 | 42 / 0 · 43 / 0 |
+  | Distanciado (11, 23, 31, 47) | 26 / 3 · 25 / 4 · 29 / 3 · 31 / 2 | 33 / 1 · 33 / 1 · 27 / 2 · 26 / 4 |

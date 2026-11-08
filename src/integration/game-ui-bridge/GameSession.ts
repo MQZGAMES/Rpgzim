@@ -14,6 +14,11 @@ import { heroSnapshot } from '../../game/ai/heroes';
 import { customHeroDef } from '../../data/heroes';
 import { parseMarket } from '../../domain/rules/market';
 import { SEASON } from '../../domain/rules/season';
+import { createCharacter, validateName } from '../../domain/rules/character';
+import type { VocationId } from '../../domain/value-objects/ids';
+
+/** Máximo de personagens salvos (o mesmo da tela inicial). */
+export const MAX_CHARACTERS = 10;
 import type { CatalogItem } from '../../domain/rules/marketCatalog';
 import type { HeroDef } from '../../domain/entities/definitions';
 import { canDrink } from '../../domain/rules/potions';
@@ -153,6 +158,36 @@ export class GameSession {
     this.audio.play('ui');
     this.dirty = true;
     return true;
+  }
+
+  /**
+   * Cria um personagem novo de dentro do jogo: nasce no templo, nível 1 com o kit da vocação, e já entra jogando com a
+   * IA (aparece em Personagens online e pode ser deslogado ou escolhido na tela inicial depois). Devolve o erro, se houver.
+   */
+  async createAiCharacter(rawName: string, vocation: VocationId): Promise<string | null> {
+    const invalid = validateName(rawName);
+    if (invalid) return invalid;
+    const name = rawName.trim().replace(/\s+/g, ' ');
+    const w = this.sim.world;
+    const taken = [
+      w.human.character.name,
+      ...[...w.heroes.values()].map((h) => h.character.name),
+      ...this.sim.resting.map((r) => r.character.name),
+      ...this.offline.map((c) => c.name),
+    ].some((n) => n.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
+    if (taken) return 'Já existe um personagem com esse nome.';
+    if (1 + w.heroes.size + this.sim.resting.length + this.offline.length >= MAX_CHARACTERS)
+      return `Limite de ${MAX_CHARACTERS} personagens. Apague um na tela inicial para criar outro.`;
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const c = createCharacter(w.data, { id, name, vocation, now: Date.now(), position: { ...w.map.playerStart } });
+    const h = this.sim.addHero(heroDefOf(w.data, c), structuredClone(c));
+    setOnlinePref(id, true);
+    this.pushMessage(`${h.character.name} (${w.data.vocations[vocation].name}) nasceu no templo e já está jogando com a IA.`, 'system');
+    this.audio.play('ui');
+    this.dirty = true;
+    await this.saves.save(c).catch(() => undefined);
+    return null;
   }
 
   /** Desloga um personagem que joga com IA: salva o progresso e tira do mundo. */

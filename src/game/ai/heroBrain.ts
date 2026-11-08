@@ -22,6 +22,7 @@ import {
   alliesAround,
   alliesNear,
   monsterDps,
+  heroDpsVs,
   xpPerMinute,
   assess,
   engagedOrJoining,
@@ -167,6 +168,10 @@ export interface HeroBrainState {
   lurePostUntil: number;
   /** Até quando a fuga está suspensa porque ele travou e precisa lutar para sobreviver. */
   fightBackUntil: number;
+  /** Até quando está abrindo caminho (cercado, matando a criatura mais fraca do cerco para sair). */
+  breakoutUntil: number;
+  /** Quando abriu caminho pela última vez (cercado e querendo sair). */
+  breakoutAt: number;
   /** Último dano recebido e desde quando ele apanha sem atacar nem andar (vigia contra o "parado apanhando"). */
   lastHurtAt?: number;
   passiveSince?: number;
@@ -275,6 +280,8 @@ export function newHeroBrain(): HeroBrainState {
     nextLureAt: 0,
     lurePostUntil: 0,
     fightBackUntil: 0,
+    breakoutUntil: 0,
+    breakoutAt: 0,
     bold: 0,
     drinkLog: [],
     heavyUntil: 0,
@@ -418,6 +425,8 @@ function wellStocked(w: World, h: HeroEntity): boolean {
 
 /** Funções internas expostas só para os testes. */
 export const heroHelpers = {
+  smartStrike: (w: World, h: HeroEntity, m: MonsterEntity, ids: string[]): boolean =>
+    asActor(w, h, () => smartStrike(w, h, m, ids, 0, false) === 'cast'),
   wellStocked: (w: World, h: HeroEntity): boolean => wellStocked(w, h),
   manaGoal: (w: World, h: HeroEntity): number => manaGoal(w, h),
   suppliesRunningOut: (w: World, h: HeroEntity): boolean => suppliesRunningOut(w, h),
@@ -769,6 +778,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   if (b.order && (w.now > b.order.until || !partyOf(w, h.id))) b.order = null;
   if (b.order && b.mode !== 'retreat' && orderTick(w, h)) return;
   fightBack(w, h);
+  if (breakOut(w, h)) return;
   unstick(w, h);
   heroGroupLife(w, h);
   handleInvites(w, h);
@@ -951,6 +961,111 @@ function fightBack(w: World, h: HeroEntity): void {
     fightSpells(w, h, target, adjacent);
 }
 
+// ------------------------------------------------------------------ cercado (trap)
+/** As criaturas encostadas, se ele está preso: nenhuma casa em volta livre para pisar e 2+ criaturas encostadas. */
+export function trappedBy(w: World, h: HeroEntity): MonsterEntity[] | null {
+  const ring = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
+  if (ring.length < 2) return null;
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++) if ((dx || dy) && canEnter(w, h.x + dx, h.y + dy, false, h.id)) return null;
+  return ring;
+}
+
+/**
+ * Cercado, ele quer sair? Quem não é Knight, sempre: preso no meio do bolo só apanha. O Knight gosta do cerco (a magia
+ * de área acerta todos de uma vez) e só abre caminho quando está morrendo, com poucas poções ou perdendo a luta.
+ */
+function wantsBreakout(w: World, h: HeroEntity): boolean {
+  if (h.character.vocation !== 'knight') return true;
+  const pct = hpPct(h);
+  return pct < 0.45 || potionsOf(w, h) <= 5 || (pct < 0.7 && assess(w, h).margin < 1);
+}
+
+/**
+ * Cercado e querendo sair: mata primeiro a criatura do cerco que cai mais rápido (a mais fraca; empate, a que mais
+ * machuca) com a melhor magia de alvo único, para abrir uma brecha. Aberta a brecha, dá um passo para a casa com menos
+ * criaturas encostadas (o Knight só se precisava sair) e devolve o turno à lógica normal (caça, fuga, distância).
+ * Retorna true se tomou conta do turno.
+ */
+function breakOut(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (b.mode === 'pk' || b.mode === 'dead' || isPz(w.map, h.x, h.y)) return false;
+  const ring = trappedBy(w, h);
+  if (ring && wantsBreakout(w, h)) {
+    b.breakoutUntil = w.now + 6000;
+    b.breakoutAt = w.now;
+    const ttk = (m: MonsterEntity) => m.hp / Math.max(0.5, heroDpsVs(w, h, m));
+    const weakest = ring.sort((a, c) => ttk(a) - ttk(c) || monsterDps(w, h, c) - monsterDps(w, h, a))[0]!;
+    if (currentTarget(w)?.id !== weakest.id) setTarget(w, weakest.id);
+    // magia de área que pega o cerco todo (Chama Sagrada, Nova de Fogo, Giro de Aço) também abre caminho; senão a de
+    // alvo único na mais fraca
+    // (a sequência de magias da vocação: a de área que pega o cerco todo — Chama Sagrada, Nova de Fogo, Giro de Aço —
+    // ou a de alvo único na mais fraca, com o golpe de misericórdia esperto)
+    fightSpells(w, h, weakest, ring.length);
+    return true;
+  }
+  if (!ring && b.breakoutUntil > w.now) {
+    // brecha aberta: sai do meio (uma casa com menos criaturas em volta); dali em diante a lógica de sempre
+    b.breakoutUntil = 0;
+    if (isMoving(h, w.now) || h.path?.length) return false;
+    const foes = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 2);
+    const touching = (x: number, y: number) => foes.filter((m) => Math.max(Math.abs(m.x - x), Math.abs(m.y - y)) <= 1).length;
+    let best: { dx: number; dy: number; n: number } | null = null;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++) {
+        if ((!dx && !dy) || !canEnter(w, h.x + dx, h.y + dy, false, h.id)) continue;
+        const n = touching(h.x + dx, h.y + dy);
+        if (!best || n < best.n) best = { dx, dy, n };
+      }
+    if (best && best.n < touching(h.x, h.y)) tryStep(w, h, best.dx, best.dy, speedOf(w, h), false);
+  }
+  return false;
+}
+
+/** Magias de alvo único de dano de cada vocação (os graus II/III entram sozinhos). */
+const SINGLE_SPELLS: Record<string, string[]> = {
+  knight: ['brutal_strike'],
+  sorcerer: ['thunder_strike', 'flame_lance', 'arcane_bolt'],
+  druid: ['earth_thorn', 'ice_shard'],
+  paladin: ['divine_shot', 'holy_arrow'],
+};
+
+/**
+ * Golpe de misericórdia esperto, antes da sequência de magias de cada vocação:
+ * - `skip`: o golpe básico já derruba o alvo (e ele não está fugindo) — não gasta mana;
+ * - `cast`: uma magia (entre `ids` e seus graus) mata o alvo — sai a mais barata que mata (nada de grau III num resto
+ *   de vida), sem deixar a mana abaixo da reserva;
+ * - `none`: nenhuma mata; segue a prioridade de sempre da vocação (medida nas simulações).
+ */
+function smartStrike(
+  w: World,
+  h: HeroEntity,
+  target: MonsterEntity,
+  ids: readonly string[] | undefined,
+  minManaPct: number,
+  fleeing: boolean,
+): 'cast' | 'skip' | 'none' {
+  if (!ids?.length) return 'none';
+  const voc = h.character.vocation;
+  const basicHit = (heroDpsVs(w, h, target) * (h.stats.attackIntervalMs / 1000)) / (1.12 * ROLES[voc].dpsMul);
+  if (!fleeing && target.hp <= basicHit * 0.9) return 'skip';
+  const lv = h.character.level;
+  const reserve = minManaPct * h.stats.maxMana;
+  let best: { id: string; cost: number } | null = null;
+  for (const base of ids)
+    for (const id of spellTiers(w.data.spells, base)) {
+      const s = w.data.spells[id];
+      if (!s || !s.vocations.includes(voc) || lv < s.minLevel || !castCheck(w, s).ok) continue;
+      const cost = Math.max(1, spellManaCost(s, lv));
+      if (h.character.mana - cost < reserve) continue;
+      const res = s.element ? (target.def.resistances?.[s.element] ?? 1) : 1;
+      if (spellAverage(w, h, id) * res * 0.85 < target.hp) continue;
+      if (!best || cost < best.cost) best = { id, cost };
+    }
+  if (best && castSpell(w, best.id)) return 'cast';
+  return 'none';
+}
+
 function survive(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const pct = hpPct(h);
@@ -1025,7 +1140,9 @@ function survive(w: World, h: HeroEntity): void {
   const fleeMargin = 0.75 + (0.5 - t.bravery) * 0.3 - h.brain.bold * 0.25 + persona.flee;
   const outmatched = !!a && a.mons.length > 0 && a.margin < fleeMargin && (pct < 0.65 || shieldLow);
   // cercado só pesa quando a luta não é folgada (com a régua em dia e poções, é só bater e beber)
-  const swarmed = attackers.length >= 4 && pct < 0.7 && a.margin < 1.5;
+  // (o Knight gosta do cerco: só conta para ele quando quer mesmo sair — morrendo, sem poções ou perdendo)
+  const swarmed =
+    attackers.length >= 4 && pct < 0.7 && a.margin < 1.5 && (h.character.vocation !== 'knight' || wantsBreakout(w, h));
   // "trem" de criaturas atrás dele e a luta não é segura: sai antes de a vida (ou o escudo) começar a cair
   // (já cercado — 2+ encostadas — e com vida e poções, correr só entrega as costas: as criaturas contornam e alcançam)
   const pinned =
@@ -1719,6 +1836,13 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   const slowed = w.now < target.slowUntil;
   const around = (r: number) => engagedAround(w, h, target, r, target) + 1;
   const cast = (id: string): boolean => tryCast(w, h, id);
+  // golpe de misericórdia: o básico já mata (não gasta mana) ou a magia mais barata que mata
+  // (o giro/área do Knight e a lentidão em quem foge continuam valendo antes)
+  if (voc !== 'knight' && !fleeing) {
+    const fin = smartStrike(w, h, target, SINGLE_SPELLS[voc], voc === 'paladin' ? 0.25 : 0.2 + reserve, false);
+    // (com várias criaturas na briga, o "básico já mata" não impede a magia de área logo abaixo)
+    if (fin === 'cast' || (fin === 'skip' && engagedAround(w, h, h, 4) <= 1)) return;
+  }
   switch (voc) {
     case 'knight':
       if (

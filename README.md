@@ -127,6 +127,24 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Cercado, magias mais espertas, criar personagem no jogo e filtros
+- **Cercado (trap)**: sem nenhuma casa livre em volta e com 2+ criaturas encostadas, o herói abre caminho. Ele mata
+  primeiro a criatura do cerco que cai mais rápido (a mais fraca; no empate, a que mais machuca), com a magia de área
+  que pega o cerco todo ou a melhor magia de alvo único. Aberta a brecha, dá um passo para a casa com menos criaturas em
+  volta e volta à lógica normal (caçar, fugir, manter distância).
+  - O **Knight** gosta do cerco (o Giro de Aço acerta todos) e só abre caminho quando está morrendo (vida abaixo de
+    45%), com 5 poções ou menos, ou perdendo a luta. Cheio de vida e poções, "cercado" também não o faz fugir.
+- **Magias de alvo único mais espertas**:
+  - não gastam mana em quem o golpe básico já derruba (a não ser que esteja fugindo);
+  - quando alguma magia mata o alvo, sai a mais barata que mata (nada de grau III num resto de vida);
+  - senão, com mana sobrando (60%+), a de mais dano; com mana curta, a de mais dano por ponto de mana. A resistência
+    da criatura ao elemento entra na conta, e os graus II/III entram sozinhos.
+- **Criar personagem de dentro do jogo**: em *Personagens online*, *+ Criar personagem* pede o nome e a vocação. Ele
+  nasce no templo, nível 1 com o kit da vocação, e já sai jogando com a IA. Aparece na lista, pode ser deslogado e
+  depois escolhido na tela inicial. Nomes repetidos são recusados, e o limite é de 10 personagens.
+- **Tela inicial**: busca pelo nome (sem diferenciar acento) e filtro por vocação; a lista vem sempre do maior nível
+  para o menor.
+
 ## Temporada 2: recomeço, XP pela metade e heróis com jeito de gente
 - **Todo mundo recomeça do nível 1** (`src/domain/rules/season.ts`): os seus personagens e os heróis voltam com o
   equipamento básico da vocação, 40 de ouro e **50 Poções de Vida e 50 Poções de Mana** pequenas. Skills, Magic Level,
@@ -472,8 +490,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **362 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada, IA com jeito de gente e recomeço da temporada).
-- Playwright: **13 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **369 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada, IA com jeito de gente e recomeço da temporada).
+- Playwright: **14 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
   na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.
