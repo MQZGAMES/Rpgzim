@@ -384,6 +384,12 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   // o resumo do grupo fica no botão "grupo" do HUD (sem quadro ocupando a tela)
   await page.getByTestId('btn-party').click();
   await expect(page.getByTestId('party-formation-line')).toHaveClass(/btn-gold/);
+  // cada membro: chamar ou ir até ele (o painel fecha e você vai andando)
+  await expect(page.getByTestId(`party-call-${id}`)).toBeVisible();
+  await api(page, (a) => a.teleport(47, 30));
+  await page.getByTestId(`party-goto-${id}`).click();
+  await expect(page.getByTestId('party-panel')).toHaveCount(0);
+  await expect(page.getByText(/Indo até/).first()).toBeVisible();
 });
 
 test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tela), mini mapa e lista de online', async ({

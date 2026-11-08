@@ -205,13 +205,14 @@ export function PartyPanel() {
         <div className="text-[11px] text-muted">A XP é dividida igualmente entre os membros por perto.</div>
         <Section
           title="Membros"
-          hint={`Chamar: o personagem larga o que faz e vem até o líder · Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}
+          hint={`Chamar: o personagem larga o que faz e vem até o líder · Ir até: você vai andando até ele, onde estiver · Coroa: escolher o líder (inclusive você de volta)${lead ? ' · X: remover do grupo' : ''}.`}
         >
           <div className="flex flex-col gap-1">
             {party.members.map((m) => (
               <div
                 key={m.id}
-                className={`frame-slot flex items-center gap-2 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}
+                className={`frame-slot flex flex-wrap items-center gap-x-2 gap-y-1 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}
+                data-testid={`party-member-${m.isYou ? 'you' : m.id}`}
               >
                 {m.isLeader ? (
                   <ItemIcon icon="ui_crown" size={14} title="Líder" />
@@ -224,7 +225,11 @@ export function PartyPanel() {
                 >
                   {m.name}
                   {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
-                  {m.persona && <span className="block truncate text-[10px] text-muted">{m.persona} · {m.dead ? 'morto' : m.activity}</span>}
+                  {m.persona && (
+                    <span className="block truncate text-[10px] text-muted">
+                      {m.persona} · {m.dead ? 'morto' : m.activity}
+                    </span>
+                  )}
                 </span>
                 <Bar
                   className="w-[60px]"
@@ -233,41 +238,57 @@ export function PartyPanel() {
                   color="var(--color-heal)"
                   height={4}
                 />
-                {!m.isYou && !m.dead && (
-                  <TapButton
-                    className="btn-pixel flex h-8 items-center justify-center !border-[6px] px-1 text-[10px]"
-                    title={`Chamar ${m.name}: larga o que está fazendo e vem até o líder`}
-                    aria-label={`Chamar ${m.name}`}
-                    onTap={() => session.partyCall(m.id)}
-                    data-testid={`party-call-${m.id}`}
-                  >
-                    Chamar
-                  </TapButton>
-                )}
-                {!m.isLeader && (
-                  <TapButton
-                    className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
-                    title={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
-                    aria-label={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
-                    onTap={() => session.partyPassLeader(m.id)}
-                    data-testid={`party-lead-${m.isYou ? 'you' : m.id}`}
-                  >
-                    <ItemIcon icon="ui_crown" size={14} />
-                  </TapButton>
-                )}
-                {lead && !m.isYou && (
-                  <>
+                {/* ações: no celular estreito vão para a linha de baixo (o nome e a vida continuam legíveis) */}
+                <div className="ml-auto flex shrink-0 gap-1">
+                  {!m.isYou && !m.dead && (
+                    <TapButton
+                      className="btn-pixel flex h-8 items-center justify-center !border-[6px] px-1 text-[10px]"
+                      title={`Ir andando até ${m.name}, onde estiver (para ao chegar perto; não ataca)`}
+                      aria-label={`Ir até ${m.name}`}
+                      onTap={() => {
+                        if (session.goToActor(m.id)) session.setPartyPanel(false);
+                      }}
+                      data-testid={`party-goto-${m.id}`}
+                    >
+                      Ir até
+                    </TapButton>
+                  )}
+                  {!m.isYou && !m.dead && (
+                    <TapButton
+                      className="btn-pixel flex h-8 items-center justify-center !border-[6px] px-1 text-[10px]"
+                      title={`Chamar ${m.name}: larga o que está fazendo e vem até o líder`}
+                      aria-label={`Chamar ${m.name}`}
+                      onTap={() => session.partyCall(m.id)}
+                      data-testid={`party-call-${m.id}`}
+                    >
+                      Chamar
+                    </TapButton>
+                  )}
+                  {!m.isLeader && (
                     <TapButton
                       className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
-                      title={`Remover ${m.name}`}
-                      aria-label={`Remover ${m.name}`}
-                      onTap={() => session.partyKick(m.id)}
-                      data-testid={`party-kick-${m.id}`}
+                      title={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
+                      aria-label={m.isYou ? 'Voltar a ser o líder' : `Tornar ${m.name} o líder`}
+                      onTap={() => session.partyPassLeader(m.id)}
+                      data-testid={`party-lead-${m.isYou ? 'you' : m.id}`}
                     >
-                      <ItemIcon icon="ui_close" size={12} />
+                      <ItemIcon icon="ui_crown" size={14} />
                     </TapButton>
-                  </>
-                )}
+                  )}
+                  {lead && !m.isYou && (
+                    <>
+                      <TapButton
+                        className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
+                        title={`Remover ${m.name}`}
+                        aria-label={`Remover ${m.name}`}
+                        onTap={() => session.partyKick(m.id)}
+                        data-testid={`party-kick-${m.id}`}
+                      >
+                        <ItemIcon icon="ui_close" size={12} />
+                      </TapButton>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -278,7 +299,11 @@ export function PartyPanel() {
             hint="Atacar: todos focam o alvo que você marcou (30 s). Segurar: ficam onde estão e só batem no que chega perto (toque de novo para soltar). Vila: vendem, repõem, se curam e voltam."
           >
             <div className="flex gap-1">
-              <PixelButton className="flex-1 !border-[6px] px-1 text-[12px]" onClick={() => session.partyOrder('attack')} data-testid="party-order-attack">
+              <PixelButton
+                className="flex-1 !border-[6px] px-1 text-[12px]"
+                onClick={() => session.partyOrder('attack')}
+                data-testid="party-order-attack"
+              >
                 Atacar meu alvo
               </PixelButton>
               <PixelButton
@@ -289,7 +314,11 @@ export function PartyPanel() {
               >
                 {party.holding ? 'Soltar posição' : 'Segurar posição'}
               </PixelButton>
-              <PixelButton className="flex-1 !border-[6px] px-1 text-[12px]" onClick={() => session.partyOrder('town')} data-testid="party-order-town">
+              <PixelButton
+                className="flex-1 !border-[6px] px-1 text-[12px]"
+                onClick={() => session.partyOrder('town')}
+                data-testid="party-order-town"
+              >
                 Voltar à vila
               </PixelButton>
             </div>
@@ -495,12 +524,19 @@ export function GoingTo() {
   const g = useSnap((s) => s.goingTo);
   if (!g) return null;
   return (
-    <div className="frame-dark pointer-events-auto flex items-center gap-2 !border-[8px] px-1 text-[12px]" data-testid="going-to">
+    <div
+      className="frame-dark pointer-events-auto flex items-center gap-2 !border-[8px] px-1 text-[12px]"
+      data-testid="going-to"
+    >
       <ItemIcon icon="ui_players" size={14} />
       <span>
         Indo até <b className="text-[#8ff0b0]">{g.name}</b> · {g.distance} tiles
       </span>
-      <PixelButton className="!border-[5px] px-1 text-[11px]" onClick={() => session.stopGoTo()} data-testid="going-to-stop">
+      <PixelButton
+        className="!border-[5px] px-1 text-[11px]"
+        onClick={() => session.stopGoTo()}
+        data-testid="going-to-stop"
+      >
         Parar
       </PixelButton>
     </div>

@@ -141,6 +141,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
     No item escolhido aparece o botão para comprar de lá sem sair da loja; só os anúncios abaixo do preço da loja
     entram. Se o mercado for mais caro, o botão não aparece.
 - **Personagens online**: nome longo encolhe com "…" e o nível fica sempre visível.
+- **Painel do grupo**: cada membro tem *Ir até* (você vai andando até ele, onde estiver; o painel fecha) além de *Chamar*.
 - **Configurar atalhos**: os 9 espaços sempre num teclado 3×3 (1 2 3 / 4 5 6 / 7 8 9), fixo no topo enquanto as
   opções rolam. Antes, no computador, eram 9 em linha e os últimos ficavam cortados. Cada magia, poção ou item mostra
   em que atalho já está, e as magias liberadas vêm primeiro.
