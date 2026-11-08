@@ -533,7 +533,7 @@ function killPlayer(w: World, killer: DamageSource): void {
   });
   message(w, `Você foi derrotado por ${killer.name}.`, 'warning');
   const sparring = killer.kind === 'player' && isSparring(w, killer.id, p.id);
-  // a morte conta para até 2 personagens: o último que bateu e o que deu mais dano no último minuto (o dano das
+  // a morte conta para todo personagem que bateu nela no último minuto (em grupo, cada um que participou; o dano das
   // criaturas não tira o crédito de ninguém — matar alguém junto com monstros também é morte injusta)
   if (!sparring)
     for (const killerId of killCredits(w, p.id))

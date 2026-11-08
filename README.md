@@ -118,7 +118,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Caça pelo custo-benefício**: XP por minuto do **grupo** (o dano de todos mata mais rápido, a XP é dividida) × segurança da régua contra o puxão típico (2–3 criaturas sozinho, uma a mais por colega). A régua agora conta a cura que dá para beber no tempo da luta, quem leva o dano (o Knight segura, os de longe pouco) e, em grupo, vale para o membro mais frágil. Sem opção segura, fica com a mais tranquila — nunca mais cai automaticamente no slime. Nível 30 caça criaturas de nível ~18–34; nível 80, de ~55–85.
 - **Estratégia de grupo**: o líder não puxa a próxima leva com um colega ferido (<55%) ou mago sem mana (<25%); a ordem de abate começa por quem mais machuca por vida restante.
 - **Convite do jogador nunca é recusado** (nem com rixa): o herói sai de qualquer outro grupo.
-- **Morte injusta**: conta para até **2 personagens** — o último que bateu e o que deu mais dano no último minuto. O dano das criaturas não tira o crédito: matar alguém junto com monstros é morte injusta.
+- **Morte injusta**: conta para **todo personagem que bateu** na vítima no último minuto (em grupo, cada um que participou). O dano das criaturas não tira o crédito: matar alguém junto com monstros é morte injusta.
 - **Caveira amarela de vingança**: quem foi morto injustamente vê o assassino com caveira amarela por 15 min e pode atacá-lo e matá-lo **sem caveira nem morte injusta** (só o PZ lock).
 - **Loot sem trava**: qualquer um pega qualquer saco a qualquer momento. O saco do **seu próprio corpo** não é dividido com o grupo; o saco de morte de outro personagem é dividido como um loot comum.
 - **Poções vendidas pela metade do preço** na Alquimia (o "vender tudo" não leva poções).
@@ -141,6 +141,9 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
     No item escolhido aparece o botão para comprar de lá sem sair da loja; só os anúncios abaixo do preço da loja
     entram. Se o mercado for mais caro, o botão não aparece.
 - **Personagens online**: nome longo encolhe com "…" e o nível fica sempre visível.
+- **Morte injusta em grupo** (como no Tibia): todo personagem que bateu na vítima no último minuto leva a morte (antes
+  eram só 2: o último golpe e o maior dano, e em grupo os heróis costumavam ficar com os dois). Golpe bloqueado também
+  conta como participação.
 - **Painel do grupo**: cada membro tem *Ir até* (você vai andando até ele, onde estiver; o painel fecha) além de *Chamar*.
 - **Configurar atalhos**: os 9 espaços sempre num teclado 3×3 (1 2 3 / 4 5 6 / 7 8 9), fixo no topo enquanto as
   opções rolam. Antes, no computador, eram 9 em linha e os últimos ficavam cortados. Cada magia, poção ou item mostra

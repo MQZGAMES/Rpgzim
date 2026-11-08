@@ -456,30 +456,27 @@ export function touchCombat(w: World, id: string): void {
   }
 }
 
-/** Registra o dano que a vítima recebeu (de personagens e de criaturas). */
+/** Registra o dano que a vítima recebeu (de personagens e de criaturas; golpe bloqueado conta como participação). */
 export function recordDamage(w: World, victimId: string, sourceId: string, amount: number): void {
-  if (amount <= 0) return;
+  if (amount < 0) return;
   const list = (w.social.damageLog.get(victimId) ?? []).filter((d) => pkNow(w) - d.at < KILL_CREDIT_MS);
   list.push({ id: sourceId, amount, at: pkNow(w) });
   w.social.damageLog.set(victimId, list);
 }
 
 /**
- * Quem matou a vítima, para a regra de PK: até 2 personagens — o ÚLTIMO personagem que a feriu e o que deu o MAIOR
- * dano nos últimos 60 s (podem ser o mesmo). Só personagens contam: o dano das criaturas é ignorado, então quem mata
- * alguém junto com monstros (ou deixa o monstro dar o golpe final) leva a morte do mesmo jeito.
+ * Quem matou a vítima, para a regra de PK (como no Tibia): TODO personagem que a feriu nos últimos 60 s — em grupo,
+ * cada um que bateu leva a morte, não só quem deu o golpe final ou o maior dano. Só personagens contam: o dano das
+ * criaturas é ignorado, então quem mata alguém junto com monstros (ou deixa o monstro dar o golpe final) leva a morte
+ * do mesmo jeito. Ordem: do maior dano para o menor.
  */
 export function killCredits(w: World, victimId: string): string[] {
   const sums = new Map<string, number>();
-  let last: { id: string; at: number } | null = null;
   for (const d of w.social.damageLog.get(victimId) ?? []) {
     if (d.id === victimId || pkNow(w) - d.at >= KILL_CREDIT_MS || !actorById(w, d.id)) continue;
     sums.set(d.id, (sums.get(d.id) ?? 0) + d.amount);
-    if (!last || d.at >= last.at) last = d;
   }
-  if (!last) return [];
-  const top = [...sums].sort((a, b) => b[1] - a[1])[0]![0];
-  return top === last.id ? [top] : [last.id, top];
+  return [...sums].sort((a, b) => b[1] - a[1]).map(([id]) => id);
 }
 
 /** Por quanto tempo quem foi morto injustamente pode se vingar do assassino (caveira amarela só para ele). */

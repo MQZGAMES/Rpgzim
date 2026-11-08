@@ -143,7 +143,7 @@ describe('PK: caveiras e PZ lock', () => {
     expect(pzLockMs(w, human.id)).toBeGreaterThan(4 * 60000);
   });
 
-  describe('quem matou: o último personagem que bateu e o de maior dano (até 2)', () => {
+  describe('quem matou: todo personagem que bateu no último minuto', () => {
     const hit = (
       w: ReturnType<typeof world>['w'],
       victim: HeroEntity,
@@ -181,7 +181,7 @@ describe('PK: caveiras e PZ lock', () => {
       expect(pzLockMs(w, human.id)).toBe(PZ_LOCK_KILL_MS);
     });
 
-    it('o último que bateu e o que deu mais dano pegam os dois; um terceiro que só raspou, não', () => {
+    it('o último que bateu e o que deu mais dano pegam os dois; quem não é personagem do mundo, não', () => {
       const { sim, w, h, human } = world();
       const m = second(sim);
       const third = { id: 'hero:longe', name: 'Longe', kind: 'player' as const }; // não é personagem do mundo
@@ -194,7 +194,7 @@ describe('PK: caveiras e PZ lock', () => {
       expect(w.social.unjust.get(m.id)).toHaveLength(1);
     });
 
-    it('com três personagens, quem não foi o último nem o de maior dano escapa da morte injusta', () => {
+    it('em grupo, todos que bateram pegam a morte injusta, mesmo sem o golpe final nem o maior dano', () => {
       const { sim, w, h, human } = world();
       const m = second(sim);
       h.character.health = h.stats.maxHealth = 1000;
@@ -203,9 +203,9 @@ describe('PK: caveiras e PZ lock', () => {
       hit(w, h, 150, actorSource(m)); // maior dano entre personagens
       hit(w, h, 999, monster);
       expect(h.dead).toBe(true);
-      // o último PERSONAGEM a bater também foi o de maior dano: só ele
+      // o herói deu o maior dano e o último golpe de personagem; você bateu pouco, mas participou
       expect(w.social.unjust.get(m.id)).toHaveLength(1);
-      expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+      expect(w.social.unjust.get(human.id)).toHaveLength(1);
     });
 
     it('quem foi morto injustamente vê o assassino com caveira amarela e se vinga sem caveira (só PZ lock)', () => {
