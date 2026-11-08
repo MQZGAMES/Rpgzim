@@ -10,6 +10,9 @@ export const BALANCE: BalanceConfig = {
   magic: { baseMana: 60, growth: 1.25 },
   combat: {
     globalSpellCooldownMs: 1000,
+    // exaustão entre magias de ataque e entre magias de cura (grupos separados: dá para atacar e curar juntos)
+    attackExhaustMs: 2000,
+    healExhaustMs: 2000,
     potionCooldownMs: 1000,
     unarmedAttack: 7,
     blockChanceBase: 0.05,

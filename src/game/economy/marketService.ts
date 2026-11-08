@@ -82,6 +82,21 @@ function deliverBuyers(w: World, fills: MarketFill[], seller: string): void {
 /** Compra agora até `qty` unidades pelo menor preço (até `maxPrice`): vai para a mochila (sem espaço, depósito). */
 export function marketBuyNow(w: World, itemId: string, qty: number, maxPrice = Infinity): boolean {
   if (!atMarket(w)) return false;
+  return buyFromMarket(w, itemId, qty, maxPrice);
+}
+
+/**
+ * Compra no mercado sem sair da loja: só os anúncios mais baratos que o preço da loja (o "Comprar no mercado" da
+ * janela da loja). O item vem para a mochila como numa compra no corretor.
+ */
+export function marketBuyAtShop(w: World, itemId: string, qty: number): boolean {
+  const shop = w.ui.shop ? w.data.shops[w.ui.shop.shopId] : undefined;
+  const offer = shop?.sells.find((o) => o.itemId === itemId);
+  if (!offer || w.player.dead) return false;
+  return buyFromMarket(w, itemId, qty, offer.price - 1);
+}
+
+function buyFromMarket(w: World, itemId: string, qty: number, maxPrice: number): boolean {
   const c = w.player.character;
   const res = buyNow(w.data, w.market, c, itemId, qty, maxPrice, pkNow(w));
   if (!res.ok) return fail(w, res.reason);

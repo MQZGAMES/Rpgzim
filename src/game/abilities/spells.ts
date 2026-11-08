@@ -2,7 +2,7 @@
 // e aplica o efeito pelas regras centrais. Os efeitos visuais são apenas consequência do evento spellCast.
 import type { SpellDef } from '../../domain/entities/definitions';
 import { chebyshev, type TilePos } from '../../domain/value-objects/position';
-import { GLOBAL_SPELL, remaining, startCooldown } from '../../domain/rules/cooldowns';
+import { remaining, SPELL_GROUP_KEY, spellGroup, startCooldown } from '../../domain/rules/cooldowns';
 import { mitigate, rollRange, spellRange } from '../../domain/rules/damage';
 import { castFailMessage, spellManaCost, validateCast } from '../../domain/rules/spells';
 import { isPz, isSolid } from '../world/GameMap';
@@ -26,10 +26,16 @@ import { actorById, canAttackActor, partyOf, registerAggression } from '../socia
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
 import { addItem } from '../../domain/rules/inventory';
 
+/** Exaustão do grupo da magia (ataque, cura ou suporte) que ainda falta. */
+function groupRemaining(w: World, spell: SpellDef): number {
+  return remaining(w.player.cooldowns, SPELL_GROUP_KEY[spellGroup(spell)], w.now);
+}
+
 export function spellCooldownRemaining(w: World, spellId: string): number {
+  const spell = w.data.spells[spellId];
   return Math.max(
     remaining(w.player.cooldowns, `spell:${spellId}`, w.now),
-    remaining(w.player.cooldowns, GLOBAL_SPELL, w.now),
+    spell ? groupRemaining(w, spell) : 0,
   );
 }
 
@@ -45,7 +51,7 @@ export function castCheck(w: World, spell: SpellDef) {
     mana: c.mana,
     dead: p.dead,
     cooldownRemaining: remaining(p.cooldowns, `spell:${spell.id}`, w.now),
-    globalCooldownRemaining: remaining(p.cooldowns, GLOBAL_SPELL, w.now),
+    globalCooldownRemaining: groupRemaining(w, spell),
     inProtectionZone: isPz(w.map, p.x, p.y),
     target: t
       ? {
@@ -135,7 +141,14 @@ export function castSpell(w: World, spellId: string): boolean {
   const cost = spellManaCost(spell, c.level);
   c.mana -= cost;
   startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
-  startCooldown(p.cooldowns, GLOBAL_SPELL, w.now, w.data.balance.combat.globalSpellCooldownMs);
+  const combatCfg = w.data.balance.combat;
+  const group = spellGroup(spell);
+  startCooldown(
+    p.cooldowns,
+    SPELL_GROUP_KEY[group],
+    w.now,
+    group === 'attack' ? combatCfg.attackExhaustMs : group === 'heal' ? combatCfg.healExhaustMs : combatCfg.globalSpellCooldownMs,
+  );
   trainPlayerSkill(w, 'magic', cost);
   if (spell.cancelSlow) {
     p.slowUntil = 0;

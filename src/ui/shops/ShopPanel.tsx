@@ -5,6 +5,14 @@ import type { ItemView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemDetails, statDiff } from '../inventory/InventoryPanel';
 import { DiffParts, ItemStats } from '../inventory/ItemCell';
+import { MARKET_CATEGORIES, type MarketCategoryId } from '../../domain/rules/marketCatalog';
+
+type CategoryFilter = 'all' | MarketCategoryId | 'other';
+const CATEGORY_NAME = Object.fromEntries(MARKET_CATEGORIES.map((c) => [c.id, c.name])) as Record<MarketCategoryId, string>;
+const CATEGORY_ORDER = MARKET_CATEGORIES.map((c) => c.id as CategoryFilter).concat('other');
+const catOf = (item: ItemView): CategoryFilter => item.category ?? 'other';
+/** Dá para usar agora (equipar ou beber/usar): vocação e nível em dia. */
+const usableNow = (item: ItemView) => !item.blockedReason && (item.equipable || item.usable);
 
 /** Diferença de atributos do item da loja em relação ao que está equipado (ex.: "+1 def"). */
 function ShopDiff({ item, equipped }: { item: ItemView; equipped: ItemView | null }) {
@@ -26,11 +34,20 @@ export function ShopPanel() {
   const [tab, setTab] = useState<'buy' | 'sell'>('buy');
   const [selId, setSelId] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
+  const [cat, setCat] = useState<CategoryFilter>('all');
+  const [mineOnly, setMineOnly] = useState(false);
   if (!shop) return null;
-  const list = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0 })) : shop.buys
-          .map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned }))
+  const all = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0, market: o.market })) : shop.buys
+          .map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned, market: null }))
           // o que você tem para vender aparece primeiro (maior valor total no topo)
           .sort((a, b) => Number(b.owned > 0) - Number(a.owned > 0) || b.owned * b.price - a.owned * a.price);
+  // categorias que esta loja tem (na ordem do mercado), para os filtros
+  const present = CATEGORY_ORDER.filter((c) => all.some((o) => catOf(o.item) === c));
+  const activeCat = cat !== 'all' && present.includes(cat) ? cat : 'all';
+  const list = all
+    .filter((o) => (activeCat === 'all' || catOf(o.item) === activeCat) && (tab !== 'buy' || !mineOnly || usableNow(o.item)))
+    // comprar: o que você já pode usar primeiro, depois pelo nível (do menor para o maior) e pelo preço
+    .sort((a, b) => (tab === 'buy' ? Number(usableNow(b.item)) - Number(usableNow(a.item)) || a.item.minLevel - b.item.minLevel || a.price - b.price : 0));
   // itens travados (cadeado) não entram no "vender tudo"
   const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned * o.price), 0);
   const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned), 0);
@@ -68,6 +85,33 @@ export function ShopPanel() {
           </span>
         </span>
       </div>
+      {/* filtros: categoria (as que a loja tem) e, na compra, só o que dá para usar agora */}
+      <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1" data-testid="shop-filters">
+        {tab === 'buy' && (
+          <button
+            type="button"
+            onClick={() => (setMineOnly(!mineOnly), setSelId(null))}
+            aria-pressed={mineOnly}
+            className={`shrink-0 rounded-sm border-2 px-2 py-[2px] text-[11px] ${mineOnly ? 'border-heal bg-[#123a24] text-heal' : 'border-[#4a3a2a] text-muted'}`}
+            data-testid="shop-mine"
+            title="Mostra só o que a sua vocação e o seu nível já podem usar"
+          >
+            {mineOnly ? '✓ ' : ''}Posso usar
+          </button>
+        )}
+        {(['all', ...present] as CategoryFilter[]).map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => (setCat(c), setSelId(null))}
+            aria-pressed={activeCat === c}
+            className={`shrink-0 rounded-sm border-2 px-2 py-[2px] text-[11px] ${activeCat === c ? 'border-gold bg-[#3a2a12] text-gold-light' : 'border-[#4a3a2a] text-muted'}`}
+            data-testid={`shop-cat-${c}`}
+          >
+            {c === 'all' ? 'Todos' : c === 'other' ? 'Diversos' : CATEGORY_NAME[c]}
+          </button>
+        ))}
+      </div>
       {/* corpo: lista (rola) + coluna de detalhes (rola) com a barra de compra sempre visível embaixo */}
       <div className="flex min-h-0 flex-1 flex-col gap-2 sm:flex-row">
         <div className="flex min-h-[96px] flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1 sm:min-h-0" data-testid="shop-list">
@@ -89,6 +133,8 @@ export function ShopPanel() {
                 </span>
                 <span className={`block text-[11px] ${tab === 'buy' && o.extra ? 'text-hp-light' : 'text-gold-light'}`}>
                   {o.price} ouro{tab === 'sell' ? ` · você tem ${o.owned}` : ''}
+                  {tab === 'buy' && o.item.minLevel > 1 && <span className={o.item.blockedReason ? 'text-hp-light' : 'text-muted'}> · nv {o.item.minLevel}</span>}
+                  {tab === 'buy' && o.market && <span className="text-heal"> · mercado {o.market.price}</span>}
                 </span>
               </span>
               {o.item.blockedReason && tab === 'buy' && (
@@ -129,6 +175,17 @@ export function ShopPanel() {
               >
                 {tab === 'buy' ? `Comprar por ${sel.price * q}` : `Vender por ${sel.price * q}`}
               </PixelButton>
+              {/* anunciado mais barato no mercado: compra de lá sem sair da loja (só aparece quando compensa) */}
+              {tab === 'buy' && sel.market && (
+                <PixelButton
+                  className="w-full !border-[6px] px-1 text-[12px]"
+                  title={`${sel.market.units} à venda no mercado abaixo do preço da loja`}
+                  onClick={() => session.marketBuyAtShop(sel.item.itemId, Math.min(q, sel.market!.units))}
+                  data-testid="shop-market-buy"
+                >
+                  Comprar {Math.min(q, sel.market.units)} no mercado · a partir de {sel.market.price} cada (loja: {sel.price})
+                </PixelButton>
+              )}
             </div>
           )}
         </div>

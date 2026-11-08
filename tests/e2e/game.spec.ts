@@ -647,3 +647,42 @@ test('tela inicial: filtro por nome e vocação, ordem por nível; criar persona
   await expect(page.locator('button[data-testid^="slot-"]', { hasText: 'Herbalista' })).toHaveCount(0);
   await expect(page.locator('button[data-testid^="slot-"]', { hasText: 'Cavaleira' })).toHaveCount(1);
 });
+
+test('loja: filtros por categoria e "Posso usar", ordem por nível; atalhos: os 9 espaços visíveis', async ({ page }, info) => {
+  await createCharacter(page, 'paladin', 'Filtradora');
+  await api(page, (a) => a.teleport(29, 16));
+  await page.keyboard.press('KeyE').catch(() => undefined);
+  if (info.project.name === 'mobile') await page.getByTestId('interact-button').tap().catch(() => undefined);
+  await expect(page.getByTestId('npc-dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Ver mercadorias' }).click();
+  await expect(page.getByTestId('shop-filters')).toBeVisible();
+  const rows = page.locator('[data-testid^="shop-item-"]');
+  const total = await rows.count();
+  // "Posso usar": só o que um Paladin nível 1 usa agora (menos itens, e nenhum com "!" de bloqueio)
+  await page.getByTestId('shop-mine').click();
+  const mine = await rows.count();
+  expect(mine).toBeGreaterThan(0);
+  expect(mine).toBeLessThan(total);
+  await page.getByTestId('shop-mine').click();
+  // categoria: só capacetes, do menor nível para o maior
+  await page.getByTestId('shop-cat-helmet').click();
+  const levels = await rows.evaluateAll((els) => els.map((e) => Number(/nv (\d+)/.exec(e.textContent ?? '')?.[1] ?? 1)));
+  expect(levels.length).toBeGreaterThan(0);
+  expect([...levels].sort((a, b) => a - b)).toEqual(levels);
+  await page.screenshot({ path: info.outputPath('loja.png') });
+  await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
+  // atalhos: os 9 espaços inteiros dentro do painel
+  if (await page.getByTestId('btn-hotbar-config').isVisible()) await page.getByTestId('btn-hotbar-config').click();
+  else {
+    await page.getByTestId('btn-settings').click();
+    await page.getByTestId('settings-hotbar').click();
+  }
+  await expect(page.getByTestId('hotbar-panel')).toBeVisible();
+  const dialog = (await page.locator('[role=dialog]').boundingBox())!;
+  for (let i = 0; i < 9; i++) {
+    const b = (await page.getByTestId(`hotbar-pick-${i}`).boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(dialog.x);
+    expect(b.x + b.width).toBeLessThanOrEqual(dialog.x + dialog.width);
+  }
+  await page.screenshot({ path: info.outputPath('atalhos.png') });
+});

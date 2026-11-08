@@ -15,6 +15,7 @@ function SlotPreview({ slot, selected, onSelect }: { slot: HotbarSlotView; selec
       onClick={onSelect}
       aria-label={`Atalho ${slot.index + 1}: ${slot.name}`}
       aria-pressed={selected}
+      title={`${slot.index + 1}: ${slot.name}`}
       className={`relative flex h-12 w-12 items-center justify-center ${selected ? 'btn-gold' : 'frame-slot !border-[6px]'}`}
       data-testid={`hotbar-pick-${slot.index}`}
     >
@@ -24,7 +25,7 @@ function SlotPreview({ slot, selected, onSelect }: { slot: HotbarSlotView; selec
   );
 }
 
-function Option({ icon, label, sub, active, onClick, dim = false, testId }: { icon: string; label: string; sub: string; active: boolean; onClick: () => void; dim?: boolean; testId: string }) {
+function Option({ icon, label, sub, active, onClick, dim = false, testId, at }: { icon: string; label: string; sub: string; active: boolean; onClick: () => void; dim?: boolean; testId: string; at?: number }) {
   return (
     <button
       type="button"
@@ -37,6 +38,12 @@ function Option({ icon, label, sub, active, onClick, dim = false, testId }: { ic
         <span className="block truncate text-[13px] text-parchment">{label}</span>
         <span className="block truncate text-[10px] text-muted">{sub}</span>
       </span>
+      {/* em que atalho já está (escolher de novo troca de lugar) */}
+      {at !== undefined && (
+        <span className="shrink-0 rounded-sm bg-gold/25 px-1 text-[10px] text-gold-light" title={`Já está no atalho ${at}`}>
+          {at}
+        </span>
+      )}
     </button>
   );
 }
@@ -57,40 +64,45 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
     if (e) setSel((sel + 1) % hotbar.length);
   };
   const isCur = (kind: string, id: string) => (kind === 'spell' ? current?.spell?.id === id : current?.kind === kind && current.itemId === id);
+  /** Número do atalho onde esta entrada já está (1 a 9), se estiver. */
+  const at = (kind: string, id: string) => {
+    const i = hotbar.findIndex((h) => (kind === 'spell' ? h.spell?.id === id : h.kind === kind && h.itemId === id));
+    return i >= 0 ? i + 1 : undefined;
+  };
+  // magias liberadas primeiro (pelo nível); as que ainda não liberam vão para o fim
+  const spells = [...book].sort((a, b) => Number(b.unlocked) - Number(a.unlocked) || a.minLevel - b.minLevel);
   return (
     <Panel title="Atalhos" icon="ui_book" onClose={onClose}>
       <div data-testid="hotbar-panel">
-        <p className="text-[12px] text-muted">Toque numa posição e escolha o que ela usa: os atalhos vão de 1 a 9, na mesma ordem da tela{touch ? ' (1 2 3 / 4 5 6 / 7 8 9, no canto inferior direito)' : ' (teclas 1–9)'}. Depois de escolher, a seleção passa para o próximo número.</p>
-        <div className="mt-2 flex justify-center">
-          {touch ? (
-            // mesmo teclado 3x3 da tela (ordem de leitura, de cima para baixo)
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(3, 48px)' }}>
+        {/* os 9 atalhos sempre num teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9, a mesma ordem da tela), fixo no topo enquanto as
+            opções rolam embaixo: cabe em qualquer tela (antes, sem toque, eram 9 em linha e os últimos ficavam cortados) */}
+        <div className="sticky top-0 z-10 -mx-1 bg-[#1d1626] px-1 pb-2" data-testid="hotbar-slots">
+          <div className="flex items-center gap-3">
+            <div className="grid shrink-0 gap-2" style={{ gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(3, 48px)' }}>
               {hotbar.map((slot) => (
                 <div key={slot.index} className="flex items-center justify-center" style={{ gridRow: TOUCH_CELLS[slot.index]![0], gridColumn: TOUCH_CELLS[slot.index]![1] }}>
                   <SlotPreview slot={slot} selected={sel === slot.index} onSelect={() => setSel(slot.index)} />
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="flex gap-2">
-              {hotbar.map((slot) => (
-                <SlotPreview key={slot.index} slot={slot} selected={sel === slot.index} onSelect={() => setSel(slot.index)} />
-              ))}
+            <div className="min-w-0 flex-1 text-[12px]">
+              <p className="text-muted">
+                Toque num número e escolha abaixo o que ele usa{touch ? ' (o mesmo teclado do canto da tela)' : ' (teclas 1 a 9)'}. Depois de escolher, passa para o próximo.
+              </p>
+              <p className="mt-1 truncate">
+                Atalho <b className="text-gold-light">{sel + 1}</b>: <span data-testid="hotbar-current">{current?.name ?? 'Vazio'}</span>
+              </p>
+              <PixelButton className="mt-1 !border-[6px] px-1 text-[11px]" onClick={() => session.setHotbar(sel, null)} data-testid="hotbar-clear">
+                Deixar vazio
+              </PixelButton>
             </div>
-          )}
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[12px]">
-          <span>
-            Atalho <b className="text-gold-light">{sel + 1}</b>: {current?.name ?? 'Vazio'}
-          </span>
-          <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.setHotbar(sel, null)} data-testid="hotbar-clear">
-            Deixar vazio
-          </PixelButton>
+          </div>
         </div>
         <h3 className="mb-1 mt-3 text-[13px] text-gold">Magias</h3>
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-          {book.map((s) => (
+          {spells.map((s) => (
             <Option
+              at={at('spell', s.id)}
               key={s.id}
               icon={s.icon}
               label={s.name}
@@ -104,14 +116,14 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
         </div>
         <h3 className="mb-1 mt-3 text-[13px] text-gold">Poções automáticas</h3>
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-          <Option icon="item_potion_health" label="Poção de vida" sub="usa a menor que cobre o que falta" active={isCur('potion', 'health')} onClick={() => assign({ kind: 'potion', id: 'health' })} testId="hotbar-opt-potion-health" />
-          <Option icon="item_potion_mana" label="Poção de mana" sub="usa a menor que cobre o que falta" active={isCur('potion', 'mana')} onClick={() => assign({ kind: 'potion', id: 'mana' })} testId="hotbar-opt-potion-mana" />
+          <Option at={at('potion', 'health')} icon="item_potion_health" label="Poção de vida" sub="usa a menor que cobre o que falta" active={isCur('potion', 'health')} onClick={() => assign({ kind: 'potion', id: 'health' })} testId="hotbar-opt-potion-health" />
+          <Option at={at('potion', 'mana')} icon="item_potion_mana" label="Poção de mana" sub="usa a menor que cobre o que falta" active={isCur('potion', 'mana')} onClick={() => assign({ kind: 'potion', id: 'mana' })} testId="hotbar-opt-potion-mana" />
         </div>
         <h3 className="mb-1 mt-3 text-[13px] text-gold">Itens da mochila</h3>
         {usable.length ? (
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
             {usable.map((it) => (
-              <Option key={it.id} icon={it.icon} label={it.name} sub={`${it.count} na mochila`} active={isCur('item', it.id)} onClick={() => assign({ kind: 'item', id: it.id })} testId={`hotbar-opt-${it.id}`} />
+              <Option key={it.id} at={at('item', it.id)} icon={it.icon} label={it.name} sub={`${it.count} na mochila`} active={isCur('item', it.id)} onClick={() => assign({ kind: 'item', id: it.id })} testId={`hotbar-opt-${it.id}`} />
             ))}
           </div>
         ) : (

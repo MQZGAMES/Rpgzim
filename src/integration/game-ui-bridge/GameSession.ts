@@ -760,6 +760,10 @@ export class GameSession {
   marketCatalog(): CatalogItem[] {
     return catalogOf(this.sim.world.data);
   }
+  /** Na loja: compra no mercado o que está anunciado mais barato que o preço da loja. */
+  marketBuyAtShop(itemId: string, qty: number): boolean {
+    return this.marketAct(this.sim.marketBuyAtShop(itemId, qty));
+  }
   marketBuyNow(itemId: string, qty: number, maxPrice?: number): boolean {
     return this.marketAct(this.sim.marketBuyNow(itemId, qty, maxPrice));
   }

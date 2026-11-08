@@ -297,6 +297,8 @@ export interface BalanceConfig {
   magic: { baseMana: number; growth: number };
   combat: {
     globalSpellCooldownMs: number;
+    attackExhaustMs: number;
+    healExhaustMs: number;
     potionCooldownMs: number;
     unarmedAttack: number;
     blockChanceBase: number;

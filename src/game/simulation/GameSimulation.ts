@@ -80,6 +80,7 @@ import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
 import {
   marketBuyNow,
+  marketBuyAtShop,
   marketCancel,
   marketCollect,
   marketOffer,
@@ -684,6 +685,9 @@ export class GameSimulation {
     return depotDeposit(this.world, invIndex);
   }
   /** Compra agora pelo menor preço anunciado (até `maxPrice`). */
+  marketBuyAtShop(itemId: string, qty: number): boolean {
+    return marketBuyAtShop(this.world, itemId, qty);
+  }
   marketBuyNow(itemId: string, qty: number, maxPrice = Infinity): boolean {
     return marketBuyNow(this.world, itemId, qty, maxPrice);
   }

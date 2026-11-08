@@ -20,8 +20,8 @@ import { bestPotionFor, usablePotionCount } from '../../domain/rules/potions';
 import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { spellManaCost } from '../../domain/rules/spells';
-import { escrowOf, marketable, parcelUnits, priceGuide, type MarketOffer, type PriceGuide } from '../../domain/rules/market';
-import { buildCatalog, compareItem, type CatalogItem, type Comparison } from '../../domain/rules/marketCatalog';
+import { escrowOf, marketable, quoteBuy, parcelUnits, priceGuide, type MarketOffer, type PriceGuide } from '../../domain/rules/market';
+import { buildCatalog, categoryOf, compareItem, type CatalogItem, type MarketCategoryId, type Comparison } from '../../domain/rules/marketCatalog';
 import { isUpgrade, itemAttack, itemDefense } from '../../domain/rules/itemPower';
 import { POTION, remaining } from '../../domain/rules/cooldowns';
 import { isPz, buildingAt, regionAt } from '../../game/world/GameMap';
@@ -74,6 +74,10 @@ export interface ItemView {
   npcSell: { price: number; shop: string } | null;
   /** Anúncio de venda mais barato no Mercado de Pedraluz (preço por unidade e quantos anúncios há), ou null. */
   market: { price: number; listings: number } | null;
+  /** Nível mínimo para usar (equipar ou beber); 0 = qualquer nível. */
+  minLevel: number;
+  /** Categoria (a mesma do mercado: espadas, capacetes, poções de vida...) ou null para os itens diversos. */
+  category: MarketCategoryId | null;
 }
 
 /** Um atalho da barra de ações (magia, item da mochila, poção automática ou vazio). */
@@ -244,7 +248,8 @@ export interface UiSnapshot {
     npcName: string;
     /** Ouro da mochila e do banco: a compra gasta o da mochila primeiro e completa com o do banco. */
     bankGold: number;
-    sells: { item: ItemView; price: number; canAfford: boolean }[];
+    /** `market`: anúncios mais baratos que a loja (preço do mais barato e quantas unidades há abaixo do preço da loja). */
+    sells: { item: ItemView; price: number; canAfford: boolean; market: { price: number; units: number } | null }[];
     buys: { item: ItemView; price: number; owned: number }[];
   } | null;
   depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
@@ -421,6 +426,8 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     kept: keptFromSellAll(c, def.id),
     npcSell: bestNpcBuy(w.data, def.id),
     market: marketLow(w.market, def.id),
+    minLevel: def.minLevel ?? 0,
+    category: categoryOf(def),
   };
 }
 
@@ -716,11 +723,16 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
             name: shopDef.name,
             npcName: shopNpc.def.name,
             bankGold: c.bankGold,
-            sells: shopDef.sells.map((o) => ({
-              item: itemView(sim, { itemId: o.itemId, count: 1 }),
-              price: o.price,
-              canAfford: c.gold + c.bankGold >= o.price,
-            })),
+            sells: shopDef.sells.map((o) => {
+              const units = quoteBuy(w.market, o.itemId, 10_000, c.id, o.price - 1).count;
+              const best = units ? quoteBuy(w.market, o.itemId, 1, c.id, o.price - 1).total : 0;
+              return {
+                item: itemView(sim, { itemId: o.itemId, count: 1 }),
+                price: o.price,
+                canAfford: c.gold + c.bankGold >= o.price,
+                market: units ? { price: best, units } : null,
+              };
+            }),
             buys: shopDef.buys.map((o) => ({
               item: itemView(sim, { itemId: o.itemId, count: 1 }),
               price: o.price,

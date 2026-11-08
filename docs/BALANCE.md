@@ -286,3 +286,11 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   | Maguim (11, 23) | 45 / 0 · 36 / 1 | 43 / 0 · 47 / 0 |
   | Mano Cura (11, 23) | 44 / 0 · 43 / 0 | 42 / 0 · 43 / 0 |
   | Distanciado (11, 23, 31, 47) | 26 / 3 · 25 / 4 · 29 / 3 · 31 / 2 | 33 / 1 · 33 / 1 · 27 / 2 · 26 / 4 |
+
+## Exaustão por grupo (nov/2026)
+- Ataque 2 s (era 1 s, compartilhado com tudo), cura 2 s e poção 2 s, cada um independente; suporte 1 s entre si.
+  Segundo Fôlego: recarga 6 s → 2 s.
+- **Medição** (`hero-life`, 3 h sozinho, sementes 11 e 23, nível / mortes): Boladex 37 / 1 · 35 / 1 (antes 38 / 1 ·
+  39 / 0); Maguim 41 / 0 · 39 / 0 (43 / 0 · 47 / 0); Mano Cura 43 / 0 · 33 / 1 (42 / 0 · 43 / 0); Distanciado
+  31 / 3 · 30 / 1 (33 / 1 · 33 / 1). Uma magia de ataque a cada 2 s tira um pouco do ritmo de todos (mais dos magos);
+  curar sem esperar o ataque compensa parte nas mortes.

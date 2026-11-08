@@ -127,6 +127,24 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Corrida na morte**: morrer encerra a Corrida e os demais efeitos; a aura não fica mais no chão.
 - **Balanceamento do dano** (`tests/tools/vocation-dps.test.ts`, detalhes em `docs/BALANCE.md`): as magias dos magos passam a crescer com a varinha (antes o Sorcerer caía para 49% do dano no nível 100 e o Druid para 37%), Knight corpo a corpo 1,15 → 1,3 e Paladin distância 1,15 → 1,25. Agora todas ficam entre ~73% e 100% em qualquer nível, com os magos muito à frente em área.
 
+## Exaustão por grupo, lojas com filtros e mercado, atalhos 3×3
+- **Exaustão por grupo**: atacar e curar ao mesmo tempo. Cada grupo tem a sua exaustão, sem uma travar a outra:
+  - magias de ataque: 2 s entre duas quaisquer (mesmo que outra já esteja pronta);
+  - magias de cura: 2 s entre duas (o Segundo Fôlego também passou para 2 s de recarga);
+  - poções: 2 s;
+  - magias de suporte (Corrida, escudos, criação de poção): a exaustão curta de antes, só entre elas.
+- **Lojas dos NPCs**:
+  - Filtros por categoria (Todos, Espadas, Capacetes, Poções de vida, Diversos...), só com as que a loja tem.
+  - Botão *Posso usar*: mostra só o que a sua vocação e o seu nível já usam.
+  - Na compra, o que você pode usar vem primeiro, depois do menor nível para o maior; cada item mostra o nível mínimo.
+  - **Comprar no mercado**: se alguém anunciou o item no mercado mais barato que a loja, a linha mostra "mercado X".
+    No item escolhido aparece o botão para comprar de lá sem sair da loja; só os anúncios abaixo do preço da loja
+    entram. Se o mercado for mais caro, o botão não aparece.
+- **Personagens online**: nome longo encolhe com "…" e o nível fica sempre visível.
+- **Configurar atalhos**: os 9 espaços sempre num teclado 3×3 (1 2 3 / 4 5 6 / 7 8 9), fixo no topo enquanto as
+  opções rolam. Antes, no computador, eram 9 em linha e os últimos ficavam cortados. Cada magia, poção ou item mostra
+  em que atalho já está, e as magias liberadas vêm primeiro.
+
 ## Cercado, magias mais espertas, criar personagem no jogo e filtros
 - **Cercado (trap)**: sem nenhuma casa livre em volta e com 2+ criaturas encostadas, o herói abre caminho. Ele mata
   primeiro a criatura do cerco que cai mais rápido (a mais fraca; no empate, a que mais machuca), com a magia de área
@@ -490,8 +508,8 @@ A simulação recebe comandos e emite eventos tipados — base para um futuro se
 (hoje o cliente controla o estado; saves locais não são à prova de adulteração).
 
 ## Resultados de testes (registrados nesta máquina)
-- Vitest: **369 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada, IA com jeito de gente e recomeço da temporada).
-- Playwright: **14 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
+- Vitest: **374 testes passando** (regras, dados, mundo, persistência, banco, sincronização GitHub, herói com vida própria, grupo/PK/modo de ataque, trava de venda, escada de criaturas, vocações, controles do grupo, atalhos, ritmo, clique x perseguição, destino alcançável, viagem pelo mini mapa, chamar para o grupo, simulação integrada, IA com jeito de gente e recomeço da temporada).
+- Playwright: **15 fluxos passando** (desktop: principal/loja/casa/banco+loot/Boladex/HUD social; mobile: joystick, HUD na tela,
   magia por toque, toque duplo para equipar, toque na área do joystick para andar). O teste do HUD social cobre o
   painel do grupo (formação e treino); um teste mobile toca no mapa em cima e embaixo, no Boladex pela posição real
   na tela, viaja pelo mini mapa e chama o Boladex pela lista de online.

@@ -121,12 +121,16 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <div className="min-w-0 flex-1 text-[12px]">
-                <div className="flex items-center gap-1">
+                {/* nome longo encolhe com "…"; o nível fica sempre visível (a vocação encolhe antes do nome) */}
+                <div className="flex min-w-0 items-center gap-1">
                   {h.isLeader && <ItemIcon icon="ui_crown" size={11} title="Líder do grupo" />}
                   {h.skull && <ItemIcon icon={`ui_skull_${h.skull}`} size={12} title="Tem caveira" />}
-                  <b className={h.inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}>{h.name}</b>
-                  <span className="truncate text-muted">
-                    · {h.vocationName} nv {h.level}
+                  <b className={`min-w-0 truncate ${h.inParty ? 'text-[#7fd8ff]' : 'text-[#8ff0b0]'}`} title={h.name}>
+                    {h.name}
+                  </b>
+                  <span className="min-w-0 shrink-[3] truncate text-muted">· {h.vocationName}</span>
+                  <span className="shrink-0 text-gold-light" data-testid={`player-level-${h.id}`}>
+                    nv {h.level}
                   </span>
                 </div>
                 <div className="truncate text-[11px] text-muted">
@@ -187,7 +191,10 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                     <SpriteFrame sheet={r.vocation} scale={1.2} className="opacity-70" />
                   </div>
                   <div className="min-w-0 flex-1 text-[12px]">
-                    <b className="text-parchment">{r.name}</b> <span className="text-muted">· nv {r.level}</span>
+                    <div className="flex min-w-0 items-center gap-1">
+                      <b className="min-w-0 truncate text-parchment" title={r.name}>{r.name}</b>
+                      <span className="shrink-0 text-gold-light">nv {r.level}</span>
+                    </div>
                     <div className="text-[11px] text-muted">volta em ~{r.backInMin} min</div>
                   </div>
                   <PixelButton
@@ -220,11 +227,10 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                       title="fora do jogo"
                     />
                   </div>
-                  <div className="min-w-0 flex-1 text-[12px]">
-                    <b className="text-parchment">{o.name}</b>{' '}
-                    <span className="text-muted">
-                      · {o.vocation.charAt(0).toUpperCase() + o.vocation.slice(1)} nv {o.level}
-                    </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-1 text-[12px]">
+                    <b className="min-w-0 truncate text-parchment" title={o.name}>{o.name}</b>
+                    <span className="min-w-0 shrink-[3] truncate text-muted">· {VOCATION_NAME[o.vocation as VocationId] ?? o.vocation}</span>
+                    <span className="shrink-0 text-gold-light">nv {o.level}</span>
                   </div>
                   <PixelButton
                     variant="gold"

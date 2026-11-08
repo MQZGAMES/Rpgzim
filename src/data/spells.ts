@@ -557,7 +557,7 @@ const list: SpellDef[] = [
     minLevel: 14,
     minMagicLevel: 0,
     manaCost: 60,
-    cooldownMs: 6000,
+    cooldownMs: 2000,
     range: 0,
     target: 'self',
     effect: 'heal',
