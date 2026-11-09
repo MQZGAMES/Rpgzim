@@ -965,7 +965,17 @@ function fightBack(w: World, h: HeroEntity): void {
   // fugindo/andando: continua; só luta se a rota de fuga falhou de verdade (sem caminho nenhum) ou se está cercado.
   // (antes "parado" bastava — e era justamente o revidar que o deixava parado: travava para sempre na fuga)
   const routeFailed = w.now - (b.routeFailedAt ?? -Infinity) < 3000;
-  if ((b.mode === 'retreat' || b.mode === 'town') && !(routeFailed && stuckMs > 1200) && adjacent < 3) return;
+  // cercado (3+ encostadas) ele luta em vez de fugir — mas só se a luta leva a algum lugar: se nem a mais fraca do
+  // cerco cai em ~25 s (sem arma, sem mana), lutar é ficar curando para sempre no mesmo lugar; aí tenta sair
+  const hopeless =
+    adjacent >= 3 &&
+    Math.min(...attackers.filter((m) => chebyshev(m, h) <= 1).map((m) => m.hp / heroDpsVs(w, h, m))) > 25;
+  if (
+    (b.mode === 'retreat' || b.mode === 'town') &&
+    !(routeFailed && stuckMs > 1200) &&
+    (adjacent < 3 || hopeless)
+  )
+    return;
   if (b.mode === 'retreat' || b.mode === 'town') b.fightBackUntil = w.now + 2500;
   if (
     moving &&

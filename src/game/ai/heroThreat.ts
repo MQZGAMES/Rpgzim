@@ -7,6 +7,7 @@
 // Margem = vida efetiva ÷ dano esperado. ≥ 1,6 segura · 1,0–1,6 arriscada · < 1,0 perde.
 import { blockChance, maxWeaponDamage } from '../../domain/rules/damage';
 import { weaponSkillLevel } from '../../domain/rules/stats';
+import { manaRegenPerSecond } from '../../domain/rules/regen';
 import { chebyshev } from '../../domain/value-objects/position';
 import { ROLES } from './heroRoles';
 import { actorById, partyOf } from '../social/social';
@@ -68,9 +69,26 @@ export function heroDpsVs(w: World, h: PlayerEntity, m: MonsterEntity): number {
   if (weapon.element === 'physical') avg = Math.max(1, avg - m.def.armor * 0.75);
   const res = m.def.resistances?.[weapon.element];
   if (res !== undefined) avg *= res;
-  // sem arma nas mãos os feitiços fazem o dano (a magia vale sem arma): estimativa pela fórmula das magias básicas
-  if (!h.character.equipment.mainHand && h.character.vocation !== 'knight')
-    avg = Math.max(avg, (10 + h.character.level * 0.4 + h.stats.magicLevel * 1.8) * 0.9);
+  // sem arma nas mãos os feitiços fazem o dano (a magia vale sem arma): estimativa pela fórmula das magias básicas,
+  // limitada pela mana que dá para gastar numa luta (~30 s): a regeneração, a mana atual e as poções de mana, com 30%
+  // indo para a cura. Sem isso o mago desarmado e sem poção de mana achava que matava como se a mana fosse infinita
+  // (ia para o ninho de aranhas socando 2 de dano e ficava preso curando para sempre)
+  if (!h.character.equipment.mainHand && h.character.vocation !== 'knight') {
+    const lv = h.character.level;
+    const perCast = (10 + lv * 0.4 + h.stats.magicLevel * 1.8) * 0.9;
+    const cost = 10 + lv * 0.25;
+    const potMana = h.character.inventory.reduce((s, st) => {
+      const use = st && w.data.items[st.itemId]?.use;
+      return st && use?.mana && !use.heal ? s + use.mana * st.count : s;
+    }, 0);
+    const manaPerSec =
+      (manaRegenPerSecond(w.data, h.character.vocation, lv) +
+        (h.character.mana + Math.min(potMana, h.stats.maxMana * 3)) / 30) *
+      0.7;
+    const interval = h.stats.attackIntervalMs / 1000;
+    const spellPerInterval = Math.min(perCast, (manaPerSec / cost) * perCast * interval);
+    avg = Math.max(avg, spellPerInterval);
+  }
   // magias de ataque somam um pouco mais que o golpe básico
   return Math.max(0.5, avg * 1.12 * ROLES[h.character.vocation].dpsMul) / (h.stats.attackIntervalMs / 1000);
 }
