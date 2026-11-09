@@ -27,7 +27,7 @@ import { canDrink } from '../../domain/rules/potions';
 function heroDefOf(data: GameData, c: CharacterState): HeroDef {
   return Object.values(data.heroes).find((d) => d.slotId === c.id) ?? customHeroDef(c);
 }
-import { canAttackActor, type PartySetting } from '../../game/social/social';
+import { canAttackActor, type PartySetting, type WarMode } from '../../game/social/social';
 import { createLocalStore, createSnapshotStore, type Panel, type Store, type UiLocalState } from './store';
 
 const PUBLISH_MS = 80;
@@ -628,6 +628,12 @@ export class GameSession {
   setPvp(on: boolean): void {
     this.sim.setPvp(on);
     this.audio.play(on ? 'error' : 'ui');
+    this.dirty = true;
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
+  }
+  setWar(mode: WarMode): void {
+    this.sim.setWar(mode);
+    this.audio.play(mode === 'off' ? 'ui' : 'error');
     this.dirty = true;
     this.saves.requestSave(() => this.sim.snapshotCharacter());
   }

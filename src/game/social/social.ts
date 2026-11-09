@@ -28,6 +28,8 @@ export interface Party {
   sparMode?: 'training' | 'duel';
   /** Últimas posições do líder (para a formação em fila). */
   trail: { x: number; y: number }[];
+  /** Grupo de uma guilda (guerra de guildas): fixo, ninguém entra nem sai por convite. */
+  guild?: 0 | 1;
 }
 
 export interface PartyInvite {
@@ -58,14 +60,33 @@ export interface SocialState {
   aggressions: Map<string, number>;
   /** Vingança: `${vitima}>${assassino}` -> até quando a vítima de uma morte injusta pode revidar sem caveira. */
   revenge: Map<string, number>;
+  /** Modo guerra: todos contra todos ou duas guildas (ver atWar, isWarEnemy). */
+  war: WarState;
 }
 
-export function newSocialState(pvp = false): SocialState {
+/**
+ * Modo guerra (escolhido nas configurações): o PK vale para todos, com as regras normais de caveira e PZ lock (a guerra
+ * tem prejuízo de verdade: morte injusta, caveira vermelha, saco de morte).
+ * - 'ffa': cada um por si — só o grupo do momento é aliado (e grupo de heróis pode trair);
+ * - 'guilds': Red e Blue, equilibradas em gente e nível; cada guilda é um grupo fixo.
+ */
+export type WarMode = 'off' | 'ffa' | 'guilds';
+export interface WarState {
+  mode: WarMode;
+  /** Guilda (0 ou 1) de cada personagem, por id da entidade. Só vale em 'guilds'. */
+  guilds: Map<string, 0 | 1>;
+  /** Próxima conferência dos grupos das guildas (quem entrou ou saiu do mundo). */
+  nextSyncAt?: number;
+}
+export const GUILD_NAMES = ['Red', 'Blue'] as const;
+
+export function newSocialState(pvp = false, war: WarMode = 'off'): SocialState {
   return {
+    war: { mode: war, guilds: new Map() },
     party: null,
     heroParties: [],
     invites: [],
-    pvp,
+    pvp: pvp || war !== 'off',
     skulls: new Map(),
     pzLocks: new Map(),
     unjust: new Map(),
@@ -127,6 +148,173 @@ export function sameParty(w: World, a: string, b: string): boolean {
   return !!p && p.members.includes(b);
 }
 
+// ------------------------------------------------------------------ modo guerra
+export function atWar(w: World): boolean {
+  return w.social.war.mode !== 'off';
+}
+
+/** Guilda do personagem na guerra de guildas (null fora dela). */
+export function guildOf(w: World, id: string): 0 | 1 | null {
+  return w.social.war.mode === 'guilds' ? (w.social.war.guilds.get(id) ?? null) : null;
+}
+
+export function sameGuild(w: World, a: string, b: string): boolean {
+  const g = guildOf(w, a);
+  return g !== null && g === guildOf(w, b);
+}
+
+/** Aliado na guerra: mesmo grupo ou mesma guilda. */
+export function isWarAlly(w: World, a: string, b: string): boolean {
+  return a === b || sameParty(w, a, b) || sameGuild(w, a, b);
+}
+
+/** Inimigo na guerra: com a guerra ligada, todo personagem que não é aliado. */
+export function isWarEnemy(w: World, a: string, b: string): boolean {
+  return atWar(w) && !isWarAlly(w, a, b);
+}
+
+/** Peso de um personagem na divisão das guildas: o nível (o Knight conta um pouco mais, é quem segura a linha). */
+const guildWeight = (a: PlayerEntity): number =>
+  a.character.level + (a.character.vocation === 'knight' ? 2 : 0);
+
+/**
+ * Sorteia as duas guildas equilibrando o número de pessoas E os níveis: do mais forte para o mais fraco (com um
+ * pouco de acaso entre níveis parecidos), cada um vai para a guilda com menos gente e, empatando, a com menos nível
+ * somado — fica uma "serpentina" (1º A, 2º e 3º B, 4º e 5º A...), com fortes e fracos dos dois lados. O grupo do
+ * jogador entra inteiro (é fixo); os grupos só de heróis se desfazem (a guilda vira o grupo).
+ */
+export function assignGuilds(w: World): void {
+  const guilds = new Map<string, 0 | 1>();
+  const actors = allActors(w);
+  const humanParty = w.social.party?.guild === undefined ? w.social.party : null;
+  const units: { ids: string[]; weight: number }[] = [];
+  const seen = new Set<string>();
+  if (humanParty) {
+    const ids = humanParty.members.filter((id) => actors.some((a) => a.id === id));
+    ids.forEach((id) => seen.add(id));
+    units.push({
+      ids,
+      weight: ids.reduce((s, id) => s + guildWeight(actors.find((a) => a.id === id)!), 0),
+    });
+  }
+  for (const a of actors)
+    if (!seen.has(a.id)) units.push({ ids: [a.id], weight: guildWeight(a) + w.rng.next() * 2.5 });
+  units.sort((a, b) => b.ids.length - a.ids.length || b.weight - a.weight);
+  const cap = Math.ceil(actors.length / 2);
+  const size = [0, 0];
+  const lv = [0, 0];
+  const first: 0 | 1 = w.rng.chance(0.5) ? 0 : 1;
+  for (const u of units) {
+    const fits = ([0, 1] as const).filter((g) => size[g]! + u.ids.length <= cap);
+    const pool = fits.length ? fits : ([0, 1] as const);
+    const g = [...pool].sort((x, y) => size[x]! - size[y]! || lv[x]! - lv[y]! || (x === first ? -1 : 1))[0]!;
+    for (const id of u.ids) guilds.set(id, g);
+    size[g]! += u.ids.length;
+    lv[g]! += u.weight;
+  }
+  w.social.war.guilds = guilds;
+}
+
+/** Quem entra no mundo com a guerra de guildas em andamento vai para a guilda com menos gente (empate: menos nível). */
+export function ensureGuild(w: World, id: string): void {
+  if (w.social.war.mode !== 'guilds') return;
+  if (!w.social.war.guilds.has(id)) {
+    const online = allActors(w).filter((a) => a.id !== id);
+    const of = (g: number) => online.filter((a) => w.social.war.guilds.get(a.id) === g);
+    const n = [of(0).length, of(1).length];
+    const l = [0, 1].map((g) => of(g).reduce((s, a) => s + guildWeight(a), 0));
+    const g: 0 | 1 =
+      n[0] !== n[1]
+        ? n[0]! < n[1]!
+          ? 0
+          : 1
+        : l[0] !== l[1]
+          ? l[0]! < l[1]!
+            ? 0
+            : 1
+          : w.rng.chance(0.5)
+            ? 0
+            : 1;
+    w.social.war.guilds.set(id, g);
+  }
+  syncGuildParties(w);
+}
+
+/** Quem lidera o grupo de uma guilda só de heróis: o de maior nível (o Knight vale um pouco mais). */
+function guildLeader(w: World, ids: string[]): string {
+  return [...ids].sort((a, b) => guildWeight(actorById(w, b)!) - guildWeight(actorById(w, a)!))[0]!;
+}
+
+/**
+ * Na guerra de guildas cada guilda é UM grupo fixo com todos os seus membros online (ninguém entra nem sai por
+ * convite; quem desloga sai e quem chega entra sozinho). Formação livre: cada um segue a própria caça. Fora das
+ * guildas, os grupos de guilda se desfazem.
+ */
+export function syncGuildParties(w: World): void {
+  const war = w.social.war;
+  if (war.mode !== 'guilds') {
+    for (const p of allParties(w)) if (p.guild !== undefined) dropParty(w, p);
+    return;
+  }
+  const online = allActors(w);
+  for (const g of [0, 1] as const) {
+    const ids = online.filter((a) => war.guilds.get(a.id) === g).map((a) => a.id);
+    let p = allParties(w).find((x) => x.guild === g) ?? null;
+    // ninguém da guilda fica em outro grupo
+    for (const id of ids) {
+      const o = partyOf(w, id);
+      if (o && o !== p) leaveParty(w, id, true);
+    }
+    if (ids.length < 2) {
+      if (p) dropParty(w, p);
+      continue;
+    }
+    const humanIn = ids.includes(w.human.id);
+    if (!p) {
+      p = {
+        leaderId: humanIn ? w.human.id : guildLeader(w, ids),
+        members: [],
+        formation: 'free',
+        targeting: 'nearest',
+        friendlyFire: false,
+        trail: [],
+        guild: g,
+      };
+      if (!humanIn) w.social.heroParties.push(p);
+    }
+    p.members = [
+      ...p.members.filter((id) => ids.includes(id)),
+      ...ids.filter((id) => !p!.members.includes(id)),
+    ];
+    if (!p.members.includes(p.leaderId)) p.leaderId = humanIn ? w.human.id : guildLeader(w, ids);
+    // o grupo com o jogador é sempre o "grupo dele" (painel, mensagens); os outros ficam na lista dos heróis
+    if (humanIn && w.social.party !== p) {
+      w.social.heroParties = w.social.heroParties.filter((x) => x !== p);
+      w.social.party = p;
+    } else if (!humanIn && w.social.party === p) {
+      w.social.party = null;
+      w.social.heroParties.push(p);
+    }
+  }
+  w.human.scope.events.emit('partyChanged', {});
+}
+
+/**
+ * Liga/desliga a guerra (vale na hora). Ligar também liga o PK. As guildas são sorteadas de novo a cada vez que o
+ * modo guildas é escolhido; sair dele desfaz os grupos das guildas.
+ */
+export function setWarMode(w: World, mode: WarMode): void {
+  w.social.war.mode = mode;
+  if (mode !== 'off') w.social.pvp = true;
+  if (mode === 'guilds') {
+    w.social.invites = [];
+    // os grupos de guilda antigos saem antes do sorteio (o do jogador conta como grupo dele)
+    for (const p of allParties(w)) if (p.guild !== undefined) dropParty(w, p);
+    assignGuilds(w);
+  } else w.social.war.guilds = new Map();
+  syncGuildParties(w);
+}
+
 /** Remove o grupo do mundo (o do jogador ou um só de heróis). */
 function dropParty(w: World, p: Party): void {
   if (w.social.party === p) w.social.party = null;
@@ -165,7 +353,8 @@ function notify(w: World, text: string, party?: Party | null): void {
   w.human.scope.events.emit('partyChanged', {});
 }
 
-export type PartyFail = 'self' | 'notLeader' | 'alreadyInParty' | 'dead' | 'noInvite' | 'notMember';
+export type PartyFail =
+  'self' | 'notLeader' | 'alreadyInParty' | 'dead' | 'noInvite' | 'notMember' | 'guild' | 'locked';
 export const PARTY_FAIL_MESSAGE: Record<PartyFail, string> = {
   self: 'Você não pode se convidar.',
   notLeader: 'Só o líder do grupo pode fazer isso.',
@@ -173,6 +362,8 @@ export const PARTY_FAIL_MESSAGE: Record<PartyFail, string> = {
   dead: 'Personagem indisponível.',
   noInvite: 'Convite expirado.',
   notMember: 'Esse personagem não está no grupo.',
+  guild: 'Na guerra de guildas só dá para agrupar com a própria guilda.',
+  locked: 'Na guerra de guildas o grupo é a guilda inteira: ninguém entra nem sai.',
 };
 
 export function invite(w: World, fromId: string, toId: string): PartyFail | null {
@@ -185,6 +376,8 @@ export function invite(w: World, fromId: string, toId: string): PartyFail | null
   if (party && party.members.includes(fromId) && party.leaderId !== fromId && fromId !== w.human.id)
     return 'notLeader';
   if (party && party.members.includes(toId)) return 'alreadyInParty';
+  // guerra de guildas: os grupos são as guildas (fixos)
+  if (w.social.war.mode === 'guilds') return 'locked';
   w.social.invites = w.social.invites.filter(
     (i) => !(i.fromId === fromId && i.toId === toId) && i.expiresAt > w.now,
   );
@@ -210,6 +403,7 @@ export function acceptInvite(w: World, toId: string, fromId?: string): PartyFail
     (i) => i.toId === toId && (!fromId || i.fromId === fromId) && i.expiresAt > w.now,
   );
   if (!inv) return 'noInvite';
+  if (w.social.war.mode === 'guilds') return 'locked';
   w.social.invites = w.social.invites.filter((i) => i !== inv && i.toId !== toId);
   const into = partyOf(w, inv.fromId);
   if (into?.members.includes(toId)) return null;
@@ -236,9 +430,11 @@ export function declineInvite(w: World, toId: string): void {
     notify(w, `${actorName(w, toId)} recusou o convite de grupo.`);
 }
 
-export function leaveParty(w: World, id: string): PartyFail | null {
+/** Sai do grupo. O grupo da guilda é fixo: só sai à força (quem desloga, a reorganização das guildas). */
+export function leaveParty(w: World, id: string, force = false): PartyFail | null {
   const p = partyOf(w, id);
   if (!p) return 'notMember';
+  if (p.guild !== undefined && !force) return 'locked';
   p.members = p.members.filter((m) => m !== id);
   const name = actorName(w, id);
   if (p.members.length < 2) {
@@ -256,6 +452,7 @@ export function kickFromParty(w: World, leaderId: string, id: string): PartyFail
   if (!p) return 'notMember';
   if (p.leaderId !== leaderId) return 'notLeader';
   if (!p.members.includes(id)) return 'notMember';
+  if (p.guild !== undefined) return 'locked';
   return leaveParty(w, id);
 }
 
@@ -289,11 +486,12 @@ export function xpReceivers(w: World, killerId: string, at: { x: number; y: numb
 }
 
 // ------------------------------------------------------------------ PK
-export type PvpFail = 'off' | 'self' | 'party' | 'pz' | 'dead';
+export type PvpFail = 'off' | 'self' | 'party' | 'guild' | 'pz' | 'dead';
 export const PVP_FAIL_MESSAGE: Record<PvpFail, string> = {
   off: 'Ataque a jogadores desligado (ative o PK).',
   self: 'Você não pode atacar a si mesmo.',
   party: 'Membros do grupo só se atacam com o treino liberado.',
+  guild: 'Membros da mesma guilda não se atacam.',
   pz: 'Ninguém pode lutar dentro de uma área protegida.',
   dead: 'Alvo indisponível.',
 };
@@ -304,7 +502,8 @@ export function canAttackActor(w: World, attacker: PlayerEntity, victim: PlayerE
   const party = sameParty(w, attacker.id, victim.id);
   // membros só se atacam com o "ataque entre membros" ligado (treino); fora do grupo, só com PK
   if (party && !partyOf(w, attacker.id)!.friendlyFire) return 'party';
-  if (!party && !w.social.pvp) return 'off';
+  if (!party && !w.social.pvp && !atWar(w)) return 'off';
+  if (!party && sameGuild(w, attacker.id, victim.id)) return 'guild';
   if (isPz(w.map, attacker.x, attacker.y) || isPz(w.map, victim.x, victim.y)) return 'pz';
   return null;
 }
@@ -367,6 +566,7 @@ export function disbandParty(w: World, leaderId: string): PartyFail | null {
   const p = partyOf(w, leaderId);
   if (!p) return 'notMember';
   if (p.leaderId !== leaderId) return 'notLeader';
+  if (p.guild !== undefined) return 'locked';
   dropParty(w, p);
   notify(w, 'O grupo foi desfeito.', p);
   return null;
@@ -645,6 +845,11 @@ export function updateSocial(w: World): void {
   for (const [id, sk] of w.social.skulls) if (sk.until <= pkNow(w)) w.social.skulls.delete(id);
   for (const [id, until] of w.social.pzLocks) if (until <= pkNow(w)) w.social.pzLocks.delete(id);
   for (const [k, until] of w.social.revenge) if (until <= pkNow(w)) w.social.revenge.delete(k);
+  // guerra de guildas: quem entrou ou saiu do mundo entra/sai do grupo da guilda
+  if (w.social.war.mode === 'guilds' && w.now >= (w.social.war.nextSyncAt ?? 0)) {
+    w.social.war.nextSyncAt = w.now + 2000;
+    syncGuildParties(w);
+  }
   // membros que deixaram de existir saem do grupo
   for (const p of [...allParties(w)]) {
     if (!p.members.some((id) => !allActors(w).some((a) => a.id === id))) continue;

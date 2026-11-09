@@ -275,7 +275,7 @@ export function PartyPanel() {
                       <ItemIcon icon="ui_crown" size={14} />
                     </TapButton>
                   )}
-                  {lead && !m.isYou && (
+                  {lead && !m.isYou && !party.locked && (
                     <>
                       <TapButton
                         className="btn-pixel flex h-8 w-8 items-center justify-center !border-[6px]"
@@ -377,20 +377,26 @@ export function PartyPanel() {
             ]}
           />
         </Section>
-        <div className="mt-4 flex gap-2">
-          <PixelButton className="flex-1" onClick={() => session.partyLeave()} data-testid="party-leave">
-            Sair do grupo
-          </PixelButton>
-          {lead && (
-            <PixelButton
-              className="flex-1"
-              onClick={() => session.disbandParty()}
-              data-testid="party-disband"
-            >
-              Desfazer grupo
+        {party.locked ? (
+          <p className="mt-4 text-[12px] text-muted" data-testid="party-locked">
+            Guerra de guildas: o grupo é a sua guilda inteira. Ninguém entra nem sai enquanto ela durar.
+          </p>
+        ) : (
+          <div className="mt-4 flex gap-2">
+            <PixelButton className="flex-1" onClick={() => session.partyLeave()} data-testid="party-leave">
+              Sair do grupo
             </PixelButton>
-          )}
-        </div>
+            {lead && (
+              <PixelButton
+                className="flex-1"
+                onClick={() => session.disbandParty()}
+                data-testid="party-disband"
+              >
+                Desfazer grupo
+              </PixelButton>
+            )}
+          </div>
+        )}
       </div>
     </Panel>
   );
@@ -459,9 +465,10 @@ export function ActorMenu() {
   const session = useSession();
   const id = useLocal((s) => s.actorMenu);
   const hero = useSnap((s) => s.heroes.find((h) => h.id === id) ?? null);
+  const guildWar = useSnap((s) => s.war.mode === 'guilds');
   if (!id || !hero) return null;
   const inParty = hero.inParty;
-  const canInvite = !inParty;
+  const canInvite = !inParty && !guildWar; // guerra de guildas: grupos fixos
   const canAttack = !hero.attackBlocked;
   return (
     <div

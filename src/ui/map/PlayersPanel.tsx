@@ -87,6 +87,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
   const me = useSnap((s) => ({ name: s.player.name, region: s.region }));
   const offline = useLocal((s) => s.offline);
   const resting = useSnap((s) => s.resting);
+  const guildWar = useSnap((s) => s.war.mode === 'guilds');
   return (
     <Panel title="Personagens online" icon="ui_players" onClose={onClose}>
       <div data-testid="players-panel">
@@ -165,7 +166,7 @@ export function PlayersPanel({ onClose }: { onClose: () => void }) {
                   >
                     No grupo
                   </PixelButton>
-                ) : (
+                ) : guildWar ? null : (
                   <PixelButton
                     variant="gold"
                     className="shrink-0 !border-[6px] px-1 text-[11px]"

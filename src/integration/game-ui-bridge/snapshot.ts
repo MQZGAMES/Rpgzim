@@ -43,7 +43,11 @@ import {
   skullSeenBy,
   pendingInviteFor,
   sameParty,
+  GUILD_NAMES,
+  guildOf,
+  type WarMode,
 } from '../../game/social/social';
+import { allActors } from '../../game/simulation/World';
 import { heroActivity } from '../../game/ai/heroBrain';
 import { personaOf } from '../../game/ai/heroTactics';
 
@@ -193,6 +197,8 @@ export interface UiSnapshot {
     sparMode: 'training' | 'duel';
     /** Os heróis do grupo estão segurando a posição (ordem do painel). */
     holding: boolean;
+    /** Grupo da guilda (guerra de guildas): ninguém entra nem sai. */
+    locked: boolean;
     members: {
       id: string;
       name: string;
@@ -212,6 +218,12 @@ export interface UiSnapshot {
   /** Convite de grupo recebido e ainda válido. */
   invite: { fromId: string; fromName: string } | null;
   pvp: boolean;
+  /** Modo guerra e, na guerra de guildas, quem está em cada uma (a sua é `mine`). */
+  war: {
+    mode: WarMode;
+    mine: 0 | 1 | null;
+    guilds: { name: string; members: { id: string; name: string; level: number; me: boolean }[] }[];
+  };
   standAttack: boolean;
   /** Personagem marcado no botão de seleção (o ataque vai nele). */
   selectedActor: { id: string; name: string } | null;
@@ -537,6 +549,7 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
     friendlyFire: party.friendlyFire,
     sparMode: party.sparMode === 'duel' ? 'duel' : 'training',
     holding: party.members.some((id) => w.heroes.get(id)?.brain.order?.kind === 'hold'),
+    locked: party.guild !== undefined,
     members: party.members.flatMap((id) => {
       const a = actorById(w, id);
       if (!a) return [];
@@ -659,6 +672,25 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     party: partyView(sim),
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
+    war: {
+      mode: w.social.war.mode,
+      mine: guildOf(w, p.id),
+      guilds:
+        w.social.war.mode === 'guilds'
+          ? GUILD_NAMES.map((name, g) => ({
+              name,
+              members: allActors(w)
+                .filter((a) => guildOf(w, a.id) === g)
+                .map((a) => ({
+                  id: a.id,
+                  name: a.character.name,
+                  level: a.character.level,
+                  me: a.id === p.id,
+                }))
+                .sort((a, b) => b.level - a.level),
+            }))
+          : [],
+    },
     standAttack: c.flags.standAttack === true,
     goingTo: (() => {
       const t = sim.goToId ? w.heroes.get(sim.goToId) : undefined;

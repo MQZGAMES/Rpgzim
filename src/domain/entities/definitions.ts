@@ -415,7 +415,12 @@ export type HeroLineKey =
   | 'lfg'
   | 'tired'
   | 'congrats'
-  | 'rip';
+  | 'rip'
+  | 'warAttack'
+  | 'warRaid'
+  | 'warWin'
+  | 'warBetray'
+  | 'warHelp';
 
 export interface HeroDef {
   id: string;

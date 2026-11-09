@@ -4,7 +4,7 @@ import type Phaser from 'phaser';
 import { renderPos, isMoving } from '../movement/movement';
 import type { HeroEntity, MonsterEntity, Mover, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
-import { skullSeenBy } from '../social/social';
+import { atWar, isWarEnemy, sameGuild, skullSeenBy } from '../social/social';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
 import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
@@ -259,7 +259,17 @@ export class EntityViews {
     const skull = skullSeenBy(w, w.human.id, a.id);
     if (skull) badges.push(`ui_skull_${skull}`);
     // marcado no botão de seleção: nome em laranja (o ataque vai nele)
-    const color = w.ui.selectedActor === a.id ? '#ffb347' : inParty && a.id !== w.human.id ? '#7fd8ff' : base;
+    // guerra: inimigo em vermelho, a própria guilda em verde (o grupo continua azul)
+    const war =
+      atWar(w) && a.id !== w.human.id
+        ? isWarEnemy(w, w.human.id, a.id)
+          ? '#ff6b6b'
+          : sameGuild(w, w.human.id, a.id)
+            ? '#9fe870'
+            : null
+        : null;
+    const color =
+      w.ui.selectedActor === a.id ? '#ffb347' : inParty && a.id !== w.human.id ? '#7fd8ff' : (war ?? base);
     return { text: a.character.name, color, badges };
   }
 

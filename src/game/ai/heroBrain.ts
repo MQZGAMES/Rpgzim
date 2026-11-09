@@ -70,10 +70,18 @@ import {
   pendingInviteFor,
   pkNow,
   sameParty,
+  atWar,
+  isWarAlly,
+  isWarEnemy,
+  skullOf,
+  skullSeenBy,
+  UNJUST_KILLS_FOR_RED,
+  UNJUST_WINDOW_MS,
 } from '../social/social';
+import { engageNeed, power, sideStrength, warEnemiesNear, warOdds } from './heroWar';
 
 export type HeroMode =
-  'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover';
+  'decide' | 'hunt' | 'town' | 'train' | 'social' | 'retreat' | 'dead' | 'follow' | 'pk' | 'recover' | 'raid';
 
 type TownStep =
   | { kind: 'shop'; npcId: string; buyPotions?: boolean; upgrades?: boolean; trainingWeapon?: boolean }
@@ -199,6 +207,17 @@ export interface HeroBrainState {
     | null;
   /** Treino de nível mágico no tempo ocioso (mana cheia sem nada para fazer). */
   nextIdleTrainAt: number;
+  /** Modo guerra: quem ele foi caçar, onde o viu por último, quando pode sair para outra caçada e o próximo olhar em volta. */
+  raidTargetId?: string | null;
+  raidIntel?: { x: number; y: number; at: number } | null;
+  nextRaidAt?: number;
+  nextWarThinkAt?: number;
+  /** Quando olha de novo se um aliado precisa de ajuda numa briga e se vale trair o grupo (cada um por si). */
+  nextAssistAt?: number;
+  nextBetrayAt?: number;
+  /** Poções de vida ao começar a briga atual (mede o gasto) e tréguas: até quando não volta a atacar cada um. */
+  pkPotions?: number;
+  warTruce?: Record<string, number>;
   /** Jeito de gente: reação, pausas, sessão de jogo, AFK, conversa (ver heroHuman). */
   human: HumanState;
 }
@@ -336,6 +355,10 @@ export function heroActivity(w: World, h: HeroEntity): string {
       return 'acompanhando o grupo';
     case 'pk':
       return b.pkTargetId === w.human.id ? 'caçando VOCÊ' : 'em combate com um jogador';
+    case 'raid':
+      return b.raidTargetId === w.human.id ? 'caçando VOCÊ' : 'indo atrás de inimigos da guerra';
+    case 'decide':
+      return isPzLocked(w, h.id) && atWar(w) ? 'esperando o PZ lock passar' : 'pensando no que fazer';
     default:
       return 'pensando no que fazer';
   }
@@ -787,8 +810,16 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   const group = partyOf(w, h.id);
   const solo = !group || group.friendlyFire;
   // em grupo o PK é o do líder, mas a legítima defesa vale sempre
-  if (b.mode === 'pk' && !solo && !attackedRecently(w, b.pkTargetId ?? '', h.id, 10000))
+  // (na guerra o líder escolhe as vítimas do grupo: o PK dele continua)
+  if (
+    b.mode === 'pk' &&
+    !solo &&
+    !(atWar(w) && warChooser(w, h)) &&
+    !attackedRecently(w, b.pkTargetId ?? '', h.id, 10000)
+  )
     setMode(w, h, 'decide');
+  // guerra: olha em volta antes de tudo — foge do que não aguenta, ataca o que vale a pena
+  if (b.mode !== 'retreat' && thinkWar(w, h)) return;
   if (b.mode !== 'retreat' && selfDefense(w, h)) return;
   if (watchDanger(w, h)) return;
   // revanche planejada: sozinho ou como líder do grupo (os membros atacam o alvo do líder)
@@ -836,6 +867,9 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
       break;
     case 'pk':
       pk(w, h);
+      break;
+    case 'raid':
+      raid(w, h);
       break;
   }
 }
@@ -1282,7 +1316,9 @@ function townReason(w: World, h: HeroEntity): string | null {
   const potions = potionsOf(w, h);
   const price = potionPrice(w);
   const spendable = c.gold + lootValue(w, h) + c.bankGold;
-  const minPotions = 1 + Math.round(t.caution * 4);
+  const minPotions = 1 + Math.round(t.caution * 4) + (atWar(w) ? 3 : 0);
+  // guerra: sem estoque para brigar (cura e mana) ele vira presa — repõe antes de sair
+  if (atWar(w) && !warStocked(w, h) && spendable >= price * 10) return 'estoque para a guerra';
   // repõe só quando dá para comprar um bom estoque (senão volta à vila a cada 2 minutos)
   if (potions === 0 && spendable >= price * 5) return 'sem poção';
   if (potions < minPotions && spendable >= price * 12) return 'poucas poções';
@@ -1344,6 +1380,7 @@ function decide(w: World, h: HeroEntity): void {
     return planTown(w, h, undefined, 'decide', true);
   }
   if (!grave) b.recoverTries = 0;
+  if (waitOutLock(w, h)) return;
   if (hpPct(h) < 0.5 && potionsOf(w, h) === 0 && !isPzLocked(w, h.id)) {
     // sem poções: descansa na área protegida até recuperar (regeneração dobrada) ou pede a bênção
     if (!isPz(w.map, h.x, h.y)) return setMode(w, h, 'retreat');
@@ -1359,6 +1396,12 @@ function decide(w: World, h: HeroEntity): void {
   const untried = Object.entries(huntLevels(w)).some(
     ([id, lv]) => !h.brain.areaStats[id] && lv <= c.level + 1,
   );
+  // guerra: ir caçar um inimigo que o seu lado vence com folga (mais vontade em quem é corajoso ou lidera um grupo)
+  const raidFoe =
+    atWar(w) && w.now >= (b.nextRaidAt ?? 0) && hpPct(h) > 0.8 && !warRecovering(w, h) && warChooser(w, h)
+      ? pickRaidTarget(w, h)
+      : null;
+  const leads = partyOf(w, h.id)?.leaderId === h.id;
   // cada opção recebe uma nota; a escolha é sorteada com peso (quase sempre a melhor, às vezes improvisa)
   const options: [string, number][] = [
     ['hunt', 0.75 + h.brain.mood * 0.1],
@@ -1372,6 +1415,7 @@ function decide(w: World, h: HeroEntity): void {
     ],
     ['social', t.sociability * 0.03 + (humanNear ? 0.04 : 0)], // pouco tempo de praça: a caça é o que rende
     ['invite', canInviteHuman(w, h) ? t.sociability * 0.5 + affinityOf(h, human.id) * 0.4 : 0],
+    ['raid', raidFoe ? 0.35 + t.bravery * 0.35 + (leads ? 0.25 : 0) + b.mood * 0.1 - t.caution * 0.2 : 0],
   ];
   const total = options.reduce((s2, [, v]) => s2 + Math.max(0, v) ** 2, 0);
   let roll = w.rng.next() * total;
@@ -1398,6 +1442,8 @@ function decide(w: World, h: HeroEntity): void {
     case 'invite':
       inviteHuman(w, h);
       return startHunt(w, h);
+    case 'raid':
+      return startRaid(w, h, raidFoe!);
     case 'explore': {
       const q = chooseQuarry(w, h, true);
       heroSay(w, h, 'explore', { monster: w.data.monsters[q]?.name ?? q }, 60000);
@@ -1486,7 +1532,7 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     if (st && w.now - st.lastDeathAt < 15 * 60000) safety *= 0.3; // morreu lá há pouco
     // memória longa: cada morte lá pesa, e o peso some aos poucos (meia-vida de ~40 min)
     if (st?.deaths) safety /= 1 + st.deaths * 0.25 * Math.exp(-(w.now - st.lastDeathAt) / (40 * 60000));
-    let score = rate * safety ** 1.5;
+    let score = rate * safety ** 1.5 * warSpotFactor(w, h, spawns);
     // a caça que mais rendeu de verdade (já conhecida, sem morte recente) ganha um empurrão: ele volta para ela
     if (st && st.ms > 5 * 60000 && id === favoriteHunt(h) && w.now - st.lastDeathAt > 30 * 60000)
       score *= 1.15;
@@ -2244,12 +2290,9 @@ const LOOT_SCAN = 10;
  * Este saco é dele para pegar? Nunca o item que alguém jogou no chão nem o saco de morte de outro personagem (do
  * jogador, de colega de grupo ou de outro herói): só o próprio saco — ou o de quem ele está caçando no PK.
  */
-function heroMayLoot(w: World, h: HeroEntity, l: { ownerId?: string; dropped?: boolean }): boolean {
-  if (l.dropped) return false;
-  if (!l.ownerId || l.ownerId === h.id) return true;
-  // o saco de morte é aberto a todos: ainda assim ele não saqueia o jogador nem colegas de grupo
-  if (l.ownerId === w.human.id || sameParty(w, h.id, l.ownerId)) return false;
-  return true;
+function heroMayLoot(_w: World, _h: HeroEntity, l: { ownerId?: string; dropped?: boolean }): boolean {
+  // o saco de morte é de quem pegar primeiro (em qualquer modo): o dono tenta recuperar, mas todos podem levar
+  return !l.dropped;
 }
 
 /** A pilha que menos vale na mochila (entre as que ele venderia): a primeira a sair para dar lugar a loot melhor. */
@@ -2803,7 +2846,13 @@ function maybeRecoverGrave(w: World, h: HeroEntity, now = false): boolean {
 
 /** O saco de morte só vale o risco se as criaturas perto dele não forem demais para quem acabou de renascer. */
 function graveSafe(w: World, h: HeroEntity, grave: { x: number; y: number }): boolean {
-  return fightMargin(w, h, monstersNear(w, grave, 8)) >= SAFE_MARGIN;
+  if (fightMargin(w, h, monstersNear(w, grave, 8)) < SAFE_MARGIN) return false;
+  // guerra: inimigos acampando o saco (esperando ele voltar) — só vai se o lado dele der conta
+  if (!atWar(w)) return true;
+  const campers = allActors(w).filter(
+    (a) => !a.dead && isWarEnemy(w, h.id, a.id) && chebyshev(a, grave) <= 10,
+  );
+  return campers.reduce((s2, a) => s2 + power(a), 0) < sideStrength(w, h) * 0.8;
 }
 
 function recover(w: World, h: HeroEntity): void {
@@ -2823,7 +2872,26 @@ function recover(w: World, h: HeroEntity): void {
 }
 
 function retreat(w: World, h: HeroEntity): void {
-  if (isPzLocked(w, h.id)) return setMode(w, h, 'decide'); // com PZ lock não há templo para onde recuar
+  // guerra: fugiu de gente e já está longe dela, com a vida em dia — volta a caçar (não precisa atravessar o mapa até o templo)
+  if (
+    atWar(w) &&
+    h.brain.retreatWhy?.startsWith('guerra') &&
+    hpPct(h) > 0.5 &&
+    w.now - h.brain.stepStartedAt > 3000 &&
+    !warEnemiesNear(w, h, 14).length
+  ) {
+    h.brain.nextRaidAt = Math.max(h.brain.nextRaidAt ?? 0, w.now + 60000);
+    return setMode(w, h, 'decide');
+  }
+  if (isPzLocked(w, h.id)) {
+    // com PZ lock não há templo para onde recuar; na guerra ele corre para perto dos aliados (reagrupa)
+    if (atWar(w) && warEnemiesNear(w, h, 10).length && regroup(w, h)) return;
+    // na guerra o PZ lock é comum: perseguido por criaturas, foge mesmo assim para perto da vila (sem entrar no templo)
+    const chased = [...w.monsters.values()].some(
+      (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 8,
+    );
+    if (!atWar(w) || !chased) return setMode(w, h, 'decide');
+  }
   // travado e cercado: luta (a fuga sem saída só entrega as costas)
   if (w.now < h.brain.fightBackUntil && currentTarget(w)) return hunt(w, h, true, true);
   setTarget(w, null);
@@ -2994,23 +3062,32 @@ function leaveHeroParty(w: World, h: HeroEntity, why: 'town' | 'time' | 'gap'): 
  */
 function heroGroupLife(w: World, h: HeroEntity): void {
   const b = h.brain;
-  if (b.mode === 'dead' || b.mode === 'pk' || w.now < (b.groupThinkAt ?? 0)) return;
+  if (b.mode === 'dead' || b.mode === 'pk' || b.mode === 'raid' || w.now < (b.groupThinkAt ?? 0)) return;
+  // guerra de guildas: o grupo é a guilda inteira (fixo)
+  if (w.social.war.mode === 'guilds') return;
   b.groupThinkAt = w.now + 4000 + w.rng.next() * 4000;
   const party = partyOf(w, h.id);
   if (party) {
     if (humanInParty(w, h)) return;
     const leader = actorById(w, party.leaderId);
     if (!leader || leader.dead) return;
-    if (!b.groupUntil) b.groupUntil = w.now + (8 + w.rng.next() * 17) * 60000;
+    // (cada um por si: grupos de ocasião, mais curtos)
+    if (!b.groupUntil)
+      b.groupUntil = w.now + (atWar(w) ? 4 + w.rng.next() * 10 : 8 + w.rng.next() * 17) * 60000;
     // cansou do grupo, nível muito diferente ou o líder foi para longe demais
     if (w.now > b.groupUntil) return leaveHeroParty(w, h, 'time');
     if (Math.abs(leader.character.level - h.character.level) > 10) return leaveHeroParty(w, h, 'gap');
     if (leader.id !== h.id && chebyshev(leader, h) > 40) return leaveHeroParty(w, h, 'gap');
     // o líder convida mais um enquanto o grupo tem menos de 4
     if (party.leaderId !== h.id || party.members.length >= 4) return;
-  } else if (w.now < b.nextGroupAt || (b.mode !== 'hunt' && b.mode !== 'decide') || isPzLocked(w, h.id))
+  } else if (
+    w.now < b.nextGroupAt ||
+    (b.mode !== 'hunt' && b.mode !== 'decide') ||
+    (isPzLocked(w, h.id) && !atWar(w))
+  )
     return;
-  else if (!w.rng.chance(0.3 + h.hero.temperament.sociability * 0.3)) return; // gosta de caçar em grupo (a margem sobe e rende mais)
+  // (cada um por si: uns andam em bando, outros preferem ir sozinhos — o temperamento decide)
+  else if (!w.rng.chance(0.3 + h.hero.temperament.sociability * 0.3 + (atWar(w) ? 0.1 : 0))) return; // gosta de caçar em grupo (a margem sobe e rende mais)
   if (pendingInviteFor(w, h.id)) return;
   const mine = partyOf(w, h.id);
   // candidatos: heróis livres e por perto; o convite só parte de quem lideraria o grupo
@@ -3028,9 +3105,13 @@ function heroGroupLife(w: World, h: HeroEntity): void {
     )
     .filter(
       (o) =>
-        Math.abs(o.character.level - h.character.level) <= 7 &&
+        Math.abs(o.character.level - h.character.level) <= (atWar(w) ? 12 : 7) &&
         affinityOf(h, o.id) > -0.3 &&
-        affinityOf(o, h.id) > -0.3,
+        affinityOf(o, h.id) > -0.3 &&
+        // guerra de guildas: só com a própria guilda; e ninguém chama para o grupo quem está tentando matar
+        (w.social.war.mode !== 'guilds' || isWarAlly(w, h.id, o.id)) &&
+        o.brain.pkTargetId !== h.id &&
+        b.pkTargetId !== o.id,
     )
     .filter((o) =>
       mine ? true : leaderScore(h) > leaderScore(o) || (leaderScore(h) === leaderScore(o) && h.id < o.id),
@@ -3151,14 +3232,14 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
   const aff = affinityOf(h, inv.fromId);
   const grudge = h.brain.grudge?.id === inv.fromId && w.now < h.brain.grudge.until;
   const levelGap = from ? Math.abs(from.character.level - h.character.level) : 99;
-  const hostile = grudge || h.brain.pkTargetId === inv.fromId;
+  const hostile = grudge || h.brain.pkTargetId === inv.fromId || h.brain.raidTargetId === inv.fromId;
   // convite do jogador humano nunca é recusado (sai de qualquer outro grupo); entre heróis, conforme a relação
   const fromHuman = inv.fromId === w.human.id;
   const chance = fromHuman
     ? 1
     : hostile
       ? 0
-      : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0);
+      : 0.3 + t.sociability * 0.45 + aff * 0.5 - (levelGap > 10 ? 0.3 : 0) + (atWar(w) ? 0.25 : 0);
   if (fromHuman || w.rng.chance(Math.max(0, Math.min(0.97, chance)))) {
     if (fromHuman && hostile) {
       h.brain.grudge = null;
@@ -3232,7 +3313,12 @@ function follow(w: World, h: HeroEntity): void {
   if (leader.x !== b.leaderLastPos.x || leader.y !== b.leaderLastPos.y) {
     b.leaderLastPos = { x: leader.x, y: leader.y };
     b.leaderIdleSince = w.now;
-  } else if (!heroLed && w.now - b.leaderIdleSince > 4 * 60000 && !isPz(w.map, leader.x, leader.y)) {
+  } else if (
+    !heroLed &&
+    !atWar(w) &&
+    w.now - b.leaderIdleSince > 4 * 60000 &&
+    !isPz(w.map, leader.x, leader.y)
+  ) {
     heroSay(w, h, 'partyLeave', { player: leader.character.name }, 0);
     leaveParty(w, h.id);
     return setMode(w, h, 'decide');
@@ -3255,7 +3341,8 @@ function follow(w: World, h: HeroEntity): void {
   if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
   keepHaste(w, h); // seguindo: Corrida sempre ativa (depois de proteger o grupo)
   // PK segue o líder: ataca o personagem que o líder ataca (se o PK do mundo permitir) e solta a vítima quando ele para
-  const leaderFoe = actorById(w, leader.targetId);
+  // (na guerra também o inimigo que está batendo num colega: todo mundo nele)
+  const leaderFoe = actorById(w, leader.targetId) ?? (atWar(w) ? groupAggressor(w, h) : null);
   if (leaderFoe && !leaderFoe.dead && !sameParty(w, h.id, leaderFoe.id) && !canAttackActor(w, h, leaderFoe)) {
     if (h.targetId !== leaderFoe.id) setTarget(w, leaderFoe.id);
     if (h.targetId === leaderFoe.id) pvpSpells(w, h, leaderFoe);
@@ -3386,16 +3473,6 @@ function giftPotion(w: World, h: HeroEntity): void {
 }
 
 // ------------------------------------------------------------------ PK: defesa, vingança e oportunidade
-function power(a: {
-  character: { level: number; health: number };
-  stats: { maxHealth: number; armor: number; weapon: { attack: number; damage?: readonly [number, number] } };
-}): number {
-  const hp = a.character.health / Math.max(1, a.stats.maxHealth);
-  const atk = a.stats.weapon.damage
-    ? (a.stats.weapon.damage[0] + a.stats.weapon.damage[1]) / 2
-    : a.stats.weapon.attack;
-  return a.character.level * 12 + a.stats.maxHealth * 0.25 * (0.4 + hp * 0.6) + a.stats.armor * 2 + atk * 3;
-}
 
 /**
  * Legítima defesa contra QUALQUER personagem que o atacou há pouco (o jogador ou outro herói), sozinho ou em grupo:
@@ -3416,10 +3493,15 @@ function selfDefense(w: World, h: HeroEntity): boolean {
   );
   if (!foes.length) return false;
   const foe = foes.sort((a, c) => power(a) - power(c))[0]!;
-  const ratio = power(h) / Math.max(1, power(foe));
+  // na guerra a conta é lado contra lado (ele e os aliados por perto contra o atacante e os dele)
+  const ratio = atWar(w) ? warOdds(w, h, foe) : power(h) / Math.max(1, power(foe));
   // com o grupo por perto ele aguenta mais: os colegas ajudam (ver follow, alvo do líder)
-  const backup = alliesNear(w, h) * 0.25;
+  const backup = atWar(w) ? 0 : alliesNear(w, h) * 0.25;
+  // guerra: com trégua (a briga já empatou), não volta a trocar poção com ele — sai de perto se puder
+  if (atWar(w) && onTruce(w, h, foe.id) && hpPct(h) > 0.25 && (warFlee(w, h, foe) || runFrom(w, h, foe)))
+    return true;
   if ((hpPct(h) > 0.35 && ratio + backup > 0.7) || hpPct(h) > 0.8) return startPk(w, h, foe.id, 'revenge');
+  if (atWar(w)) return warFlee(w, h, foe) || startPk(w, h, foe.id, 'revenge');
   heroSay(w, h, 'flee', { player: foe.character.name }, 20000);
   if (b.mode !== 'retreat') setMode(w, h, 'retreat');
   return true;
@@ -3440,7 +3522,8 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
     if (h.targetId === human.id) h.targetId = null;
     return false;
   }
-  if (!w.social.pvp || human.dead || h.dead) return false;
+  // (na guerra quem decide é thinkWar: o jogador é um inimigo como qualquer outro)
+  if (!w.social.pvp || atWar(w) || human.dead || h.dead) return false;
   if (sameParty(w, h.id, human.id) || isPz(w.map, h.x, h.y) || isPz(w.map, human.x, human.y)) return false;
   const dist = chebyshev(human, h);
   if (dist > 9) return false;
@@ -3471,24 +3554,27 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
   return false;
 }
 
-function startPk(w: World, h: HeroEntity, targetId: string, why: 'greed' | 'revenge'): boolean {
+function startPk(w: World, h: HeroEntity, targetId: string, why: 'greed' | 'revenge' | 'war'): boolean {
   const victim = actorById(w, targetId);
   if (!victim) return false;
   setMode(w, h, 'pk');
   h.brain.pkTargetId = targetId;
+  h.brain.pkPotions = potionsOf(w, h);
   setTarget(w, targetId);
   if (h.targetId !== targetId) {
     setMode(w, h, 'decide');
     return false;
   }
-  changeAffinity(h, targetId, -0.2);
-  heroSay(
-    w,
-    h,
-    why === 'revenge' ? 'revenge' : 'pkThreat',
-    { player: victim.character.name, gold: victim.character.gold },
-    0,
-  );
+  changeAffinity(h, targetId, why === 'war' ? -0.05 : -0.2);
+  if (why === 'war') heroSay(w, h, 'warAttack', { player: victim.character.name }, 20000);
+  else
+    heroSay(
+      w,
+      h,
+      why === 'revenge' ? 'revenge' : 'pkThreat',
+      { player: victim.character.name, gold: victim.character.gold },
+      0,
+    );
   return true;
 }
 
@@ -3496,8 +3582,9 @@ function pk(w: World, h: HeroEntity): void {
   const b = h.brain;
   const victim = actorById(w, b.pkTargetId);
   if (!victim || !w.social.pvp || sameParty(w, h.id, victim.id)) return setMode(w, h, 'decide');
+  if (atWar(w) && !victim.dead && !isWarEnemy(w, h.id, victim.id)) return setMode(w, h, 'decide');
   if (victim.dead) {
-    heroSay(w, h, 'pkWin', { player: victim.character.name }, 0);
+    heroSay(w, h, atWar(w) ? 'warWin' : 'pkWin', { player: victim.character.name }, 0);
     h.brain.mood = Math.min(1, h.brain.mood + 0.3);
     if (b.grudge?.id === victim.id) b.grudge = null;
     // volta a caçar (e pega o que caiu, se estiver perto)
@@ -3510,6 +3597,22 @@ function pk(w: World, h: HeroEntity): void {
   if (hpPct(h) < 0.3 && potionsOf(w, h) === 0) {
     heroSay(w, h, 'flee', { player: victim.character.name }, 0);
     return setMode(w, h, 'retreat');
+  }
+  // guerra: chegou reforço do lado dele (ou a vida despencou): larga a briga antes de virar a vítima
+  if (atWar(w)) {
+    const odds = warOdds(w, h, victim);
+    if (((odds < 0.6 && hpPct(h) < 0.6) || (hpPct(h) < 0.25 && odds < 1.2)) && warFlee(w, h, victim)) return;
+    // briga empatada: as poções curam o que o outro tira (ou ele nem consegue acertar). Gente de verdade larga antes
+    // de torrar o estoque todo — trégua com esse inimigo por uns minutos
+    const elapsed = w.now - b.stepStartedAt;
+    const used = (b.pkPotions ?? potionsOf(w, h)) - potionsOf(w, h);
+    const vhp = victim.character.health / Math.max(1, victim.stats.maxHealth);
+    const stale =
+      (elapsed > 45000 && vhp > 0.35 && used >= 6) ||
+      (elapsed > 90000 && vhp > 0.25) ||
+      (elapsed > 20000 && w.now - h.lastAttackAt > 20000);
+    if (stale) return warDisengage(w, h, victim);
+    if (onTruce(w, h, victim.id) && vhp > 0.25) return setMode(w, h, 'decide');
   }
   if (h.targetId !== victim.id) setTarget(w, victim.id);
   keepHaste(w, h);
@@ -3595,6 +3698,447 @@ function pvpSpells(w: World, h: HeroEntity, victim: PlayerEntity): void {
   if (best) tryCast(w, h, best.id);
 }
 
+// ------------------------------------------------------------------ guerra: atacar, caçar gente, fugir e reagrupar
+/** Estoque para a guerra: cura para ~2,5 vidas cheias e (quem vive de mana) mana para brigar. */
+function warStocked(w: World, h: HeroEntity): boolean {
+  const goal = manaGoal(w, h);
+  return (
+    potionHeal(w, h) >= h.stats.maxHealth * 2.5 &&
+    (!goal || manaStock(w, h) >= Math.min(goal * 0.4, h.stats.maxMana * 2))
+  );
+}
+
+/** Sem condições de guerrear: sem estoque de poção, sem dinheiro para repor ou sem o equipamento (perdido numa morte). */
+function warBroke(w: World, h: HeroEntity): boolean {
+  const c = h.character;
+  const money = c.gold + c.bankGold + lootValue(w, h);
+  // (dinheiro: menos que umas 5 poções no total — bolsa, banco e loot a vender)
+  return unarmed(h) || !c.equipment.body || money < potionPrice(w) * 5 || !warStocked(w, h);
+}
+
+/**
+ * Em recuperação (ele ou a maior parte do grupo por perto sem dinheiro, itens ou poções): prioriza caçar para se
+ * refazer e só briga por oportunidade (inimigo quase morto) ou com vitória certa.
+ */
+function warRecovering(w: World, h: HeroEntity): boolean {
+  if (warBroke(w, h)) return true;
+  const mates = alliesAround(w, h).filter((a): a is HeroEntity => 'brain' in a);
+  return mates.length >= 2 && mates.filter((m) => warBroke(w, m)).length * 2 > mates.length + 1;
+}
+
+/** Escolhe as vítimas? Sozinho, líder do grupo ou em formação livre; quem segue o líder ataca o alvo dele. */
+function warChooser(w: World, h: HeroEntity): boolean {
+  const p = partyOf(w, h.id);
+  return !p || p.leaderId === h.id || !followingHuman(w, h);
+}
+
+/** Caveira do inimigo como ele a vê (vermelha, branca ou a amarela da vingança): matá-lo é justo. */
+function warSkullBonus(w: World, h: HeroEntity, foe: PlayerEntity): number {
+  const s = skullSeenBy(w, h.id, foe.id);
+  return s === 'red' ? 1 : s === 'white' ? 0.6 : s === 'yellow' ? 0.45 : 0;
+}
+
+/** Mortes injustas dele nas últimas 24 h (a 3ª dá caveira vermelha). */
+function unjustKills(w: World, h: HeroEntity): number {
+  return (w.social.unjust.get(h.id) ?? []).filter((t) => pkNow(w) - t < UNJUST_WINDOW_MS).length;
+}
+
+/**
+ * Vantagem que ele exige para atacar este inimigo: o temperamento dá a base; caveira no inimigo baixa (é justo);
+ * perto da caveira vermelha, atacar quem não tem caveira pede mais folga (mas não deixa de acontecer); com caveira
+ * vermelha a morte custa tudo — mais cuidado; em recuperação, só com vitória certa.
+ */
+function warNeed(w: World, h: HeroEntity, foe: PlayerEntity | null): number {
+  let need = engageNeed(h.hero.temperament, h.brain.mood);
+  if (foe && warSkullBonus(w, h, foe) > 0) need -= 0.15;
+  else if (unjustKills(w, h) >= UNJUST_KILLS_FOR_RED - 1) need += 0.2;
+  if (skullOf(w, h.id)?.kind === 'red') need += 0.25;
+  if (warRecovering(w, h)) need = Math.max(need + 0.6, 2);
+  return need;
+}
+
+/** Nota de um alvo de guerra (maior = melhor): caveira primeiro, depois vantagem, vida baixa, foco do time e rixa. */
+function warTargetScore(w: World, h: HeroEntity, foe: PlayerEntity, odds: number): number {
+  const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
+  const focused = allActors(w).some((a) => a !== h && a.targetId === foe.id && isWarAlly(w, h.id, a.id));
+  return (
+    warSkullBonus(w, h, foe) * 1.2 +
+    Math.min(odds, 3) * 0.6 +
+    (1 - foeHp) * 0.8 +
+    (focused ? 0.5 : 0) +
+    (h.brain.grudge?.id === foe.id ? 0.6 : 0) -
+    affinityOf(h, foe.id) * 0.4 -
+    chebyshev(foe, h) * 0.04
+  );
+}
+
+/**
+ * Guerra: a cada ~1,2 s olha em volta.
+ * 1. Inimigos demais para o seu lado (todos somados contra ele e os aliados por perto): sai dali.
+ * 2. Quem escolhe vítimas (sozinho, líder ou em formação livre): ataca o inimigo à vista que o seu lado vence com a
+ *    folga exigida (warNeed) — sozinho contra alguém muito mais forte a conta não fecha, com o grupo fecha. Quem está
+ *    quase morto vale o golpe final (oportunidade). Caveiras vêm primeiro.
+ * 3. Sem ninguém à vista: trai o grupo (cada um por si), vai ajudar um aliado que está brigando, ou sai para caçar
+ *    um inimigo que esteja dando sopa. Fora disso, segue caçando criaturas.
+ * Retorna true se tomou conta do turno.
+ */
+function thinkWar(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (!atWar(w) || h.dead || b.mode === 'pk' || b.mode === 'dead' || isPz(w.map, h.x, h.y)) return false;
+  if (w.now < (b.nextWarThinkAt ?? 0)) return false;
+  b.nextWarThinkAt = w.now + 900 + w.rng.next() * 700;
+  const foes = warEnemiesNear(w, h, 10).filter((f) => hasLineOfSight(w, h, f));
+  if (foes.length) {
+    // 1) perigo: o meu lado perde feio para os inimigos em volta
+    const close = foes.filter((f) => chebyshev(f, h) <= 7);
+    const pressure = close.reduce((s2, f) => s2 + power(f), 0);
+    const flee = warRecovering(w, h) || skullOf(w, h.id)?.kind === 'red' ? 0.9 : 0.7;
+    if (close.length && sideStrength(w, h) / Math.max(1, pressure) < flee) {
+      const worst = [...close].sort((a, c) => power(c) - power(a))[0]!;
+      if (warFlee(w, h, worst)) return true;
+    }
+    // 2) atacar: só quem escolhe as vítimas (os membros vão no alvo do líder, ver follow)
+    if (warChooser(w, h)) {
+      const hp = hpPct(h);
+      const recovering = warRecovering(w, h);
+      let best: { foe: PlayerEntity; score: number } | null = null;
+      for (const foe of foes) {
+        const odds = warOdds(w, h, foe);
+        const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
+        const finisher = foeHp < 0.25 && odds >= (recovering ? 1.1 : 0.9) && hp > 0.35;
+        if (!(odds >= warNeed(w, h, foe) && hp > 0.55 && !onTruce(w, h, foe.id)) && !finisher) continue;
+        const score = warTargetScore(w, h, foe, odds);
+        if (!best || score > best.score) best = { foe, score };
+      }
+      if (best) return startPk(w, h, best.foe.id, 'war');
+    }
+  }
+  return maybeBetray(w, h) || warAssist(w, h) || warUrge(w, h);
+}
+
+/** Vontade de caçar gente no meio da caça: de tempos em tempos, com vida e estoque em dia, vai atrás de um inimigo. */
+function warUrge(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (b.mode !== 'hunt' || w.now < (b.nextRaidAt ?? 0) || !warChooser(w, h)) return false;
+  b.nextRaidAt = w.now + 30000 + w.rng.next() * 30000;
+  if (hpPct(h) < 0.8 || warRecovering(w, h) || engagedByMonsters(w, h)) return false;
+  const t = h.hero.temperament;
+  const leads = partyOf(w, h.id)?.leaderId === h.id;
+  if (!w.rng.chance(0.25 + t.bravery * 0.3 + (leads ? 0.15 : 0) - t.caution * 0.1)) return false;
+  const foe = pickRaidTarget(w, h, 80);
+  if (!foe) return false;
+  startRaid(w, h, foe);
+  return true;
+}
+
+/**
+ * Busca o conflito: um aliado (grupo ou guilda) a até 35 tiles está brigando com um inimigo e, chegando lá, o lado
+ * deles vence — vai ajudar. Em recuperação, não sai da caça para isso.
+ */
+function warAssist(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (w.now < (b.nextAssistAt ?? 0) || !warChooser(w, h)) return false;
+  b.nextAssistAt = w.now + 3000;
+  if (b.mode === 'raid' || b.mode === 'town' || b.mode === 'retreat' || hpPct(h) < 0.7) return false;
+  if (warRecovering(w, h) || engagedByMonsters(w, h)) return false;
+  let best: { foe: PlayerEntity; ally: PlayerEntity; d: number } | null = null;
+  for (const ally of allActors(w)) {
+    if (ally === h || ally.dead || !isWarAlly(w, h.id, ally.id) || chebyshev(ally, h) > 35) continue;
+    for (const foe of warEnemiesNear(w, ally, 8)) {
+      if (!(attackedRecently(w, foe.id, ally.id, 5000) || ally.targetId === foe.id) || inTown(w, foe))
+        continue;
+      const odds = (sideStrength(w, ally) + power(h) * 0.8) / Math.max(1, sideStrength(w, foe));
+      if (odds < warNeed(w, h, foe) * 0.9) continue;
+      const d = chebyshev(foe, h);
+      if (!best || d < best.d) best = { foe, ally, d };
+    }
+  }
+  if (!best) return false;
+  startRaid(w, h, best.foe, best.ally);
+  return true;
+}
+
+/**
+ * Cada um por si: um grupo só de heróis pode ser traído. Quem é ganancioso (e não gosta tanto do colega) olha o
+ * colega ferido ou carregado de ouro; se vence ele E quem ficar do lado dele, sai do grupo e ataca. O grupo do
+ * jogador nunca trai.
+ */
+function maybeBetray(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if (w.social.war.mode !== 'ffa' || w.now < (b.nextBetrayAt ?? 0)) return false;
+  b.nextBetrayAt = w.now + 20000 + w.rng.next() * 20000;
+  const p = partyOf(w, h.id);
+  if (!p || p.guild !== undefined || p.members.includes(w.human.id)) return false;
+  if (hpPct(h) < 0.6 || engagedByMonsters(w, h) || warRecovering(w, h)) return false;
+  const t = h.hero.temperament;
+  const loyalty = (1 - t.greed) * 0.5 + t.sociability * 0.25 + t.caution * 0.25;
+  for (const id of p.members) {
+    const mate = id !== h.id ? actorById(w, id) : null;
+    if (
+      !mate ||
+      mate.dead ||
+      chebyshev(mate, h) > 6 ||
+      !hasLineOfSight(w, h, mate) ||
+      isPz(w.map, mate.x, mate.y)
+    )
+      continue;
+    const defenders = p.members
+      .map((m) => actorById(w, m))
+      .filter((a): a is PlayerEntity => !!a && a !== h && a !== mate && !a.dead && chebyshev(a, mate) <= 8);
+    const odds = power(h) / Math.max(1, power(mate) + defenders.reduce((s2, a) => s2 + power(a) * 0.8, 0));
+    const mateHp = mate.character.health / Math.max(1, mate.stats.maxHealth);
+    const loot = mate.character.gold + ('brain' in mate ? lootValue(w, mate as HeroEntity) : 0);
+    const temptation =
+      t.greed * 0.8 +
+      (1 - mateHp) * 0.6 +
+      Math.min(1, loot / (300 + h.character.level * 50)) * 0.5 +
+      (b.grudge?.id === mate.id ? 0.6 : 0) -
+      affinityOf(h, mate.id) * 0.8 -
+      loyalty * 0.6;
+    if (temptation < 0.45 || odds < warNeed(w, h, mate) || !w.rng.chance(0.35)) continue;
+    leaveParty(w, h.id);
+    for (const m of p.members) {
+      const o = w.heroes.get(m);
+      if (!o) continue;
+      changeAffinity(o, h.id, -0.7);
+      o.brain.dangerous[h.id] = w.now + 30 * 60000;
+    }
+    const victim = w.heroes.get(mate.id);
+    if (victim) victim.brain.grudge = { id: h.id, until: w.now + 30 * 60000 };
+    heroSay(w, h, 'warBetray', { player: mate.character.name }, 0);
+    return startPk(w, h, mate.id, 'war');
+  }
+  return false;
+}
+
+/** Alvo para ir caçar: inimigo fora da vila que o meu lado (eu e quem está comigo) vence com folga. */
+function pickRaidTarget(w: World, h: HeroEntity, maxDist = 120): PlayerEntity | null {
+  const mine = sideStrength(w, h, 10);
+  let best: { foe: PlayerEntity; score: number } | null = null;
+  for (const foe of allActors(w)) {
+    if (foe === h || foe.dead || !isWarEnemy(w, h.id, foe.id) || inTown(w, foe) || onTruce(w, h, foe.id))
+      continue;
+    const d = chebyshev(foe, h);
+    if (d > maxDist) continue;
+    const odds = mine / Math.max(1, sideStrength(w, foe));
+    if (odds < warNeed(w, h, foe) * 1.05) continue;
+    const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
+    const score =
+      warSkullBonus(w, h, foe) +
+      Math.min(odds, 3) * 0.5 -
+      d / 60 +
+      (h.brain.grudge?.id === foe.id ? 0.6 : 0) +
+      (1 - foeHp) * 0.3 -
+      affinityOf(h, foe.id) * 0.3;
+    if (!best || score > best.score) best = { foe, score };
+  }
+  return best?.foe ?? null;
+}
+
+function startRaid(w: World, h: HeroEntity, foe: PlayerEntity, helping?: PlayerEntity): void {
+  const b = h.brain;
+  setMode(w, h, 'raid', 4 * 60000);
+  b.raidTargetId = foe.id;
+  b.raidIntel = null;
+  if (helping) heroSay(w, h, 'warHelp', { player: helping.character.name }, 30000);
+  else heroSay(w, h, 'warRaid', { player: foe.character.name }, 60000);
+}
+
+/**
+ * Caçando um inimigo: vai até onde ele foi visto por último (a posição é atualizada de tempos em tempos, como quem
+ * pergunta no chat "onde ele tá?"). Ao avistá-lo, refaz a conta: vence, ataca; quase, espera o grupo chegar; perde
+ * feio, desiste e guarda a rixa para depois. Desiste também se ele entrar na vila ou se faltar vida/poção.
+ */
+function raid(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  const foe = actorById(w, b.raidTargetId ?? null);
+  const done = (cool = 45000): void => {
+    b.raidTargetId = null;
+    b.raidIntel = null;
+    b.nextRaidAt = w.now + cool + w.rng.next() * cool;
+    setMode(w, h, 'decide');
+  };
+  if (!atWar(w) || !foe || foe.dead || !isWarEnemy(w, h.id, foe.id) || (b.modeUntil && w.now > b.modeUntil))
+    return done();
+  if (hpPct(h) < 0.5 || potionsOf(w, h) <= LOW_POTIONS) return done();
+  if (inTown(w, foe)) {
+    heroSay(w, h, 'pkEscaped', { player: foe.character.name }, 60000);
+    return done();
+  }
+  // criaturas no caminho: resolve primeiro (a caçada continua depois)
+  if (engagedByMonsters(w, h)) return hunt(w, h, true, true);
+  const d = chebyshev(foe, h);
+  if (d <= 10 && hasLineOfSight(w, h, foe)) {
+    const odds = warOdds(w, h, foe);
+    const need = warNeed(w, h, foe);
+    const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
+    if (odds >= need || (foeHp < 0.25 && odds >= 0.9)) {
+      startPk(w, h, foe.id, 'war');
+      return;
+    }
+    // perde feio (ou está sozinho, sem ninguém para chegar): desiste por agora e guarda a conta
+    if (odds < need * 0.75 || !partyOf(w, h.id)) {
+      markDanger(w, h, foe.id, 5 * 60000);
+      heroSay(w, h, 'revengeLater', { player: foe.character.name }, 120000);
+      return done(2 * 60000);
+    }
+    // quase: para e espera o grupo encostar (não entra na briga em desvantagem)
+    if (h.path?.length) {
+      h.path = null;
+      h.pathGoal = null;
+      b.walkReq = null;
+    }
+    return;
+  }
+  if (!b.raidIntel || w.now - b.raidIntel.at > 8000) b.raidIntel = { x: foe.x, y: foe.y, at: w.now };
+  if (d > 12) keepHaste(w, h);
+  const goal = b.raidIntel;
+  if (!h.path?.length || !b.walkReq || chebyshev(b.walkReq, goal) > 3) goTo(w, h, goal.x, goal.y, 150000, 3);
+}
+
+/** Trégua com o inimigo (a última briga empatou): ainda não volta a atacá-lo. */
+function onTruce(w: World, h: HeroEntity, id: string): boolean {
+  return (h.brain.warTruce?.[id] ?? 0) > w.now;
+}
+
+/** Larga a briga empatada: trégua de ~3 min com ele; com a vida baixa, recua para se refazer. */
+function warDisengage(w: World, h: HeroEntity, foe: PlayerEntity): void {
+  const b = h.brain;
+  const until = w.now + (2.5 + w.rng.next()) * 60000;
+  (b.warTruce ??= {})[foe.id] = until;
+  // a trégua vale para os dois lados (o outro também cansou de trocar poção): ele larga a briga no próximo pensamento
+  const other = w.heroes.get(foe.id);
+  if (other) (other.brain.warTruce ??= {})[h.id] = Math.max(other.brain.warTruce[h.id] ?? 0, until);
+  for (const [id, t] of Object.entries(b.warTruce)) if (t <= w.now) delete b.warTruce[id];
+  heroSay(w, h, 'revengeLater', { player: foe.character.name }, 60000);
+  b.nextRaidAt = Math.max(b.nextRaidAt ?? 0, w.now + 60000);
+  if (hpPct(h) < 0.5 && warFlee(w, h, foe)) return;
+  setMode(w, h, 'decide');
+}
+
+/**
+ * Sai de uma briga perdida: sem PZ lock, recua para o templo; com ele (não entra na área protegida), corre para perto
+ * do aliado mais próximo. Sem ninguém para quem correr, retorna false (a legítima defesa decide: luta).
+ */
+function warFlee(w: World, h: HeroEntity, foe: PlayerEntity): boolean {
+  const b = h.brain;
+  if (isPzLocked(w, h.id) && !nearestWarAlly(w, h)) return false;
+  heroSay(w, h, 'flee', { player: foe.character.name }, 20000);
+  markDanger(w, h, foe.id, 5 * 60000);
+  b.retreatWhy = `guerra: inimigos demais (${foe.character.name})`;
+  if (b.mode !== 'retreat') setMode(w, h, 'retreat');
+  return true;
+}
+
+/** Afasta-se do inimigo (sem abrigo nem aliado para onde correr): um ponto livre do lado oposto a ele. */
+function runFrom(w: World, h: HeroEntity, foe: PlayerEntity): boolean {
+  const dx = Math.sign(h.x - foe.x) || (w.rng.chance(0.5) ? 1 : -1);
+  const dy = Math.sign(h.y - foe.y);
+  if (h.targetId && !w.monsters.has(h.targetId)) setTarget(w, null);
+  keepHaste(w, h);
+  if (h.path?.length && isMoving(h, w.now)) return true;
+  for (const d of [14, 10, 7, 4]) {
+    const x = h.x + dx * d;
+    const y = h.y + dy * d;
+    if (canEnter(w, x, y, false, h.id) && !isPz(w.map, x, y)) {
+      goTo(w, h, x, y, 40000);
+      return true;
+    }
+  }
+  return false;
+}
+
+function nearestWarAlly(w: World, h: HeroEntity): PlayerEntity | null {
+  return (
+    allActors(w)
+      .filter(
+        (a) => a !== h && !a.dead && isWarAlly(w, h.id, a.id) && chebyshev(a, h) <= 30 && chebyshev(a, h) > 2,
+      )
+      .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0] ?? null
+  );
+}
+
+/** Corre (Corrida) para perto do aliado mais próximo. Retorna false se não há aliado longe dele (já está junto). */
+function regroup(w: World, h: HeroEntity): boolean {
+  const ally = nearestWarAlly(w, h);
+  if (!ally) return false;
+  if (h.targetId && !w.monsters.has(h.targetId)) setTarget(w, null);
+  keepHaste(w, h);
+  const b = h.brain;
+  if (!h.path?.length || !b.walkReq || chebyshev(b.walkReq, ally) > 2) goTo(w, h, ally.x, ally.y, 60000, 1);
+  return true;
+}
+
+/** Seguindo o grupo na guerra: o inimigo por perto que está batendo num colega (ou que um colega ataca) — o mais ferido. */
+function groupAggressor(w: World, h: HeroEntity): PlayerEntity | null {
+  const members = partyMembers(w, h);
+  return (
+    warEnemiesNear(w, h, 8)
+      .filter((f) =>
+        members.some((m) => attackedRecently(w, f.id, m, 4000) || actorById(w, m)?.targetId === f.id),
+      )
+      .sort((a, c) => a.character.health / a.stats.maxHealth - c.character.health / c.stats.maxHealth)[0] ??
+    null
+  );
+}
+
+/**
+ * Guerra com PZ lock (não entra na vila para repor) e o estoque no fim ou a vida baixa: espera o lock passar perto da
+ * porta mais próxima, fora da área protegida (caçar seco seria morrer). Retorna true se está esperando.
+ */
+function waitOutLock(w: World, h: HeroEntity): boolean {
+  if (!atWar(w) || !isPzLocked(w, h.id) || isPz(w.map, h.x, h.y)) return false;
+  if (potionsOf(w, h) > LOW_POTIONS + 1 && hpPct(h) >= 0.5) return false;
+  if (engagedByMonsters(w, h)) return false;
+  const doors = [...w.map.doors].sort((a, c) => chebyshev(a, h) - chebyshev(c, h));
+  for (const door of doors.slice(0, 3))
+    for (const dy of [2, -2, 3, -3]) {
+      const x = door.x;
+      const y = door.y + dy;
+      if (isPz(w.map, x, y) || !canEnter(w, x, y, false, h.id)) continue;
+      h.brain.townWhy = 'esperando o PZ lock passar';
+      if (chebyshev({ x, y }, h) > 2 && !h.path?.length) goTo(w, h, x, y, 60000, 1);
+      return true;
+    }
+  return false;
+}
+
+/** A guerra mudou (ligou, desligou ou trocou de modo): cada herói reavalia tudo já no próximo pensamento. */
+export function heroWarChanged(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  b.nextWarThinkAt = 0;
+  b.nextAssistAt = 0;
+  b.nextBetrayAt = w.now + 30000 + w.rng.next() * 30000;
+  b.nextRaidAt = w.now + 5000 + w.rng.next() * 15000;
+  b.raidTargetId = null;
+  b.raidIntel = null;
+  b.warTruce = {};
+  b.groupThinkAt = 0;
+  b.nextGroupAt = Math.min(b.nextGroupAt, w.now);
+  if (b.mode === 'pk' || b.mode === 'raid' || (b.mode === 'follow' && !followingHuman(w, h)))
+    setMode(w, h, 'decide');
+}
+
+/**
+ * Busca o conflito na escolha da caça: área com inimigos que o lado dele vence rende mais (é onde a guerra acontece);
+ * com inimigos fortes demais por perto, rende menos. Em recuperação, só evita os fortes.
+ */
+function warSpotFactor(w: World, h: HeroEntity, spawns: readonly { x: number; y: number }[]): number {
+  if (!atWar(w)) return 1;
+  const mine = sideStrength(w, h, 10);
+  const recovering = warRecovering(w, h);
+  let prey = 0;
+  let threat = 0;
+  for (const foe of allActors(w)) {
+    if (foe === h || foe.dead || !isWarEnemy(w, h.id, foe.id) || !spawns.some((s) => chebyshev(s, foe) <= 15))
+      continue;
+    const odds = mine / Math.max(1, power(foe));
+    if (odds >= warNeed(w, h, foe)) prey++;
+    else if (odds < 0.8) threat++;
+  }
+  return (recovering ? 1 : 1 + Math.min(2, prey) * 0.3) * (threat ? 0.5 : 1);
+}
+
 // ------------------------------------------------------------------ improviso: comentários e pequenas vontades
 function whims(w: World, h: HeroEntity): void {
   const b = h.brain;
@@ -3667,6 +4211,35 @@ function callForHelp(w: World, h: HeroEntity): void {
   if (w.now < b.nextHelpCallAt || h.dead || isPz(w.map, h.x, h.y)) return;
   const party = partyOf(w, h.id);
   if (!party) return;
+  // guerra: apanhando de gente, chama os 3 aliados mais perto (eles vêm caçar o agressor e refazem a conta ao chegar)
+  if (atWar(w)) {
+    const foe = allActors(w).find(
+      (a) => !a.dead && isWarEnemy(w, h.id, a.id) && attackedRecently(w, a.id, h.id, 4000),
+    );
+    if (foe) {
+      const allies = [...w.heroes.values()]
+        .filter(
+          (a) =>
+            a !== h &&
+            !a.dead &&
+            isWarAlly(w, h.id, a.id) &&
+            chebyshev(a, h) > 6 &&
+            chebyshev(a, h) <= 40 &&
+            a.brain.mode !== 'pk' &&
+            a.brain.mode !== 'retreat' &&
+            a.brain.mode !== 'town' &&
+            hpPct(a) > 0.6,
+        )
+        .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))
+        .slice(0, 3);
+      if (allies.length) {
+        b.nextHelpCallAt = w.now + 25000;
+        for (const a of allies) asActor(w, a, () => startRaid(w, a, foe, h));
+        heroSay(w, h, 'helpCall', {}, 0);
+        return;
+      }
+    }
+  }
   const hitters = [...w.monsters.values()].filter(
     (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 3,
   );
@@ -3684,7 +4257,9 @@ function callForHelp(w: World, h: HeroEntity): void {
         a.brain.mode !== 'town' &&
         (a.brain.summonedUntil ?? 0) <= w.now &&
         hpPct(a) > 0.5,
-    );
+    )
+    .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))
+    .slice(0, 3);
   if (!far.length) return;
   b.nextHelpCallAt = w.now + 30000;
   for (const a of far) {
@@ -3813,6 +4388,7 @@ function markDanger(w: World, h: HeroEntity, id: string, ms: number): void {
 
 /** Força do herói somada à dos colegas por perto (os de grupo valem 80%: nem sempre entram juntos). */
 function strengthWithAllies(w: World, h: HeroEntity): number {
+  if (atWar(w)) return sideStrength(w, h, 10); // guerra: a guilda por perto também conta
   return power(h) + alliesAround(w, h).reduce((s, a) => s + power(a) * 0.8, 0);
 }
 
@@ -3822,7 +4398,15 @@ function strengthWithAllies(w: World, h: HeroEntity): number {
  */
 function watchDanger(w: World, h: HeroEntity): boolean {
   const b = h.brain;
-  if (!w.social.pvp || w.now < b.nextDangerAt || b.mode === 'pk' || b.mode === 'retreat' || b.mode === 'dead')
+  // (na guerra quem vigia o perigo é thinkWar, lado contra lado)
+  if (
+    !w.social.pvp ||
+    atWar(w) ||
+    w.now < b.nextDangerAt ||
+    b.mode === 'pk' ||
+    b.mode === 'retreat' ||
+    b.mode === 'dead'
+  )
     return false;
   b.nextDangerAt = w.now + 1000;
   const foe = allActors(w).find(
