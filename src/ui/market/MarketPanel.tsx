@@ -13,10 +13,12 @@ import { MarketItem } from './MarketItem';
 import { Coin, FitBadge } from './marketUi';
 
 type Mode = 'buy' | 'sell' | 'mine' | 'log';
+/** Categoria da lista; 'all' = "Ver tudo" (tudo à venda ao comprar, tudo que você tem ao vender). */
+type ListCat = MarketCategoryId | 'all';
 type Screen =
   | { kind: 'cats' }
-  | { kind: 'list'; cat: MarketCategoryId }
-  | { kind: 'item'; itemId: string; back: MarketCategoryId | 'mine' | 'search' };
+  | { kind: 'list'; cat: ListCat }
+  | { kind: 'item'; itemId: string; back: ListCat | 'mine' | 'search' };
 type VocFilter = 'all' | 'mine' | 'knight' | 'paladin' | 'sorcerer' | 'druid';
 type Sort = 'level-asc' | 'level-desc' | 'price-asc' | 'price-desc';
 
@@ -55,10 +57,11 @@ export function MarketPanel() {
     (mode === 'sell' ? market.quotes[it.itemId]?.bid : market.quotes[it.itemId]?.ask) ?? null;
   const vocOk = (it: CatalogItem) =>
     voc === 'all' || !it.vocations || it.vocations.includes((voc === 'mine' ? vocation : voc) as never);
+  const viewAll = screen.kind === 'list' && screen.cat === 'all';
   const listFor = (items: CatalogItem[]) =>
     items
       .filter((it) => (mode === 'sell' ? (market.owned[it.itemId] ?? 0) > 0 : true))
-      .filter((it) => mode === 'sell' || !onlyOffers || priceOf(it) !== null)
+      .filter((it) => mode === 'sell' || !(onlyOffers || viewAll) || priceOf(it) !== null)
       .filter(vocOk)
       .sort((a, b) => {
         if (sort.startsWith('level'))
@@ -91,7 +94,9 @@ export function MarketPanel() {
   const mine = market.offers.filter((o) => o.mine);
   const title =
     screen.kind === 'list'
-      ? MARKET_CATEGORIES.find((c) => c.id === screen.cat)?.name
+      ? screen.cat === 'all'
+        ? 'Ver tudo'
+        : MARKET_CATEGORIES.find((c) => c.id === screen.cat)?.name
       : screen.kind === 'item'
         ? byId.get(screen.itemId)?.name
         : null;
@@ -191,6 +196,7 @@ export function MarketPanel() {
                   : null
               }
               onCat={(cat) => go({ kind: 'list', cat })}
+              onAll={() => go({ kind: 'list', cat: 'all' })}
               onItem={(itemId) => go({ kind: 'item', itemId, back: 'search' })}
             />
           ) : screen.kind === 'list' ? (
@@ -221,7 +227,7 @@ export function MarketPanel() {
                       {label}
                     </PixelButton>
                   ))}
-                  {mode === 'buy' && (
+                  {mode === 'buy' && !viewAll && (
                     <PixelButton
                       variant={onlyOffers ? 'gold' : 'stone'}
                       className={chip(onlyOffers)}
@@ -235,7 +241,7 @@ export function MarketPanel() {
               </div>
               <ItemRows
                 mode={tradeMode}
-                items={listFor(catalog.filter((c) => c.category === screen.cat))}
+                items={listFor(catalog.filter((c) => screen.cat === 'all' || c.category === screen.cat))}
                 onItem={(itemId) => go({ kind: 'item', itemId, back: screen.cat })}
               />
             </>
@@ -258,6 +264,7 @@ function Categories({
   setQuery,
   results,
   onCat,
+  onAll,
   onItem,
 }: {
   mode: 'buy' | 'sell';
@@ -266,6 +273,7 @@ function Categories({
   setQuery: (q: string) => void;
   results: CatalogItem[] | null;
   onCat: (c: MarketCategoryId) => void;
+  onAll: () => void;
   onItem: (itemId: string) => void;
 }) {
   const market = useSnap((s) => s.market)!;
@@ -278,6 +286,7 @@ function Categories({
           s + (mode === 'sell' ? (market.owned[c.itemId] ?? 0) : (market.quotes[c.itemId]?.askUnits ?? 0)),
         0,
       );
+  const total = MARKET_CATEGORIES.reduce((s, c) => s + count(c.id), 0);
   return (
     <div data-testid="market-categories">
       <input
@@ -291,35 +300,45 @@ function Categories({
       {results ? (
         <ItemRows mode={mode} items={results} onItem={onItem} />
       ) : (
-        groups.map((g) => (
-          <div key={g} className="mb-2">
-            <div className="mb-1 text-[12px] text-muted">{g}</div>
-            <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
-              {MARKET_CATEGORIES.filter((c) => c.group === g).map((c) => {
-                const n = count(c.id);
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onCat(c.id)}
-                    className={`frame-slot relative flex min-h-[64px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
-                    data-testid={`market-cat-${c.id}`}
-                  >
-                    <ItemIcon icon={c.icon} size={26} />
-                    <span className="text-[10px] leading-tight text-parchment">{c.name}</span>
-                    {n > 0 && (
-                      <span
-                        className={`text-outline absolute right-[2px] top-[1px] text-[10px] ${mode === 'sell' ? 'text-heal' : 'text-gold-light'}`}
-                      >
-                        {n}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+        <>
+          <PixelButton
+            variant="gold"
+            className="mb-2 min-h-[40px] w-full !border-[6px] text-[13px]"
+            onClick={onAll}
+            data-testid="market-view-all"
+          >
+            Ver tudo ({total})
+          </PixelButton>
+          {groups.map((g) => (
+            <div key={g} className="mb-2">
+              <div className="mb-1 text-[12px] text-muted">{g}</div>
+              <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
+                {MARKET_CATEGORIES.filter((c) => c.group === g).map((c) => {
+                  const n = count(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onCat(c.id)}
+                      className={`frame-slot relative flex min-h-[64px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
+                      data-testid={`market-cat-${c.id}`}
+                    >
+                      <ItemIcon icon={c.icon} size={26} />
+                      <span className="text-[10px] leading-tight text-parchment">{c.name}</span>
+                      {n > 0 && (
+                        <span
+                          className={`text-outline absolute right-[2px] top-[1px] text-[10px] ${mode === 'sell' ? 'text-heal' : 'text-gold-light'}`}
+                        >
+                          {n}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </>
       )}
       <p className="text-[11px] text-muted">
         {mode === 'buy'
@@ -400,7 +419,12 @@ function ItemRows({
 
 const fmtWhen = (at: number) =>
   at > 0
-    ? new Date(at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    ? new Date(at).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : '';
 
 /** Registro: o que você comprou e vendeu no mercado (ofertas atendidas incluídas), com preço e total. */
@@ -438,7 +462,9 @@ function TradeLog() {
                   <ItemIcon icon={it?.icon ?? 'ui_bag'} size={26} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-parchment">
-                      <span className={buy ? 'text-hp-light' : 'text-heal'}>{buy ? 'Comprou' : 'Vendeu'}</span>{' '}
+                      <span className={buy ? 'text-hp-light' : 'text-heal'}>
+                        {buy ? 'Comprou' : 'Vendeu'}
+                      </span>{' '}
                       {e.count}x {it?.name ?? e.itemId}
                     </span>
                     <span className="block text-[11px] text-muted">
