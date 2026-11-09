@@ -11,6 +11,12 @@ import { VOCATION_IDS } from '../../domain/value-objects/ids';
 /** Sem acento e em minúsculas (o filtro acha "joao" em "João"). */
 const fold = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
+/** "09/11 02:57" — vazio quando o save não tem data. */
+const fmtSaved = (at: number) =>
+  at > 0
+    ? new Date(at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+
 export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slotId: string) => void }) {
   const { saves, data, audio, seasonReset } = useServices();
   const [seasonSeen, setSeasonSeen] = useState(false);
@@ -104,6 +110,11 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                             <span className="block text-[11px] text-parchment">
                               {data.vocations[s.vocation as keyof typeof data.vocations]?.name ?? s.vocation} · Nível {s.level}
                             </span>
+                            {s.updatedAt > 0 && (
+                              <span className="block text-[10px] text-muted" data-testid={`slot-saved-${s.slotId}`}>
+                                Último salvamento: {fmtSaved(s.updatedAt)}
+                              </span>
+                            )}
                           </span>
                         </button>
                         <PixelButton
