@@ -126,6 +126,15 @@ export interface MarketOfferView {
   at: number;
 }
 
+export interface MarketLogView {
+  kind: 'buy' | 'sell';
+  itemId: string;
+  count: number;
+  /** Preço por unidade. */
+  price: number;
+  at: number;
+}
+
 export type MarketQuoteView = PriceGuide;
 
 export interface UiSnapshot {
@@ -270,6 +279,8 @@ export interface UiSnapshot {
     money: number;
     /** Ouro reservado nas suas ofertas de compra. */
     escrow: number;
+    /** Registro das suas compras e vendas (do mais recente ao mais antigo). */
+    log: MarketLogView[];
   } | null;
   loot: {
     title: string;
@@ -371,6 +382,7 @@ function marketView(sim: GameSimulation, npcName: string): NonNullable<UiSnapsho
     parcels: parcelUnits(m, c.id),
     money: c.gold + c.bankGold,
     escrow: escrowOf(m, c.id),
+    log: [...(m.log[c.id] ?? [])].reverse(),
   };
 }
 

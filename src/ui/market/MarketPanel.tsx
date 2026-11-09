@@ -12,7 +12,7 @@ import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { MarketItem } from './MarketItem';
 import { Coin, FitBadge } from './marketUi';
 
-type Mode = 'buy' | 'sell' | 'mine';
+type Mode = 'buy' | 'sell' | 'mine' | 'log';
 type Screen =
   | { kind: 'cats' }
   | { kind: 'list'; cat: MarketCategoryId }
@@ -74,7 +74,7 @@ export function MarketPanel() {
   const switchMode = (m: Mode) => {
     setMode(m);
     // no item, troca de modo e continua no mesmo item; na lista ou nas categorias, volta às categorias
-    if (screen.kind !== 'item' || m === 'mine') setScreen({ kind: 'cats' });
+    if (screen.kind !== 'item' || m === 'mine' || m === 'log') setScreen({ kind: 'cats' });
   };
   const back = () => {
     if (screen.kind === 'item')
@@ -106,7 +106,7 @@ export function MarketPanel() {
     >
       <div className="flex min-h-0 flex-1 flex-col" data-testid="market-panel">
         {/* 1) comprar / vender / minhas ofertas */}
-        <div className="mb-1 grid shrink-0 grid-cols-3 gap-1">
+        <div className="mb-1 grid shrink-0 grid-cols-4 gap-1">
           <PixelButton
             variant={mode === 'buy' ? 'gold' : 'stone'}
             className="min-h-[40px] !border-[6px] text-[13px]"
@@ -131,6 +131,14 @@ export function MarketPanel() {
           >
             Minhas ({mine.length})
           </PixelButton>
+          <PixelButton
+            variant={mode === 'log' ? 'gold' : 'stone'}
+            className="min-h-[40px] !border-[6px] text-[12px]"
+            onClick={() => switchMode('log')}
+            data-testid="market-mode-log"
+          >
+            Registro
+          </PixelButton>
         </div>
         <div className="mb-1 flex shrink-0 flex-wrap items-center gap-x-3 text-[11px] text-muted">
           <span>
@@ -152,7 +160,7 @@ export function MarketPanel() {
             </PixelButton>
           )}
         </div>
-        {screen.kind !== 'cats' && mode !== 'mine' && (
+        {screen.kind !== 'cats' && mode !== 'mine' && mode !== 'log' && (
           <div className="mb-1 flex shrink-0 items-center gap-2">
             <PixelButton
               className="min-h-[34px] !border-[5px] px-2 text-[12px]"
@@ -165,7 +173,9 @@ export function MarketPanel() {
           </div>
         )}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-          {mode === 'mine' ? (
+          {mode === 'log' ? (
+            <TradeLog />
+          ) : mode === 'mine' ? (
             <MyOffers
               onOpen={(itemId, side) => (setMode(side), go({ kind: 'item', itemId, back: 'mine' }))}
             />
@@ -384,6 +394,67 @@ function ItemRows({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const fmtWhen = (at: number) =>
+  at > 0
+    ? new Date(at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+
+/** Registro: o que você comprou e vendeu no mercado (ofertas atendidas incluídas), com preço e total. */
+function TradeLog() {
+  const session = useSession();
+  const market = useSnap((s) => s.market)!;
+  const catalog = useMemo(() => session.marketCatalog(), [session]);
+  const byId = new Map(catalog.map((c) => [c.itemId, c]));
+  const spent = market.log.reduce((s, e) => s + (e.kind === 'buy' ? e.count * e.price : 0), 0);
+  const earned = market.log.reduce((s, e) => s + (e.kind === 'sell' ? e.count * e.price : 0), 0);
+  return (
+    <div data-testid="market-log">
+      {market.log.length === 0 ? (
+        <p className="text-[12px] text-muted">Nenhum negócio ainda.</p>
+      ) : (
+        <>
+          <div className="mb-1 flex flex-wrap gap-x-3 text-[11px] text-muted">
+            <span>
+              Gasto <Coin n={spent} className="text-hp-light" />
+            </span>
+            <span>
+              Recebido <Coin n={earned} className="text-heal" />
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {market.log.map((e, i) => {
+              const it = byId.get(e.itemId);
+              const buy = e.kind === 'buy';
+              return (
+                <div
+                  key={`${e.at}-${i}`}
+                  className="frame-slot flex items-center gap-2 !border-[5px] px-1 py-1 text-[12px]"
+                  data-testid={`market-log-${i}`}
+                >
+                  <ItemIcon icon={it?.icon ?? 'ui_bag'} size={26} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-parchment">
+                      <span className={buy ? 'text-hp-light' : 'text-heal'}>{buy ? 'Comprou' : 'Vendeu'}</span>{' '}
+                      {e.count}x {it?.name ?? e.itemId}
+                    </span>
+                    <span className="block text-[11px] text-muted">
+                      a <Coin n={e.price} /> · total {e.count * e.price} · {fmtWhen(e.at)}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <p className="mt-2 text-[11px] text-muted">
+        Guarda as últimas 100 compras e vendas, inclusive as ofertas suas que alguém atendeu enquanto você
+        estava fora.
+      </p>
     </div>
   );
 }

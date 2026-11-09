@@ -271,3 +271,27 @@ describe('mercado: os heróis negociam', () => {
     expect(escrowOf(w.market, h.character.id)).toBe(0);
   });
 });
+
+describe('mercado: registro de compras e vendas', () => {
+  it('anota cada negócio dos dois lados, com preço por unidade, e persiste', () => {
+    const { sim, w } = setup();
+    const p = w.human.character;
+    offer(w, 'sell', 'caro', 'potion_health', 10, 60);
+    offer(w, 'sell', 'barato', 'potion_health', 3, 30);
+    p.gold = 1000;
+    expect(sim.marketBuyNow('potion_health', 5, 60)).toBe(true); // 3 a 30 + 2 a 60
+    expect(w.market.log[p.id]).toEqual([
+      { kind: 'buy', itemId: 'potion_health', count: 3, price: 30, at: expect.any(Number) },
+      { kind: 'buy', itemId: 'potion_health', count: 2, price: 60, at: expect.any(Number) },
+    ]);
+    expect(w.market.log.barato).toEqual([{ kind: 'sell', itemId: 'potion_health', count: 3, price: 30, at: expect.any(Number) }]);
+    p.inventory[0] = { itemId: 'sword_iron', count: 1 };
+    offer(w, 'buy', 'fora', 'sword_iron', 1, 250);
+    expect(sim.marketSellNow('sword_iron', 1)).toBe(true);
+    expect(w.market.log[p.id]!.at(-1)).toMatchObject({ kind: 'sell', itemId: 'sword_iron', count: 1, price: 250 });
+    expect(w.market.log.fora).toMatchObject([{ kind: 'buy', itemId: 'sword_iron', count: 1, price: 250 }]);
+    const back = parseMarket(D, JSON.parse(JSON.stringify({ ...w.market, season: SEASON })));
+    expect(back.log).toEqual(w.market.log);
+    expect(buildSnapshot(sim, 1).market?.log[0]).toMatchObject({ kind: 'sell', itemId: 'sword_iron' });
+  });
+});
