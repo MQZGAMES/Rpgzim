@@ -6,6 +6,27 @@ import { useRef, type PointerEvent as ReactPointerEvent, type TouchEvent as Reac
 
 const SLOP = 12;
 
+/**
+ * Engole o `click` sintético que o navegador dispara depois de um toque já tratado. Se o toque fechou um painel, o
+ * botão some antes do `touchend`, o cancelamento do click não acontece e o click cai no que estava embaixo do dedo
+ * (ex.: o X do menu em cima do botão de PK do HUD — fechar o menu desligava o PK e, com ele, o modo guerra).
+ */
+function swallowGhostClick(x: number, y: number): void {
+  if (typeof document === 'undefined') return;
+  const until = performance.now() + 700;
+  const kill = (e: MouseEvent) => {
+    if (performance.now() > until) return done();
+    if (Math.hypot(e.clientX - x, e.clientY - y) > 40) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    done();
+  };
+  const done = () => document.removeEventListener('click', kill, true);
+  document.addEventListener('click', kill, true);
+  setTimeout(done, 750);
+}
+
 export function useTap(handler: (() => void) | undefined, disabled = false) {
   const down = useRef<{ id: number; x: number; y: number } | null>(null);
   const handledAt = useRef(-Infinity);
@@ -19,6 +40,7 @@ export function useTap(handler: (() => void) | undefined, disabled = false) {
       down.current = null;
       if (disabled || !d || d.id !== e.pointerId || Math.hypot(e.clientX - d.x, e.clientY - d.y) > SLOP) return;
       handledAt.current = e.timeStamp;
+      swallowGhostClick(e.clientX, e.clientY);
       handler();
     },
     onPointerCancel: () => {
