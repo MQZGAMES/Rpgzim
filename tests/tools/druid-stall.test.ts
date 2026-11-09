@@ -46,20 +46,43 @@ test('impasses', { timeout: 1_800_000 }, () => {
     w.human.character.health = w.human.stats.maxHealth;
     const who = heroes.find((h) => h.character.name === process.env.STALL_WHO);
     if (who && s >= Number(process.env.STALL_FROM ?? 0) && s < Number(process.env.STALL_TO ?? 0)) {
-      const mobs = [...w.monsters.values()].filter((m) => m.alive && Math.max(Math.abs(m.x - who.x), Math.abs(m.y - who.y)) <= 2).map((m) => `${m.def.id}:${m.hp}/${m.def.health}@${Math.max(Math.abs(m.x - who.x), Math.abs(m.y - who.y))}${m.targetId === who.id ? '*' : ''}`).join(' ');
-      process.stderr.write(`${s}s ${who.brain.mode} hp=${who.character.health}/${who.stats.maxHealth} mana=${who.character.mana}/${who.stats.maxMana} tgt=${who.targetId} lastAtk=${Math.round((w.now - who.lastAttackAt) / 1000)}s why=${who.brain.retreatWhy} route=${Math.round((w.now - (who.brain.routeFailedAt ?? -1e9)) / 1000)} fb=${Math.round((who.brain.fightBackUntil - w.now) / 1000)} path=${who.path?.length ?? 0} pz=${w.social.pzLocks.has(who.id)} | ${mobs}
+      const mobs = [...w.monsters.values()]
+        .filter((m) => m.alive && Math.max(Math.abs(m.x - who.x), Math.abs(m.y - who.y)) <= 2)
+        .map(
+          (m) =>
+            `${m.def.id}:${m.hp}/${m.def.health}@${Math.max(Math.abs(m.x - who.x), Math.abs(m.y - who.y))}${m.targetId === who.id ? '*' : ''}`,
+        )
+        .join(' ');
+      process.stderr
+        .write(`${s}s ${who.brain.mode} hp=${who.character.health}/${who.stats.maxHealth} mana=${who.character.mana}/${who.stats.maxMana} tgt=${who.targetId} step=${Math.round((w.now - who.brain.stepStartedAt) / 1000)}s truce=${JSON.stringify(who.brain.warTruce ?? {}).length > 2} lastAtk=${Math.round((w.now - who.lastAttackAt) / 1000)}s why=${who.brain.retreatWhy} route=${Math.round((w.now - (who.brain.routeFailedAt ?? -1e9)) / 1000)} fb=${Math.round((who.brain.fightBackUntil - w.now) / 1000)} path=${who.path?.length ?? 0} pz=${w.social.pzLocks.has(who.id)} | ${mobs}
 `);
     }
     for (const h of heroes) {
       const n = h.character.name;
-      const hit = [...w.monsters.values()].some((m) => m.alive && m.targetId === h.id && Math.max(Math.abs(m.x - h.x), Math.abs(m.y - h.y)) <= 1);
+      const hit = [...w.monsters.values()].some(
+        (m) => m.alive && m.targetId === h.id && Math.max(Math.abs(m.x - h.x), Math.abs(m.y - h.y)) <= 1,
+      );
       const cur = since[n];
-      const still = cur && cur.x === h.x && cur.y === h.y && cur.deaths === h.character.stats.deaths && cur.xp === h.character.experience && hit && !h.dead;
-      if (!still) since[n] = { x: h.x, y: h.y, at: s, deaths: h.character.stats.deaths, xp: h.character.experience };
+      const still =
+        cur &&
+        cur.x === h.x &&
+        cur.y === h.y &&
+        cur.deaths === h.character.stats.deaths &&
+        cur.xp === h.character.experience &&
+        hit &&
+        !h.dead;
+      if (!still)
+        since[n] = { x: h.x, y: h.y, at: s, deaths: h.character.stats.deaths, xp: h.character.experience };
       else {
         const len = s - cur.at;
         if (!worst[n] || len > worst[n].s)
-          worst[n] = { s: len, at: cur.at, where: `${h.x},${h.y}`, mode: h.brain.mode, weapon: h.character.equipment.mainHand?.itemId ?? 'SEM ARMA' };
+          worst[n] = {
+            s: len,
+            at: cur.at,
+            where: `${h.x},${h.y}`,
+            mode: h.brain.mode,
+            weapon: h.character.equipment.mainHand?.itemId ?? 'SEM ARMA',
+          };
       }
     }
   }
