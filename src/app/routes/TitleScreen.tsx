@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { uiImage } from '../../assets';
 import type { SaveSlotSummary } from '../../domain/repositories/SaveRepository';
 import { useServices } from '../providers/services';
-import { PixelButton, SpriteFrame } from '../../ui/common/primitives';
+import { PixelButton } from '../../ui/common/primitives';
 import { CloudBadge, CloudPanel, useCloud } from './CloudPanel';
 import { InstallHint } from './InstallHint';
-import { MAX_CHARACTERS } from '../../integration/game-ui-bridge/GameSession';
 import { VOCATION_IDS } from '../../domain/value-objects/ids';
 
 /** Sem acento e em minúsculas (o filtro acha "joao" em "João"). */
@@ -72,7 +71,9 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
             <>
               {slots.length > 0 && (
                 <div className="mb-3">
-                  <h2 className="mb-2 text-[13px] text-gold">Continuar aventura</h2>
+                  <h2 className="mb-2 text-[13px] text-gold">
+                    Continuar aventura <span className="text-muted">({slots.length})</span>
+                  </h2>
                   {/* filtros: nome e vocação; a lista vem sempre do maior nível para o menor */}
                   <div className="mb-2 flex gap-2" data-testid="slot-filters">
                     <input
@@ -99,43 +100,49 @@ export function TitleScreen({ onNew, onLoad }: { onNew: () => void; onLoad: (slo
                       ))}
                     </select>
                   </div>
-                  <div className="flex flex-col gap-2">
+                  {/* lista enxuta (nome, vocação, nível): cabe uma grande quantidade de personagens, com rolagem */}
+                  <div className="flex max-h-[46vh] flex-col gap-1 overflow-y-auto overscroll-contain pr-1" data-testid="slot-list">
                     {shown.length === 0 && <p className="text-center text-[12px] text-muted">Nenhum personagem com esse filtro.</p>}
                     {shown.map((s) => (
-                      <div key={s.slotId} className="flex items-center gap-2">
-                        <button type="button" onClick={() => onLoad(s.slotId)} className="btn-gold flex flex-1 items-center gap-2 text-left" data-testid={`slot-${s.slotId}`}>
-                          <SpriteFrame sheet={data.vocations[s.vocation as keyof typeof data.vocations]?.sprite ?? 'knight'} scale={1} className="-my-2" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[15px]">{s.name}</span>
-                            <span className="block text-[11px] text-parchment">
-                              {data.vocations[s.vocation as keyof typeof data.vocations]?.name ?? s.vocation} · Nível {s.level}
-                            </span>
-                            {s.updatedAt > 0 && (
-                              <span className="block text-[10px] text-muted" data-testid={`slot-saved-${s.slotId}`}>
-                                Último salvamento: {fmtSaved(s.updatedAt)}
-                              </span>
-                            )}
+                      <div key={s.slotId} className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onLoad(s.slotId)}
+                          className="btn-gold flex min-h-[36px] min-w-0 flex-1 items-center gap-2 !py-0 text-left"
+                          data-testid={`slot-${s.slotId}`}
+                        >
+                          <span className="min-w-0 flex-1 truncate text-[14px]">{s.name}</span>
+                          <span className="shrink-0 text-[11px] text-parchment">
+                            {data.vocations[s.vocation as keyof typeof data.vocations]?.name ?? s.vocation}
                           </span>
+                          <span className="w-12 shrink-0 text-right text-[12px]">Nv {s.level}</span>
+                          {s.updatedAt > 0 && (
+                            <span
+                              className="hidden shrink-0 text-[10px] text-parchment opacity-70 sm:inline"
+                              title={`Último salvamento: ${fmtSaved(s.updatedAt)}`}
+                              data-testid={`slot-saved-${s.slotId}`}
+                            >
+                              {fmtSaved(s.updatedAt)}
+                            </span>
+                          )}
                         </button>
                         <PixelButton
-                          className="h-12 px-1 text-[11px]"
+                          className="h-9 w-9 shrink-0 px-0 text-[13px]"
                           ariaLabel={`Apagar ${s.name}`}
                           onClick={() => {
                             if (window.confirm(`Apagar o personagem ${s.name}? Esta ação não pode ser desfeita.`)) void saves.remove(s.slotId).then(refresh);
                           }}
                         >
-                          Apagar
+                          ✕
                         </PixelButton>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-              {slots.length < MAX_CHARACTERS && (
-                <PixelButton variant={slots.length ? 'stone' : 'gold'} className="w-full py-1 text-base" onClick={onNew}>
-                  Novo personagem
-                </PixelButton>
-              )}
+              <PixelButton variant={slots.length ? 'stone' : 'gold'} className="w-full py-1 text-base" onClick={onNew}>
+                Novo personagem
+              </PixelButton>
               {error && <p className="mt-2 text-[12px] text-hp-light">{error}</p>}
               <CloudBadge onOpen={() => setCloudOpen(true)} />
               <InstallHint />

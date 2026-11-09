@@ -21,42 +21,79 @@ export function canStep(staticFree: Passable, x: number, y: number, dx: number, 
   return true;
 }
 
+/** Heap mínimo de (chave, valor) em dois arrays de números (sem um objeto por item: menos coleta de lixo). */
 class MinHeap {
-  private items: { k: number; v: number }[] = [];
+  private k: number[] = [];
+  private v: number[] = [];
   get size() {
-    return this.items.length;
+    return this.k.length;
   }
   push(v: number, k: number) {
-    const a = this.items;
-    a.push({ k, v });
-    let i = a.length - 1;
+    const K = this.k;
+    const V = this.v;
+    K.push(k);
+    V.push(v);
+    let i = K.length - 1;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (a[p]!.k <= a[i]!.k) break;
-      [a[p], a[i]] = [a[i]!, a[p]!];
+      if (K[p]! <= K[i]!) break;
+      [K[p], K[i]] = [K[i]!, K[p]!];
+      [V[p], V[i]] = [V[i]!, V[p]!];
       i = p;
     }
   }
   pop(): number {
-    const a = this.items;
-    const top = a[0]!;
-    const last = a.pop()!;
-    if (a.length) {
-      a[0] = last;
+    const K = this.k;
+    const V = this.v;
+    const top = V[0]!;
+    const lk = K.pop()!;
+    const lv = V.pop()!;
+    if (K.length) {
+      K[0] = lk;
+      V[0] = lv;
       let i = 0;
       for (;;) {
         const l = i * 2 + 1;
         const r = l + 1;
         let m = i;
-        if (l < a.length && a[l]!.k < a[m]!.k) m = l;
-        if (r < a.length && a[r]!.k < a[m]!.k) m = r;
+        if (l < K.length && K[l]! < K[m]!) m = l;
+        if (r < K.length && K[r]! < K[m]!) m = r;
         if (m === i) break;
-        [a[m], a[i]] = [a[i]!, a[m]!];
+        [K[m], K[i]] = [K[i]!, K[m]!];
+        [V[m], V[i]] = [V[i]!, V[m]!];
         i = m;
       }
     }
-    return top.v;
+    return top;
   }
+}
+
+/**
+ * Memória reaproveitada entre as buscas (uma por mapa de tamanho W×H): custo, pai e "visto/fechado" marcados com um
+ * número de geração — zerar tudo a cada busca custaria mais que a própria busca. Antes eram Map/Set novos por busca,
+ * o maior custo do jogo com muitos personagens andando.
+ */
+let cap = 0;
+let gCost = new Float64Array(0);
+let parentOf = new Int32Array(0);
+let seenGen = new Uint32Array(0);
+let closedGen = new Uint32Array(0);
+let gen = 0;
+function nextGen(n: number): number {
+  if (cap < n) {
+    cap = n;
+    gCost = new Float64Array(n);
+    parentOf = new Int32Array(n);
+    seenGen = new Uint32Array(n);
+    closedGen = new Uint32Array(n);
+    gen = 0;
+  }
+  if (++gen >= 0xffffffff) {
+    seenGen.fill(0);
+    closedGen.fill(0);
+    gen = 1;
+  }
+  return gen;
 }
 
 export interface PathOptions {
@@ -83,9 +120,9 @@ export function findPath(from: TilePos, to: TilePos, o: PathOptions): TilePos[] 
   if (done(from.x, from.y)) return [];
   const maxNodes = o.maxNodes ?? 4000;
   const start = from.y * W + from.x;
-  const g = new Map<number, number>([[start, 0]]);
-  const parent = new Map<number, number>();
-  const closed = new Set<number>();
+  const G = nextGen(W * H);
+  gCost[start] = 0;
+  seenGen[start] = G;
   const heap = new MinHeap();
   const h = (x: number, y: number) => {
     const dx = Math.abs(x - to.x);
@@ -96,8 +133,8 @@ export function findPath(from: TilePos, to: TilePos, o: PathOptions): TilePos[] 
   let expanded = 0;
   while (heap.size) {
     const cur = heap.pop();
-    if (closed.has(cur)) continue;
-    closed.add(cur);
+    if (closedGen[cur] === G) continue;
+    closedGen[cur] = G;
     const cx = cur % W;
     const cy = (cur - cx) / W;
     if (done(cx, cy)) {
@@ -105,26 +142,27 @@ export function findPath(from: TilePos, to: TilePos, o: PathOptions): TilePos[] 
       let n = cur;
       while (n !== start) {
         out.push({ x: n % W, y: Math.floor(n / W) });
-        n = parent.get(n)!;
+        n = parentOf[n]!;
       }
       return out.reverse();
     }
     if (++expanded > maxNodes) return null;
-    const gc = g.get(cur)!;
+    const gc = gCost[cur]!;
     for (const [dx, dy, cost] of DIRS) {
       const nx = cx + dx;
       const ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const ni = ny * W + nx;
-      if (closed.has(ni)) continue;
+      if (closedGen[ni] === G) continue;
       const isGoal = nx === to.x && ny === to.y;
       if (!isGoal && !o.passable(nx, ny)) continue;
       if (isGoal && !o.staticFree(nx, ny) && stop === 0) continue;
       if (!canStep(o.staticFree, cx, cy, dx, dy)) continue;
       const ng = gc + cost + (o.costAt?.(nx, ny) ?? 0);
-      if (ng < (g.get(ni) ?? Infinity)) {
-        g.set(ni, ng);
-        parent.set(ni, cur);
+      if (seenGen[ni] !== G || ng < gCost[ni]!) {
+        gCost[ni] = ng;
+        seenGen[ni] = G;
+        parentOf[ni] = cur;
         heap.push(ni, ng + h(nx, ny));
       }
     }

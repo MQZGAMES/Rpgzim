@@ -55,6 +55,8 @@ export interface PlayerEntity extends Mover {
   path: TilePos[] | null;
   pathGoal: TilePos | null;
   chaseRecalcAt: number;
+  /** Passo bloqueado (alguém na frente): quando pode replanejar a rota de novo (heróis esperam um instante). */
+  replanAt?: number;
   /** Rota em cache da perseguição ao alvo (o próximo passo sai sem esperar um recálculo). */
   chasePath: { goal: TilePos; path: TilePos[] } | null;
   /** O jogador andou por conta própria (toque/joystick): não persegue o alvo até escolher um alvo de novo. */
