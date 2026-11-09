@@ -54,6 +54,7 @@ import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
+import { MANA_REGEN_OUTSIDE_PZ } from '../../domain/rules/regen';
 import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
 import {
   PARTY_FAIL_MESSAGE,
@@ -133,8 +134,6 @@ export interface SimulationOptions {
 
 /** Depois de atacar, quem segue o líder fica caçando em paz por este tempo antes de voltar a segui-lo. */
 const FOLLOW_COMBAT_PAUSE_MS = 6000;
-/** Fora da PZ a mana volta nesta proporção (a PZ não recupera mana, então o campo compensa). */
-const MANA_REGEN_OUTSIDE_PZ = 2;
 
 export class GameSimulation {
   readonly world: World;

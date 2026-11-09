@@ -801,6 +801,11 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   if (b.order && (w.now > b.order.until || !partyOf(w, h.id))) b.order = null;
   if (b.order && b.mode !== 'retreat' && orderTick(w, h)) return;
   fightBack(w, h);
+  // (antes de abrir caminho num cerco: a briga com gente que não leva a nada é largada mesmo assim)
+  if (b.mode === 'pk' && atWar(w)) {
+    const v = actorById(w, b.pkTargetId);
+    if (v) warPkCheck(w, h, v);
+  }
   if (breakOut(w, h)) return;
   unstick(w, h);
   heroGroupLife(w, h);
@@ -965,7 +970,17 @@ function fightBack(w: World, h: HeroEntity): void {
   // fugindo/andando: continua; só luta se a rota de fuga falhou de verdade (sem caminho nenhum) ou se está cercado.
   // (antes "parado" bastava — e era justamente o revidar que o deixava parado: travava para sempre na fuga)
   const routeFailed = w.now - (b.routeFailedAt ?? -Infinity) < 3000;
-  if ((b.mode === 'retreat' || b.mode === 'town') && !(routeFailed && stuckMs > 1200) && adjacent < 3) return;
+  // cercado (3+ encostadas) ele luta em vez de fugir — mas só se a luta leva a algum lugar: se nem a mais fraca do
+  // cerco cai em ~25 s (sem arma, sem mana), lutar é ficar curando para sempre no mesmo lugar; aí tenta sair
+  const hopeless =
+    adjacent >= 3 &&
+    Math.min(...attackers.filter((m) => chebyshev(m, h) <= 1).map((m) => m.hp / heroDpsVs(w, h, m))) > 25;
+  if (
+    (b.mode === 'retreat' || b.mode === 'town') &&
+    !(routeFailed && stuckMs > 1200) &&
+    (adjacent < 3 || hopeless)
+  )
+    return;
   if (b.mode === 'retreat' || b.mode === 'town') b.fightBackUntil = w.now + 2500;
   if (
     moving &&
@@ -3598,25 +3613,39 @@ function pk(w: World, h: HeroEntity): void {
     heroSay(w, h, 'flee', { player: victim.character.name }, 0);
     return setMode(w, h, 'retreat');
   }
-  // guerra: chegou reforço do lado dele (ou a vida despencou): larga a briga antes de virar a vítima
-  if (atWar(w)) {
-    const odds = warOdds(w, h, victim);
-    if (((odds < 0.6 && hpPct(h) < 0.6) || (hpPct(h) < 0.25 && odds < 1.2)) && warFlee(w, h, victim)) return;
-    // briga empatada: as poções curam o que o outro tira (ou ele nem consegue acertar). Gente de verdade larga antes
-    // de torrar o estoque todo — trégua com esse inimigo por uns minutos
-    const elapsed = w.now - b.stepStartedAt;
-    const used = (b.pkPotions ?? potionsOf(w, h)) - potionsOf(w, h);
-    const vhp = victim.character.health / Math.max(1, victim.stats.maxHealth);
-    const stale =
-      (elapsed > 45000 && vhp > 0.35 && used >= 6) ||
-      (elapsed > 90000 && vhp > 0.25) ||
-      (elapsed > 20000 && w.now - h.lastAttackAt > 20000);
-    if (stale) return warDisengage(w, h, victim);
-    if (onTruce(w, h, victim.id) && vhp > 0.25) return setMode(w, h, 'decide');
-  }
+  if (warPkCheck(w, h, victim)) return;
   if (h.targetId !== victim.id) setTarget(w, victim.id);
   keepHaste(w, h);
   if (h.targetId === victim.id) pvpSpells(w, h, victim);
+}
+
+/**
+ * Guerra, no meio de uma briga com gente: larga se chegou reforço do outro lado (ou a vida despencou), se a briga
+ * empatou (as poções curam o que o outro tira) ou se ele não consegue acertar a vítima. Roda também quando outra rotina
+ * toma o turno (ex.: abrindo caminho num cerco), senão ele ficava preso mirando quem não alcança. True se largou.
+ */
+function warPkCheck(w: World, h: HeroEntity, victim: PlayerEntity): boolean {
+  if (!atWar(w) || victim.dead) return false;
+  const b = h.brain;
+  const odds = warOdds(w, h, victim);
+  if (((odds < 0.6 && hpPct(h) < 0.6) || (hpPct(h) < 0.25 && odds < 1.2)) && warFlee(w, h, victim)) return true;
+  const elapsed = w.now - b.stepStartedAt;
+  const used = (b.pkPotions ?? potionsOf(w, h)) - potionsOf(w, h);
+  const vhp = victim.character.health / Math.max(1, victim.stats.maxHealth);
+  const stale =
+    (elapsed > 45000 && vhp > 0.35 && used >= 6) ||
+    (elapsed > 60000 && vhp > 0.25) ||
+    // (não alcança a vítima: atrás de criaturas, do outro lado de um obstáculo — bater nas criaturas em volta não conta)
+    (elapsed > 20000 && !attackedRecently(w, h.id, victim.id, 15000));
+  if (stale) {
+    warDisengage(w, h, victim);
+    return true;
+  }
+  if (onTruce(w, h, victim.id) && vhp > 0.25) {
+    setMode(w, h, 'decide');
+    return true;
+  }
+  return false;
 }
 
 /** Magias que deixam lento, por vocação: abrem a perseguição de quem foge (ou está para fugir). */
