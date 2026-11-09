@@ -98,6 +98,8 @@ export function SettingsPanel({
       </label>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Ajudas automáticas</h3>
       <AutoOptions />
+      <h3 className="mb-1 mt-3 text-[13px] text-gold">Modo guerra</h3>
+      <WarOptions />
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Controles</h3>
       <div className="flex flex-wrap gap-2">
         <PixelButton onClick={() => session.setPanel('hotbar')} data-testid="settings-hotbar">
@@ -233,6 +235,59 @@ function AutoOptions() {
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Modo guerra: desligado, cada um por si ou duas guildas sorteadas. Os heróis passam a caçar uns aos outros (e você),
+ * em grupo ou sozinhos, pesando a força de cada lado. Sem caveira; morrer derruba a mochila como no PK.
+ */
+function WarOptions() {
+  const session = useSession();
+  const war = useSnap((s) => s.war);
+  const options = [
+    ['off', 'Desligado'],
+    ['ffa', 'Cada um por si'],
+    ['guilds', 'Guildas'],
+  ] as const;
+  return (
+    <div data-testid="war-options">
+      <div className="flex flex-wrap gap-2 py-1">
+        {options.map(([v, l]) => (
+          <PixelButton
+            key={v}
+            variant={war.mode === v ? 'gold' : 'stone'}
+            onClick={() => war.mode !== v && session.setWar(v)}
+            data-testid={`war-${v}`}
+          >
+            {l}
+          </PixelButton>
+        ))}
+      </div>
+      <p className="text-[12px] text-muted">
+        {war.mode === 'off'
+          ? 'Ligado, os personagens continuam caçando mas buscam briga: atacam em grupo ou sozinhos, evitam quem é forte demais e fogem quando estão perdendo. Caveiras, PZ lock e perdas na morte valem como no PK.'
+          : war.mode === 'ffa'
+            ? 'Cada um por si: só o grupo é aliado. Os heróis formam grupos de 2 a 4 ou vão sozinhos — e podem trair o grupo. O seu grupo fica como está.'
+            : 'Red contra Blue, equilibradas em número e nível. Cada guilda é um grupo fixo: ninguém entra nem sai. Escolher de novo sorteia de novo.'}
+      </p>
+      {war.mode === 'guilds' && (
+        <div className="mt-1 grid grid-cols-2 gap-2" data-testid="war-guild-lists">
+          {war.guilds.map((g, i) => (
+            <div key={g.name} className="border-2 border-dusk p-1 text-[12px]">
+              <div className={i === war.mine ? 'text-heal' : 'text-hp-light'}>
+                {g.name} ({g.members.length}){i === war.mine ? ' · sua' : ''}
+              </div>
+              {g.members.map((m) => (
+                <div key={m.id} className={m.me ? 'text-gold-light' : 'text-parchment'}>
+                  {m.name} · nv {m.level}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>

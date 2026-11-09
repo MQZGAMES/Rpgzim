@@ -131,6 +131,11 @@ const boladex: HeroDef = {
     tired: ['Tô ficando cansado... mais uma caçada e paro.', 'Bocejei aqui. Mais um pouquinho só.', 'Já tá tarde, hein... última volta.'],
     congrats: ['gz, {player}!', 'Parabéns, {player}! Nível {level}!', 'Aê, {player}! Up!', 'Boa, {player}! Tá voando.'],
     rip: ['F, {player}...', 'Eita, {player} caiu!', 'Volta logo, {player}!', 'Ih... foi mal, {player}.'],
+    warAttack: ['Pega o {player}!', 'É guerra, {player}!', 'Foco no {player}, pessoal!', 'Hoje você cai, {player}!'],
+    warRaid: ['Vou atrás do {player}.', 'Bora caçar o {player}, galera!', 'O {player} tá dando sopa. Fui!'],
+    warWin: ['Menos um! GG, {player}.', '{player} caiu! Próximo!', 'Essa guerra é nossa!'],
+    warBetray: ['Nada pessoal, {player}... é guerra.', 'Desculpa, {player}. Cada um por si!', 'Valeu pela companhia, {player}. Agora o ouro é meu.'],
+    warHelp: ['Segura aí, {player}, tô chegando!', 'Aguenta, {player}! Indo te ajudar.', 'Tô indo, {player}!'],
   },
 };
 

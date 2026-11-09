@@ -74,6 +74,13 @@ import {
   savePk,
   updateSocial,
   type PartySetting,
+  GUILD_NAMES,
+  atWar,
+  canAttackActor,
+  ensureGuild,
+  guildOf,
+  setWarMode,
+  type WarMode,
 } from '../social/social';
 import { addHero, heroSnapshot } from '../ai/heroes';
 import { updateCityGuards } from '../world/guards';
@@ -90,7 +97,17 @@ import {
 import type { OfferSide } from '../../domain/rules/market';
 import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
-import { answerInviteNow, heroFollowTick, heroStatusLine, orderHero, profileOf, reactNearby, summonHero, updateHeroBrain } from '../ai/heroBrain';
+import {
+  answerInviteNow,
+  heroWarChanged,
+  heroFollowTick,
+  heroStatusLine,
+  orderHero,
+  profileOf,
+  reactNearby,
+  summonHero,
+  updateHeroBrain,
+} from '../ai/heroBrain';
 import { allActors, asActor, message, warnThrottled, type UiState, type World } from './World';
 
 export const MAX_STEP_MS = 50;
@@ -185,7 +202,10 @@ export class GameSimulation {
       human: player,
       heroes: new Map(),
       auto: { ...DEFAULT_AUTO },
-      social: Object.assign(newSocialState(c.flags.pvp === true), { clock: opts.clock }),
+      social: Object.assign(
+        newSocialState(c.flags.pvp === true, c.flags.war ? (c.flags.warGuilds ? 'guilds' : 'ffa') : 'off'),
+        { clock: opts.clock },
+      ),
       monsters: new Map(),
       npcs: new Map(),
       lootBags: new Map(),
@@ -242,6 +262,7 @@ export class GameSimulation {
     refreshStats(w);
     updateRegion(w);
     for (const hc of opts.heroes ?? []) this.addHero(hc.hero, hc.character);
+    if (w.social.war.mode === 'guilds') setWarMode(w, 'guilds'); // sorteio com todos que já estão online
     marketCollect(w, w.human);
     // os heróis por perto reagem ao jogador: "gz" no nível novo, "F" quando ele cai
     w.human.scope.events.on('levelUp', (e) => reactNearby(w, w.human, 'congrats', { player: w.human.character.name, level: e.level }));
@@ -252,6 +273,7 @@ export class GameSimulation {
   addHero(hero: HeroDef, character: CharacterState): HeroEntity {
     const w = this.world;
     const h = addHero(w, hero, character);
+    ensureGuild(w, h.id);
     asActor(w, h, () => {
       refreshStats(w);
       updateRegion(w);
@@ -302,7 +324,7 @@ export class GameSimulation {
     const w = this.world;
     const h = [...w.heroes.values()].find((x) => x.hero.id === heroId || x.id === heroId);
     if (!h) return null;
-    if (partyOf(w, h.id)) leaveParty(w, h.id);
+    if (partyOf(w, h.id)) leaveParty(w, h.id, true);
     w.social.invites = w.social.invites.filter((i) => i.fromId !== h.id && i.toId !== h.id);
     for (const m of w.monsters.values())
       if (m.targetId === h.id) {
@@ -847,6 +869,8 @@ export class GameSimulation {
   /** Permissão de PK (ataque entre personagens). Desligar encerra os ataques em andamento. */
   setPvp(on: boolean): void {
     const w = this.world;
+    // desligar o PK encerra também a guerra (que depende dele)
+    if (!on && atWar(w)) this.setWar('off', true);
     w.social.pvp = on;
     w.human.character.flags.pvp = on;
     if (!on) for (const a of allActors(w)) if (a.targetId && !w.monsters.has(a.targetId)) a.targetId = null;
@@ -855,6 +879,37 @@ export class GameSimulation {
       on ? 'PK ativado: personagens podem se atacar fora das áreas protegidas.' : 'PK desativado.',
       on ? 'warning' : 'system',
     );
+    w.events.emit('socialChanged', {});
+  }
+  /**
+   * Modo guerra: 'ffa' (cada um por si), 'guilds' (duas guildas sorteadas) ou 'off'. Ligar liga o PK; desligar
+   * mantém o PK como estava e encerra os ataques entre quem não é mais inimigo.
+   */
+  setWar(mode: WarMode, quiet = false): void {
+    const w = this.world;
+    setWarMode(w, mode);
+    const c = w.human.character;
+    c.flags.war = mode !== 'off';
+    c.flags.warGuilds = mode === 'guilds';
+    if (mode !== 'off') c.flags.pvp = true;
+    // ninguém continua mirando um aliado (guildas novas) nem segue brigando quando a guerra acaba
+    for (const a of allActors(w))
+      if (a.targetId && !w.monsters.has(a.targetId)) {
+        const t = actorById(w, a.targetId);
+        if (!t || mode === 'off' || canAttackActor(w, a, t)) a.targetId = null;
+      }
+    // vale na hora: cada herói reavalia tudo no próximo pensamento (alvos, grupos, caçadas)
+    for (const h of w.heroes.values()) asActor(w, h, () => heroWarChanged(w, h));
+    if (!quiet)
+      message(
+        w,
+        mode === 'off'
+          ? 'Modo guerra desligado.'
+          : mode === 'ffa'
+            ? 'GUERRA: cada um por si! Todos podem se atacar fora das áreas protegidas (caveiras e perdas valem).'
+            : `GUERRA DE GUILDAS: você é do ${GUILD_NAMES[guildOf(w, w.human.id) ?? 0]}. A outra guilda é inimiga (caveiras e perdas valem).`,
+        mode === 'off' ? 'system' : 'warning',
+      );
     w.events.emit('socialChanged', {});
   }
   /** Modo de ataque: parado (não persegue o alvo) ou seguindo o alvo. */

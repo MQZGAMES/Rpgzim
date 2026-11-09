@@ -120,7 +120,8 @@ describe('Knight sem poção', () => {
 });
 
 describe('saco de morte do jogador', () => {
-  it('os heróis não pegam o saco de morte do jogador nem o que ele jogou no chão, e o saco não é dividido com o grupo', () => {
+  // (regra nova: o saco de morte é de quem pegar primeiro, em qualquer modo — o dono tenta recuperar, mas todos podem levar)
+  it('os heróis pegam o saco de morte do jogador (é de quem pegar), mas não o que ele jogou no chão', () => {
     const { sim, w, h } = withHero();
     invite(w, w.human.id, h.id);
     acceptInvite(w, h.id, w.human.id);
@@ -155,9 +156,9 @@ describe('saco de morte do jogador', () => {
     h.brain.nextThinkAt = 0;
     const gold = h.character.gold;
     advance(sim, 5000, 50);
-    expect(w.lootBags.get('loot:morte')?.gold).toBe(500);
+    expect(w.lootBags.get('loot:morte')?.gold ?? 0).toBe(0);
     expect(w.lootBags.has('loot:chao')).toBe(true);
-    expect(h.character.gold).toBe(gold);
+    expect(h.character.gold).toBeGreaterThan(gold);
   });
 });
 
