@@ -9,6 +9,7 @@ import {
   collectParcels,
   collectProceeds,
   depotSpace,
+  logTrade,
   placeOffer,
   sellNow,
   type MarketFail,
@@ -49,9 +50,16 @@ function onlineByCharacter(w: World, characterId: string): PlayerEntity | undefi
 const itemName = (w: World, id: string) => w.data.items[id]?.name ?? id;
 const qtyName = (w: World, id: string, n: number) => `${n > 1 ? `${n}x ` : ''}${itemName(w, id)}`;
 
+/** Anota no registro de `characterId` cada negócio fechado (um por oferta atendida, com o preço dela). */
+function logFills(w: World, characterId: string, kind: 'buy' | 'sell', fills: MarketFill[]): void {
+  const at = pkNow(w);
+  for (const f of fills) logTrade(w.market, characterId, { kind, itemId: f.itemId, count: f.count, price: f.price, at });
+}
+
 /** Quem tinha a oferta de venda recebe o ouro no banco (fora do jogo: fica guardado). */
 function paySellers(w: World, fills: MarketFill[], buyer: string): void {
   for (const f of fills) {
+    logTrade(w.market, f.otherId, { kind: 'sell', itemId: f.itemId, count: f.count, price: f.price, at: pkNow(w) });
     const gold = f.count * f.price;
     const seller = onlineByCharacter(w, f.otherId);
     if (seller) {
@@ -65,6 +73,7 @@ function paySellers(w: World, fills: MarketFill[], buyer: string): void {
 /** Quem tinha a oferta de compra recebe o item no depósito (sem espaço ou fora do jogo: entrega a retirar). */
 function deliverBuyers(w: World, fills: MarketFill[], seller: string): void {
   for (const f of fills) {
+    logTrade(w.market, f.otherId, { kind: 'buy', itemId: f.itemId, count: f.count, price: f.price, at: pkNow(w) });
     const buyer = onlineByCharacter(w, f.otherId);
     const fit = buyer ? depotSpace(w.data, buyer.character, f.itemId, f.count) : 0;
     if (buyer && fit) addItem(w.data, buyer.character.depot, f.itemId, fit);
@@ -101,6 +110,7 @@ function buyFromMarket(w: World, itemId: string, qty: number, maxPrice: number):
   const res = buyNow(w.data, w.market, c, itemId, qty, maxPrice, pkNow(w));
   if (!res.ok) return fail(w, res.reason);
   paySellers(w, res.fills, c.name);
+  logFills(w, c.id, 'buy', res.fills);
   message(w, `Comprou no mercado: ${qtyName(w, itemId, res.count)} por ${res.total} de ouro.`, 'loot');
   changed(w);
   return true;
@@ -113,6 +123,7 @@ export function marketSellNow(w: World, itemId: string, qty: number, minPrice = 
   const res = sellNow(w.data, w.market, c, itemId, qty, minPrice, pkNow(w));
   if (!res.ok) return fail(w, res.reason);
   deliverBuyers(w, res.fills, c.name);
+  logFills(w, c.id, 'sell', res.fills);
   message(w, `Vendeu no mercado: ${qtyName(w, itemId, res.count)} por ${res.total} de ouro (no banco).`, 'loot');
   changed(w);
   return true;
@@ -126,10 +137,12 @@ export function marketOffer(w: World, side: OfferSide, itemId: string, qty: numb
   if (!res.ok) return fail(w, res.reason);
   if (side === 'sell') {
     deliverBuyers(w, res.fills, c.name);
+    logFills(w, c.id, 'sell', res.fills);
     if (res.matched) message(w, `Vendeu na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro (no banco).`, 'loot');
     if (res.offer) message(w, `Anunciado: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} de ouro cada.`, 'info');
   } else {
     paySellers(w, res.fills, c.name);
+    logFills(w, c.id, 'buy', res.fills);
     if (res.matched) message(w, `Comprou na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro.`, 'loot');
     if (res.offer)
       message(w, `Oferta de compra: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} cada (${res.offer.count * res.offer.price} reservados).`, 'info');

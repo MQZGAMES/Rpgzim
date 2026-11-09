@@ -46,7 +46,29 @@ export interface MarketState {
   proceeds: Record<string, number>;
   /** Itens comprados ainda não entregues (fora do jogo ou depósito cheio). */
   parcels: Record<string, ItemStack[]>;
+  /** Registro de compras e vendas de cada personagem (do mais antigo ao mais recente). */
+  log: Record<string, MarketLogEntry[]>;
   seq: number;
+}
+
+/** Uma linha do registro do mercado: o que o personagem comprou ou vendeu, a que preço por unidade e o total. */
+export interface MarketLogEntry {
+  kind: 'buy' | 'sell';
+  itemId: string;
+  count: number;
+  /** Preço por unidade. */
+  price: number;
+  at: number;
+}
+
+/** Linhas guardadas por personagem no registro. */
+export const LOG_KEEP = 100;
+
+/** Anota um negócio no registro de um personagem (guarda só as últimas `LOG_KEEP`). */
+export function logTrade(m: MarketState, characterId: string, entry: MarketLogEntry): void {
+  const list = (m.log[characterId] ??= []);
+  list.push(entry);
+  if (list.length > LOG_KEEP) list.splice(0, list.length - LOG_KEEP);
 }
 
 /** Um lado de um negócio: quem estava do outro lado, quantas unidades e a que preço. */
@@ -60,7 +82,7 @@ export interface MarketFill {
 /** Negócios guardados por item no histórico. */
 export const HISTORY_KEEP = 20;
 
-export const emptyMarket = (): MarketState => ({ offers: [], history: {}, proceeds: {}, parcels: {}, seq: 0 });
+export const emptyMarket = (): MarketState => ({ offers: [], history: {}, proceeds: {}, parcels: {}, log: {}, seq: 0 });
 
 /** O mercado só aceita equipamentos e poções (os itens diversos ficam com as lojas). */
 export function marketable(def: ItemDef | undefined): boolean {
@@ -499,6 +521,16 @@ export function parseMarket(data: GameData, raw: unknown): MarketState {
         for (const s of v as Record<string, unknown>[])
           if (s && typeof s.itemId === 'string' && data.items[s.itemId] && num(s.count) > 0)
             addParcel(m, k, s.itemId, Math.floor(num(s.count)));
+  if (r.log && typeof r.log === 'object')
+    for (const [k, list] of Object.entries(r.log as Record<string, unknown>)) {
+      if (!Array.isArray(list)) continue;
+      for (const e of list as Record<string, unknown>[]) {
+        const count = Math.floor(num(e?.count));
+        const price = Math.floor(num(e?.price));
+        if (!e || (e.kind !== 'buy' && e.kind !== 'sell') || typeof e.itemId !== 'string' || !data.items[e.itemId]) continue;
+        if (count > 0 && price > 0) logTrade(m, k, { kind: e.kind, itemId: e.itemId, count, price, at: num(e.at) || 0 });
+      }
+    }
   m.seq = Math.max(m.seq, Number.isFinite(num(r.seq)) ? num(r.seq) : 0, m.offers.length);
   return m;
 }
