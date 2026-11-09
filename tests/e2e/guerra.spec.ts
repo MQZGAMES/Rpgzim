@@ -37,3 +37,57 @@ test('modo guerra: guildas nas configurações', async ({ page }, info) => {
   await expect(page.getByTestId('war-off')).toBeVisible();
   await expect(page.getByTestId('war-guild-lists')).toHaveCount(0);
 });
+
+test('modo guerra: a escolha continua valendo depois de fechar e reabrir o menu', async ({ page }) => {
+  await page.goto('/?debug');
+  await page.getByRole('button', { name: 'Novo personagem' }).click();
+  await page.getByTestId('voc-knight').click();
+  await page.getByTestId('name-input').fill('Teimoso');
+  await page.getByRole('button', { name: 'Começar aventura' }).click();
+  await page.waitForFunction(
+    () => (window.__RPGZIM__ as { ready?: () => boolean } | undefined)?.ready?.() === true,
+    null,
+    { timeout: 30_000 },
+  );
+  for (const mode of ['ffa', 'guilds'] as const) {
+    await page.getByTestId('btn-settings').click();
+    await page.getByTestId(`war-${mode}`).click();
+    await page.waitForTimeout(1500);
+    await expect(page.getByTestId(`war-${mode}`)).toHaveClass(/gold/);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(3000);
+    await page.getByTestId('btn-settings').click();
+    await expect(page.getByTestId(`war-${mode}`)).toHaveClass(/gold/);
+    await page.keyboard.press('Escape');
+  }
+});
+
+test('modo guerra: funciona com um personagem já salvo (sair e entrar de novo)', async ({ page }) => {
+  const ready = () =>
+    page.waitForFunction(() => (window.__RPGZIM__ as { ready?: () => boolean } | undefined)?.ready?.() === true, null, {
+      timeout: 30_000,
+    });
+  await page.goto('/?debug');
+  await page.getByRole('button', { name: 'Novo personagem' }).click();
+  await page.getByTestId('voc-druid').click();
+  await page.getByTestId('name-input').fill('Antigo');
+  await page.getByRole('button', { name: 'Começar aventura' }).click();
+  await ready();
+  await page.waitForTimeout(3000);
+  await page.getByTestId('btn-settings').click();
+  await page.getByRole('button', { name: 'Salvar e sair' }).click();
+  await page.getByRole('button', { name: /Antigo/ }).first().click();
+  await ready();
+  await page.waitForTimeout(3000);
+  for (const mode of ['ffa', 'guilds'] as const) {
+    await page.getByTestId('btn-settings').click();
+    await page.getByTestId(`war-${mode}`).click();
+    await page.waitForTimeout(1500);
+    await expect(page.getByTestId(`war-${mode}`)).toHaveClass(/gold/);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(4000);
+    await page.getByTestId('btn-settings').click();
+    await expect(page.getByTestId(`war-${mode}`)).toHaveClass(/gold/);
+    await page.keyboard.press('Escape');
+  }
+});
