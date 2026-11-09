@@ -317,7 +317,7 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
 test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await page.goto('/?debug');
-  await expect(page.getByTestId('slot-boladex')).toContainText('Nível');
+  await expect(page.getByTestId('slot-boladex')).toContainText('Nv');
   await expect(page.getByRole('button', { name: 'Apagar Boladex' })).toBeVisible();
   await createCharacter(page, 'paladin', 'Parceiro');
   type HeroInfo = { id: string; level: number; mode: string; x: number; y: number };

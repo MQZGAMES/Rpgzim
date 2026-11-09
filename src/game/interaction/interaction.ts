@@ -69,6 +69,17 @@ function walkThenInteract(
   target: { kind: 'npc' | 'loot' | 'sign'; id: string },
 ): void {
   const p = w.player;
+  // já está andando até este mesmo alvo: mantém a rota (a IA chama isto a cada pensamento; refazer a busca toda vez,
+  // com a vila cheia de gente, era um dos maiores custos do jogo)
+  const pend = w.ui.pending;
+  if (
+    pend?.kind === target.kind &&
+    pend.id === target.id &&
+    p.path?.length &&
+    p.pathGoal?.x === pos.x &&
+    p.pathGoal?.y === pos.y
+  )
+    return;
   // NPCs atrás de balcões: basta chegar ao alcance da conversa (2 tiles); tenta antes o tile colado
   const path =
     target.kind === 'npc'

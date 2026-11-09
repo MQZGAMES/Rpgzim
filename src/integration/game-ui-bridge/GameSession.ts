@@ -18,7 +18,6 @@ import { createCharacter, validateName } from '../../domain/rules/character';
 import type { VocationId } from '../../domain/value-objects/ids';
 
 /** Máximo de personagens salvos (o mesmo da tela inicial). */
-export const MAX_CHARACTERS = 10;
 import type { CatalogItem } from '../../domain/rules/marketCatalog';
 import type { HeroDef } from '../../domain/entities/definitions';
 import { canDrink } from '../../domain/rules/potions';
@@ -176,8 +175,6 @@ export class GameSession {
       ...this.offline.map((c) => c.name),
     ].some((n) => n.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
     if (taken) return 'Já existe um personagem com esse nome.';
-    if (1 + w.heroes.size + this.sim.resting.length + this.offline.length >= MAX_CHARACTERS)
-      return `Limite de ${MAX_CHARACTERS} personagens. Apague um na tela inicial para criar outro.`;
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const c = createCharacter(w.data, { id, name, vocation, now: Date.now(), position: { ...w.map.playerStart } });

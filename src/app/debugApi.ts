@@ -2,6 +2,8 @@
 // ou com ?debug na URL. Não faz parte da jogabilidade.
 import type Phaser from 'phaser';
 import type { GameSession } from '../integration/game-ui-bridge/GameSession';
+import { customHeroDef } from '../data/heroes';
+import { createCharacter } from '../domain/rules/character';
 
 export function installDebugApi(session: GameSession, getGame?: () => Phaser.Game): () => void {
   const enabled = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug');
@@ -53,6 +55,19 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
     actorMenu: () => session.local.get().actorMenu,
     screenOf: (id: string) => session.screenOf(id),
     stop: () => sim.stop(),
+    /** Teste de carga: põe N personagens de IA no mundo (não salvos), níveis 8–37, vocações alternadas. */
+    spawnBots: (n: number) => {
+      const vocs = ['knight', 'sorcerer', 'druid', 'paladin'] as const;
+      const base = sim.world.heroes.size;
+      for (let i = 0; i < n; i++) {
+        const def = customHeroDef({ id: `bot_${base + i}`, name: `Bot${base + i}`, vocation: vocs[i % 4]! });
+        const c = createCharacter(sim.world.data, { id: def.slotId, name: def.name, vocation: def.vocation, now: Date.now(), position: { ...sim.world.map.playerStart } });
+        c.level = 8 + ((i * 7) % 30);
+        c.gold = 1500;
+        sim.addHero(def, c);
+      }
+      return sim.world.heroes.size;
+    },
     befriendHeroes: () => {
       for (const h of sim.world.heroes.values()) h.brain.affinity[sim.world.human.id] = 1;
     },

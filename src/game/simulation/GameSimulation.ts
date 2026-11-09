@@ -367,6 +367,7 @@ export class GameSimulation {
   private tick(step: number): void {
     const w = this.world;
     w.now += step;
+    this.longReplans = 0;
     this.tickActor(step);
     updateAutoPlay(w);
     // heróis: mesma sequência do jogador, cada um no próprio contexto, guiados pela IA
@@ -399,6 +400,13 @@ export class GameSimulation {
     updateUiDistance(w);
     updateRegion(w);
   }
+
+  /**
+   * Orçamento de recálculos de rota longa por quadro (heróis bloqueados): com muita gente, vários replanejando no
+   * mesmo quadro davam engasgos. Os que passam do orçamento esperam alguns quadros (o jogador nunca espera).
+   */
+  private longReplans = 0;
+  private static readonly LONG_REPLANS_PER_TICK = 2;
 
   private updatePlayerMovement(): void {
     const w = this.world;
@@ -473,10 +481,33 @@ export class GameSimulation {
         p.path.shift();
         return;
       }
-      // bloqueado (ex.: monstro no caminho): recalcula até o destino
+      // bloqueado (ex.: monstro ou outro personagem no caminho). Com muita gente no mundo, replanejar a rota inteira a
+      // cada quadro era o maior custo do jogo (A* de até 120 mil nós por herói travado, 60 vezes por segundo):
+      // 1) herói espera um instante antes de replanejar (como gente esperando o outro passar); o jogador, não;
+      if (p !== w.human) {
+        if (w.now < (p.replanAt ?? 0)) return;
+        p.replanAt = w.now + 200 + w.rng.next() * 150;
+      }
+      // 2) conserto local: desvia só até um ponto alguns passos à frente na rota que já tinha (busca pequena)
+      const AHEAD = 6;
+      if (p.path.length > AHEAD + 2) {
+        const detour = pathTo(w, p, p.path[AHEAD]!, false, { maxNodes: 1500 });
+        if (detour?.length && detour.length <= AHEAD + 8) {
+          p.path = [...detour, ...p.path.slice(AHEAD + 1)];
+          return;
+        }
+      }
+      // 3) sem desvio curto: recalcula até o destino
       const goal = p.pathGoal;
       // viagem longa (mini mapa) replaneja com mais fôlego; caminho curto, barato
       const far = goal ? Math.max(Math.abs(goal.x - p.x), Math.abs(goal.y - p.y)) > 30 : false;
+      if (far && p !== w.human) {
+        if (this.longReplans >= GameSimulation.LONG_REPLANS_PER_TICK) {
+          p.replanAt = w.now + 50 + w.rng.next() * 100;
+          return;
+        }
+        this.longReplans++;
+      }
       p.path = goal
         ? pathTo(w, p, goal, false, { stopWithin: w.ui.pending ? 1 : 0, maxNodes: far ? 120000 : 2500 })
         : null;
