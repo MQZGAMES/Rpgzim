@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA as D } from '../../src/data';
-import { HOTBAR_SIZE, assignHotbar, defaultHotbar, normalizeHotbar, parseHotbarEntry } from '../../src/domain/rules/hotbar';
+import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, defaultHotbar, normalizeHotbar, normalizeHotbarSets, parseHotbarEntry, switchHotbarSet } from '../../src/domain/rules/hotbar';
 
 describe('atalhos personalizáveis', () => {
   it('padrão: magias da vocação + poções automáticas de vida e mana', () => {
@@ -47,5 +47,52 @@ describe('atalhos personalizáveis', () => {
     assignHotbar(hb, 3, null);
     expect(hb[3]).toBe('');
     expect(parseHotbarEntry('brutal_strike')).toEqual({ kind: 'spell', id: 'brutal_strike' });
+  });
+});
+
+describe('favoritos de atalhos (3 conjuntos)', () => {
+  const fresh = () => {
+    const hotbar = defaultHotbar(D, 'druid');
+    return { hotbar, ...normalizeHotbarSets(D, 'druid', hotbar, undefined, undefined) };
+  };
+
+  it('save antigo (sem conjuntos): o conjunto 1 é a barra de sempre e os outros dois começam com o padrão', () => {
+    const mine = ['spell:earth_thorn', '', '', '', '', '', '', 'potion:health', ''];
+    const s = normalizeHotbarSets(D, 'druid', normalizeHotbar(D, 'druid', mine), undefined, undefined);
+    expect(HOTBAR_SETS).toBe(3);
+    expect(s.hotbarSet).toBe(0);
+    expect(s.hotbarSets).toHaveLength(3);
+    expect(s.hotbarSets[0]).toEqual(normalizeHotbar(D, 'druid', mine));
+    expect(s.hotbarSets[1]).toEqual(defaultHotbar(D, 'druid'));
+    expect(s.hotbarSets[2]).toEqual(defaultHotbar(D, 'druid'));
+  });
+
+  it('trocar guarda a barra que sai e carrega a que entra (e volta intacta)', () => {
+    const c = fresh();
+    c.hotbar[0] = 'potion:mana'; // edição no conjunto 1
+    expect(switchHotbarSet(c, 1)).toBe(true);
+    expect(c.hotbarSet).toBe(1);
+    expect(c.hotbar[0]).toBe(defaultHotbar(D, 'druid')[0]); // o conjunto 2 é independente
+    c.hotbar[0] = '';
+    expect(switchHotbarSet(c, 2)).toBe(true);
+    expect(switchHotbarSet(c, 0)).toBe(true);
+    expect(c.hotbar[0]).toBe('potion:mana');
+    expect(switchHotbarSet(c, 1)).toBe(true);
+    expect(c.hotbar[0]).toBe('');
+  });
+
+  it('conjunto inválido ou o mesmo que já está ativo não faz nada', () => {
+    const c = fresh();
+    for (const bad of [-1, 3, 1.5, NaN, 0]) expect(switchHotbarSet(c, bad)).toBe(false);
+    expect(c.hotbarSet).toBe(0);
+  });
+
+  it('dados corrompidos viram conjuntos válidos (índice fora da faixa, listas de lixo)', () => {
+    const hotbar = defaultHotbar(D, 'knight');
+    const s = normalizeHotbarSets(D, 'knight', hotbar, [42, ['spell:arcane_bolt'], 'x', 'extra'], 9);
+    expect(s.hotbarSet).toBe(0);
+    expect(s.hotbarSets).toHaveLength(3);
+    for (const set of s.hotbarSets) expect(set).toHaveLength(HOTBAR_SIZE);
+    expect(s.hotbarSets[1]).not.toContain('spell:arcane_bolt'); // magia de outra vocação é descartada
   });
 });

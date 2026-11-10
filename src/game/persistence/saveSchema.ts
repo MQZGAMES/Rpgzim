@@ -3,7 +3,7 @@
 import type { CharacterState, ItemStack } from '../../domain/entities/character';
 import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/definitions';
 import type { GameData } from '../../domain/entities/gameData';
-import { normalizeHotbar } from '../../domain/rules/hotbar';
+import { normalizeHotbar, normalizeHotbarSets } from '../../domain/rules/hotbar';
 import { SEASON, isOldSeason, seasonReset } from '../../domain/rules/season';
 import { addItem } from '../../domain/rules/inventory';
 import { fixMageWeapon } from '../../domain/rules/equipment';
@@ -111,6 +111,7 @@ export function parseSave(data: GameData, raw: unknown, start?: { x: number; y: 
   const flagsRaw = isObj(c.flags) ? c.flags : {};
   const flags: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(flagsRaw)) if (typeof v === 'boolean') flags[k] = v;
+  const hotbar = normalizeHotbar(data, c.vocation, Array.isArray(c.hotbar) ? c.hotbar : []);
   const character: CharacterState = {
     id: c.id,
     name,
@@ -127,7 +128,8 @@ export function parseSave(data: GameData, raw: unknown, start?: { x: number; y: 
     bankGold: Math.floor(num(c.bankGold, 0, 0, 1e9)),
     position: { x: Math.floor(num(pos.x, 0, 0, 10000)), y: Math.floor(num(pos.y, 0, 0, 10000)) },
     facing: c.facing === 'up' || c.facing === 'left' || c.facing === 'right' ? c.facing : 'down',
-    hotbar: normalizeHotbar(data, c.vocation, Array.isArray(c.hotbar) ? c.hotbar : []),
+    hotbar,
+    ...normalizeHotbarSets(data, c.vocation, hotbar, c.hotbarSets, c.hotbarSet),
     flags,
     pk: parsePk(c.pk),
     stats: {

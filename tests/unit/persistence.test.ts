@@ -17,6 +17,35 @@ const make = () =>
   createCharacter(D, { id: 'hero-1', name: 'Aria', vocation: 'druid', now: 0, position: { x: 47, y: 11 } });
 
 describe('formato de save', () => {
+
+  it('favoritos de atalhos: o conjunto ativo e os outros dois sobrevivem à ida e volta', () => {
+    const c = make();
+    c.hotbar[0] = 'potion:mana';
+    c.hotbarSets[0] = [...c.hotbar];
+    c.hotbarSets[1] = c.hotbarSets[1]!.map(() => '');
+    c.hotbarSets[1]![2] = 'potion:health';
+    const back = parseSave(D, JSON.parse(JSON.stringify(toSaveFile(c)))).character;
+    expect(back.hotbarSet).toBe(0);
+    expect(back.hotbar[0]).toBe('potion:mana');
+    expect(back.hotbarSets[1]![2]).toBe('potion:health');
+    // o ativo vale pela barra atual (a cópia guardada pode estar velha)
+    c.hotbar[1] = 'potion:health';
+    expect(parseSave(D, JSON.parse(JSON.stringify(toSaveFile(c)))).character.hotbarSets[0]![1]).toBe('potion:health');
+  });
+
+  it('save antigo, sem conjuntos, abre com 3 conjuntos e o 1º é a barra de sempre', () => {
+    const c = make();
+    c.hotbar[0] = 'potion:mana';
+    const file = JSON.parse(JSON.stringify(toSaveFile(c)));
+    delete file.character.hotbarSets;
+    delete file.character.hotbarSet;
+    const back = parseSave(D, file).character;
+    expect(back.hotbarSet).toBe(0);
+    expect(back.hotbarSets).toHaveLength(3);
+    expect(back.hotbarSets[0]).toEqual(back.hotbar);
+    expect(back.hotbar[0]).toBe('potion:mana');
+  });
+
   it('ida e volta preserva o personagem', () => {
     const c = make();
     c.gold = 321;

@@ -71,3 +71,44 @@ export function assignHotbar(hotbar: string[], index: number, entry: HotbarEntry
   if (prev >= 0 && prev !== index) hotbar[prev] = hotbar[index] ?? '';
   hotbar[index] = code;
 }
+
+// ------------------------------------------------------------------ conjuntos de favoritos
+/** Quantos conjuntos de atalhos (favoritos) o personagem tem; o botão da tela alterna entre eles. */
+export const HOTBAR_SETS = 3;
+
+/** O que a troca de conjuntos precisa do personagem (a barra atual é sempre o conjunto ativo). */
+export interface HotbarSetsState {
+  hotbar: string[];
+  hotbarSet: number;
+  hotbarSets: string[][];
+}
+
+/**
+ * Ajusta o que veio do save: `hotbar` é a barra do conjunto ativo (a verdade), `sets` guarda os outros. Save antigo, sem
+ * conjuntos, vira "conjunto 1 = a barra de sempre" e os outros dois começam com o padrão da vocação.
+ */
+export function normalizeHotbarSets(
+  data: GameData,
+  vocation: VocationId,
+  hotbar: readonly string[],
+  sets: unknown,
+  active: unknown,
+): { hotbarSet: number; hotbarSets: string[][] } {
+  const set = typeof active === 'number' && Number.isInteger(active) && active >= 0 && active < HOTBAR_SETS ? active : 0;
+  const saved = Array.isArray(sets) ? sets : [];
+  const out: string[][] = [];
+  for (let i = 0; i < HOTBAR_SETS; i++) {
+    const raw = i === set ? hotbar : Array.isArray(saved[i]) ? (saved[i] as unknown[]) : [];
+    out.push(normalizeHotbar(data, vocation, raw));
+  }
+  return { hotbarSet: set, hotbarSets: out };
+}
+
+/** Passa para outro conjunto: guarda a barra atual no conjunto que sai e carrega a do que entra. */
+export function switchHotbarSet(c: HotbarSetsState, to: number): boolean {
+  if (!Number.isInteger(to) || to < 0 || to >= HOTBAR_SETS || to === c.hotbarSet) return false;
+  c.hotbarSets[c.hotbarSet] = [...c.hotbar];
+  c.hotbar = [...(c.hotbarSets[to] ?? [])];
+  c.hotbarSet = to;
+  return true;
+}

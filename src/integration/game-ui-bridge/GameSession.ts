@@ -853,6 +853,13 @@ export class GameSession {
     this.sim.respawn();
     this.dirty = true;
   }
+  /** Troca o conjunto de favoritos de atalhos (0 a 2); sem argumento, vai para o próximo. */
+  setHotbarSet(to?: number): void {
+    if (!this.sim.setHotbarSet(to)) return;
+    this.audio.play('ui');
+    this.dirty = true;
+    this.saves.requestSave(() => this.sim.snapshotCharacter());
+  }
   setHotbar(index: number, entry: HotbarEntry): void {
     this.sim.setHotbar(index, entry);
     this.dirty = true;
