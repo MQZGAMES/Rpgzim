@@ -52,7 +52,7 @@ test('vida na guerra', { timeout: 1_800_000 }, () => {
       const n = h.character.name;
       if (e.byPlayer) {
         pvpDeaths[n] = (pvpDeaths[n] ?? 0) + 1;
-        const k = actorName(w, e.killerId);
+        const k = e.killerId ? actorName(w, e.killerId) : (e.killerName ?? 'Desconhecido');
         kills[k] = (kills[k] ?? 0) + 1;
       } else mobDeaths[n] = (mobDeaths[n] ?? 0) + 1;
     });

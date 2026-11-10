@@ -36,7 +36,7 @@ test('tabela de caça', { timeout: 600_000 }, () => {
     out.push(`\n== ${def.name} (${def.vocation} ${level}) hp ${h.stats.maxHealth} arma ${h.stats.weapon.attack}`);
     const rows = Object.values(w.data.monsters)
       .filter((m) => w.map.spawns.some((s) => s.monsterId === m.id))
-      .sort((a, b) => a.level - b.level)
+      .sort((a, b) => (a.level ?? 1) - (b.level ?? 1))
       .map((m) => {
         const proto = Array.from({ length: 3 }, () => ({ def: m, hp: m.health }) as unknown as MonsterEntity);
         return `${m.id.padEnd(16)} n${String(m.level).padStart(3)} margem3 ${fightMargin(w, h, proto).toFixed(2).padStart(6)} xp/min ${xpPerMinute(w, h, m.id).toFixed(0).padStart(6)}`;

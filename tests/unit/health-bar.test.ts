@@ -35,6 +35,15 @@ function makeView() {
 }
 
 describe('health bar lifecycle', () => {
+  it('changes color at health thresholds even if the rounded fill width stays the same', () => {
+    const { view, graphics } = makeView();
+    view.setHealthBar(0.605);
+    view.setHealthBar(0.595);
+    expect(graphics.fillStyle).toHaveBeenLastCalledWith(0xf8dc6c, 1);
+    view.setHealthBar(0.305);
+    view.setHealthBar(0.295);
+    expect(graphics.fillStyle).toHaveBeenLastCalledWith(0xe04a44, 1);
+  });
   it('draws a full health bar on the first update, without taking damage', () => {
     const { view, graphics, scene } = makeView();
     view.setHealthBar(1);

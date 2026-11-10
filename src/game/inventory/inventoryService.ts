@@ -159,7 +159,7 @@ function splitWithParty(w: World, bag: LootContainer, which: number | 'all'): vo
 export function takeLoot(w: World, containerId: string, which: number | 'all'): void {
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
-  if (!bag) return;
+  if (!bag || w.player.dead || Math.max(Math.abs(bag.x - w.player.x), Math.abs(bag.y - w.player.y)) > 1) return;
   // sem trava: qualquer um pega qualquer saco a qualquer momento. Só não divide com o grupo o que você mesmo jogou
   // no chão e o saco do seu próprio corpo; o saco de morte de outro personagem é dividido como um loot comum
   if (!bag.dropped && bag.ownerId !== w.player.id) splitWithParty(w, bag, which);

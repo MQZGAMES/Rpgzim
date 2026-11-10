@@ -19,6 +19,15 @@ function req<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
+/** Request success is provisional: quota/storage failures may still abort the transaction. */
+function committed(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(tx.error ?? new Error('Transação do IndexedDB cancelada'));
+    tx.onerror = () => reject(tx.error ?? new Error('Falha na transação do IndexedDB'));
+  });
+}
+
 export class IndexedDbSaveRepository<T> implements SaveRepository<T> {
   private dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -56,11 +65,14 @@ export class IndexedDbSaveRepository<T> implements SaveRepository<T> {
 
   async save(slotId: string, data: T, summary: SaveSlotSummary): Promise<void> {
     const store = await this.store('readwrite');
-    await req(store.put({ slotId, data, summary } satisfies Stored<T>));
+    const done = committed(store.transaction);
+    await Promise.all([req(store.put({ slotId, data, summary } satisfies Stored<T>)), done]);
   }
 
   async remove(slotId: string): Promise<void> {
-    await req((await this.store('readwrite')).delete(slotId));
+    const store = await this.store('readwrite');
+    const done = committed(store.transaction);
+    await Promise.all([req(store.delete(slotId)), done]);
   }
 }
 
@@ -74,7 +86,10 @@ export class LocalStorageSaveRepository<T> implements SaveRepository<T> {
       const key = this.storage.key(i);
       if (!key?.startsWith(this.prefix)) continue;
       try {
-        out.push((JSON.parse(this.storage.getItem(key) ?? 'null') as Stored<T>).summary);
+        const stored = JSON.parse(this.storage.getItem(key) ?? 'null') as Stored<T> | null;
+        const s = stored?.summary;
+        if (s && typeof s.slotId === 'string' && typeof s.name === 'string' && typeof s.vocation === 'string' &&
+            Number.isFinite(s.level) && Number.isFinite(s.updatedAt)) out.push(s);
       } catch {
         /* entrada corrompida é ignorada */
       }

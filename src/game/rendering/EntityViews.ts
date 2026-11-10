@@ -134,7 +134,8 @@ export class CreatureView {
 
   /** Barra de vida compacta acima da cabeça (redesenhada só quando muda). */
   setHealthBar(pct: number | null, scene: Phaser.Scene = this.scene, color = 0x4fd08a): void {
-    const key = pct === null ? 'none' : `${Math.round(pct * BAR_W)}:${color}`;
+    const c = pct !== null && pct <= 0.3 ? 0xe04a44 : pct !== null && pct <= 0.6 ? 0xf8dc6c : color;
+    const key = pct === null ? 'none' : `${Math.round(pct * BAR_W)}:${c}`;
     if (key === this.lastHpKey && (pct === null || this.bar?.visible)) return;
     this.lastHpKey = key;
     if (pct === null) {
@@ -150,7 +151,6 @@ export class CreatureView {
     const top = this.headTop - 3;
     g.fillStyle(0x120d18, 1).fillRect(-w / 2 - 1, top - 1, w + 2, BAR_H + 2);
     const fill = Math.max(1, Math.round(w * pct));
-    const c = pct > 0.6 ? color : pct > 0.3 ? 0xf8dc6c : 0xe04a44;
     g.fillStyle(c, 1).fillRect(-w / 2, top, fill, BAR_H);
   }
 

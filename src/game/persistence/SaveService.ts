@@ -38,8 +38,10 @@ export class SaveService {
     // valida o próprio save antes de gravar: nunca persiste um estado inconsistente
     parseSave(this.data, file);
     const summary: SaveSlotSummary = { slotId: character.id, name: character.name, vocation: character.vocation, level: character.level, updatedAt: file.savedAt };
-    this.lastSavedAt = Date.now();
-    this.writing = this.writing.then(() => this.repo.save(character.id, file, summary)).catch((e: unknown) => {
+    this.writing = this.writing.catch(() => undefined).then(async () => {
+      await this.repo.save(character.id, file, summary);
+      this.lastSavedAt = file.savedAt;
+    }).catch((e: unknown) => {
       console.error('Falha ao salvar', e);
       throw e;
     });

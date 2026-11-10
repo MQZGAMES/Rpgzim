@@ -6,6 +6,7 @@ import { createCharacter } from '../../src/domain/rules/character';
 import { refreshStats } from '../../src/game/progression/progression';
 import { asActor } from '../../src/game/simulation/World';
 import { partyOf } from '../../src/game/social/social';
+import { isPz } from '../../src/game/world/GameMap';
 import { makeSim, advance } from '../helpers';
 import type { HeroEntity } from '../../src/game/entities/types';
 
@@ -88,7 +89,7 @@ test('heróis travados', { timeout: 900_000 }, () => {
             .filter((m) => m.alive && m.targetId === h.id)
             .map((m) => `${m.def.id}@${Math.max(Math.abs(m.x - h.x), Math.abs(m.y - h.y))}`);
           log.push(
-            `${t()} TRAVADO ${h.character.name} modo=${h.brain.mode} alvo=${h.targetId} hp=${h.character.health}/${h.stats.maxHealth} mana=${h.character.mana} path=${h.path?.length ?? 0} move=${!!h.move} pz=${w.map.tiles ? '' : ''} atacantes=[${mons.join(',')}] grupo=${!!partyOf(w, h.id)} arma=${h.character.equipment.mainHand?.itemId}`,
+            `${t()} TRAVADO ${h.character.name} modo=${h.brain.mode} alvo=${h.targetId} hp=${h.character.health}/${h.stats.maxHealth} mana=${h.character.mana} path=${h.path?.length ?? 0} move=${!!h.move} pz=${isPz(w.map, h.x, h.y)} atacantes=[${mons.join(',')}] grupo=${!!partyOf(w, h.id)} arma=${h.character.equipment.mainHand?.itemId}`,
           );
           stuckSince.set(h.id, { at: w.now + 1e9, x: h.x, y: h.y });
         }
