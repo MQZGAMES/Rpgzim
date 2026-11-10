@@ -112,6 +112,15 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 - **Grupo mais dinâmico**: em grupo os heróis se curam e bebem poção mais cedo, recuam para trás dos colegas em vez de apanhar até o fim, e Druid/Paladin lançam a magia de área no meio do bolo de criaturas.
 - **Saco de morte protegido**: heróis não pegam o saco de morte de outro personagem nem itens jogados no chão, e o saco de morte não é dividido com o grupo (antes, em grupo, parte do seu loot ia para os heróis).
 
+## Heróis que não morrem parados
+Medido com `tests/tools/hero-deaths.test.ts` (autópsia: os últimos segundos de cada morte). Com 12 heróis começando do nível 1 (3 sementes, ~49 h de herói) as mortes caíram de **17 para 2** e o XP total subiu 19%; quase todas as mortes antigas eram com o herói parado.
+- **Atirador de longe conta como ameaça**: quem atirava de 4 tiles ou mais não entrava na conta, e o herói só bebia a poção com 25% de vida.
+- **Fuga que anda** (`src/game/ai/heroEscape.ts`): perseguido de perto, ele corre em trechos curtos para a casa mais longe das criaturas (sem passar encostado nelas nem acordar as paradas), na direção do abrigo. Antes traçava a rota até a vila — nas caças distantes ela nem cabia no limite da busca, e ele "não achava rota" e ficava lutando. Em fuga só luta quem está encurralado de verdade (nenhuma casa livre).
+- **Despistou, respira e volta**: sem ninguém atrás e com poções, bebe até a vida voltar e retoma a caça dali, em vez de atravessar o mapa até a vila.
+- **Sai antes de morrer**: vida abaixo de 38% por 2,5 s mesmo bebendo ("sangrando"), 40% da vida perdida em 3 s ("despencando") ou criatura que tira metade da vida cheia num golpe ("letal": não puxa, não caça sozinho e evita a área).
+- **Mana na régua**: numa luta de verdade o dano das magias só conta com mana para conjurá-las; o mago com menos de 30% espera chegar a 60% antes de puxar a próxima.
+- Testado e descartado (não reduziu mortes): esperar fora do acampamento reprovado e recuar atirando com 3+ criaturas atrás.
+
 ## IA mais esperta, PK revisado e balanceamento das vocações
 - **Nada de herói parado apanhando**: um vigia percebe quando ele toma dano por ~2,5 s sem atacar nem andar (alvo do outro lado de um obstáculo, varinha sem mana, rota travada) e troca para quem dá para acertar ou foge. Na fuga, cercado, ele atravessa as criaturas em vez de ficar parado "revidando" (era um travamento sem fim). Mago sem mana não fica "lutando" parado.
 - **Legítima defesa sempre**: em grupo (de heróis ou com o jogador) quem é atacado no PK revida ou foge — antes só reagia sozinho. No PK todas as vocações usam as magias de ataque.
