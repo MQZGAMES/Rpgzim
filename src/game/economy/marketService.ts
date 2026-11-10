@@ -10,7 +10,10 @@ import {
   collectProceeds,
   depotSpace,
   logTrade,
+  marketable,
+  ownedCount,
   placeOffer,
+  priceGuide,
   sellNow,
   type MarketFail,
   type MarketFill,
@@ -147,6 +150,44 @@ export function marketOffer(w: World, side: OfferSide, itemId: string, qty: numb
     if (res.offer)
       message(w, `Oferta de compra: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} cada (${res.offer.count * res.offer.price} reservados).`, 'info');
   }
+  changed(w);
+  return true;
+}
+
+/**
+ * Vender tudo rápido: anuncia todas as unidades (mochila + depósito) de cada item de `itemIds` pelo preço sugerido — um
+ * abaixo do menor anúncio dos outros ou, sem ninguém vendendo, o preço de referência (nunca abaixo da maior oferta de
+ * compra). Uma mensagem só para o lote inteiro.
+ */
+export function marketSellAll(w: World, itemIds: readonly string[]): boolean {
+  if (!atMarket(w)) return false;
+  const c = w.player.character;
+  let kinds = 0;
+  let units = 0;
+  let asking = 0;
+  let soldUnits = 0;
+  let soldGold = 0;
+  for (const itemId of new Set(itemIds)) {
+    const have = ownedCount(c, itemId);
+    if (!have || !marketable(w.data.items[itemId])) continue;
+    const price = priceGuide(w.data, w.market, itemId, c.id).sellSuggest;
+    const res = placeOffer(w.data, w.market, c, 'sell', itemId, have, price, pkNow(w));
+    if (!res.ok) continue;
+    kinds++;
+    if (res.fills.length) {
+      deliverBuyers(w, res.fills, c.name);
+      logFills(w, c.id, 'sell', res.fills);
+      soldUnits += res.matched;
+      soldGold += res.total;
+    }
+    if (res.offer) {
+      units += res.offer.count;
+      asking += res.offer.count * res.offer.price;
+    }
+  }
+  if (!kinds) return fail(w, 'empty');
+  if (soldUnits) message(w, `Vendeu na hora: ${soldUnits} ${soldUnits > 1 ? 'itens' : 'item'} por ${soldGold} de ouro (no banco).`, 'loot');
+  if (units) message(w, `Anunciado: ${units} ${units > 1 ? 'itens' : 'item'} pelo preço sugerido (${asking} de ouro no total).`, 'info');
   changed(w);
   return true;
 }

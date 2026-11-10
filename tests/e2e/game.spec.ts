@@ -265,6 +265,13 @@ test('mercado: corretor ao lado da banqueira, vender (categoria → item → anu
   await expect(page.locator('[data-testid^=market-mine-]')).toHaveCount(1);
   await page.locator('[data-testid^=market-cancel-]').first().click();
   await expect(page.locator('[data-testid^=market-mine-]')).toHaveCount(0);
+  // Vender tudo rápido: pede confirmação e anuncia tudo pelo preço sugerido
+  await page.getByTestId('market-mode-sell').click();
+  await page.getByTestId('market-sell-all').click();
+  await page.getByTestId('market-sell-all-yes').click();
+  await expect(page.getByTestId('market-sell-all')).toHaveCount(0);
+  await page.getByTestId('market-mode-mine').click();
+  await expect(page.locator('[data-testid^=market-mine-]').first()).toBeVisible();
   // Comprar → filtros da lista (vocação e ordenação)
   await page.getByTestId('market-mode-buy').click();
   await page.getByTestId('market-cat-sword').click();

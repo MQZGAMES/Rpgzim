@@ -92,6 +92,7 @@ import {
   marketCancel,
   marketCollect,
   marketOffer,
+  marketSellAll,
   marketSellNow,
   marketTakeParcels,
 } from '../economy/marketService';
@@ -750,6 +751,9 @@ export class GameSimulation {
   /** Cria uma oferta de venda ou de compra (o que cruza com o outro lado fecha na hora). */
   marketOffer(side: OfferSide, itemId: string, qty: number, price: number): boolean {
     return marketOffer(this.world, side, itemId, qty, price);
+  }
+  marketSellAll(itemIds: readonly string[]): boolean {
+    return marketSellAll(this.world, itemIds);
   }
   marketCancel(offerId: string): boolean {
     return marketCancel(this.world, offerId);
