@@ -19,6 +19,7 @@ import {
   type MarketFill,
   type OfferSide,
 } from '../../domain/rules/market';
+import { keptFromSellAll } from '../../domain/rules/economy';
 import { addItem } from '../../domain/rules/inventory';
 import type { PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
@@ -157,9 +158,10 @@ export function marketOffer(w: World, side: OfferSide, itemId: string, qty: numb
 /**
  * Vender tudo rápido: anuncia todas as unidades (mochila + depósito) de cada item de `itemIds` pelo preço sugerido — um
  * abaixo do menor anúncio dos outros ou, sem ninguém vendendo, o preço de referência (nunca abaixo da maior oferta de
- * compra). Uma mensagem só para o lote inteiro.
+ * compra). Uma mensagem só para o lote inteiro. Os travados (cadeado do jogador e poções) só entram com `includeKept`,
+ * que a tela pede numa confirmação à parte.
  */
-export function marketSellAll(w: World, itemIds: readonly string[]): boolean {
+export function marketSellAll(w: World, itemIds: readonly string[], includeKept = false): boolean {
   if (!atMarket(w)) return false;
   const c = w.player.character;
   let kinds = 0;
@@ -170,6 +172,7 @@ export function marketSellAll(w: World, itemIds: readonly string[]): boolean {
   for (const itemId of new Set(itemIds)) {
     const have = ownedCount(c, itemId);
     if (!have || !marketable(w.data.items[itemId])) continue;
+    if (!includeKept && keptFromSellAll(c, itemId)) continue;
     const price = priceGuide(w.data, w.market, itemId, c.id).sellSuggest;
     const res = placeOffer(w.data, w.market, c, 'sell', itemId, have, price, pkNow(w));
     if (!res.ok) continue;

@@ -158,8 +158,20 @@ describe('mercado: livro de ofertas', () => {
     offer(w, 'buy', 'b', 'sword_iron', 1, 200); // não vende para a oferta de compra: anuncia acima dela
     const suggested = priceGuide(D, w.market, 'potion_health', p.id).sellSuggest; // ninguém vendendo
     const bank = p.bankGold;
-    expect(sim.marketSellAll(['sword_iron', 'potion_health', 'bone_fragment', 'helmet_iron'])).toBe(true);
-    const mine = w.market.offers.filter((o) => o.ownerId === p.id);
+    const ids = ['sword_iron', 'potion_health', 'bone_fragment', 'helmet_iron', 'axe_hand'];
+    // travados (poções sempre; o que o jogador travou com o cadeado) ficam de fora sem a confirmação à parte
+    p.inventory[3] = { itemId: 'axe_hand', count: 1 };
+    sim.setSellLock('axe_hand', true);
+    expect(buildSnapshot(sim, 1).market!.kept).toMatchObject({ sword_iron: false, potion_health: true, axe_hand: true });
+    expect(sim.marketSellAll(ids)).toBe(true);
+    expect(w.market.offers.filter((o) => o.ownerId === p.id).map((o) => o.itemId)).toEqual(['sword_iron']);
+    expect(countItem(p.inventory, 'potion_health') + countItem(p.depot, 'potion_health')).toBe(8);
+    expect(sim.marketSellAll(ids)).toBe(false); // só sobraram travados
+    // com a confirmação: entram também
+    sim.setSellLock('axe_hand', false);
+    expect(sim.marketSellAll(ids, true)).toBe(true);
+    const mine = w.market.offers.filter((o) => o.ownerId === p.id && o.itemId !== 'axe_hand');
+    expect(w.market.offers.some((o) => o.ownerId === p.id && o.itemId === 'axe_hand')).toBe(true);
     expect(mine).toHaveLength(2);
     expect(mine.find((o) => o.itemId === 'sword_iron')).toMatchObject({ side: 'sell', count: 1, price: 259 });
     expect(mine.find((o) => o.itemId === 'potion_health')).toMatchObject({ side: 'sell', count: 8, price: suggested });
@@ -168,8 +180,8 @@ describe('mercado: livro de ofertas', () => {
     expect(p.bankGold).toBe(bank);
     expect(offersFor(w.market, 'sword_iron', 'buy')).toHaveLength(1);
     // nada mais para anunciar
-    expect(sim.marketSellAll(['sword_iron', 'potion_health'])).toBe(false);
-    expect(w.market.offers.filter((o) => o.ownerId === p.id)).toHaveLength(2);
+    expect(sim.marketSellAll(ids, true)).toBe(false);
+    expect(w.market.offers.filter((o) => o.ownerId === p.id)).toHaveLength(3);
   });
 
   it('preço de referência e sugestões seguem a oferta e a procura', () => {

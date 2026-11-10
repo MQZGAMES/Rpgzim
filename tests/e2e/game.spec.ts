@@ -269,9 +269,11 @@ test('mercado: corretor ao lado da banqueira, vender (categoria → item → anu
   await page.getByTestId('market-mode-sell').click();
   await page.getByTestId('market-sell-all').click();
   await page.getByTestId('market-sell-all-yes').click();
-  await expect(page.getByTestId('market-sell-all')).toHaveCount(0);
+  await expect(page.getByTestId('market-sell-all-confirm')).toHaveCount(0);
   await page.getByTestId('market-mode-mine').click();
   await expect(page.locator('[data-testid^=market-mine-]').first()).toBeVisible();
+  // poções (travadas) ficaram de fora: nenhuma foi anunciada
+  expect((await api(page, (a) => a.player())).inventory.some((s) => s.itemId.startsWith('potion_'))).toBe(true);
   // Comprar → filtros da lista (vocação e ordenação)
   await page.getByTestId('market-mode-buy').click();
   await page.getByTestId('market-cat-sword').click();

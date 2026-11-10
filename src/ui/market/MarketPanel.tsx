@@ -357,19 +357,26 @@ function Categories({
 
 /**
  * Vender tudo rápido: anuncia tudo o que você tem de `items` (mochila e depósito) pelo preço sugerido de cada um — um
- * abaixo do menor anúncio ou, sem ninguém vendendo, o preço de referência. Dois toques: o segundo confirma.
+ * abaixo do menor anúncio ou, sem ninguém vendendo, o preço de referência. Dois toques: o segundo confirma. Os travados
+ * (cadeado e poções) ficam de fora, a menos que você marque para incluí-los na confirmação.
  */
 function QuickSellAll({ items }: { items: CatalogItem[] }) {
   const session = useSession();
   const market = useSnap((s) => s.market)!;
   const [confirming, setConfirming] = useState(false);
-  const mine = items.filter((it) => (market.owned[it.itemId] ?? 0) > 0);
-  const units = mine.reduce((s, it) => s + market.owned[it.itemId]!, 0);
+  const [withKept, setWithKept] = useState(false);
+  const owned = items.filter((it) => (market.owned[it.itemId] ?? 0) > 0);
+  const count = (list: CatalogItem[]) => list.reduce((s, it) => s + market.owned[it.itemId]!, 0);
+  const free = owned.filter((it) => !market.kept[it.itemId]);
+  const keptUnits = count(owned) - count(free);
+  const mine = withKept ? owned : free;
+  const units = count(mine);
   const total = mine.reduce(
     (s, it) => s + market.owned[it.itemId]! * (market.quotes[it.itemId]?.sellSuggest ?? 0),
     0,
   );
-  if (!units) return null;
+  if (!owned.length) return null;
+  const close = () => (setConfirming(false), setWithKept(false));
   if (!confirming)
     return (
       <PixelButton
@@ -377,22 +384,52 @@ function QuickSellAll({ items }: { items: CatalogItem[] }) {
         onClick={() => setConfirming(true)}
         data-testid="market-sell-all"
       >
-        Vender tudo rápido ({units})
+        Vender tudo rápido ({count(free)})
+        {keptUnits > 0 && (
+          <span className="ml-1 inline-flex items-center gap-[2px] text-[11px] text-muted">
+            <ItemIcon icon="ui_lock" size={11} />
+            {keptUnits}
+          </span>
+        )}
       </PixelButton>
     );
   return (
     <div className="frame-slot mb-2 !border-[6px] p-1 text-[12px]" data-testid="market-sell-all-confirm">
       <p className="mb-1 text-parchment">
-        Anunciar {units} {units > 1 ? 'itens' : 'item'} ({mine.length} {mine.length > 1 ? 'tipos' : 'tipo'})
-        da mochila e do depósito pelo preço sugerido? Total pedido: <Coin n={total} />
+        {units > 0 ? (
+          <>
+            Anunciar {units} {units > 1 ? 'itens' : 'item'} ({mine.length}{' '}
+            {mine.length > 1 ? 'tipos' : 'tipo'}) da mochila e do depósito pelo preço sugerido? Total pedido:{' '}
+            <Coin n={total} />
+          </>
+        ) : (
+          'Só há itens travados aqui: marque abaixo para anunciá-los.'
+        )}
       </p>
+      {keptUnits > 0 && (
+        <button
+          type="button"
+          onClick={() => setWithKept(!withKept)}
+          aria-pressed={withKept}
+          className={`mb-1 flex w-full items-center gap-1 rounded-sm border-2 px-2 py-[4px] text-left text-[11px] ${withKept ? 'border-hp-light text-hp-light' : 'border-[#4a3a2a] text-muted'}`}
+          data-testid="market-sell-all-kept"
+        >
+          <ItemIcon icon="ui_lock" size={12} />
+          {withKept ? '✓ ' : ''}Incluir também {keptUnits} {keptUnits > 1 ? 'travados' : 'travado'} (poções e
+          itens com cadeado)
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-1">
         <PixelButton
           variant="gold"
           className="min-h-[38px] !border-[5px] text-[12px]"
+          disabled={units === 0}
           onClick={() => {
-            session.marketSellAll(mine.map((it) => it.itemId));
-            setConfirming(false);
+            session.marketSellAll(
+              mine.map((it) => it.itemId),
+              withKept,
+            );
+            close();
           }}
           data-testid="market-sell-all-yes"
         >
@@ -400,7 +437,7 @@ function QuickSellAll({ items }: { items: CatalogItem[] }) {
         </PixelButton>
         <PixelButton
           className="min-h-[38px] !border-[5px] text-[12px]"
-          onClick={() => setConfirming(false)}
+          onClick={close}
           data-testid="market-sell-all-no"
         >
           Cancelar

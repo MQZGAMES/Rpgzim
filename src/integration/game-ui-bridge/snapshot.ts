@@ -283,6 +283,8 @@ export interface UiSnapshot {
     quotes: Record<string, MarketQuoteView>;
     /** Equipamentos e poções que você tem (mochila + depósito). */
     owned: Record<string, number>;
+    /** Dos que você tem, os travados (cadeado ou poção): o "vender tudo rápido" só os leva com confirmação à parte. */
+    kept: Record<string, boolean>;
     /** Comparação de cada item do catálogo com o que você usa (melhor, pior, igual, nível, vocação). */
     fits: Record<string, Comparison>;
     /** Unidades compradas esperando para ser retiradas. */
@@ -390,6 +392,7 @@ function marketView(sim: GameSimulation, npcName: string): NonNullable<UiSnapsho
     })),
     quotes,
     owned,
+    kept: Object.fromEntries(Object.keys(owned).map((id) => [id, keptFromSellAll(c, id)])),
     fits,
     parcels: parcelUnits(m, c.id),
     money: c.gold + c.bankGold,
