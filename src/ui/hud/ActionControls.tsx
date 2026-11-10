@@ -2,6 +2,7 @@
 // canto inferior direito: no toque, um teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9, de cima para baixo); no desktop, a barra
 // com as teclas 1–9. Os atalhos são configuráveis (painel "Atalhos"). Não há botão de ataque: as magias de ataque
 // também iniciam o ataque básico.
+import { HOTBAR_SETS } from '../../domain/rules/hotbar';
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon } from '../common/primitives';
@@ -116,6 +117,40 @@ function SelectActorButton({ width, height }: { width: number; height: number })
   );
 }
 
+/**
+ * Botão pequeno dos favoritos de atalhos: mostra o conjunto ativo (1 a 3) e cada toque passa para o próximo. Fica junto
+ * dos atalhos (acima do teclado no toque, ao lado da engrenagem no desktop); a tecla 0 faz o mesmo.
+ */
+export function HotbarSetButton({ width, height }: { width: number; height: number }) {
+  const session = useSession();
+  const set = useSnap((s) => s.hotbarSet);
+  return (
+    <button
+      type="button"
+      aria-label={`Favoritos de atalhos: conjunto ${set + 1} de ${HOTBAR_SETS} (toque para trocar)`}
+      title={`Favoritos de atalhos ${set + 1}/${HOTBAR_SETS} — toque para trocar (tecla 0)`}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        session.audio.unlock();
+        session.setHotbarSet();
+      }}
+      className="btn-pixel pointer-events-auto relative flex flex-col items-center justify-center !border-[6px]"
+      style={{ width, height }}
+      data-testid="hotbar-set-button"
+    >
+      <span className="text-[13px] leading-none text-gold-light" data-testid="hotbar-set-current">
+        {set + 1}
+      </span>
+      {/* um pontinho por conjunto; o ativo acende */}
+      <span className="mt-[2px] flex gap-[2px]" aria-hidden>
+        {Array.from({ length: HOTBAR_SETS }, (_, i) => (
+          <span key={i} className={`h-[3px] w-[3px] ${i === set ? 'bg-gold-light' : 'bg-muted/60'}`} />
+        ))}
+      </span>
+    </button>
+  );
+}
+
 export function TouchActions() {
   const hotbar = useSnap((s) => s.hotbar);
   const cols = `${TOUCH_SLOT}px ${TOUCH_SLOT}px ${TOUCH_SLOT}px`;
@@ -124,8 +159,9 @@ export function TouchActions() {
       <div className="pointer-events-none flex flex-col items-end gap-1" data-testid="touch-actions">
         <InteractButton />
         {/* seleção de jogador/herói logo acima dos atalhos */}
-        <div className="px-[4px]">
-          <SelectActorButton width={TOUCH_GRID_W - 8} height={30} />
+        <div className="flex items-center gap-[4px] px-[4px]">
+          <HotbarSetButton width={34} height={30} />
+          <SelectActorButton width={TOUCH_GRID_W - 8 - 34 - 4} height={30} />
         </div>
         <div
           className="pointer-events-auto grid items-center justify-items-center p-[4px]"
@@ -155,6 +191,7 @@ export function DesktopActionBar() {
         {hotbar.map((slot) => (
           <HotbarSlot key={slot.index} slot={slot} size={46} keyHint={String(slot.index + 1)} />
         ))}
+        <HotbarSetButton width={30} height={46} />
         <button type="button" onClick={() => session.setPanel('hotbar')} className="btn-pixel flex h-[46px] w-7 items-center justify-center !border-[6px] text-[10px]" title="Configurar atalhos" data-testid="btn-hotbar-config">
           <ItemIcon icon="ui_gear" size={14} />
         </button>

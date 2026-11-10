@@ -701,3 +701,46 @@ test('loja: filtros por categoria e "Posso usar", ordem por nível; atalhos: os 
   }
   await page.screenshot({ path: info.outputPath('atalhos.png') });
 });
+
+test('favoritos de atalhos: botão troca entre 3 conjuntos, o menu edita o ativo e a tecla 0 também troca', async ({ page }, info) => {
+  await createCharacter(page, 'knight', 'Favorita');
+  const isMobile = info.project.name === 'mobile';
+  const btn = page.getByTestId('hotbar-set-button');
+  await expect(btn).toBeVisible();
+  await expect(page.getByTestId('hotbar-set-current')).toHaveText('1');
+  // o botão cabe na tela e não cobre os atalhos
+  const vp = page.viewportSize()!;
+  const b = (await btn.boundingBox())!;
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.width).toBeLessThanOrEqual(vp.width);
+  expect(b.y + b.height).toBeLessThanOrEqual(vp.height);
+  const first = (await page.getByTestId('slot-0').count()) ? page.getByTestId('slot-0') : page.locator('[data-testid^=spell-]').first();
+  const k = (await first.boundingBox())!;
+  expect(b.y + b.height <= k.y + 1 || b.x + b.width <= k.x + 1 || b.x >= k.x + k.width - 1).toBe(true);
+  await page.screenshot({ path: info.outputPath('favoritos.png') });
+  // toque: vai para o conjunto 2 (que começa com o padrão da vocação)
+  await btn.dispatchEvent('pointerdown');
+  await expect(page.getByTestId('hotbar-set-current')).toHaveText('2');
+  // no menu, o conjunto 2 está ativo; esvazia o atalho 1 só nele
+  if (isMobile) {
+    await page.getByTestId('btn-settings').click();
+    await page.getByTestId('settings-hotbar').click();
+  } else await page.getByTestId('btn-hotbar-config').click();
+  await expect(page.getByTestId('hotbar-set-1')).toHaveClass(/btn-gold/);
+  await page.getByTestId('hotbar-pick-0').click();
+  await page.getByTestId('hotbar-clear').click();
+  // trocar de conjunto dentro do menu também vale (volta ao 1: atalho 1 cheio)
+  await page.getByTestId('hotbar-set-0').click();
+  await expect(page.getByTestId('hotbar-current')).not.toHaveText('Vazio');
+  await page.getByTestId('hotbar-set-1').click();
+  await page.getByTestId('hotbar-pick-0').click();
+  await expect(page.getByTestId('hotbar-current')).toHaveText('Vazio');
+  await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
+  await expect(page.getByLabel(/Atalho 1 vazio/)).toBeVisible();
+  // tecla 0 dá a volta: 2 -> 3 -> 1; no conjunto 1 o atalho 1 continua preenchido
+  await page.keyboard.press('Digit0');
+  await expect(page.getByTestId('hotbar-set-current')).toHaveText('3');
+  await page.keyboard.press('Digit0');
+  await expect(page.getByTestId('hotbar-set-current')).toHaveText('1');
+  await expect(page.getByLabel(/Atalho 1 vazio/)).toHaveCount(0);
+});

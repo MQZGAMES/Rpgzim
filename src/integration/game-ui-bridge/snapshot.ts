@@ -256,6 +256,8 @@ export interface UiSnapshot {
     region: string;
   }[];
   hotbar: HotbarSlotView[];
+  /** Conjunto de favoritos de atalhos ativo (0 a 2). */
+  hotbarSet: number;
   spellbook: SpellView[];
   inventory: (ItemView | null)[];
   equipment: Record<EquipSlot, ItemView | null>;
@@ -738,6 +740,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       region: regionAt(w.map, h.x, h.y)?.name ?? 'Terras desconhecidas',
     })),
     hotbar: hotbarView(sim),
+    hotbarSet: c.hotbarSet ?? 0,
     spellbook: voc.spells.map((id) => spellView(sim, id)),
     inventory: c.inventory.map((st) => (st ? itemView(sim, st) : null)),
     equipment,

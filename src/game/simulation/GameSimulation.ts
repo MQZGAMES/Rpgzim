@@ -64,7 +64,7 @@ import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
 import { MANA_REGEN_OUTSIDE_PZ } from '../../domain/rules/regen';
-import { HOTBAR_SIZE, assignHotbar, normalizeHotbar, type HotbarEntry } from '../../domain/rules/hotbar';
+import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, normalizeHotbar, normalizeHotbarSets, switchHotbarSet, type HotbarEntry } from '../../domain/rules/hotbar';
 import {
   PARTY_FAIL_MESSAGE,
   acceptInvite,
@@ -1004,6 +1004,16 @@ export class GameSimulation {
     if (c.hotbar.length !== HOTBAR_SIZE) c.hotbar = normalizeHotbar(this.world.data, c.vocation, c.hotbar);
     assignHotbar(c.hotbar, index, entry);
     this.world.events.emit('saveRequested', { reason: 'hotbar' });
+  }
+  /** Troca o conjunto de favoritos ativo (0 a 2); a barra da tela passa a ser a dele. `to` omitido = o próximo. */
+  setHotbarSet(to?: number): boolean {
+    const c = this.world.player.character;
+    if (!Array.isArray(c.hotbarSets) || c.hotbarSets.length !== HOTBAR_SETS)
+      Object.assign(c, normalizeHotbarSets(this.world.data, c.vocation, c.hotbar, c.hotbarSets, c.hotbarSet));
+    const next = to ?? (c.hotbarSet + 1) % HOTBAR_SETS;
+    if (!switchHotbarSet(c, next)) return false;
+    this.world.events.emit('saveRequested', { reason: 'hotbar' });
+    return true;
   }
 
   // ------------------------------------------------------------------ utilidades para testes/depuração

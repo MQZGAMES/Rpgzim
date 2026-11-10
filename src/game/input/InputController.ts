@@ -101,6 +101,9 @@ export class InputController {
       case 'Digit9':
         s.useSlot(Number(e.code.slice(5)) - 1);
         break;
+      case 'Digit0':
+        s.setHotbarSet();
+        break;
       case 'KeyQ':
         s.quickPotion('health');
         break;

@@ -41,8 +41,11 @@ export interface CharacterState {
   bankGold: number;
   position: { x: number; y: number };
   facing: Facing;
-  /** Barra de atalhos de magias (ids). */
+  /** Barra de atalhos (magias, itens, poções): é sempre o conjunto de favoritos ativo. */
   hotbar: string[];
+  /** Conjunto de favoritos ativo (0 a 2) e os três conjuntos (o ativo é atualizado ao trocar; a verdade dele é `hotbar`). */
+  hotbarSet: number;
+  hotbarSets: string[][];
   flags: Record<string, boolean>;
   /** Estado de PK (caveira, PZ lock, mortes injustas), em tempo real para valer entre sessões. */
   pk?: { skull: 'white' | 'yellow' | 'red' | null; skullUntil: number; pzLockUntil: number; unjust: number[] };

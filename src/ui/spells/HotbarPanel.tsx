@@ -1,7 +1,7 @@
 // Configuração dos atalhos: escolha uma posição (numerada, no mesmo lugar da tela) e vincule uma magia,
 // uma poção automática ou um item usável da mochila. Uma entrada já usada em outro atalho troca de lugar.
 import { useState } from 'react';
-import type { HotbarEntry } from '../../domain/rules/hotbar';
+import { HOTBAR_SETS, type HotbarEntry } from '../../domain/rules/hotbar';
 import { useLocal, useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import type { HotbarSlotView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
@@ -52,6 +52,7 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
   const touch = useLocal((s) => s.touch);
   const hotbar = useSnap((s) => s.hotbar);
+  const set = useSnap((s) => s.hotbarSet);
   const book = useSnap((s) => s.spellbook);
   const usable = useSnap((s) => {
     const seen = new Set<string>();
@@ -77,6 +78,23 @@ export function HotbarPanel({ onClose }: { onClose: () => void }) {
         {/* os 9 atalhos sempre num teclado 3x3 (1 2 3 / 4 5 6 / 7 8 9, a mesma ordem da tela), fixo no topo enquanto as
             opções rolam embaixo: cabe em qualquer tela (antes, sem toque, eram 9 em linha e os últimos ficavam cortados) */}
         <div className="sticky top-0 z-10 -mx-1 bg-[#1d1626] px-1 pb-2" data-testid="hotbar-slots">
+          {/* favoritos: três conjuntos de atalhos; o escolhido é o que aparece na tela e o que se edita aqui */}
+          <div className="mb-2 flex items-center gap-1" data-testid="hotbar-sets">
+            <span className="mr-1 text-[11px] text-muted">Favoritos</span>
+            {Array.from({ length: HOTBAR_SETS }, (_, i) => (
+              <PixelButton
+                key={i}
+                variant={i === set ? 'gold' : 'stone'}
+                className="h-7 w-9 !border-[6px] text-[12px]"
+                onClick={() => session.setHotbarSet(i)}
+                ariaLabel={`Conjunto de favoritos ${i + 1}`}
+                data-testid={`hotbar-set-${i}`}
+              >
+                {i + 1}
+              </PixelButton>
+            ))}
+            <span className="ml-1 min-w-0 truncate text-[10px] text-muted">{touch ? 'botão ao lado de “Jogador”' : 'tecla 0 ou botão da barra'} troca</span>
+          </div>
           <div className="flex items-center gap-3">
             <div className="grid shrink-0 gap-2" style={{ gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(3, 48px)' }}>
               {hotbar.map((slot) => (
