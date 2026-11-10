@@ -135,7 +135,7 @@ export class CreatureView {
   /** Barra de vida compacta acima da cabeça (redesenhada só quando muda). */
   setHealthBar(pct: number | null, scene: Phaser.Scene = this.scene, color = 0x4fd08a): void {
     const key = pct === null ? 'none' : `${Math.round(pct * BAR_W)}:${color}`;
-    if (key === this.lastHpKey) return;
+    if (key === this.lastHpKey && (pct === null || this.bar?.visible)) return;
     this.lastHpKey = key;
     if (pct === null) {
       this.bar?.setVisible(false);
@@ -196,12 +196,13 @@ export class CreatureView {
     this.sprite.anims.stop();
     const frames = this.sprite.texture.frameTotal - 1; // inclui __BASE
     this.sprite.setFrame(frames - 1);
-    this.bar?.setVisible(false);
+    this.setHealthBar(null);
     this.label?.setVisible(false);
   }
 
   revive(): void {
     this.dead = false;
+    this.lastHpKey = '';
     this.sprite.setAlpha(1);
     this.container.setAlpha(1);
   }

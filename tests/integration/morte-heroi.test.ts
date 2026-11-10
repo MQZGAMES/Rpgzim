@@ -6,7 +6,8 @@ import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
 import { validateCast } from '../../src/domain/rules/spells';
 import { castSpell } from '../../src/game/abilities/spells';
-import { damagePlayer } from '../../src/game/combat/combat';
+import { damagePlayer, respawnPlayer } from '../../src/game/combat/combat';
+import { canEnter, occupant, removeOccupant, teleport, tryStep } from '../../src/game/movement/movement';
 import type { HeroEntity } from '../../src/game/entities/types';
 import { asActor } from '../../src/game/simulation/World';
 import { advance, makeSim, runUntil } from '../helpers';
@@ -31,6 +32,48 @@ const killHero = (sim: ReturnType<typeof setup>['sim'], h: HeroEntity) => {
   const w = sim.world;
   asActor(w, h, () => damagePlayer(w, 99999, 'physical', { id: 'x', name: 'Lobo', kind: 'monster' }));
 };
+
+describe('death releases collision immediately', () => {
+  it('a moving hero stops blocking as soon as they die, even while their loot remains', () => {
+    const { w, h, sim } = setup();
+    teleport(w, w.human, 30, 23);
+    teleport(w, h, 31, 23);
+    expect(tryStep(w, h, 1, 0, 3, false)).toBe(true);
+    expect(canEnter(w, 32, 23, false, w.human.id)).toBe(false);
+    h.character.gold = 100;
+    killHero(sim, h);
+    expect(h.dead).toBe(true);
+    expect(h.move).toBeNull();
+    expect(occupant(w, 32, 23)).toBeUndefined();
+    expect([...w.lootBags.values()].some((b) => b.x === 32 && b.y === 23)).toBe(true);
+    expect(tryStep(w, w.human, 1, 0, 3, false)).toBe(true);
+    w.now = w.human.moveEnd;
+    expect(tryStep(w, w.human, 1, 0, 3, false)).toBe(true);
+    expect(w.human.x).toBe(32);
+  });
+
+  it('the human also releases their tile before respawning', () => {
+    const { w, h } = setup();
+    teleport(w, w.human, 30, 23);
+    w.human.invulnerableUntil = 0;
+    damagePlayer(w, 99999, 'physical', { id: 'x', name: 'Lobo', kind: 'monster' });
+    expect(w.human.dead).toBe(true);
+    expect(canEnter(w, 30, 23, false, h.id)).toBe(true);
+    teleport(w, h, 30, 23);
+    respawnPlayer(w);
+    expect(occupant(w, 30, 23)).toBe(h.id);
+    expect(occupant(w, w.human.x, w.human.y)).toBe(w.human.id);
+  });
+
+  it('leaving a shared tile never restores a dead character as its occupant', () => {
+    const { w, h, sim } = setup();
+    teleport(w, h, w.human.x, w.human.y);
+    killHero(sim, h);
+    expect(occupant(w, w.human.x, w.human.y)).toBe(w.human.id);
+    removeOccupant(w, w.human);
+    expect(occupant(w, w.human.x, w.human.y)).toBeUndefined();
+  });
+});
 
 describe('morte de caveira vermelha', () => {
   it('perde tudo, renasce sem arma e a primeira compra é uma arma (com o dinheiro do banco)', () => {

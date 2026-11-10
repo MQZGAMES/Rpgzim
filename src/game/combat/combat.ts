@@ -479,6 +479,8 @@ function killPlayer(w: World, killer: DamageSource): void {
   const c = p.character;
   const skullBefore = skullOf(w, p.id)?.kind ?? null;
   p.dead = true;
+  removeOccupant(w, p);
+  p.move = null;
   p.path = null;
   p.pathGoal = null;
   p.heldDir = null;

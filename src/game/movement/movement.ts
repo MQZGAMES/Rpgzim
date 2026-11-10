@@ -122,7 +122,7 @@ export function removeOccupant(w: World, m: Mover): void {
   if (w.occupancy.get(i) !== m.id) return;
   w.occupancy.delete(i);
   // outro personagem dividindo o tile (área protegida) volta a ser o ocupante
-  const other = [w.human, ...w.heroes.values()].find((a) => a.id !== m.id && a.x === m.x && a.y === m.y);
+  const other = [w.human, ...w.heroes.values()].find((a) => !a.dead && a.id !== m.id && a.x === m.x && a.y === m.y);
   if (other) w.occupancy.set(i, other.id);
 }
 
