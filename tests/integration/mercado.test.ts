@@ -146,6 +146,32 @@ describe('mercado: livro de ofertas', () => {
     expect(p.bankGold).toBe(bank + 200);
   });
 
+  it('vender tudo rápido: anuncia tudo (mochila + depósito) um abaixo do menor anúncio ou, sem anúncio, pelo sugerido', () => {
+    const { sim, w } = setup();
+    const p = w.human.character;
+    p.inventory = p.inventory.map(() => null);
+    p.inventory[0] = { itemId: 'sword_iron', count: 1 };
+    p.inventory[1] = { itemId: 'potion_health', count: 5 };
+    p.inventory[2] = { itemId: 'bone_fragment', count: 4 }; // não é do mercado: fica
+    p.depot[0] = { itemId: 'potion_health', count: 3 };
+    offer(w, 'sell', 'a', 'sword_iron', 2, 260); // já anunciaram: um abaixo
+    offer(w, 'buy', 'b', 'sword_iron', 1, 200); // não vende para a oferta de compra: anuncia acima dela
+    const suggested = priceGuide(D, w.market, 'potion_health', p.id).sellSuggest; // ninguém vendendo
+    const bank = p.bankGold;
+    expect(sim.marketSellAll(['sword_iron', 'potion_health', 'bone_fragment', 'helmet_iron'])).toBe(true);
+    const mine = w.market.offers.filter((o) => o.ownerId === p.id);
+    expect(mine).toHaveLength(2);
+    expect(mine.find((o) => o.itemId === 'sword_iron')).toMatchObject({ side: 'sell', count: 1, price: 259 });
+    expect(mine.find((o) => o.itemId === 'potion_health')).toMatchObject({ side: 'sell', count: 8, price: suggested });
+    expect(countItem(p.inventory, 'potion_health') + countItem(p.depot, 'potion_health')).toBe(0);
+    expect(countItem(p.inventory, 'bone_fragment')).toBe(4);
+    expect(p.bankGold).toBe(bank);
+    expect(offersFor(w.market, 'sword_iron', 'buy')).toHaveLength(1);
+    // nada mais para anunciar
+    expect(sim.marketSellAll(['sword_iron', 'potion_health'])).toBe(false);
+    expect(w.market.offers.filter((o) => o.ownerId === p.id)).toHaveLength(2);
+  });
+
   it('preço de referência e sugestões seguem a oferta e a procura', () => {
     const { w } = setup();
     offer(w, 'sell', 'a', 'sword_iron', 2, 260);

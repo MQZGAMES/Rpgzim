@@ -239,6 +239,11 @@ export function MarketPanel() {
                   )}
                 </div>
               </div>
+              {mode === 'sell' && (
+                <QuickSellAll
+                  items={listFor(catalog.filter((c) => screen.cat === 'all' || c.category === screen.cat))}
+                />
+              )}
               <ItemRows
                 mode={tradeMode}
                 items={listFor(catalog.filter((c) => screen.cat === 'all' || c.category === screen.cat))}
@@ -309,6 +314,7 @@ function Categories({
           >
             Ver tudo ({total})
           </PixelButton>
+          {mode === 'sell' && <QuickSellAll items={catalog} />}
           {groups.map((g) => (
             <div key={g} className="mb-2">
               <div className="mb-1 text-[12px] text-muted">{g}</div>
@@ -345,6 +351,61 @@ function Categories({
           ? 'O número em cada categoria é quanto está à venda. Comprando, você paga sempre o menor preço; sem ninguém vendendo, deixe uma oferta de compra.'
           : 'O número é quanto você tem (mochila e depósito). Materiais de criaturas só são vendidos nas lojas.'}
       </p>
+    </div>
+  );
+}
+
+/**
+ * Vender tudo rápido: anuncia tudo o que você tem de `items` (mochila e depósito) pelo preço sugerido de cada um — um
+ * abaixo do menor anúncio ou, sem ninguém vendendo, o preço de referência. Dois toques: o segundo confirma.
+ */
+function QuickSellAll({ items }: { items: CatalogItem[] }) {
+  const session = useSession();
+  const market = useSnap((s) => s.market)!;
+  const [confirming, setConfirming] = useState(false);
+  const mine = items.filter((it) => (market.owned[it.itemId] ?? 0) > 0);
+  const units = mine.reduce((s, it) => s + market.owned[it.itemId]!, 0);
+  const total = mine.reduce(
+    (s, it) => s + market.owned[it.itemId]! * (market.quotes[it.itemId]?.sellSuggest ?? 0),
+    0,
+  );
+  if (!units) return null;
+  if (!confirming)
+    return (
+      <PixelButton
+        className="mb-2 min-h-[40px] w-full !border-[6px] text-[13px]"
+        onClick={() => setConfirming(true)}
+        data-testid="market-sell-all"
+      >
+        Vender tudo rápido ({units})
+      </PixelButton>
+    );
+  return (
+    <div className="frame-slot mb-2 !border-[6px] p-1 text-[12px]" data-testid="market-sell-all-confirm">
+      <p className="mb-1 text-parchment">
+        Anunciar {units} {units > 1 ? 'itens' : 'item'} ({mine.length} {mine.length > 1 ? 'tipos' : 'tipo'})
+        da mochila e do depósito pelo preço sugerido? Total pedido: <Coin n={total} />
+      </p>
+      <div className="grid grid-cols-2 gap-1">
+        <PixelButton
+          variant="gold"
+          className="min-h-[38px] !border-[5px] text-[12px]"
+          onClick={() => {
+            session.marketSellAll(mine.map((it) => it.itemId));
+            setConfirming(false);
+          }}
+          data-testid="market-sell-all-yes"
+        >
+          Anunciar tudo
+        </PixelButton>
+        <PixelButton
+          className="min-h-[38px] !border-[5px] text-[12px]"
+          onClick={() => setConfirming(false)}
+          data-testid="market-sell-all-no"
+        >
+          Cancelar
+        </PixelButton>
+      </div>
     </div>
   );
 }
