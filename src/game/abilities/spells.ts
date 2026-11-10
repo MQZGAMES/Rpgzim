@@ -4,7 +4,7 @@ import type { SpellDef } from '../../domain/entities/definitions';
 import { chebyshev, type TilePos } from '../../domain/value-objects/position';
 import { remaining, SPELL_GROUP_KEY, spellGroup, startCooldown } from '../../domain/rules/cooldowns';
 import { mitigate, rollRange, spellRange } from '../../domain/rules/damage';
-import { castFailMessage, spellManaCost, validateCast } from '../../domain/rules/spells';
+import { castFailMessage, spellCooldownKey, spellManaCost, validateCast } from '../../domain/rules/spells';
 import { isPz, isSolid } from '../world/GameMap';
 import type { MonsterEntity } from '../entities/types';
 import type { World } from '../simulation/World';
@@ -24,7 +24,7 @@ import {
 } from '../combat/combat';
 import { actorById, canAttackActor, partyOf, registerAggression } from '../social/social';
 import { refreshStats, trainPlayerSkill } from '../progression/progression';
-import { addItem } from '../../domain/rules/inventory';
+import { addItem, canFit } from '../../domain/rules/inventory';
 
 /** Exaustão do grupo da magia (ataque, cura ou suporte) que ainda falta. */
 function groupRemaining(w: World, spell: SpellDef): number {
@@ -34,7 +34,7 @@ function groupRemaining(w: World, spell: SpellDef): number {
 export function spellCooldownRemaining(w: World, spellId: string): number {
   const spell = w.data.spells[spellId];
   return Math.max(
-    remaining(w.player.cooldowns, `spell:${spellId}`, w.now),
+    remaining(w.player.cooldowns, spell ? spellCooldownKey(spell) : `spell:${spellId}`, w.now),
     spell ? groupRemaining(w, spell) : 0,
   );
 }
@@ -50,7 +50,7 @@ export function castCheck(w: World, spell: SpellDef) {
     magicLevel: p.stats.magicLevel,
     mana: c.mana,
     dead: p.dead,
-    cooldownRemaining: remaining(p.cooldowns, `spell:${spell.id}`, w.now),
+    cooldownRemaining: remaining(p.cooldowns, spellCooldownKey(spell), w.now),
     globalCooldownRemaining: groupRemaining(w, spell),
     inProtectionZone: isPz(w.map, p.x, p.y),
     target: t
@@ -96,8 +96,7 @@ export function castSpell(w: World, spellId: string): boolean {
   // Toda magia de ataque também é o "botão de ataque": mira (como acima) e começa o ataque básico, mesmo que a magia
   // não saia (sem mana, em recarga ou ainda bloqueada) — as de área em volta dele também miram o mais próximo.
   // (a área em volta só mira pelo jogador humano: a IA dos heróis escolhe o alvo dela)
-  const offensive =
-    spell.effect === 'damage' && !p.dead && (spell.target !== 'areaSelf' || p === w.human);
+  const offensive = spell.effect === 'damage' && !p.dead && (spell.target !== 'areaSelf' || p === w.human);
   if (offensive) {
     // personagem selecionado no botão de seleção: a magia vai nele
     const sel = selectedActor(w);
@@ -125,11 +124,11 @@ export function castSpell(w: World, spellId: string): boolean {
   p.queuedSpell = null;
   if (spell.conjure) {
     // magia de criação: precisa caber na mochila (senão não gasta a mana)
-    const made = addItem(w.data, c.inventory, spell.conjure.itemId, spell.conjure.count);
-    if (made < spell.conjure.count) {
+    if (!canFit(w.data, c.inventory, spell.conjure.itemId, spell.conjure.count)) {
       warnThrottled(w, 'conjure:full', 'Mochila cheia: não há espaço para a poção.', 1500);
       return false;
     }
+    addItem(w.data, c.inventory, spell.conjure.itemId, spell.conjure.count);
     message(
       w,
       `${spell.name}: ${w.data.items[spell.conjure.itemId]?.name ?? spell.conjure.itemId} criada.`,
@@ -140,14 +139,18 @@ export function castSpell(w: World, spellId: string): boolean {
   // custo, cooldowns e treino de Magic Level (mana gasta)
   const cost = spellManaCost(spell, c.level);
   c.mana -= cost;
-  startCooldown(p.cooldowns, `spell:${spell.id}`, w.now, spell.cooldownMs);
+  startCooldown(p.cooldowns, spellCooldownKey(spell), w.now, spell.cooldownMs);
   const combatCfg = w.data.balance.combat;
   const group = spellGroup(spell);
   startCooldown(
     p.cooldowns,
     SPELL_GROUP_KEY[group],
     w.now,
-    group === 'attack' ? combatCfg.attackExhaustMs : group === 'heal' ? combatCfg.healExhaustMs : combatCfg.globalSpellCooldownMs,
+    group === 'attack'
+      ? combatCfg.attackExhaustMs
+      : group === 'heal'
+        ? combatCfg.healExhaustMs
+        : combatCfg.globalSpellCooldownMs,
   );
   trainPlayerSkill(w, 'magic', cost);
   if (spell.cancelSlow) {

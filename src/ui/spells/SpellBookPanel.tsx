@@ -1,7 +1,14 @@
+import { SPELLS } from '../../data/spells';
+import { spellDetails } from '../../domain/rules/spellDetails';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 
-const TARGET_LABEL: Record<string, string> = { target: 'Alvo', self: 'Si mesmo', areaSelf: 'Área ao redor', areaTarget: 'Área no alvo' };
+const TARGET_LABEL: Record<string, string> = {
+  target: 'Alvo',
+  self: 'Si mesmo',
+  areaSelf: 'Área ao redor',
+  areaTarget: 'Área no alvo',
+};
 
 export function SpellBookPanel({ onClose }: { onClose: () => void }) {
   const session = useSession();
@@ -10,8 +17,14 @@ export function SpellBookPanel({ onClose }: { onClose: () => void }) {
   return (
     <Panel title="Grimório" onClose={onClose} icon="ui_book" wide>
       <div className="mb-2 flex items-center gap-2">
-        <p className="flex-1 text-[12px] text-muted">Magias gastam mana, têm recarga e evoluem seu Magic Level. Coloque cada magia num atalho (1–9).</p>
-        <PixelButton className="!border-[6px] px-1 text-[11px]" onClick={() => session.setPanel('hotbar')} data-testid="open-hotbar">
+        <p className="flex-1 text-[12px] text-muted">
+          Magias gastam mana, têm recarga e evoluem seu Magic Level. Coloque cada magia num atalho (1–9).
+        </p>
+        <PixelButton
+          className="!border-[6px] px-1 text-[11px]"
+          onClick={() => session.setPanel('hotbar')}
+          data-testid="open-hotbar"
+        >
           Atalhos
         </PixelButton>
       </div>
@@ -27,6 +40,11 @@ export function SpellBookPanel({ onClose }: { onClose: () => void }) {
                 </span>
               </div>
               <div className="text-[12px] leading-snug text-parchment">{s.description}</div>
+              <div className="mt-2 space-y-1 text-[12px] text-parchment">
+                {spellDetails(SPELLS[s.id]!).map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
               <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-muted">
                 <span className="text-mana-light">{s.manaCost} mana</span>
                 <span>Recarga {s.cooldownMs / 1000}s</span>
@@ -39,7 +57,13 @@ export function SpellBookPanel({ onClose }: { onClose: () => void }) {
               <div className="mt-1 flex items-center gap-1">
                 <span className="text-[11px] text-muted">Atalho:</span>
                 {hotbar.map((_, i) => (
-                  <PixelButton key={i} variant={hotbar[i] === s.id ? 'gold' : 'stone'} className="h-7 w-7 !border-[6px] text-[11px]" onClick={() => session.setHotbar(i, { kind: 'spell', id: s.id })} ariaLabel={`Colocar no atalho ${i + 1}`}>
+                  <PixelButton
+                    key={i}
+                    variant={hotbar[i] === s.id ? 'gold' : 'stone'}
+                    className="h-7 w-7 !border-[6px] text-[11px]"
+                    onClick={() => session.setHotbar(i, { kind: 'spell', id: s.id })}
+                    ariaLabel={`Colocar no atalho ${i + 1}`}
+                  >
                     {i + 1}
                   </PixelButton>
                 ))}

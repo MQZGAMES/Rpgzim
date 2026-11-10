@@ -101,3 +101,8 @@ export function spellTiers(spells: Readonly<Record<string, SpellDef>>, id: strin
   const root = spells[id]?.baseId ?? id;
   return [root, `${root}_2`, `${root}_3`].filter((x) => spells[x]?.baseId === root || x === root);
 }
+
+/** All grades of the same spell share their individual cooldown. */
+export function spellCooldownKey(spell: SpellDef): string {
+  return `spell:${spell.baseId ?? spell.id}`;
+}

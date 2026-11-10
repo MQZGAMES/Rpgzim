@@ -552,7 +552,8 @@ const list: SpellDef[] = [
     name: 'Segundo Fôlego',
     words: 'vita fortis',
     icon: 'spell_second_wind',
-    description: 'Respira fundo e recupera vida pela força do corpo (cresce com o nível, não com o Magic Level).',
+    description:
+      'Recupera vida principalmente pelo nível, com uma contribuição menor do Magic Level.',
     vocations: ['knight'],
     minLevel: 14,
     minMagicLevel: 0,
@@ -585,23 +586,44 @@ const TIERED: readonly (readonly [string, number, number])[] = [
   ['light_heal', 25, 50],
 ];
 /** Por grau: multiplicador do efeito, da mana e o Magic Level a mais (magos / demais vocações). */
-const TIER_SCALE = { 2: { power: 1.4, mana: 1.6, ml: [6, 2] }, 3: { power: 1.85, mana: 2.3, ml: [14, 5] } } as const;
+const TIER_SCALE = {
+  2: { power: 1.4, mana: 1.6, ml: [6, 2] },
+  3: { power: 1.85, mana: 2.3, ml: [14, 5] },
+} as const;
 
 function tierOf(base: SpellDef, tier: 2 | 3, minLevel: number): SpellDef {
   const k = TIER_SCALE[tier];
   const mage = base.vocations.every((v) => v === 'sorcerer' || v === 'druid');
-  const f = base.formula!;
+  const durationOnly = base.buff?.kind === 'haste' || base.buff?.kind === 'manaShield';
+  const manaScale = durationOnly ? 1 : base.conjure ? tier : k.mana;
   return {
     ...base,
     id: `${base.id}_${tier}`,
     name: `${base.name} ${ROMAN[tier]}`,
     words: `${base.words} ${ROMAN[tier].toLowerCase()}`,
-    description: `${base.description} Grau ${ROMAN[tier]}: ${Math.round((k.power - 1) * 100)}% mais forte, ${Math.round((k.mana - 1) * 100)}% mais mana.`,
+    description: base.conjure
+      ? `Cria um lote de ${base.conjure.count * tier} poções na mochila, com custo proporcional à quantidade.`
+      : base.buff
+        ? `Evolução de ${base.name}: mantém a intensidade do efeito e amplia sua duração.`
+        : base.description,
     minLevel,
     minMagicLevel: base.minMagicLevel + k.ml[mage ? 0 : 1],
-    manaCost: Math.round(base.manaCost * k.mana),
-    ...(base.manaPerLevel ? { manaPerLevel: Math.round(base.manaPerLevel * k.mana * 100) / 100 } : {}),
-    formula: { ...f, levelFactor: f.levelFactor * k.power, powerFactor: f.powerFactor * k.power, base: Math.round(f.base * k.power) },
+    manaCost: Math.round(base.manaCost * manaScale),
+    ...(base.manaPerLevel ? { manaPerLevel: Math.round(base.manaPerLevel * manaScale * 100) / 100 } : {}),
+    ...(base.formula
+      ? {
+          formula: {
+            ...base.formula,
+            levelFactor: base.formula.levelFactor * k.power,
+            powerFactor: base.formula.powerFactor * k.power,
+            base: Math.round(base.formula.base * k.power),
+          },
+        }
+      : {}),
+    // Buffs improve uptime, never movement speed or damage absorption.
+    ...(base.buff ? { buff: { ...base.buff, durationMs: base.buff.durationMs * tier } } : {}),
+    // Batch creation keeps the same cost per potion and existing item IDs.
+    ...(base.conjure ? { conjure: { ...base.conjure, count: base.conjure.count * tier } } : {}),
     tier,
     baseId: base.id,
   };
@@ -627,7 +649,10 @@ const CONJURE_NAMES = ['Pequena', 'Média', 'Grande', 'Espiritual', 'Divina'] as
 /** Custo em mana por ponto recuperado, por tamanho (pequena → divina). */
 const CONJURE_COST = [3.4, 3.2, 3, 2.7, 2.4] as const;
 
-function conjureSpell([id, itemId, amount, potionLevel, voc, words]: (typeof CONJURES)[number], i: number): SpellDef {
+function conjureSpell(
+  [id, itemId, amount, potionLevel, voc, words]: (typeof CONJURES)[number],
+  i: number,
+): SpellDef {
   const size = i % 5;
   const heal = voc === 'druid';
   const what = heal ? 'Vida' : 'Mana';
@@ -648,7 +673,9 @@ function conjureSpell([id, itemId, amount, potionLevel, voc, words]: (typeof CON
     effect: 'conjure',
     element: heal ? 'earth' : 'energy',
     conjure: { itemId, count: 1 },
-    vfx: heal ? { impact: 'fx_heal', sfx: 'heal', color: '#4fd08a' } : { impact: 'fx_mana_shield', sfx: 'buff', color: '#5aa8dd' },
+    vfx: heal
+      ? { impact: 'fx_heal', sfx: 'heal', color: '#4fd08a' }
+      : { impact: 'fx_mana_shield', sfx: 'buff', color: '#5aa8dd' },
     tier: size + 1,
   };
 }
@@ -656,17 +683,26 @@ function conjureSpell([id, itemId, amount, potionLevel, voc, words]: (typeof CON
 const byId = new Map(list.map((x) => [x.id, x]));
 const conjures = CONJURES.map(conjureSpell);
 // as duas magias de criação antigas (mesmo id) viram a versão "Média" da nova série
-const base = list.map((x) => conjures.find((c) => c.id === x.id) ?? x);
-const extra = [
-  ...TIERED.flatMap(([id, l2, l3]) => [tierOf(byId.get(id)!, 2, l2), tierOf(byId.get(id)!, 3, l3)]),
+const originals = [
+  ...list.map((x) => conjures.find((c) => c.id === x.id) ?? x),
   ...conjures.filter((c) => !byId.has(c.id)),
 ];
+const base = originals.map((x) => ({ ...x, name: `${x.name} I`, tier: 1 }));
+const extra = originals.flatMap((spell) => {
+  const existing = TIERED.find(([id]) => id === spell.id);
+  // Preserve established unlocks; later spells progress at +20 / +45 levels.
+  const l2 = existing?.[1] ?? spell.minLevel + 20;
+  const l3 = existing?.[2] ?? spell.minLevel + 45;
+  return [tierOf(spell, 2, l2), tierOf(spell, 3, l3)];
+});
 
-export const SPELLS: Readonly<Record<string, SpellDef>> = Object.fromEntries([...base, ...extra].map((s) => [s.id, s]));
+export const SPELLS: Readonly<Record<string, SpellDef>> = Object.fromEntries(
+  [...base, ...extra].map((s) => [s.id, s]),
+);
 
 /** Magias novas (graus II/III e criação de poções) de cada vocação, na ordem em que vão liberando. */
 export function extraSpellsFor(voc: string): string[] {
-  return extra
+  return [...base.filter((s) => !byId.has(s.id)), ...extra]
     .filter((x) => (x.vocations as readonly string[]).includes(voc))
     .sort((a, b) => a.minLevel - b.minLevel)
     .map((x) => x.id);

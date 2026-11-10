@@ -3319,7 +3319,9 @@ function conjurePotions(w: World, h: HeroEntity): void {
         canDrink(w.data.items[sp.conjure!.itemId], h.character.level) &&
         h.character.mana - spellManaCost(sp, h.character.level) >= h.stats.maxMana * 0.5,
     )
-    .sort((a, b) => (b.tier ?? 0) - (a.tier ?? 0));
+    .sort((a, b) =>
+      (w.data.items[b.conjure!.itemId]?.minLevel ?? 1) -
+      (w.data.items[a.conjure!.itemId]?.minLevel ?? 1) || (b.tier ?? 1) - (a.tier ?? 1));
   for (const sp of options) if (tryCast(w, h, sp.id)) return;
 }
 

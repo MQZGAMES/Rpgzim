@@ -97,6 +97,12 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
       )
     : 0;
   const [shopQty, setShopQty] = useState(1);
+  const shopPrice = mode === 'buy' ? q.shopSells : q.shopBuys;
+  const shopMax =
+    shopPrice === null
+      ? 0
+      : Math.min(1000, mode === 'buy' ? Math.floor(market.money / Math.max(1, shopPrice)) : owned);
+  const shopCount = Math.max(1, Math.min(shopQty, shopMax));
   const [qtyNow, setQtyNow] = useState(1);
   const [qtyOffer, setQtyOffer] = useState(1);
   const [price, setPrice] = useState(mode === 'buy' ? q.buySuggest : q.sellSuggest);
@@ -192,54 +198,20 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
           )}
         </div>
         <div className="frame-slot !border-[4px] px-1">
-          <div className="text-muted">Loja vende / paga</div>
+          <div className="text-muted">{mode === 'buy' ? 'Comprar da loja' : 'Vender para a loja'}</div>
           <span className="text-parchment">
-            {q.shopSells ?? '—'} / {q.shopBuys ?? '—'}
+            {shopPrice === null ? 'Indisponível' : <Coin n={shopPrice} />}
           </span>
         </div>
       </div>
-      <div className="frame-slot !border-[6px] p-2" data-testid="market-shop-card">
-        <div className="mb-2 text-[14px] text-gold-light">Negociar com a loja</div>
-        <p className="mb-2 text-[11px] text-muted">
-          Compra entregue na mochila. Venda usa mochila e depósito, sem os equipados.
-        </p>
-        <QtyStepper
-          value={Math.min(shopQty, 1000)}
-          max={1000}
-          onChange={setShopQty}
-          testId="market-shop-qty"
-        />
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          <PixelButton
-            variant="gold"
-            className="min-h-[44px] !border-[5px] text-[12px]"
-            disabled={q.shopSells === null || shopQty * q.shopSells > market.money}
-            onClick={() => session.marketShopTrade('buy', item.itemId, shopQty) && setShopQty(1)}
-            data-testid="market-shop-buy"
-          >
-            {q.shopSells === null ? 'Loja não vende' : `Comprar ${shopQty} · ${shopQty * q.shopSells} ouro`}
-          </PixelButton>
-          <PixelButton
-            className="min-h-[44px] !border-[5px] text-[12px]"
-            disabled={q.shopBuys === null || shopQty > owned}
-            onClick={() => session.marketShopTrade('sell', item.itemId, shopQty) && setShopQty(1)}
-            data-testid="market-shop-sell"
-          >
-            {q.shopBuys === null ? 'Loja não compra' : `Vender ${shopQty} · ${shopQty * q.shopBuys} ouro`}
-          </PixelButton>
-        </div>
-        <p className="mt-1 text-[11px] text-muted">
-          Preço por unidade: compra {q.shopSells ?? '—'} · venda {q.shopBuys ?? '—'} ouro.
-        </p>
-      </div>
       <div className="text-[14px] text-parchment">
-        Negociar com jogadores · {mode === 'buy' ? 'Comprar' : 'Vender'}
+        {mode === 'buy' ? 'Opções de compra' : 'Opções de venda'}
       </div>
       {mode === 'buy' ? (
         <>
           {/* comprar agora: pelo menor preço (várias unidades do mesmo preço de uma vez) */}
           <div className="frame-slot !border-[6px] p-1" data-testid="market-buy-now-card">
-            <div className="mb-1 text-[12px] text-gold-light">Comprar agora</div>
+            <div className="mb-1 text-[12px] text-gold-light">Comprar agora de jogadores</div>
             {askAt ? (
               <>
                 <div className="mb-1 text-[11px] text-muted">
@@ -313,7 +285,7 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
         <>
           {/* vender agora: para quem já quer comprar */}
           <div className="frame-slot !border-[6px] p-1" data-testid="market-sell-now-card">
-            <div className="mb-1 text-[12px] text-mana-light">Vender agora</div>
+            <div className="mb-1 text-[12px] text-mana-light">Vender agora para jogadores</div>
             {!owned ? (
               <p className="text-[11px] text-muted">Você não tem esse item.</p>
             ) : bidAt ? (
@@ -386,6 +358,44 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
           </div>
         </>
       )}
+      <div className="frame-slot !border-[6px] p-1" data-testid="market-shop-card">
+        <div className="mb-1 text-[12px] text-gold-light">
+          {mode === 'buy' ? 'Comprar da loja' : 'Vender para a loja'}
+        </div>
+        <p className="mb-1 text-[11px] text-muted">
+          {mode === 'buy'
+            ? 'Compra imediata, entregue na mochila.'
+            : 'Venda imediata da mochila e do depósito, sem os equipamentos vestidos.'}
+        </p>
+        {shopPrice !== null && (
+          <div className="mb-1 text-[11px] text-parchment">
+            <Coin n={shopPrice} /> por unidade · preço fixo, sem negociação
+          </div>
+        )}
+        {shopMax > 0 && (
+          <QtyStepper value={shopCount} max={shopMax} onChange={setShopQty} testId="market-shop-qty" />
+        )}
+        <PixelButton
+          variant="gold"
+          className="mt-1 min-h-[40px] w-full !border-[6px] text-[13px]"
+          disabled={shopMax === 0}
+          onClick={() => session.marketShopTrade(mode, item.itemId, shopCount) && setShopQty(1)}
+          data-testid={mode === 'buy' ? 'market-shop-buy' : 'market-shop-sell'}
+        >
+          {shopPrice === null
+            ? mode === 'buy'
+              ? 'Loja não vende este item'
+              : 'Loja não compra este item'
+            : `${mode === 'buy' ? 'Comprar da loja' : 'Vender para a loja'} · ${shopMax > 0 ? shopCount : 0} por ${(shopMax > 0 ? shopCount : 0) * shopPrice} de ouro`}
+        </PixelButton>
+        {shopPrice !== null && shopMax === 0 && (
+          <p className="mt-1 text-[11px] text-hp-light">
+            {mode === 'buy'
+              ? 'Ouro insuficiente (bolsa + banco).'
+              : 'Você não tem unidades disponíveis para vender.'}
+          </p>
+        )}
+      </div>
       {/* todas as ofertas do item */}
       <div className="flex flex-col gap-2 sm:flex-row">
         <Book

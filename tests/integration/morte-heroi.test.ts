@@ -182,7 +182,7 @@ describe('delays fechados e Cura Intensa', () => {
       if (i.type === 'potion')
         expect(allowed.has(i.use!.cooldownMs), `${i.id} ${i.use!.cooldownMs}`).toBe(true);
     const cura = GAME_DATA.spells.sap_blessing!;
-    expect(cura.name).toBe('Cura Intensa');
+    expect(cura.name).toBe('Cura Intensa I');
     expect(cura.manaCost).toBe(80);
     expect(cura.partyRadius).toBe(12);
     expect(cura.buff).toBeUndefined();
@@ -208,11 +208,27 @@ describe('saco de morte sem trava e mana na PZ', () => {
   it('o próprio saco de morte não é dividido com o grupo; o de outro personagem é', () => {
     const { sim, w, h } = setup('boladex');
     const p = w.human;
-    w.social.party = { leaderId: p.id, members: [p.id, h.id], formation: 'free', targeting: 'nearest', friendlyFire: false, trail: [] };
+    w.social.party = {
+      leaderId: p.id,
+      members: [p.id, h.id],
+      formation: 'free',
+      targeting: 'nearest',
+      friendlyFire: false,
+      trail: [],
+    };
     h.x = p.x;
     h.y = p.y;
     // saco do próprio jogador: fica tudo com ele
-    w.lootBags.set('own', { id: 'own', ownerId: p.id, x: p.x, y: p.y, items: [], gold: 400, expiresAt: Infinity, sourceName: 'eu (morto)' });
+    w.lootBags.set('own', {
+      id: 'own',
+      ownerId: p.id,
+      x: p.x,
+      y: p.y,
+      items: [],
+      gold: 400,
+      expiresAt: Infinity,
+      sourceName: 'eu (morto)',
+    });
     w.ui.lootId = 'own';
     const g0 = p.character.gold;
     const hg0 = h.character.gold;
@@ -220,7 +236,16 @@ describe('saco de morte sem trava e mana na PZ', () => {
     expect(p.character.gold).toBe(g0 + 400);
     expect(h.character.gold).toBe(hg0);
     // saco de morte de um estranho: dividido como loot comum
-    w.lootBags.set('other', { id: 'other', ownerId: 'outro', x: p.x, y: p.y, items: [], gold: 400, expiresAt: Infinity, sourceName: 'outro (morto)' });
+    w.lootBags.set('other', {
+      id: 'other',
+      ownerId: 'outro',
+      x: p.x,
+      y: p.y,
+      items: [],
+      gold: 400,
+      expiresAt: Infinity,
+      sourceName: 'outro (morto)',
+    });
     w.ui.lootId = 'other';
     sim.takeLoot('all');
     expect(h.character.gold).toBe(hg0 + 200);
