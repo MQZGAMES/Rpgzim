@@ -61,7 +61,13 @@ export function MarketPanel() {
   const listFor = (items: CatalogItem[]) =>
     items
       .filter((it) => (mode === 'sell' ? (market.owned[it.itemId] ?? 0) > 0 : true))
-      .filter((it) => mode === 'sell' || !(onlyOffers || viewAll) || priceOf(it) !== null)
+      .filter(
+        (it) =>
+          mode === 'sell' ||
+          !(onlyOffers || viewAll) ||
+          priceOf(it) !== null ||
+          market.quotes[it.itemId]?.shopSells != null,
+      )
       .filter(vocOk)
       .sort((a, b) => {
         if (sort.startsWith('level'))
@@ -77,7 +83,7 @@ export function MarketPanel() {
   const switchMode = (m: Mode) => {
     setMode(m);
     // no item, troca de modo e continua no mesmo item; na lista ou nas categorias, volta às categorias
-    if (screen.kind !== 'item' || m === 'mine' || m === 'log') setScreen({ kind: 'cats' });
+    if (m === 'mine' || m === 'log' || mode === 'mine' || mode === 'log') setScreen({ kind: 'cats' });
   };
   const back = () => {
     if (screen.kind === 'item')
@@ -201,6 +207,13 @@ export function MarketPanel() {
             />
           ) : screen.kind === 'list' ? (
             <>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value.slice(0, 30))}
+                aria-label="Filtrar itens da categoria"
+                placeholder="Filtrar itens desta categoria…"
+                className="mb-2 h-11 w-full border-2 border-ink bg-[#1a1220] px-2 text-[13px] text-parchment"
+              />
               <div className="sticky top-0 z-10 -mx-[1px] mb-1 flex flex-col gap-1 bg-[#1a1220] pb-1">
                 <div className="flex gap-1 overflow-x-auto pb-[2px]" data-testid="market-voc-filter">
                   {VOCS.map(([v, label]) => (
@@ -241,12 +254,24 @@ export function MarketPanel() {
               </div>
               {mode === 'sell' && (
                 <QuickSellAll
-                  items={listFor(catalog.filter((c) => screen.cat === 'all' || c.category === screen.cat))}
+                  items={listFor(
+                    catalog.filter(
+                      (c) =>
+                        (screen.cat === 'all' || c.category === screen.cat) &&
+                        c.name.toLowerCase().includes(query.trim().toLowerCase()),
+                    ),
+                  )}
                 />
               )}
               <ItemRows
                 mode={tradeMode}
-                items={listFor(catalog.filter((c) => screen.cat === 'all' || c.category === screen.cat))}
+                items={listFor(
+                  catalog.filter(
+                    (c) =>
+                      (screen.cat === 'all' || c.category === screen.cat) &&
+                      c.name.toLowerCase().includes(query.trim().toLowerCase()),
+                  ),
+                )}
                 onItem={(itemId) => go({ kind: 'item', itemId, back: screen.cat })}
               />
             </>
@@ -312,13 +337,13 @@ function Categories({
             onClick={onAll}
             data-testid="market-view-all"
           >
-            Ver tudo ({total})
+            Explorar todos os itens ({total})
           </PixelButton>
           {mode === 'sell' && <QuickSellAll items={catalog} />}
           {groups.map((g) => (
             <div key={g} className="mb-2">
               <div className="mb-1 text-[12px] text-muted">{g}</div>
-              <div className="grid grid-cols-4 gap-1 sm:grid-cols-6">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {MARKET_CATEGORIES.filter((c) => c.group === g).map((c) => {
                   const n = count(c.id);
                   return (
@@ -326,7 +351,7 @@ function Categories({
                       key={c.id}
                       type="button"
                       onClick={() => onCat(c.id)}
-                      className={`frame-slot relative flex min-h-[64px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
+                      className={`frame-slot relative flex min-h-[76px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
                       data-testid={`market-cat-${c.id}`}
                     >
                       <ItemIcon icon={c.icon} size={26} />

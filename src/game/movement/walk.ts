@@ -52,6 +52,7 @@ export function planWalk(w: World, x: number, y: number, opts: { quiet?: boolean
     if (!opts.quiet) message(w, 'Não há caminho até lá.', 'warning');
     return false;
   }
+  p.following = false; // A general route is not a party formation route.
   p.path = path;
   // o destino guardado é o ponto alcançável (o último passo do caminho), não o tile tocado: se alguém cruzar
   // o caminho, o replanejamento mira um lugar possível (tocar num telhado/árvore/água não "trava" mais)

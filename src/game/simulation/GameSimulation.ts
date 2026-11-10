@@ -16,7 +16,16 @@ import { isPz, isSolid } from '../world/GameMap';
 import type { GameMap } from '../world/GameMap';
 import type { HeroDef } from '../../domain/entities/definitions';
 import type { HeroEntity, NpcEntity, PlayerEntity } from '../entities/types';
-import { canEnter, isMoving, pathTo, placeOccupant, removeOccupant, settle, teleport, tryStep } from '../movement/movement';
+import {
+  canEnter,
+  isMoving,
+  pathTo,
+  placeOccupant,
+  removeOccupant,
+  settle,
+  teleport,
+  tryStep,
+} from '../movement/movement';
 import {
   currentActorTarget,
   currentTarget,
@@ -88,6 +97,7 @@ import { updateCityGuards } from '../world/guards';
 import { emptyMarket, type MarketState } from '../../domain/rules/market';
 import {
   marketBuyNow,
+  marketShopTrade,
   marketBuyAtShop,
   marketCancel,
   marketCollect,
@@ -97,7 +107,7 @@ import {
   marketTakeParcels,
 } from '../economy/marketService';
 import type { OfferSide } from '../../domain/rules/market';
-import { actorSpeed, chaseStep, trailStep } from '../movement/follow';
+import { actorSpeed, chaseStep, followCatchUp, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import {
   answerInviteNow,
@@ -265,8 +275,12 @@ export class GameSimulation {
     if (w.social.war.mode === 'guilds') setWarMode(w, 'guilds'); // sorteio com todos que já estão online
     marketCollect(w, w.human);
     // os heróis por perto reagem ao jogador: "gz" no nível novo, "F" quando ele cai
-    w.human.scope.events.on('levelUp', (e) => reactNearby(w, w.human, 'congrats', { player: w.human.character.name, level: e.level }));
-    w.human.scope.events.on('playerDied', () => reactNearby(w, w.human, 'rip', { player: w.human.character.name }));
+    w.human.scope.events.on('levelUp', (e) =>
+      reactNearby(w, w.human, 'congrats', { player: w.human.character.name, level: e.level }),
+    );
+    w.human.scope.events.on('playerDied', () =>
+      reactNearby(w, w.human, 'rip', { player: w.human.character.name }),
+    );
   }
 
   /** Coloca um herói (personagem com vida própria) no mundo. */
@@ -475,10 +489,11 @@ export class GameSimulation {
       p.pathGoal = null;
     }
     if (p.path && p.path.length) {
+      const pathSpeed = speed * (p.following ? followCatchUp(w, p) : 1);
       const next = p.path[0]!;
       const dx = next.x - p.x;
       const dy = next.y - p.y;
-      if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && tryStep(w, p, dx, dy, speed, false)) {
+      if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && tryStep(w, p, dx, dy, pathSpeed, false)) {
         p.path.shift();
         return;
       }
@@ -635,7 +650,10 @@ export class GameSimulation {
     if (p.targetId) p.chasePaused = true; // não ataca: só anda
     // refaz a rota quando ele se afasta do destino (mais folga e menos recálculo quando ainda está longe)
     const g = p.pathGoal;
-    const stale = !p.path?.length || !g || Math.max(Math.abs(g.x - t.x), Math.abs(g.y - t.y)) > Math.max(2, Math.floor(d / 8));
+    const stale =
+      !p.path?.length ||
+      !g ||
+      Math.max(Math.abs(g.x - t.x), Math.abs(g.y - t.y)) > Math.max(2, Math.floor(d / 8));
     if (stale && w.now >= this.goToReplanAt) {
       this.goToReplanAt = w.now + (d > 40 ? 2000 : 600);
       planWalk(w, t.x, t.y, { quiet: true, maxNodes: 120000, avoidMonsters: true, stopWithin: 1 });
@@ -710,13 +728,16 @@ export class GameSimulation {
   }
   /** Coleta da janela de loot: 'all' (todos os sacos ao redor), 'gold' ou um item de um saco específico. */
   /** Pega tudo, só o ouro, uma pilha ou um grupo de pilhas do mesmo item (de vários sacos de uma vez). */
-  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] }): void {
+  takeLoot(
+    which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] },
+  ): void {
     if (!this.world.ui.lootId) return;
     if (which === 'all') takeAllNearbyLoot(this.world);
     else if (which === 'gold') takeNearbyGold(this.world);
     else if ('refs' in which)
       // do maior índice para o menor em cada saco: tirar uma pilha não muda o índice das anteriores
-      for (const r of [...which.refs].sort((a, b) => b.index - a.index)) takeLoot(this.world, r.bagId, r.index);
+      for (const r of [...which.refs].sort((a, b) => b.index - a.index))
+        takeLoot(this.world, r.bagId, r.index);
     else takeLoot(this.world, which.bagId, which.index);
   }
   closeLoot(): void {
@@ -740,6 +761,9 @@ export class GameSimulation {
   /** Compra agora pelo menor preço anunciado (até `maxPrice`). */
   marketBuyAtShop(itemId: string, qty: number): boolean {
     return marketBuyAtShop(this.world, itemId, qty);
+  }
+  marketShopTrade(side: 'buy' | 'sell', itemId: string, qty: number): boolean {
+    return marketShopTrade(this.world, side, itemId, qty);
   }
   marketBuyNow(itemId: string, qty: number, maxPrice = Infinity): boolean {
     return marketBuyNow(this.world, itemId, qty, maxPrice);
@@ -848,7 +872,10 @@ export class GameSimulation {
     if (!h || !summonHero(w, h, w.human.id)) return false;
     const party = partyOf(w, id)!;
     const to = party.leaderId === id ? w.human.character.name : actorName(w, party.leaderId);
-    w.events.emit('message', { text: `${h.character.name} parou o que fazia e está indo até ${to}.`, kind: 'system' });
+    w.events.emit('message', {
+      text: `${h.character.name} parou o que fazia e está indo até ${to}.`,
+      kind: 'system',
+    });
     return true;
   }
   /**
@@ -858,7 +885,9 @@ export class GameSimulation {
   partyOrder(kind: 'attack' | 'hold' | 'town'): boolean {
     const w = this.world;
     const party = partyOf(w, w.human.id);
-    const heroes = (party?.members ?? []).map((id) => w.heroes.get(id)).filter((h): h is NonNullable<typeof h> => !!h && !h.dead);
+    const heroes = (party?.members ?? [])
+      .map((id) => w.heroes.get(id))
+      .filter((h): h is NonNullable<typeof h> => !!h && !h.dead);
     if (!heroes.length) {
       w.events.emit('message', { text: 'Nenhum herói no seu grupo para receber a ordem.', kind: 'system' });
       return false;
@@ -866,7 +895,10 @@ export class GameSimulation {
     let order: 'attack' | 'hold' | 'release' | 'town' = kind;
     const target = kind === 'attack' ? w.human.targetId : null;
     if (kind === 'attack' && !target) {
-      w.events.emit('message', { text: 'Selecione um alvo primeiro: os heróis atacam o mesmo alvo que você.', kind: 'system' });
+      w.events.emit('message', {
+        text: 'Selecione um alvo primeiro: os heróis atacam o mesmo alvo que você.',
+        kind: 'system',
+      });
       return false;
     }
     if (kind === 'hold' && heroes.every((h) => h.brain.order?.kind === 'hold')) order = 'release';
@@ -892,7 +924,10 @@ export class GameSimulation {
     // regras do grupo ficam guardadas no personagem: o próximo grupo que ele liderar já começa com elas
     else if (asLeader === w.human.id) {
       const c = w.human.character;
-      c.settings = { ...c.settings, party: { ...c.settings?.party, ...(patch as Record<string, string | boolean>) } };
+      c.settings = {
+        ...c.settings,
+        party: { ...c.settings?.party, ...(patch as Record<string, string | boolean>) },
+      };
     }
   }
   disbandParty(): void {

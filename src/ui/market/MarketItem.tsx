@@ -96,6 +96,7 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
         bidLevels.filter((l) => l.price >= bidAt.price).reduce((s, l) => s + l.count, 0),
       )
     : 0;
+  const [shopQty, setShopQty] = useState(1);
   const [qtyNow, setQtyNow] = useState(1);
   const [qtyOffer, setQtyOffer] = useState(1);
   const [price, setPrice] = useState(mode === 'buy' ? q.buySuggest : q.sellSuggest);
@@ -196,6 +197,43 @@ export function MarketItem({ item, mode }: { item: CatalogItem; mode: 'buy' | 's
             {q.shopSells ?? '—'} / {q.shopBuys ?? '—'}
           </span>
         </div>
+      </div>
+      <div className="frame-slot !border-[6px] p-2" data-testid="market-shop-card">
+        <div className="mb-2 text-[14px] text-gold-light">Negociar com a loja</div>
+        <p className="mb-2 text-[11px] text-muted">
+          Compra entregue na mochila. Venda usa mochila e depósito, sem os equipados.
+        </p>
+        <QtyStepper
+          value={Math.min(shopQty, 1000)}
+          max={1000}
+          onChange={setShopQty}
+          testId="market-shop-qty"
+        />
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <PixelButton
+            variant="gold"
+            className="min-h-[44px] !border-[5px] text-[12px]"
+            disabled={q.shopSells === null || shopQty * q.shopSells > market.money}
+            onClick={() => session.marketShopTrade('buy', item.itemId, shopQty) && setShopQty(1)}
+            data-testid="market-shop-buy"
+          >
+            {q.shopSells === null ? 'Loja não vende' : `Comprar ${shopQty} · ${shopQty * q.shopSells} ouro`}
+          </PixelButton>
+          <PixelButton
+            className="min-h-[44px] !border-[5px] text-[12px]"
+            disabled={q.shopBuys === null || shopQty > owned}
+            onClick={() => session.marketShopTrade('sell', item.itemId, shopQty) && setShopQty(1)}
+            data-testid="market-shop-sell"
+          >
+            {q.shopBuys === null ? 'Loja não compra' : `Vender ${shopQty} · ${shopQty * q.shopBuys} ouro`}
+          </PixelButton>
+        </div>
+        <p className="mt-1 text-[11px] text-muted">
+          Preço por unidade: compra {q.shopSells ?? '—'} · venda {q.shopBuys ?? '—'} ouro.
+        </p>
+      </div>
+      <div className="text-[14px] text-parchment">
+        Negociar com jogadores · {mode === 'buy' ? 'Comprar' : 'Vender'}
       </div>
       {mode === 'buy' ? (
         <>

@@ -5,7 +5,8 @@ import { castCheck, castSpell } from '../abilities/spells';
 import { nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
-import { canDrink } from '../../domain/rules/potions';
+import { POTION, isReady } from '../../domain/rules/cooldowns';
+import { canDrink, potionKind } from '../../domain/rules/potions';
 import { spellTiers } from '../../domain/rules/spells';
 
 export interface AutoSettings {
@@ -68,7 +69,9 @@ export function choosePotion(
   const owned = w.player.character.inventory
     .map((st, i) => {
       // poção acima do nível dele não conta (não dá para beber)
-      const use = st && canDrink(w.data.items[st.itemId], level) ? w.data.items[st.itemId]?.use : undefined;
+      const def = st ? w.data.items[st.itemId] : undefined;
+      const use =
+        st && st.count > 0 && potionKind(def) === kind && canDrink(def, level) ? def?.use : undefined;
       return {
         i,
         v: kind === 'heal' ? (use?.heal ?? 0) : (use?.mana ?? 0),
@@ -83,7 +86,8 @@ export function choosePotion(
   return (owned.find((p) => p.v >= missing * 0.8) ?? owned[owned.length - 1])!.i;
 }
 
-let nextAt = 0;
+// Polling belongs to the world, never to the module or a previous session.
+const nextAutoAt = new WeakMap<World, number>();
 
 /** Vida (fração) do membro do grupo mais ferido ao alcance da Bênção da Seiva (inclui você). */
 function weakestAround(w: World, radius: number): number {
@@ -123,18 +127,24 @@ function autoHealSpell(w: World, a: AutoSettings): boolean {
 export function updateAutoPlay(w: World): void {
   const a = w.auto;
   const p = w.player;
-  if ((!a.autoLoot && !a.autoHeal) || p.dead || w.now < nextAt) return;
-  nextAt = w.now + 400;
+  if ((!a.autoLoot && !a.autoHeal) || p.dead || w.now < (nextAutoAt.get(w) ?? 0)) return;
+  nextAutoAt.set(w, w.now + 400);
   if (a.autoHeal) {
-    const healed = autoHealSpell(w, a);
+    // Healing spells and potions have independent exhaustion groups.
+    autoHealSpell(w, a);
     const pct = p.character.health / Math.max(1, p.stats.maxHealth);
     const manaPct = p.character.mana / Math.max(1, p.stats.maxMana);
-    if (!healed && a.potionHp && pct < a.hpBelow) {
-      const idx = choosePotion(w, 'heal', p.stats.maxHealth - p.character.health, a.prefer);
-      if (idx >= 0) useInventoryItem(w, idx);
-    } else if (!healed && a.potionMana && a.manaBelow > 0 && manaPct < a.manaBelow) {
-      const idx = choosePotion(w, 'mana', p.stats.maxMana - p.character.mana, a.prefer);
-      if (idx >= 0) useInventoryItem(w, idx);
+    if (isReady(p.cooldowns, POTION, w.now)) {
+      let drank = false;
+      // Critical health has priority, but a missing/unusable HP potion must not block mana.
+      if (a.potionHp && pct < a.hpBelow) {
+        const idx = choosePotion(w, 'heal', p.stats.maxHealth - p.character.health, a.prefer);
+        if (idx >= 0) drank = useInventoryItem(w, idx);
+      }
+      if (!drank && a.potionMana && a.manaBelow > 0 && manaPct < a.manaBelow) {
+        const idx = choosePotion(w, 'mana', p.stats.maxMana - p.character.mana, a.prefer);
+        if (idx >= 0) useInventoryItem(w, idx);
+      }
     }
   }
   // pega o loot ao alcance (menos o que você mesmo jogou no chão)

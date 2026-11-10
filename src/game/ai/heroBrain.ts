@@ -740,6 +740,7 @@ function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void 
     b.huntStartedAt = w.now;
   }
   if (mode !== 'pk') b.pkTargetId = null;
+  if (mode !== 'follow') h.following = false;
   h.brain.mode = mode;
   h.brain.modeUntil = durationMs ? w.now + durationMs : 0;
   h.brain.stepStartedAt = w.now;
@@ -3468,6 +3469,7 @@ function walkToLeader(
   const stale = !req || !h.path?.length || chebyshev(req, goal) > (far ? 6 : 1);
   // "seguir" para a 2 tiles do líder (não entra no tile dele: os personagens não se sobrepõem)
   if (stale) goTo(w, h, goal.x, goal.y, far ? 120000 : 20000, goal.near);
+  h.following = true;
 }
 
 /** Dá uma poção ao colega de grupo com pouca vida (se tiver de sobra). */
@@ -4226,7 +4228,7 @@ function sidestep(w: World, h: HeroEntity): void {
   const start = w.rng.int(0, dirs.length - 1);
   for (let i = 0; i < dirs.length; i++) {
     const [dx, dy] = dirs[(start + i) % dirs.length]!;
-    if (tryStep(w, h, dx, dy, h.stats.speed, false)) return;
+    if (tryStep(w, h, dx, dy, speedOf(w, h), false)) return;
   }
 }
 

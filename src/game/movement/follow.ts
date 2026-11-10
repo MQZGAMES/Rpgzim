@@ -12,9 +12,9 @@ import { actorById, partyOf } from '../social/social';
 import { isPz } from '../world/GameMap';
 import { greedyStepToward, pathTo, tryStep } from './movement';
 
-/** Velocidade atual do ator (tiles/s): base + buffs, lentidão e o fôlego de quem segue o líder e ficou para trás. */
+/** Current movement speed (tiles/s), including buffs and slows; independent of input method. */
 export function actorSpeed(w: World, p: PlayerEntity): number {
-  return p.stats.speed * followCatchUp(w, p) * (w.now < p.slowUntil ? p.slowFactor : 1);
+  return p.stats.speed * (w.now < p.slowUntil ? p.slowFactor : 1);
 }
 
 /** Quem segue o líder (formação seguir/fila) e ficou para trás ganha um fôlego, limitado pela velocidade do líder. */
@@ -26,7 +26,8 @@ export function followCatchUp(w: World, p: PlayerEntity): number {
   const d = chebyshev(leader, p);
   if (d <= 1) return 1;
   // o fôlego cobre a diferença de velocidade do líder (Corrida, nível) e mais um pouco; nunca passa de +60%
-  const ratio = (leader.stats.speed * (leader.slowUntil > w.now ? leader.slowFactor : 1)) / Math.max(0.5, p.stats.speed);
+  const ratio =
+    (leader.stats.speed * (leader.slowUntil > w.now ? leader.slowFactor : 1)) / Math.max(0.5, p.stats.speed);
   const need = Math.max(d > 2 ? 1.2 : 1.1, ratio * 1.12);
   return Math.min(d > 6 ? 1.6 : 1.4, need);
 }
@@ -67,11 +68,12 @@ export function trailStep(w: World, p: PlayerEntity, tolerance: number): 'arrive
   if (chebyshev(leader, p) <= tolerance) return 'arrived';
   const next = nextCrumb(w, p);
   if (!next) return 'none';
+  const speed = actorSpeed(w, p) * followCatchUp(w, p);
   const dx = Math.sign(next.x - p.x);
   const dy = Math.sign(next.y - p.y);
-  if (tryStep(w, p, dx, dy, actorSpeed(w, p), false)) return 'moved';
+  if (tryStep(w, p, dx, dy, speed, false)) return 'moved';
   // diagonal barrada: tenta cada eixo
-  if (dx && dy && (tryStep(w, p, dx, 0, actorSpeed(w, p), false) || tryStep(w, p, 0, dy, actorSpeed(w, p), false))) return 'moved';
+  if (dx && dy && (tryStep(w, p, dx, 0, speed, false) || tryStep(w, p, 0, dy, speed, false))) return 'moved';
   return 'none';
 }
 
@@ -81,6 +83,9 @@ export function trailStep(w: World, p: PlayerEntity, tolerance: number): 'arrive
  */
 export function chaseStep(w: World, p: PlayerEntity, t: MonsterEntity | PlayerEntity, stop: number): boolean {
   if (isPz(w.map, p.x, p.y)) return false;
+  // Equal/lower-level players can be closed on instead of keeping an eternal gap.
+  // Only pursuit gets this bounded bonus; haste, equipment and slows still affect real speed.
+  const speed = actorSpeed(w, p) * (t.kind === 'player' && t.character.level <= p.character.level ? 1.12 : 1);
   const cache = p.chasePath;
   // (o alvo andou 2 casas já é rota velha: com 3 o perseguidor ia até onde o alvo estava e parecia travado)
   const targetMoved = !cache || chebyshev(cache.goal, t) > 1;
@@ -100,12 +105,12 @@ export function chaseStep(w: World, p: PlayerEntity, t: MonsterEntity | PlayerEn
     p.chasePath = null; // o ator foi deslocado: refaz na próxima
     return false;
   }
-  if (tryStep(w, p, dx, dy, actorSpeed(w, p), false)) {
+  if (tryStep(w, p, dx, dy, speed, false)) {
     route.path.shift();
     return true;
   }
   // bloqueado (alguém no caminho): desvia na hora com um passo que aproxime e refaz a rota no próximo passo
   p.chaseRecalcAt = 0;
   p.chasePath = null;
-  return greedyStepToward(w, p, t.x, t.y, actorSpeed(w, p), false);
+  return greedyStepToward(w, p, t.x, t.y, speed, false);
 }

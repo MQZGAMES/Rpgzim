@@ -14,12 +14,13 @@ import {
   ownedCount,
   placeOffer,
   priceGuide,
+  shopPrices,
   sellNow,
   type MarketFail,
   type MarketFill,
   type OfferSide,
 } from '../../domain/rules/market';
-import { addItem } from '../../domain/rules/inventory';
+import { addItem, canFit, removeItem } from '../../domain/rules/inventory';
 import type { PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, message, warnThrottled } from '../simulation/World';
@@ -56,18 +57,28 @@ const qtyName = (w: World, id: string, n: number) => `${n > 1 ? `${n}x ` : ''}${
 /** Anota no registro de `characterId` cada negócio fechado (um por oferta atendida, com o preço dela). */
 function logFills(w: World, characterId: string, kind: 'buy' | 'sell', fills: MarketFill[]): void {
   const at = pkNow(w);
-  for (const f of fills) logTrade(w.market, characterId, { kind, itemId: f.itemId, count: f.count, price: f.price, at });
+  for (const f of fills)
+    logTrade(w.market, characterId, { kind, itemId: f.itemId, count: f.count, price: f.price, at });
 }
 
 /** Quem tinha a oferta de venda recebe o ouro no banco (fora do jogo: fica guardado). */
 function paySellers(w: World, fills: MarketFill[], buyer: string): void {
   for (const f of fills) {
-    logTrade(w.market, f.otherId, { kind: 'sell', itemId: f.itemId, count: f.count, price: f.price, at: pkNow(w) });
+    logTrade(w.market, f.otherId, {
+      kind: 'sell',
+      itemId: f.itemId,
+      count: f.count,
+      price: f.price,
+      at: pkNow(w),
+    });
     const gold = f.count * f.price;
     const seller = onlineByCharacter(w, f.otherId);
     if (seller) {
       seller.character.bankGold += gold;
-      seller.scope.events.emit('message', { text: `Mercado: ${buyer} comprou ${qtyName(w, f.itemId, f.count)}. +${gold} de ouro no banco.`, kind: 'loot' });
+      seller.scope.events.emit('message', {
+        text: `Mercado: ${buyer} comprou ${qtyName(w, f.itemId, f.count)}. +${gold} de ouro no banco.`,
+        kind: 'loot',
+      });
       seller.scope.events.emit('saveRequested', { reason: 'market' });
     } else w.market.proceeds[f.otherId] = (w.market.proceeds[f.otherId] ?? 0) + gold;
   }
@@ -76,7 +87,13 @@ function paySellers(w: World, fills: MarketFill[], buyer: string): void {
 /** Quem tinha a oferta de compra recebe o item no depósito (sem espaço ou fora do jogo: entrega a retirar). */
 function deliverBuyers(w: World, fills: MarketFill[], seller: string): void {
   for (const f of fills) {
-    logTrade(w.market, f.otherId, { kind: 'buy', itemId: f.itemId, count: f.count, price: f.price, at: pkNow(w) });
+    logTrade(w.market, f.otherId, {
+      kind: 'buy',
+      itemId: f.itemId,
+      count: f.count,
+      price: f.price,
+      at: pkNow(w),
+    });
     const buyer = onlineByCharacter(w, f.otherId);
     const fit = buyer ? depotSpace(w.data, buyer.character, f.itemId, f.count) : 0;
     if (buyer && fit) addItem(w.data, buyer.character.depot, f.itemId, fit);
@@ -127,7 +144,11 @@ export function marketSellNow(w: World, itemId: string, qty: number, minPrice = 
   if (!res.ok) return fail(w, res.reason);
   deliverBuyers(w, res.fills, c.name);
   logFills(w, c.id, 'sell', res.fills);
-  message(w, `Vendeu no mercado: ${qtyName(w, itemId, res.count)} por ${res.total} de ouro (no banco).`, 'loot');
+  message(
+    w,
+    `Vendeu no mercado: ${qtyName(w, itemId, res.count)} por ${res.total} de ouro (no banco).`,
+    'loot',
+  );
   changed(w);
   return true;
 }
@@ -141,14 +162,29 @@ export function marketOffer(w: World, side: OfferSide, itemId: string, qty: numb
   if (side === 'sell') {
     deliverBuyers(w, res.fills, c.name);
     logFills(w, c.id, 'sell', res.fills);
-    if (res.matched) message(w, `Vendeu na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro (no banco).`, 'loot');
-    if (res.offer) message(w, `Anunciado: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} de ouro cada.`, 'info');
+    if (res.matched)
+      message(
+        w,
+        `Vendeu na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro (no banco).`,
+        'loot',
+      );
+    if (res.offer)
+      message(
+        w,
+        `Anunciado: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} de ouro cada.`,
+        'info',
+      );
   } else {
     paySellers(w, res.fills, c.name);
     logFills(w, c.id, 'buy', res.fills);
-    if (res.matched) message(w, `Comprou na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro.`, 'loot');
+    if (res.matched)
+      message(w, `Comprou na hora: ${qtyName(w, itemId, res.matched)} por ${res.total} de ouro.`, 'loot');
     if (res.offer)
-      message(w, `Oferta de compra: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} cada (${res.offer.count * res.offer.price} reservados).`, 'info');
+      message(
+        w,
+        `Oferta de compra: ${qtyName(w, itemId, res.offer.count)} a ${res.offer.price} cada (${res.offer.count * res.offer.price} reservados).`,
+        'info',
+      );
   }
   changed(w);
   return true;
@@ -186,8 +222,18 @@ export function marketSellAll(w: World, itemIds: readonly string[]): boolean {
     }
   }
   if (!kinds) return fail(w, 'empty');
-  if (soldUnits) message(w, `Vendeu na hora: ${soldUnits} ${soldUnits > 1 ? 'itens' : 'item'} por ${soldGold} de ouro (no banco).`, 'loot');
-  if (units) message(w, `Anunciado: ${units} ${units > 1 ? 'itens' : 'item'} pelo preço sugerido (${asking} de ouro no total).`, 'info');
+  if (soldUnits)
+    message(
+      w,
+      `Vendeu na hora: ${soldUnits} ${soldUnits > 1 ? 'itens' : 'item'} por ${soldGold} de ouro (no banco).`,
+      'loot',
+    );
+  if (units)
+    message(
+      w,
+      `Anunciado: ${units} ${units > 1 ? 'itens' : 'item'} pelo preço sugerido (${asking} de ouro no total).`,
+      'info',
+    );
   changed(w);
   return true;
 }
@@ -222,9 +268,50 @@ export function marketTakeParcels(w: World): boolean {
 export function marketCollect(w: World, a: PlayerEntity): number {
   const got = collectProceeds(w.market, a.character);
   const items = collectParcels(w.data, w.market, a.character, false);
-  if (got > 0) a.scope.events.emit('message', { text: `Mercado: suas vendas renderam ${got} de ouro (já no banco).`, kind: 'loot' });
+  if (got > 0)
+    a.scope.events.emit('message', {
+      text: `Mercado: suas vendas renderam ${got} de ouro (já no banco).`,
+      kind: 'loot',
+    });
   if (items > 0)
-    a.scope.events.emit('message', { text: `Mercado: ${items} ${items > 1 ? 'itens comprados chegaram' : 'item comprado chegou'} no depósito.`, kind: 'loot' });
+    a.scope.events.emit('message', {
+      text: `Mercado: ${items} ${items > 1 ? 'itens comprados chegaram' : 'item comprado chegou'} no depósito.`,
+      kind: 'loot',
+    });
   if (got > 0 || items > 0) w.events.emit('marketChanged', {});
   return got;
+}
+
+/** Negociação direta com lojas pelo corretor; preços sempre calculados no jogo. */
+export function marketShopTrade(w: World, side: 'buy' | 'sell', itemId: string, qty: number): boolean {
+  if (!atMarket(w)) return false;
+  if (!Number.isInteger(qty) || qty < 1 || qty > 1000) return false;
+  const prices = shopPrices(w.data, itemId);
+  const price = side === 'buy' ? prices.sells : prices.buys;
+  if (price === null) return false;
+  const c = w.player.character;
+  const total = price * qty;
+  if (side === 'buy') {
+    if (c.gold + c.bankGold < total) return fail(w, 'gold');
+    if (!canFit(w.data, c.inventory, itemId, qty)) {
+      warnThrottled(w, 'market:shop:full', 'Sem espaço na mochila.', 600);
+      return false;
+    }
+    const bag = Math.min(c.gold, total);
+    c.gold -= bag;
+    c.bankGold -= total - bag;
+    addItem(w.data, c.inventory, itemId, qty);
+  } else {
+    if (ownedCount(c, itemId) < qty) return false;
+    const removed = removeItem(c.inventory, itemId, qty);
+    removeItem(c.depot, itemId, qty - removed);
+    c.gold += total;
+  }
+  message(
+    w,
+    `${side === 'buy' ? 'Comprou da loja' : 'Vendeu à loja'} ${qtyName(w, itemId, qty)} por ${total} de ouro.`,
+    'loot',
+  );
+  changed(w);
+  return true;
 }

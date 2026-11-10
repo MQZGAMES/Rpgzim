@@ -176,11 +176,22 @@ export class GameSession {
     ].some((n) => n.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
     if (taken) return 'Já existe um personagem com esse nome.';
     const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const c = createCharacter(w.data, { id, name, vocation, now: Date.now(), position: { ...w.map.playerStart } });
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const c = createCharacter(w.data, {
+      id,
+      name,
+      vocation,
+      now: Date.now(),
+      position: { ...w.map.playerStart },
+    });
     const h = this.sim.addHero(heroDefOf(w.data, c), structuredClone(c));
     setOnlinePref(id, true);
-    this.pushMessage(`${h.character.name} (${w.data.vocations[vocation].name}) nasceu no templo e já está jogando com a IA.`, 'system');
+    this.pushMessage(
+      `${h.character.name} (${w.data.vocations[vocation].name}) nasceu no templo e já está jogando com a IA.`,
+      'system',
+    );
     this.audio.play('ui');
     this.dirty = true;
     await this.saves.save(c).catch(() => undefined);
@@ -703,7 +714,13 @@ export class GameSession {
         v: (kind === 'health' ? w.data.items[id]?.use?.heal : w.data.items[id]?.use?.mana) ?? 0,
         other: kind === 'health' ? w.data.items[id]?.use?.mana : w.data.items[id]?.use?.heal,
       }))
-      .filter((p) => p.v > 0 && !p.other && w.data.items[p.id]?.type === 'potion' && canDrink(w.data.items[p.id], c.level))
+      .filter(
+        (p) =>
+          p.v > 0 &&
+          !p.other &&
+          w.data.items[p.id]?.type === 'potion' &&
+          canDrink(w.data.items[p.id], c.level),
+      )
       .sort((a, b) => a.v - b.v);
     return (owned.find((p) => p.v >= missing * 0.8) ?? owned[owned.length - 1])?.id;
   }
@@ -767,6 +784,9 @@ export class GameSession {
   marketBuyAtShop(itemId: string, qty: number): boolean {
     return this.marketAct(this.sim.marketBuyAtShop(itemId, qty));
   }
+  marketShopTrade(side: 'buy' | 'sell', itemId: string, qty: number): boolean {
+    return this.marketAct(this.sim.marketShopTrade(side, itemId, qty));
+  }
   marketBuyNow(itemId: string, qty: number, maxPrice?: number): boolean {
     return this.marketAct(this.sim.marketBuyNow(itemId, qty, maxPrice));
   }
@@ -774,7 +794,10 @@ export class GameSession {
     return this.marketAct(this.sim.marketSellNow(itemId, qty, minPrice));
   }
   marketOffer(side: 'sell' | 'buy', itemId: string, qty: number, price: number): boolean {
-    return this.marketAct(this.sim.marketOffer(side, itemId, qty, price), side === 'sell' ? 'coin' : 'pickup');
+    return this.marketAct(
+      this.sim.marketOffer(side, itemId, qty, price),
+      side === 'sell' ? 'coin' : 'pickup',
+    );
   }
   /** Vender tudo rápido: anuncia tudo o que tem desses itens pelo preço sugerido. */
   marketSellAll(itemIds: readonly string[]): boolean {
@@ -815,7 +838,9 @@ export class GameSession {
     if (this.sim.sellAll()) this.audio.play('coin');
     this.dirty = true;
   }
-  takeLoot(which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] }): void {
+  takeLoot(
+    which: 'all' | 'gold' | { bagId: string; index: number } | { refs: { bagId: string; index: number }[] },
+  ): void {
     this.sim.takeLoot(which);
     this.audio.play('pickup');
     this.dirty = true;
