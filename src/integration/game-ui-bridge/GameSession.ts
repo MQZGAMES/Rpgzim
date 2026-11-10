@@ -799,9 +799,9 @@ export class GameSession {
       side === 'sell' ? 'coin' : 'pickup',
     );
   }
-  /** Vender tudo rápido: anuncia tudo o que tem desses itens pelo preço sugerido. */
-  marketSellAll(itemIds: readonly string[]): boolean {
-    return this.marketAct(this.sim.marketSellAll(itemIds));
+  /** Vender tudo rápido: anuncia tudo o que tem desses itens pelo preço sugerido (travados só com `includeKept`). */
+  marketSellAll(itemIds: readonly string[], includeKept = false): boolean {
+    return this.marketAct(this.sim.marketSellAll(itemIds, includeKept));
   }
   marketCancel(offerId: string): boolean {
     return this.marketAct(this.sim.marketCancel(offerId), 'pickup');

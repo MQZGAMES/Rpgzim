@@ -776,8 +776,8 @@ export class GameSimulation {
   marketOffer(side: OfferSide, itemId: string, qty: number, price: number): boolean {
     return marketOffer(this.world, side, itemId, qty, price);
   }
-  marketSellAll(itemIds: readonly string[]): boolean {
-    return marketSellAll(this.world, itemIds);
+  marketSellAll(itemIds: readonly string[], includeKept = false): boolean {
+    return marketSellAll(this.world, itemIds, includeKept);
   }
   marketCancel(offerId: string): boolean {
     return marketCancel(this.world, offerId);

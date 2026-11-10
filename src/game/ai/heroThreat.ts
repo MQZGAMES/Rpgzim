@@ -49,7 +49,7 @@ export function monsterMaxHit(h: HeroEntity, m: MonsterEntity): number {
 }
 
 /** Dano médio por segundo do personagem contra esta criatura (armadura e resistência dela descontadas). */
-export function heroDpsVs(w: World, h: PlayerEntity, m: MonsterEntity): number {
+export function heroDpsVs(w: World, h: PlayerEntity, m: MonsterEntity, live = false): number {
   const voc = w.data.vocations[h.character.vocation];
   const weapon = h.stats.weapon;
   let avg: number;
@@ -90,7 +90,35 @@ export function heroDpsVs(w: World, h: PlayerEntity, m: MonsterEntity): number {
     avg = Math.max(avg, spellPerInterval);
   }
   // magias de ataque somam um pouco mais que o golpe básico
-  return Math.max(0.5, avg * 1.12 * ROLES[h.character.vocation].dpsMul) / (h.stats.attackIntervalMs / 1000);
+  const mul = 1.12 * ROLES[h.character.vocation].dpsMul;
+  // numa luta de verdade (`live`) a parte das magias só vale com mana para conjurá-las: mago seco bate só de varinha
+  const spells = live && h.character.equipment.mainHand ? spellBudget(w, h) : 1;
+  return Math.max(0.5, avg * (1 + (mul - 1) * spells)) / (h.stats.attackIntervalMs / 1000);
+}
+
+/**
+ * Fração (0..1) das magias de ataque que ele sustenta numa luta de ~20 s: a mana atual, a regeneração e as poções de
+ * mana contra o custo de conjurar a cada 2 s (a exaustão das magias de ataque). Knight não depende disso.
+ */
+export function spellBudget(w: World, h: PlayerEntity): number {
+  const voc = h.character.vocation;
+  if (ROLES[voc].dpsMul <= 1) return 1;
+  const lv = h.character.level;
+  let cost = 0;
+  let n = 0;
+  for (const id of w.data.vocations[voc].spells) {
+    const s = w.data.spells[id];
+    if (!s || s.effect !== 'damage' || lv < s.minLevel) continue;
+    cost += s.manaCost + Math.floor(lv * (s.manaPerLevel ?? 0));
+    n++;
+  }
+  if (!n) return 1;
+  const potMana = h.character.inventory.reduce((sum, st) => {
+    const use = st && w.data.items[st.itemId]?.use;
+    return st && use?.mana && !use.heal ? sum + use.mana * st.count : sum;
+  }, 0);
+  const budget = h.character.mana + manaRegenPerSecond(w.data, voc, lv) * 20 + Math.min(potMana, h.stats.maxMana * 2);
+  return Math.max(0, Math.min(1, budget / ((cost / n) * 10)));
 }
 
 /** Poções de vida na mochila (cura de cada uma, da maior para a menor, uma entrada por poção). */
@@ -126,8 +154,14 @@ export function alliesAround(w: World, h: PlayerEntity): PlayerEntity[] {
 }
 
 /** Dano por segundo do grupo (ele + colegas por perto) contra a criatura: com mais gente ela morre mais rápido. */
-export function partyDpsVs(w: World, h: HeroEntity, m: MonsterEntity, allies = alliesAround(w, h)): number {
-  return allies.reduce((s, a) => s + heroDpsVs(w, a, m) * 0.85, heroDpsVs(w, h, m));
+export function partyDpsVs(
+  w: World,
+  h: HeroEntity,
+  m: MonsterEntity,
+  allies = alliesAround(w, h),
+  live = false,
+): number {
+  return allies.reduce((s, a) => s + heroDpsVs(w, a, m, live) * 0.85, heroDpsVs(w, h, m, live));
 }
 
 /**
@@ -150,8 +184,11 @@ export function fightPlan(
 ): { damage: number; seconds: number } {
   const allies = alliesAround(w, h);
   const share = damageShare(w, h, allies);
+  // criaturas de verdade (com id) = luta de agora: a mana que ele tem conta. As "de mentira" (escolha da caça) não:
+  // a caça não muda só porque a mana está baixa neste instante
+  const live = mons.some((m) => !!m.id);
   const rows = mons.map((m) => {
-    const out = partyDpsVs(w, h, m, allies) * (m.def.attack.range > 2 ? 0.8 : 1); // atiradores fogem/recuam: demora mais
+    const out = partyDpsVs(w, h, m, allies, live) * (m.def.attack.range > 2 ? 0.8 : 1); // atiradores fogem/recuam: demora mais
     return { hp: m.hp, dpsIn: monsterDps(w, h, m) * share, ttk: m.hp / out };
   });
   rows.sort((a, b) => a.ttk - b.ttk);

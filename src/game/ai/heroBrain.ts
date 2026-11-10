@@ -10,7 +10,7 @@ import type { HeroLineKey, ItemDef } from '../../domain/entities/definitions';
 import { chebyshev } from '../../domain/value-objects/position';
 import { addItem, countItem, freeSlots, removeAt } from '../../domain/rules/inventory';
 import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
-import { isPz } from '../world/GameMap';
+import { isPz, isSolid } from '../world/GameMap';
 import type { HeroEntity, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, asActor } from '../simulation/World';
@@ -22,6 +22,7 @@ import {
   alliesAround,
   alliesNear,
   monsterDps,
+  monsterMaxHit,
   heroDpsVs,
   xpPerMinute,
   assess,
@@ -37,6 +38,7 @@ import { spellManaCost, spellTiers } from '../../domain/rules/spells';
 import { bestPotionFor, canDrink, potionAmount, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
 import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
 import { humanProfile, styleLine, type HumanProfile } from './heroHuman';
+import { escapePath } from './heroEscape';
 import { actorSpeed as speedOf } from '../movement/follow';
 import {
   aggro,
@@ -185,6 +187,17 @@ export interface HeroBrainState {
   passiveSince?: number;
   /** Última vez que não achou rota nenhuma até o abrigo na fuga (aí sim revidar faz sentido). */
   routeFailedAt?: number;
+  /** Desde quando a vida está baixa com alguém batendo (a poção não está dando conta: hora de sair). */
+  lowSince?: number;
+  /** Na fuga: desde quando ninguém mais o persegue (despistou: respira e volta, sem ir até a vila). */
+  clearSince?: number;
+  /** Mago esperando a mana voltar antes de puxar a próxima criatura. */
+  manaRest?: boolean;
+  /** Vida nos últimos segundos (para notar quando ela despenca). */
+  hpTrail?: { at: number; hp: number }[];
+  /** Fuga: quando traçou o último trecho curto (longe das criaturas) e quando pode tentar de novo a rota longa. */
+  escapeAt?: number;
+  nextRouteAt?: number;
   /** Distância do alvo na última olhada (para saber se ele está fugindo). */
   chaseSeen?: { id: string; d: number; x?: number; y?: number };
   /** Chamado pelo grupo: larga o que está fazendo e vai até o líder (até este instante). */
@@ -976,10 +989,12 @@ function fightBack(w: World, h: HeroEntity): void {
   const hopeless =
     adjacent >= 3 &&
     Math.min(...attackers.filter((m) => chebyshev(m, h) <= 1).map((m) => m.hp / heroDpsVs(w, h, m))) > 25;
+  // (antes "3+ encostadas" bastava para ele parar e lutar a luta que já tinha decidido largar — morria parado com
+  // casas livres em volta. Agora só luta na fuga quem não tem por onde sair: com uma brecha, ele anda)
   if (
     (b.mode === 'retreat' || b.mode === 'town') &&
     !(routeFailed && stuckMs > 1200) &&
-    (adjacent < 3 || hopeless)
+    (exitsOf(w, h) > 0 || hopeless)
   )
     return;
   if (b.mode === 'retreat' || b.mode === 'town') b.fightBackUntil = w.now + 2500;
@@ -1011,6 +1026,23 @@ function fightBack(w: World, h: HeroEntity): void {
     fightSpells(w, h, target, adjacent);
 }
 
+/** A criatura tira metade da vida cheia dele num golpe só (dois golpes seguidos matam antes da poção)? */
+function isLethal(h: HeroEntity, m: MonsterEntity): boolean {
+  return monsterMaxHit(h, m) >= h.stats.maxHealth * 0.5;
+}
+
+/** Casas vizinhas onde ele pode pisar agora (sem cortar quina de parede): as saídas de quem está apertado. */
+function exitsOf(w: World, h: HeroEntity): number {
+  let n = 0;
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++) {
+      if ((!dx && !dy) || !canEnter(w, h.x + dx, h.y + dy, false, h.id)) continue;
+      if (dx && dy && (isSolid(w.map, h.x + dx, h.y) || isSolid(w.map, h.x, h.y + dy))) continue;
+      n++;
+    }
+  return n;
+}
+
 // ------------------------------------------------------------------ cercado (trap)
 /** As criaturas encostadas, se ele está preso: nenhuma casa em volta livre para pisar e 2+ criaturas encostadas. */
 export function trappedBy(w: World, h: HeroEntity): MonsterEntity[] | null {
@@ -1026,7 +1058,7 @@ export function trappedBy(w: World, h: HeroEntity): MonsterEntity[] | null {
  * de área acerta todos de uma vez) e só abre caminho quando está morrendo, com poucas poções ou perdendo a luta.
  */
 function wantsBreakout(w: World, h: HeroEntity): boolean {
-  if (h.character.vocation !== 'knight') return true;
+  if (h.character.vocation !== 'knight' || h.brain.mode === 'retreat') return true;
   const pct = hpPct(h);
   return pct < 0.45 || potionsOf(w, h) <= 5 || (pct < 0.7 && assess(w, h).margin < 1);
 }
@@ -1119,9 +1151,10 @@ function smartStrike(
 function survive(w: World, h: HeroEntity): void {
   const t = h.hero.temperament;
   const pct = hpPct(h);
-  // quem está batendo nele: corpo a corpo encostado e atiradores dentro do alcance deles
+  // quem está batendo nele: corpo a corpo encostado e atiradores dentro do alcance DELES (antes o corte era 3 tiles:
+  // quem atirava de 4 ou mais não contava, e ele só bebia a poção com 25% de vida, sem nunca "ver" o perigo)
   const attackers = [...w.monsters.values()].filter(
-    (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.min(3, Math.max(2, m.def.attack.range)),
+    (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.max(2, m.def.attack.range),
   );
   // apanhando de personagens (PK): conta para a poção e para a cura como as criaturas
   const pvpHit =
@@ -1214,16 +1247,43 @@ function survive(w: World, h: HeroEntity): void {
     (h.character.vocation === 'druid' && h.character.mana >= 160) ||
     (h.character.vocation === 'sorcerer' && h.character.mana >= 120);
   const recover = pct < 0.4 && potionsOf(w, h) <= LOW_POTIONS && !selfHeal;
+  // "não está dando": a vida segue baixa há alguns segundos mesmo bebendo e a luta não acaba já — gente sai dali em
+  // vez de ficar bebendo no mesmo lugar até um golpe mais forte matar (a régua conta o estoque todo de poções, mas a
+  // exaustão delas não acompanha o dano que chega)
+  const hb = h.brain;
+  if (attackers.length && pct < 0.38) hb.lowSince ||= w.now;
+  else if (pct >= 0.5 || !attackers.length) hb.lowSince = 0;
+  const endsIn = attackers.reduce((s, m) => s + m.hp / Math.max(0.5, heroDpsVs(w, h, m, true)), 0);
+  const bleeding = !!hb.lowSince && w.now - hb.lowSince > 2500 && endsIn > 4;
+  // a vida despencou (40% da vida cheia em ~3 s, já contando o que bebeu) com 2+ batendo: o dano que chega é muito
+  // maior do que ele consegue curar — sai enquanto ainda tem vida para correr
+  const trail = (hb.hpTrail ??= []);
+  trail.push({ at: w.now, hp });
+  while (trail.length && w.now - trail[0]!.at > 3200) trail.shift();
+  const plunge =
+    attackers.length >= 2 && endsIn > 3 && Math.max(...trail.map((s) => s.hp)) - hp >= h.stats.maxHealth * 0.4;
+  // criatura que tira metade da vida CHEIA num golpe: dois golpes seguidos matam antes da poção — não se luta com isso
+  // (a régua trabalha com a média e achava a luta folgada; era assim que o Chefe Goblin matava os magos novatos)
+  const lethal = attackers.find((m) => isLethal(h, m));
+  if (lethal) hb.avoid[lethal.def.id] = Math.max(hb.avoid[lethal.def.id] ?? 0, w.now + 25 * 60000);
   if (
-    (outmatched || swarmed || train || dry || recover || (pct < 0.32 - t.bravery * 0.12 && noPotions)) &&
+    (outmatched ||
+      swarmed ||
+      train ||
+      dry ||
+      recover ||
+      bleeding ||
+      plunge ||
+      lethal ||
+      (pct < 0.32 - t.bravery * 0.12 && noPotions)) &&
     h.brain.mode !== 'retreat' &&
     !isPz(w.map, h.x, h.y)
   ) {
     heroSay(w, h, 'retreat', {}, 20000);
     h.brain.bold = Math.max(-1, h.brain.bold - 0.12); // fugiu: da próxima vez pensa duas vezes
-    h.brain.retreatWhy = `${recover ? 'recuperar ' : ''}${outmatched ? 'régua ' : ''}${swarmed ? 'cercado ' : ''}${train ? 'trem ' : ''}${dry ? 'seco ' : ''}margem=${a.margin.toFixed(2)} vida=${Math.round(pct * 100)}% pots=${potionsOf(w, h)} alvos=${a.mons.map((m) => m.def.id).join('+')}`;
+    h.brain.retreatWhy = `${recover ? 'recuperar ' : ''}${bleeding ? 'sangrando ' : ''}${plunge ? 'despencando ' : ''}${lethal ? 'letal ' : ''}${outmatched ? 'régua ' : ''}${swarmed ? 'cercado ' : ''}${train ? 'trem ' : ''}${dry ? 'seco ' : ''}margem=${a.margin.toFixed(2)} vida=${Math.round(pct * 100)}% pots=${potionsOf(w, h)} alvos=${a.mons.map((m) => m.def.id).join('+')}`;
     // aprendeu: foge de novo da mesma área? não — evita a caça atual e o que o cercou por alguns minutos
-    if (outmatched || swarmed || train) {
+    if (outmatched || swarmed || train || bleeding || plunge) {
       for (const m of a.mons)
         if (m.targetId === h.id)
           h.brain.avoid[m.def.id] = Math.max(h.brain.avoid[m.def.id] ?? 0, w.now + 6 * 60000);
@@ -1521,6 +1581,8 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     if (min > lvl + 4 || (h.brain.avoid[id] ?? 0) > w.now) continue;
     const spawns = w.map.spawns.filter((s) => s.monsterId === id);
     if (!spawns.length) continue;
+    // sozinho, não caça o que o derruba em dois golpes
+    if (!alliesNear(w, h) && protoMonsters(w, id, 1).some((m) => isLethal(h, m))) continue;
     // em grupo, a régua vale para o membro mais frágil (o mago não pode morrer para o Knight upar)
     let margin = fightMargin(w, h, protoMonsters(w, id, pull));
     for (const a of alliesAround(w, h))
@@ -1536,7 +1598,8 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
       if (
         sp.monsterId !== id &&
         spawns.some((q) => chebyshev(q, sp) <= 12) &&
-        fightMargin(w, h, protoMonsters(w, sp.monsterId, 1)) < RISKY_MARGIN + 0.3
+        (fightMargin(w, h, protoMonsters(w, sp.monsterId, 1)) < RISKY_MARGIN + 0.3 ||
+          protoMonsters(w, sp.monsterId, 1).some((m) => isLethal(h, m)))
       ) {
         safety *= 0.25;
         break;
@@ -1700,10 +1763,24 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   // quem já está nele tem prioridade; para puxar uma criatura nova, a régua precisa aprovar o grupo todo
   // (ela e as vizinhas que se juntariam à briga) e ele precisa estar com a vida em dia
   const engaged = engagedOrJoining(w, h);
+  // mago com a mana no fim e criatura à vista: antes de avaliar a caça, espera a mana voltar (sem mana a régua
+  // reprovaria a presa de sempre e ele trocaria por uma mais fraca à toa). Espera fora da vista das criaturas paradas:
+  // perto demais elas o notam e a espera vira luta sem mana
+  if (!training && candidates.length && !engaged.some((m) => m.targetId === h.id) && restingForMana(w, h)) {
+    if (engaged.length && !isMoving(h, w.now) && !h.path?.length) {
+      const away = escapePath(w, h, engaged, null);
+      if (away) {
+        h.path = away;
+        h.pathGoal = { ...away[away.length - 1]! };
+      }
+    }
+    return;
+  }
   const approve = (m: MonsterEntity) =>
     training ||
     m.targetId === h.id ||
-    fightMargin(w, h, [...new Set([m, ...monstersNear(w, m, 3), ...engaged])]) >= needMargin(w, h);
+    (!isLethal(h, m) &&
+      fightMargin(w, h, [...new Set([m, ...monstersNear(w, m, 3), ...engaged])]) >= needMargin(w, h));
   // ordem de abate: entre as que já batem nele, primeiro a que mais machuca por vida restante (some mais dano
   // que chega por segundo de luta); para puxar, a mais perto e sem vizinhas
   // em grupo: o alvo que os colegas já atacam morre primeiro (foco); atiradores batendo nele também vêm antes
@@ -1765,6 +1842,23 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   if (chebyshev(b.spot ?? spot, h) > 4) goTo(w, h, (b.spot ?? spot).x, (b.spot ?? spot).y);
   else if (w.rng.chance(0.3))
     goTo(w, h, (b.spot ?? spot).x + w.rng.int(-3, 3), (b.spot ?? spot).y + w.rng.int(-3, 3));
+}
+
+/**
+ * Mago (Sorcerer/Druid) com a mana no fim: espera antes de puxar a próxima, como gente (começa abaixo de 30% e só
+ * volta com 60%). Com poção de mana, bebe e segue.
+ */
+function restingForMana(w: World, h: HeroEntity): boolean {
+  const voc = h.character.vocation;
+  if (voc !== 'sorcerer' && voc !== 'druid') return false;
+  const b = h.brain;
+  const pct = h.character.mana / Math.max(1, h.stats.maxMana);
+  if (pct < 0.3) b.manaRest = true;
+  else if (pct >= 0.6) b.manaRest = false;
+  if (!b.manaRest) return false;
+  const idx = pickManaPotion(w, h);
+  if (idx >= 0) drinkMana(w, h, idx);
+  return true;
 }
 
 /**
@@ -2887,6 +2981,33 @@ function recover(w: World, h: HeroEntity): void {
   if (!isMoving(h, w.now) && !h.path?.length) goTo(w, h, grave.x, grave.y, 120000);
 }
 
+/**
+ * Despistou? Ninguém mais o persegue nem o acerta há alguns segundos. Com poções na mochila ele respira (bebe até a
+ * vida voltar) e retoma a vida dali mesmo, como gente — antes atravessava o mapa até a vila a cada susto. Sem poções
+ * (ou fugindo de gente) segue para o abrigo.
+ */
+function shookThemOff(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  const why = b.retreatWhy ?? '';
+  if (why.startsWith('guerra') || why.startsWith('jogador') || w.now - b.stepStartedAt < 2500) return false;
+  const chased = [...w.monsters.values()].some(
+    (m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= Math.max(9, m.def.attack.range + 2),
+  );
+  if (chased || w.now - (b.lastHurtAt ?? -Infinity) < 3000) {
+    b.clearSince = 0;
+    return false;
+  }
+  b.clearSince ||= w.now;
+  if (w.now - b.clearSince < 2500 || potionsOf(w, h) <= LOW_POTIONS + 1) return false;
+  if (hpPct(h) < 0.7) {
+    const idx = pickPotion(w, h);
+    if (idx >= 0) drinkHealth(w, h, idx);
+    return false;
+  }
+  b.clearSince = 0;
+  return true;
+}
+
 function retreat(w: World, h: HeroEntity): void {
   // guerra: fugiu de gente e já está longe dela, com a vida em dia — volta a caçar (não precisa atravessar o mapa até o templo)
   if (
@@ -2917,6 +3038,7 @@ function retreat(w: World, h: HeroEntity): void {
     h.brain.prepare = potionsOf(w, h) < 6 || hpPct(h) < 0.5;
     return setMode(w, h, 'decide');
   }
+  if (shookThemOff(w, h)) return setMode(w, h, 'decide');
   // corre (Corrida) para a área protegida mais próxima (porta de uma construção), desviando das criaturas. Sem mana
   // para a Corrida, bebe uma poção de mana antes: as criaturas contornam obstáculos e alcançam quem foge a pé
   const haste = w.data.spells.haste;
@@ -2936,22 +3058,47 @@ function retreat(w: World, h: HeroEntity): void {
   const goal = door
     ? { x: door.x, y: door.y - 2 }
     : { x: start.x + w.rng.int(-2, 2), y: start.y + w.rng.int(-1, 2) };
-  if (
-    !isMoving(h, w.now) &&
-    !h.path?.length &&
-    !planWalk(w, goal.x, goal.y, { quiet: true, avoidMonsters: true, maxNodes: 60000 }) &&
-    // cercado, a rota "desviando das criaturas" não existe: passa no meio delas mesmo (parado ele só apanha)
-    !planWalk(w, goal.x, goal.y, { quiet: true, maxNodes: 60000 })
-  ) {
-    // sem rota nenhuma até o abrigo: luta contra quem está em cima dele (poção e magias); sem como lutar, dá um passo
-    h.brain.routeFailedAt = w.now;
-    const foe = [...w.monsters.values()]
-      .filter((m) => m.alive && m.targetId === h.id)
-      .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))[0];
-    if (foe) {
+  const b = h.brain;
+  // perseguido de perto: trechos curtos para longe do bolo (ver heroEscape). A rota longa até o abrigo ficava cara e,
+  // nas caças distantes, nem existia dentro do limite da busca — ele "não achava rota" e morria parado lutando
+  const chasers = [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 9);
+  const pressed = chasers.some((m) => chebyshev(m, h) <= Math.max(3, m.def.attack.range));
+  if (pressed) {
+    const stale = !h.path?.length || w.now - (b.escapeAt ?? -Infinity) > 700;
+    if (!stale) return;
+    const path = escapePath(w, h, chasers, goal);
+    if (path) {
+      b.escapeAt = w.now;
+      b.walkReq = null;
+      h.path = path;
+      h.pathGoal = { ...path[path.length - 1]! };
+      b.nextRouteAt = 0;
+      return;
+    }
+    // encurralado (nenhuma casa melhor que esta): luta contra quem está em cima dele — abre caminho pelo mais fraco
+    if (isMoving(h, w.now)) return;
+    b.routeFailedAt = w.now;
+    h.path = null;
+    const foe = chasers.sort(
+      (a, c) => chebyshev(a, h) - chebyshev(c, h) || a.hp / heroDpsVs(w, h, a, true) - c.hp / heroDpsVs(w, h, c, true),
+    )[0];
+    if (foe && canHitNow(w, h)) {
       setTarget(w, foe.id);
       hunt(w, h, true, true);
-    } else sidestep(w, h);
+    }
+    return;
+  }
+  if (isMoving(h, w.now) || h.path?.length || w.now < (b.nextRouteAt ?? 0)) return;
+  if (planWalk(w, goal.x, goal.y, { quiet: true, avoidMonsters: true, maxNodes: 150000 })) return;
+  // sem rota até o abrigo (longe demais, caminho fechado): segue na direção dele aos trechos e tenta de novo em 2 s
+  b.nextRouteAt = w.now + 2000;
+  const hop = escapePath(w, h, chasers, goal);
+  if (hop) {
+    h.path = hop;
+    h.pathGoal = { ...hop[hop.length - 1]! };
+  } else {
+    b.routeFailedAt = w.now;
+    sidestep(w, h);
   }
 }
 
