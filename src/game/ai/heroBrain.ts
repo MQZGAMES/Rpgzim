@@ -50,7 +50,7 @@ import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/int
 import { equipItem, nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
-import { marketBuyNow, marketCancel, marketOffer, marketSellNow } from '../economy/marketService';
+import { marketBuyNow, marketCancel, marketOffer, marketSellAll, marketSellNow } from '../economy/marketService';
 import { collectParcels, escrowOf, marketable, offersFor, ownOffers, parcelUnits, priceGuide, shopPrices } from '../../domain/rules/market';
 import { withdrawItem } from '../../domain/rules/depot';
 import { lureTankId, sparMode } from '../social/social';
@@ -2047,9 +2047,9 @@ function bestSpawn(w: World, h: HeroEntity, quarry: string): { x: number; y: num
 }
 
 /** Pode vender este item? Nunca poções, arma de treino nem equipamento melhor/que vai usar em breve. */
-function sellable(w: World, h: HeroEntity, itemId: string): boolean {
+function sellable(w: World, h: HeroEntity, itemId: string, includeDepot = false): boolean {
   const c = h.character;
-  if (!countItem(c.inventory, itemId) || itemId.startsWith('training_')) return false;
+  if (!(countItem(c.inventory, itemId) + (includeDepot ? countItem(c.depot, itemId) : 0)) || itemId.startsWith('training_')) return false;
   const def = w.data.items[itemId];
   // munição só é guardada por quem a usa (o Knight vende as flechas que caem dos goblins)
   if (!def || def.type === 'potion') return false;
@@ -4591,7 +4591,7 @@ function idleTraining(w: World, h: HeroEntity): void {
 }
 
 // ------------------------------------------------------------------ mercado (corretor ao lado da banqueira)
-/** Anúncios de venda abertos que um herói mantém (o resto do loot de equipamento vai para a loja). */
+/** Cap for surplus potion listings; equipment loot is listed in bulk. */
 const HERO_MAX_LISTINGS = 4;
 /** Ofertas de compra (metas de equipamento) abertas por herói. */
 const HERO_MAX_BIDS = 2;
@@ -4608,12 +4608,12 @@ function shopFloor(w: World, itemId: string): number {
 /** Equipamento do loot que ele leva ao mercado em vez da loja: não vai usar e vale anunciar. */
 function marketLoot(w: World, h: HeroEntity, itemId: string): boolean {
   const def = w.data.items[itemId];
-  return !!def?.slot && marketable(def) && !def.weapon?.training && def.value >= MARKET_MIN_VALUE && sellable(w, h, itemId);
+  return !!def?.slot && marketable(def) && !def.weapon?.training && def.value >= MARKET_MIN_VALUE && sellable(w, h, itemId, true);
 }
 
 /**
  * Vale levar ao mercado (e não à loja)? Alguém já paga mais que a loja, ou o preço sugerido rende bem mais (40%+) que a
- * loja — e ainda há espaço para mais um anúncio. O resto vai para a loja na hora (dinheiro parado em anúncio sem
+ * loja. O resto vai para a loja na hora (dinheiro parado em anúncio sem
  * comprador atrasa poções e equipamento).
  */
 function worthMarket(w: World, h: HeroEntity, itemId: string): boolean {
@@ -4622,8 +4622,7 @@ function worthMarket(w: World, h: HeroEntity, itemId: string): boolean {
   const floor = shopFloor(w, itemId);
   const bid = offersFor(w.market, itemId, 'buy', c.id)[0];
   if (bid && bid.price > floor) return true;
-  const listings = ownOffers(w.market, c.id).filter((o) => o.side === 'sell').length;
-  return listings < HERO_MAX_LISTINGS && priceGuide(w.data, w.market, itemId, c.id).sellSuggest >= floor * 1.4;
+  return priceGuide(w.data, w.market, itemId, c.id).sellSuggest >= floor * 1.4;
 }
 
 /** Há o que fazer no corretor nesta visita? (senão ele nem passa lá: o banco fica no outro lado da vila) */
@@ -4641,7 +4640,7 @@ function marketErrands(w: World, h: HeroEntity): boolean {
       if (shop !== null && c.gold + c.bankGold + o.price * o.count - keepGold(w, h) >= shop) return true;
     }
   }
-  if (c.inventory.some((st) => st && worthMarket(w, h, st.itemId))) return true;
+  if ([...c.inventory, ...c.depot].some((st) => st && worthMarket(w, h, st.itemId))) return true;
   const money = marketMoney(w, h);
   for (const o of w.market.offers) {
     if (o.side !== 'sell' || o.ownerId === c.id) continue;
@@ -4744,20 +4743,23 @@ function marketing(w: World, h: HeroEntity): void {
   }
   // 3) equipamento do loot: para quem já quer comprar (pagando mais que a loja) ou anuncia o que rende bem mais que a
   // loja (o resto vai para a loja)
-  let listings = ownOffers(w.market, c.id).filter((o) => o.side === 'sell').length;
-  for (const id of [...new Set(c.inventory.filter((st) => st && worthMarket(w, h, st.itemId)).map((st) => st!.itemId))]) {
+  const toList: string[] = [];
+  const lootIds = new Set([...c.inventory, ...c.depot].filter((st) => st && worthMarket(w, h, st.itemId)).map((st) => st!.itemId));
+  for (const id of lootIds) {
     const floor = shopFloor(w, id);
     const bid = offersFor(w.market, id, 'buy', c.id)[0];
-    if (bid && bid.price > floor) marketSellNow(w, id, countItem(c.inventory, id), floor + 1);
-    const left = countItem(c.inventory, id);
-    if (!left || listings >= HERO_MAX_LISTINGS) continue;
+    if (bid && bid.price > floor) marketSellNow(w, id, countItem(c.inventory, id) + countItem(c.depot, id), floor + 1);
+    const left = countItem(c.inventory, id) + countItem(c.depot, id);
+    if (!left) continue;
     const g = priceGuide(w.data, w.market, id, c.id);
     if (g.sellSuggest < floor * 1.4) continue;
-    if (marketOffer(w, 'sell', id, left, g.sellSuggest)) {
-      listings++;
-      heroSay(w, h, 'tradeSell', { item: w.data.items[id]?.name ?? id, gold: g.sellSuggest }, 3 * 60000);
-    }
+    toList.push(id);
   }
+  if (toList.length && marketSellAll(w, toList)) {
+    const id = toList[0]!;
+    heroSay(w, h, 'tradeSell', { item: w.data.items[id]?.name ?? id, gold: priceGuide(w.data, w.market, id, c.id).sellSuggest }, 3 * 60000);
+  }
+  let listings = ownOffers(w.market, c.id).filter((o) => o.side === 'sell').length;
   // 4) poções: do nível dele, pelo menor preço (nunca acima da loja); anuncia as pequenas que sobraram
   for (const kind of ['heal', 'mana'] as const) {
     const best = bestPotionFor(w.data, c.level, kind);

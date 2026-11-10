@@ -255,6 +255,31 @@ describe('mercado: os heróis negociam', () => {
     expect(countItem(inv, 'bone_fragment')).toBe(10); // material: só a loja compra
   });
 
+  it('announces all surplus from bag and depot even with four existing listings', () => {
+    const { w, h, asHero } = setup(20);
+    const c = h.character;
+    c.inventory.fill(null);
+    c.depot.fill(null);
+    c.inventory[0] = { itemId: 'bow_elven', count: 1 };
+    c.inventory[1] = { itemId: 'bone_fragment', count: 10 };
+    c.inventory[2] = { itemId: 'potion_health', count: 3 };
+    c.depot[0] = { itemId: 'bow_elven', count: 2 };
+    c.depot[1] = { itemId: 'robe_mystic', count: 1 };
+    for (let i = 0; i < 4; i++) offer(w, 'sell', c.id, 'helmet_iron', 1, 200);
+    const equipment = structuredClone(c.equipment);
+    const bowPrice = priceGuide(D, w.market, 'bow_elven', c.id).sellSuggest;
+    asHero(() => heroHelpers.marketing(w, h));
+    const sales = w.market.offers.filter((o) => o.ownerId === c.id && o.side === 'sell');
+    expect(sales).toHaveLength(6);
+    expect(sales.find((o) => o.itemId === 'bow_elven')).toMatchObject({ count: 3, price: bowPrice });
+    expect(sales.find((o) => o.itemId === 'robe_mystic')).toMatchObject({ count: 1 });
+    expect(countItem(c.inventory, 'bow_elven') + countItem(c.depot, 'bow_elven')).toBe(0);
+    expect(countItem(c.depot, 'robe_mystic')).toBe(0);
+    expect(countItem(c.inventory, 'bone_fragment')).toBe(10);
+    expect(countItem(c.inventory, 'potion_health')).toBe(3);
+    expect(c.equipment).toEqual(equipment);
+  });
+
   it('compram poções mais baratas que a loja (nunca acima dela) e o upgrade que está à venda', () => {
     const { w, h, asHero } = setup(10);
     offer(w, 'sell', 'x', 'potion_health', 40, 30);
