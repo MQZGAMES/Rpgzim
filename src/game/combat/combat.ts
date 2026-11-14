@@ -225,7 +225,7 @@ function performBasicAttack(w: World, target: MonsterEntity | PlayerEntity): voi
   const weapon = p.stats.weapon;
   const from = { x: p.x, y: p.y };
   const to = { x: target.x, y: target.y };
-  // a mana é verificada antes do ataque
+  // só a Varinha de Treino gasta mana (e treina Magic Level); as demais varinhas disparam de graça
   if (weapon.kind === 'wand') {
     const cost = weapon.manaCost ?? 0;
     if (c.mana < cost) {

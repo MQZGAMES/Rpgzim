@@ -317,7 +317,7 @@ function itemLines(def: ItemDef): string[] {
     if (w.kind === 'wand')
       l.push(
         `Dano: ${w.damage?.[0]}-${w.damage?.[1]} (${w.element === 'fire' ? 'fogo' : w.element === 'energy' ? 'energia' : w.element === 'earth' ? 'terra' : 'gelo'})`,
-        `Mana por disparo: ${w.manaCost}`,
+        ...(w.manaCost ? [`Mana por disparo: ${w.manaCost}`] : []),
       );
     else l.push(`Ataque: ${w.attack}`);
     l.push(`Alcance: ${w.range} ${w.range === 1 ? 'tile' : 'tiles'}`);

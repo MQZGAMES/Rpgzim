@@ -127,3 +127,11 @@ describe('monstros, NPCs, lojas e objetos', () => {
       for (const f of p.frames) expect(frames[f], `${p.id}:${f}`).toBeDefined();
   });
 });
+
+describe('varinhas', () => {
+  it('só a Varinha de Treino gasta mana por disparo', () => {
+    const wands = Object.values(GAME_DATA.items).filter((i) => i.weapon?.kind === 'wand');
+    expect(wands.length).toBeGreaterThan(4);
+    for (const i of wands) expect(i.weapon!.manaCost ?? 0, i.id).toBe(i.id === 'training_wand' ? 3 : 0);
+  });
+});

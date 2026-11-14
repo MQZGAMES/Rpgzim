@@ -56,7 +56,7 @@ export interface WeaponStats {
   /** Tipo de munição exigida no slot de munição. */
   /** Dano fixo (varinhas e cajados). */
   damage?: readonly [number, number];
-  /** Mana consumida por disparo (varinhas e cajados). */
+  /** Mana consumida por disparo (só a Varinha de Treino; as demais varinhas e cajados não gastam mana). */
   manaCost?: number;
   /** Projétil visual. */
   projectile?: string;
