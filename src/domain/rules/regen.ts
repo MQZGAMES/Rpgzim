@@ -3,11 +3,15 @@
 import type { GameData } from '../entities/gameData';
 import type { VocationId } from '../value-objects/ids';
 
-/** Fora da PZ a mana volta nesta proporção (a PZ não recupera mana, então o campo compensa). */
-export const MANA_REGEN_OUTSIDE_PZ = 2;
+/**
+ * Mana natural por ciclo de regeneração (a cada `regenTickMs`, 2 s), como no Tibia: só a base da vocação, sem crescer
+ * com o nível. A mana de verdade vem das poções; assim a cura por magia não fica infinita. Na PZ a mana não volta.
+ */
+export function manaPerTick(data: GameData, vocation: VocationId): number {
+  return data.vocations[vocation].regen.mana;
+}
 
 /** Mana recuperada por segundo fora da área protegida, sem comida. */
-export function manaRegenPerSecond(data: GameData, vocation: VocationId, level: number): number {
-  const perTick = (data.vocations[vocation].regen.mana + Math.floor(level / 4)) * MANA_REGEN_OUTSIDE_PZ;
-  return perTick / (data.balance.player.regenTickMs / 1000);
+export function manaRegenPerSecond(data: GameData, vocation: VocationId, _level?: number): number {
+  return manaPerTick(data, vocation) / (data.balance.player.regenTickMs / 1000);
 }

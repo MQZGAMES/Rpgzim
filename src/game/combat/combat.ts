@@ -443,6 +443,9 @@ export function damagePlayer(
         },
         w.rng,
       );
+  // PvP: golpes e magias de um personagem em outro (jogador ou NPC humano) causam só uma fração do dano
+  if (source.kind === 'player' && source.id !== p.id && res.damage > 0)
+    res.damage = Math.max(1, Math.round(res.damage * cfg.pvpDamageMultiplier));
   // Escudo de Mana: o dano sai da mana primeiro; o que passar (mana zerada) atinge a vida
   let toHealth = res.damage;
   if (

@@ -18,6 +18,7 @@ export const BALANCE: BalanceConfig = {
     blockChanceBase: 0.05,
     blockChancePerSkill: 0.008,
     maxBlockChance: 0.45,
+    pvpDamageMultiplier: 0.5,
     shieldingTriesPerHit: 1,
     // arco/lança com o alvo encostado: erra bastante e bate fraco (o ideal é manter 2+ tiles)
     pointBlankHitMultiplier: 0.5,

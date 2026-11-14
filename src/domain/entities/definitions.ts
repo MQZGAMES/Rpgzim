@@ -304,6 +304,8 @@ export interface BalanceConfig {
     blockChanceBase: number;
     blockChancePerSkill: number;
     maxBlockChance: number;
+    /** Fração do dano que um personagem causa em outro (jogador ou NPC humano); em criaturas o dano é cheio. */
+    pvpDamageMultiplier: number;
     shieldingTriesPerHit: number;
     /** Arma de distância com o alvo colado (1 tile): multiplicadores de acerto e de dano. */
     pointBlankHitMultiplier: number;
