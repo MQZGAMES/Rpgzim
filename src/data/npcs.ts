@@ -108,7 +108,7 @@ const list: NpcDef[] = [
       },
       {
         id: 'help',
-        text: 'Toque num item da mochila para guardá-lo e num item do depósito para retirá-lo. "Guardar loot" leva tudo, menos poções. O ouro pode ser depositado e sacado quando quiser.',
+        text: 'Toque num item para ver os atributos e guardá-lo ou retirá-lo; toque duas vezes para guardar ou retirar direto. "Guardar loot" leva tudo, menos poções. O ouro pode ser depositado e sacado quando quiser.',
         options: [{ label: 'Abrir depósito', action: 'openDepot' }, close],
       },
     ],
