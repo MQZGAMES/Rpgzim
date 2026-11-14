@@ -1,9 +1,11 @@
-// Banco de Pedraluz: ouro (depositar/sacar) e depósito de itens. Toque num item da mochila para guardar e num item do
-// depósito para retirar. (O mercado entre personagens fica com o corretor, ao lado da banqueira.)
+// Banco de Pedraluz: ouro (depositar/sacar) e depósito de itens. Um toque num item mostra os atributos com o botão de
+// guardar (mochila) ou retirar (depósito); o toque duplo guarda/retira direto. (O mercado entre personagens fica com o
+// corretor, ao lado da banqueira.)
 import { useState } from 'react';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemCell } from '../inventory/ItemCell';
+import { ItemDetails } from '../inventory/InventoryPanel';
 
 function GoldRow() {
   const session = useSession();
@@ -60,9 +62,24 @@ export function DepotPanel() {
   const session = useSession();
   const depot = useSnap((s) => s.depot);
   const inv = useSnap((s) => s.inventory);
+  const eq = useSnap((s) => s.equipment);
   const [last, setLast] = useState<string | null>(null);
+  const [sel, setSel] = useState<{ from: 'bag' | 'depot'; index: number } | null>(null);
   if (!depot) return null;
   const used = depot.items.filter(Boolean).length;
+  const deposit = (i: number) => {
+    const it = inv[i];
+    if (it && session.depotDeposit(i)) setLast(`${it.name}: guardado no depósito.`);
+    setSel(null);
+  };
+  const withdraw = (i: number) => {
+    const it = depot.items[i];
+    if (it && session.depotWithdraw(i)) setLast(`${it.name}: retirado do depósito.`);
+    setSel(null);
+  };
+  const pick = (from: 'bag' | 'depot', index: number, filled: boolean) =>
+    setSel(filled && !(sel?.from === from && sel.index === index) ? { from, index } : null);
+  const selected = sel ? (sel.from === 'bag' ? inv[sel.index] : depot.items[sel.index]) : null;
   return (
     <Panel title="Banco de Pedraluz" onClose={() => session.closeDepot()} icon="ui_save" wide>
       <div data-testid="depot-panel">
@@ -88,9 +105,9 @@ export function DepotPanel() {
                     <ItemCell
                       key={i}
                       item={it}
-                      onTap={() => {
-                        if (it && session.depotDeposit(i)) setLast(`${it.name}: guardado no depósito.`);
-                      }}
+                      active={sel?.from === 'bag' && sel.index === i}
+                      onTap={() => pick('bag', i, !!it)}
+                      onDoubleTap={() => deposit(i)}
                       testId={`depot-bag-${i}`}
                     />
                   ))}
@@ -105,9 +122,9 @@ export function DepotPanel() {
                     <ItemCell
                       key={i}
                       item={it}
-                      onTap={() => {
-                        if (it && session.depotWithdraw(i)) setLast(`${it.name}: retirado do depósito.`);
-                      }}
+                      active={sel?.from === 'depot' && sel.index === i}
+                      onTap={() => pick('depot', i, !!it)}
+                      onDoubleTap={() => withdraw(i)}
                       emptyLabel="Espaço vazio no depósito"
                       testId={`depot-slot-${i}`}
                     />
@@ -115,9 +132,31 @@ export function DepotPanel() {
                 </div>
               </div>
             </div>
+            {sel && selected && (
+              <div className="mt-2">
+                <ItemDetails
+                  item={selected}
+                  equipped={selected.slot ? (eq[selected.slot] ?? null) : undefined}
+                  actions={
+                    <>
+                      <PixelButton
+                        className="!border-[5px] px-2 text-[12px]"
+                        onClick={() => (sel.from === 'bag' ? deposit(sel.index) : withdraw(sel.index))}
+                        data-testid="depot-item-action"
+                      >
+                        {sel.from === 'bag' ? 'Depositar' : 'Retirar'}
+                      </PixelButton>
+                      <PixelButton className="!border-[5px] px-2 text-[12px]" onClick={() => setSel(null)}>
+                        Fechar
+                      </PixelButton>
+                    </>
+                  }
+                />
+              </div>
+            )}
             <p className="mt-2 text-[12px] text-muted">
               {last ??
-                'Toque num item da mochila para guardar e num item do depósito para retirar. O depósito e o ouro do banco nunca se perdem.'}
+                'Toque num item para ver os atributos e guardar ou retirar; toque duas vezes para guardar ou retirar direto. O depósito e o ouro do banco nunca se perdem.'}
             </p>
           </>
         }

@@ -230,8 +230,13 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await page.getByRole('button', { name: 'Depositar', exact: true }).click();
   await expect(page.getByTestId('depot-bank-gold')).toContainText('25');
   const axe = (await api(page, (a) => a.player())).inventory.findIndex((s) => s.itemId === 'axe_hand');
+  // um toque mostra os atributos com o botão de guardar; o toque duplo retira direto
   await page.getByTestId(`depot-bag-${axe}`).click();
+  await expect(page.getByTestId('item-details')).toContainText('Machadinha');
+  await page.getByTestId('depot-item-action').click();
   await expect(page.getByTestId('depot-slot-0')).toHaveAttribute('aria-label', /Machadinha/);
+  await page.getByTestId('depot-slot-0').dblclick();
+  await expect(page.getByTestId('depot-slot-0')).toHaveAttribute('aria-label', 'Espaço vazio no depósito');
   await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
   // loot no chão: o botão contextual abre a janela
   await api(page, (a) => a.teleport(80, 22));
