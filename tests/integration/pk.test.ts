@@ -185,7 +185,7 @@ describe('PK: caveiras e PZ lock', () => {
       const { sim, w, h, human } = world();
       const m = second(sim);
       const third = { id: 'hero:longe', name: 'Longe', kind: 'player' as const }; // não é personagem do mundo
-      h.character.health = h.stats.maxHealth = 700;
+      h.character.health = h.stats.maxHealth = 350; // dano entre personagens vale metade (300 + 25 + 30)
       hit(w, h, 600, actorSource(m)); // maior dano
       hit(w, h, 50, third);
       hit(w, h, 60, actorSource(human)); // último golpe

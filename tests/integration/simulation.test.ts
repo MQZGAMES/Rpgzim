@@ -219,6 +219,23 @@ describe('combate e progressão', () => {
   });
 });
 
+describe('dano PvP', () => {
+  it('personagem causa metade do dano em outro personagem; criatura causa dano cheio', () => {
+    const sim = makeSim('knight', { seed: 3 });
+    const w = sim.world;
+    const p = w.player;
+    p.invulnerableUntil = 0;
+    p.stats.maxHealth = 10_000;
+    const hit = (kind: 'monster' | 'player') => {
+      p.character.health = 10_000;
+      damagePlayer(w, 100, 'fire', { id: `src-${kind}`, name: kind, kind }, true);
+      return 10_000 - p.character.health;
+    };
+    expect(hit('monster')).toBe(100);
+    expect(hit('player')).toBe(50);
+  });
+});
+
 describe('magias', () => {
   it('respeitam mana, cooldown, alcance e treinam o Magic Level', () => {
     const sim = makeSim('sorcerer', { loot: fixedLoot });

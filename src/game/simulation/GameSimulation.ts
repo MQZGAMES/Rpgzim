@@ -63,7 +63,7 @@ import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
-import { MANA_REGEN_OUTSIDE_PZ } from '../../domain/rules/regen';
+import { manaPerTick } from '../../domain/rules/regen';
 import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, normalizeHotbar, normalizeHotbarSets, switchHotbarSet, type HotbarEntry } from '../../domain/rules/hotbar';
 import {
   PARTY_FAIL_MESSAGE,
@@ -556,7 +556,7 @@ export class GameSimulation {
       let hp = (voc.regen.health + Math.floor(c.level / 5)) * pzMul;
       // área protegida: a vida volta em dobro, mas a mana não se recupera (poção ou fora dela)
       const inPz = pzMul === 2;
-      let mp = inPz ? 0 : (voc.regen.mana + Math.floor(c.level / 4)) * MANA_REGEN_OUTSIDE_PZ;
+      let mp = inPz ? 0 : manaPerTick(w.data, c.vocation);
       if (p.food && w.now < p.food.until) {
         hp += p.food.health;
         if (!inPz) mp += p.food.mana;
