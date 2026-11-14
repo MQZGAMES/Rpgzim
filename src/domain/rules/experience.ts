@@ -34,9 +34,34 @@ export function applyXp(level: number, xp: number, gain: number, cfg: BalanceCon
   return { experience, level: newLevel, levelsGained: newLevel - level };
 }
 
-/** Penalidade de morte: perde uma fração do XP necessário ao nível atual, sem perder o nível. */
-export function applyDeathPenalty(level: number, xp: number, fraction: number, cfg: BalanceConfig['experience']): number {
-  const floor = totalXpForLevel(level, cfg);
-  const span = totalXpForLevel(level + 1, cfg) - floor;
-  return Math.max(floor, Math.floor(xp - span * fraction));
+export interface DeathXpResult {
+  experience: number;
+  level: number;
+  levelsLost: number;
+}
+
+/**
+ * Penalidade de morte: perde uma fração do tamanho de um nível (em progresso, 0..1). Se o progresso do nível atual
+ * não cobre a perda, o resto é tirado do nível anterior e o personagem desce de nível.
+ * Ex.: com 10% no nível N e fração 0,5, perde os 10% e mais 40% do nível N-1, ficando em 60% do N-1.
+ */
+export function applyDeathPenalty(level: number, xp: number, fraction: number, cfg: BalanceConfig['experience']): DeathXpResult {
+  let lv = level;
+  let progress = levelProgress(lv, xp, cfg);
+  let remaining = Math.max(0, fraction);
+  while (remaining > 0 && lv > 1) {
+    if (progress >= remaining) {
+      progress -= remaining;
+      remaining = 0;
+    } else {
+      remaining -= progress;
+      lv -= 1;
+      progress = 1;
+    }
+  }
+  if (lv === 1) progress = Math.max(0, progress - remaining);
+  const floor = totalXpForLevel(lv, cfg);
+  const span = totalXpForLevel(lv + 1, cfg) - floor;
+  const experience = Math.min(Math.floor(xp), Math.max(floor, floor + Math.floor(span * progress)));
+  return { experience, level: lv, levelsLost: level - lv };
 }

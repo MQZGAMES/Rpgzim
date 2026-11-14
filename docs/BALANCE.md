@@ -11,7 +11,7 @@ reais do jogo em [`BALANCE-REPORT.md`](BALANCE-REPORT.md) por `tests/tools/balan
 - **Skills** (Sword/Axe/Club/Distance/Shielding): tentativas para subir do nível n = `22 · 1,12^(n − 10) · multiplicador`.
   Multiplicador menor = vocação aprende mais rápido (Knight 1 nas armas corpo a corpo, Paladin 1 em Distance).
 - **Magic Level**: mana gasta para subir do ML n = `60 · 1,25^n · multiplicador` (magos 1, Paladin 1,4, Knight 3).
-- **Morte**: perde 50% da XP do nível atual (nunca o nível) e treino de skills, que nunca caem abaixo de 10.
+- **Morte**: perde 50% de um nível de XP (se o XP do nível atual não cobre, o resto sai do nível anterior e o personagem desce de nível; ex.: 10% no nível N vira 60% do N-1) e treino de skills, que nunca caem abaixo de 10.
 
 ## Shielding (estilo Tibia)
 

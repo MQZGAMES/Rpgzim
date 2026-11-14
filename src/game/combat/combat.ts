@@ -493,12 +493,9 @@ function killPlayer(w: World, killer: DamageSource): void {
   w.ui.dialog = null;
   w.ui.lootId = null;
   const before = c.experience;
-  c.experience = applyDeathPenalty(
-    c.level,
-    c.experience,
-    w.data.balance.player.deathXpPenalty,
-    w.data.balance.experience,
-  );
+  const xpLoss = applyDeathPenalty(c.level, c.experience, w.data.balance.player.deathXpPenalty, w.data.balance.experience);
+  c.experience = xpLoss.experience;
+  c.level = xpLoss.level;
   c.stats.deaths += 1;
   // skills também perdem treino, sem nunca ficar abaixo de 10 (Magic Level: 0)
   const voc = w.data.vocations[c.vocation];
@@ -515,6 +512,7 @@ function killPlayer(w: World, killer: DamageSource): void {
     if (c.skills[id].level < before) lostSkills.push(`${SKILL_LABEL[id]} ${before}→${c.skills[id].level}`);
   }
   refreshStats(w);
+  if (xpLoss.levelsLost > 0) message(w, `Você caiu para o nível ${c.level}.`, 'warning');
   if (lostSkills.length) message(w, `Skills perdidas: ${lostSkills.join(', ')}.`, 'warning');
   for (const m of w.monsters.values())
     if (m.alive && m.targetId === p.id && (m.state === 'chasing' || m.state === 'attacking')) {
