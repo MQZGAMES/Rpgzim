@@ -35,12 +35,34 @@ describe('experiência e nível', () => {
     expect(levelProgress(3, (cur + next) / 2, xp)).toBeCloseTo(0.5, 1);
   });
 
-  it('a penalidade de morte nunca rebaixa o nível', () => {
+  it('a penalidade de morte tira metade da faixa do nível e não rebaixa se o XP do nível cobre', () => {
     const floor = totalXpForLevel(6, xp);
-    expect(applyDeathPenalty(6, floor + 10, 0.5, xp)).toBe(floor);
-    const mid = floor + 400;
-    expect(applyDeathPenalty(6, mid, 0.1, xp)).toBeLessThan(mid);
-    expect(applyDeathPenalty(6, mid, 0.1, xp)).toBeGreaterThanOrEqual(floor);
+    const span = totalXpForLevel(7, xp) - floor;
+    const high = floor + Math.floor(span * 0.8);
+    const res = applyDeathPenalty(6, high, 0.5, xp);
+    expect(res.level).toBe(6);
+    expect(res.levelsLost).toBe(0);
+    expect(Math.abs(res.experience - (high - span * 0.5))).toBeLessThanOrEqual(1);
+  });
+
+  it('a penalidade de morte desce de nível, levando o resto do nível anterior (10% -> 60% do anterior)', () => {
+    const floor = totalXpForLevel(6, xp);
+    const span = totalXpForLevel(7, xp) - floor;
+    const res = applyDeathPenalty(6, floor + Math.floor(span * 0.1), 0.5, xp);
+    expect(res.level).toBe(5);
+    expect(res.levelsLost).toBe(1);
+    const prevFloor = totalXpForLevel(5, xp);
+    const prevSpan = floor - prevFloor;
+    const progress = (res.experience - prevFloor) / prevSpan;
+    expect(progress).toBeGreaterThan(0.55);
+    expect(progress).toBeLessThan(0.65);
+  });
+
+  it('a penalidade de morte nunca passa do nível 1 nem do XP zero', () => {
+    const res = applyDeathPenalty(1, 5, 0.5, xp);
+    expect(res.level).toBe(1);
+    expect(res.experience).toBeGreaterThanOrEqual(0);
+    expect(res.levelsLost).toBe(0);
   });
 });
 

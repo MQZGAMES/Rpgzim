@@ -1,6 +1,7 @@
 // Testes de integração da simulação completa (sem renderização): fluxo principal do jogador.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
+import { totalXpForLevel } from '../../src/domain/rules/experience';
 import { escrowOf } from '../../src/domain/rules/market';
 import { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { MemorySaveRepository } from '../../src/game/persistence/repositories';
@@ -191,11 +192,17 @@ describe('combate e progressão', () => {
     expect(hits).toBe(0);
   });
 
-  it('jogador morre, perde XP sem perder nível e renasce no templo', () => {
+  it.each([
+    { label: 'com XP sobrando no nível, perde XP e mantém o nível', progress: 0.8, level: 3 },
+    { label: 'com pouco XP no nível, desce para o nível anterior', progress: 0.1, level: 2 },
+  ])('jogador morre e renasce no templo: $label', ({ progress, level }) => {
     const sim = makeSim('sorcerer', { seed: 9 });
     const p = sim.world.player;
-    p.character.experience = 120;
-    p.character.level = 2;
+    const cfg = sim.world.data.balance.experience;
+    const floor = totalXpForLevel(3, cfg);
+    const startXp = floor + Math.floor((totalXpForLevel(4, cfg) - floor) * progress);
+    p.character.experience = startXp;
+    p.character.level = 3;
     const goblin = nearestMonster(sim, 'goblin');
     placeNear(sim, goblin, 2);
     p.character.health = 1;
@@ -203,8 +210,8 @@ describe('combate e progressão', () => {
     sim.events.on('playerDied', () => (died = true));
     expect(runUntil(sim, () => died, 20000)).toBe(true);
     expect(p.dead).toBe(true);
-    expect(p.character.level).toBe(2);
-    expect(p.character.experience).toBeLessThan(120);
+    expect(p.character.level).toBe(level);
+    expect(p.character.experience).toBeLessThan(startXp);
     sim.respawn();
     expect(p.dead).toBe(false);
     expect(p.x).toBe(sim.world.map.playerStart.x);
