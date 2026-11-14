@@ -13,7 +13,8 @@ reais do jogo em [`BALANCE-REPORT.md`](BALANCE-REPORT.md) por `tests/tools/balan
 - **Magic Level**: mana gasta para subir do ML n = `60 · 1,25^n · multiplicador` (magos 1, Paladin 1,4, Knight 3).
 - **Morte**: perde 50% de um nível de XP (se o XP do nível atual não cobre, o resto sai do nível anterior e o personagem desce de nível; ex.: 10% no nível N vira 60% do N-1) e treino de skills, que nunca caem abaixo de 10.
 - **PvP**: golpes e magias de um personagem em outro (jogador ou NPC humano) causam 50% do dano (`combat.pvpDamageMultiplier`); em criaturas o dano é cheio.
-- **Mana natural**: a cada 2 s, só a base da vocação (Sorcerer/Druid 4, Paladin 2, Knight 1), sem bônus de nível, como no Tibia; na PZ não volta. A mana de verdade vem das poções.
+- **Mana natural**: a cada 2 s, só a base da vocação (Sorcerer/Druid 15, Paladin 10, Knight 5), sem bônus de nível, como no Tibia; na PZ não volta. A mana de verdade vem das poções.
+- **Varinhas e cajados**: não gastam mana nem treinam Magic Level (o ML sobe gastando mana em magias). Exceção: a Varinha de Treino gasta 3 de mana por disparo para treinar ML.
 
 ## Shielding (estilo Tibia)
 

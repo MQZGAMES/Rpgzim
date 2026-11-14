@@ -55,7 +55,6 @@ function build(): ItemDef[] {
     const rod = ROD_ELEMENT[k]!;
     const atkSkills = (n: number): StatBonuses['skills'] => Object.fromEntries(ATK_SKILLS.map((s) => [s, n]));
     const add = (def: Omit<ItemDef, 'minLevel'>) => out.push({ ...def, minLevel: t.level });
-    const manaCost = 5 + Math.floor(k / 2);
     // ---- armas
     add({
       id: `sword_${t.id}`,
@@ -109,7 +108,7 @@ function build(): ItemDef[] {
     add({
       id: `wand_${t.id}`,
       name: `Varinha de ${t.name}`,
-      description: `Dispara ${wand === 'fire' ? 'fogo' : 'energia'} concentrada. Consome ${manaCost} de mana por disparo.`,
+      description: `Dispara ${wand === 'fire' ? 'fogo' : 'energia'} concentrada.`,
       type: 'weapon',
       icon: `item_wand_${t.id}`,
       value: r(5400 * V),
@@ -122,14 +121,13 @@ function build(): ItemDef[] {
         range: 4,
         element: wand,
         damage: [r(42 * A), r(60 * A)],
-        manaCost,
         projectile: PROJECTILE[wand],
       },
     });
     add({
       id: `rod_${t.id}`,
       name: `Cajado de ${t.name}`,
-      description: `Canaliza ${rod === 'earth' ? 'a terra' : 'o gelo'}. Consome ${manaCost} de mana por disparo.`,
+      description: `Canaliza ${rod === 'earth' ? 'a terra' : 'o gelo'}.`,
       type: 'weapon',
       icon: `item_rod_${t.id}`,
       value: r(5400 * V),
@@ -142,7 +140,6 @@ function build(): ItemDef[] {
         range: 4,
         element: rod,
         damage: [r(42 * A), r(60 * A)],
-        manaCost,
         projectile: PROJECTILE[rod],
       },
     });
