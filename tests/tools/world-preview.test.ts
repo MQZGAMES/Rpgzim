@@ -15,7 +15,7 @@ import manifest from '../../src/assets/generated/manifest.json';
 const gen = join(process.cwd(), 'src', 'assets', 'generated');
 const outDir = process.env.ART_PREVIEW_DIR ?? join(process.cwd(), 'docs', 'art');
 
-test('renderiza o mundo', () => {
+test('renderiza o mundo', { timeout: 120_000 }, () => {
   mkdirSync(outDir, { recursive: true });
   const map = buildWorld();
   const tilesImg = decodePng(readFileSync(join(gen, 'tiles.png')));
@@ -41,7 +41,7 @@ test('renderiza o mundo', () => {
 
   const render = (withRoofs: boolean, withActors = true) => {
     const c = new PixelCanvas(map.width * T, map.height * T);
-    for (const layer of ['ground', 'dirt', 'cobble', 'water', 'decor', 'floor', 'walls'] as const) {
+    for (const layer of ['ground', 'dirt', 'cobble', 'water', 'lava', 'decor', 'floor', 'walls'] as const) {
       const data = map.layers[layer];
       for (let y = 0; y < map.height; y++)
         for (let x = 0; x < map.width; x++) {

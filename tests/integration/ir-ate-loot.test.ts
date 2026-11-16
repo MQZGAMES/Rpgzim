@@ -6,7 +6,7 @@ import { countItem } from '../../src/domain/rules/inventory';
 import type { HeroEntity } from '../../src/game/entities/types';
 import { asActor } from '../../src/game/simulation/World';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 const D = GAME_DATA;
 
@@ -24,12 +24,12 @@ describe('Ir até', () => {
   it('vai andando até o personagem longe, segue quando ele muda de lugar e para a 2 tiles, sem atacar', () => {
     const { sim, w, h } = withHero();
     for (const m of w.monsters.values()) m.respawnAt = Infinity;
-    asActor(w, h, () => sim.teleportPlayer(64, 22)); // na avenida, a leste do templo
+    asActor(w, h, () => sim.teleportPlayer(...T(64, 22))); // na avenida, a leste do templo
     expect(sim.goToActor(h.id)).toBe(true);
     expect(buildSnapshot(sim, 1).goingTo?.name).toBe(h.character.name);
     advance(sim, 4000, 50);
     // ele muda de lugar no meio do caminho: a rota acompanha
-    asActor(w, h, () => sim.teleportPlayer(30, 24));
+    asActor(w, h, () => sim.teleportPlayer(...T(30, 24)));
     let t = 0;
     while (sim.goToId && t < 60000) {
       advance(sim, 200, 50);
@@ -62,7 +62,7 @@ describe('Ir até', () => {
 
   it('andar por conta própria cancela', () => {
     const { sim, w, h } = withHero();
-    asActor(w, h, () => sim.teleportPlayer(64, 22));
+    asActor(w, h, () => sim.teleportPlayer(...T(64, 22)));
     sim.goToActor(h.id);
     advance(sim, 500, 50);
     sim.setMoveVector(0, 1);
@@ -75,7 +75,7 @@ describe('materiais agrupados no loot', () => {
   it('o mesmo material em vários sacos ao redor aparece numa pilha só e é pego de uma vez', () => {
     const { sim, w } = withHero();
     const p = w.human;
-    sim.teleportPlayer(30, 24);
+    sim.teleportPlayer(...T(30, 24));
     for (const [i, n] of [3, 4, 5].entries())
       w.lootBags.set(`b${i}`, { id: `b${i}`, x: p.x + (i - 1), y: p.y + 1, items: [{ itemId: 'wolf_pelt', count: n }, { itemId: 'sword_iron', count: 1 }], gold: 0, expiresAt: Infinity, sourceName: 'Lobo' });
     w.ui.lootId = 'b0';

@@ -117,8 +117,9 @@ espécies sobem ×1 / ×1,25 / ×1,55. XP ×3 e ouro ×2,2 por patamar. Dobrar a
 | 5 | 30 | Xamã Orc, Lobo do Gelo, Cavaleiro Sombrio | Fortaleza, Bosque Gélido, Cidadela |
 | 6 | 40 | Troll, Lich, Dragão Jovem (elite) | Covil do Dragão |
 
-- **Distância de perseguição** (`leashMultiplier: 3`): 3× maior que antes; ao passar dela, a criatura volta por
-  teleporte com a vida cheia (evita "puxar e curar").
+- **Distância de perseguição** (`leashMultiplier: 2`, era 3): ao passar dela, a criatura volta por teleporte com a vida
+  cheia (evita "puxar e curar"). No mapa com a vila no centro as zonas ficam mais perto umas das outras: com 3× a
+  criatura atravessava a zona inteira e juntava trens enormes (ver *Mundo com Pedraluz no centro*).
 - **Paladin colado no alvo** (`pointBlankHitMultiplier`/`pointBlankDamageMultiplier` = 0,5): arco/lança a 1 tile
   acerta metade das vezes e causa metade do dano; o ideal é ficar a 2+ tiles.
 - **Cura Intensa** (Druid, antiga Bênção da Seiva): cura em si e nos membros do grupo a até 12 tiles; 80 de mana, exaustão de 2 s, sem regeneração.
@@ -387,3 +388,30 @@ Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e
   Maguim 39/45 → 41/42 · 717/689 → 468/592; Mano Cura 42/41 → 43/42 · 193/208 → 123/134; Distanciado 41/34 → 42/41 ·
   183/197 → 213/186. Nenhuma morte.
 - Teste "cada um por si tem mortes por PK" soma 3 sementes (uma só era frágil a qualquer mudança de economia/IA).
+
+## Mundo com Pedraluz no centro (nov/2026)
+- Mapa 245×250 com a vila no centro; cinco anéis de distância a partir da muralha (níveis 1–8, 9–20, 20–42, 44–71,
+  72–103) em quatro direções de biomas (`src/data/maps/layout.ts`, `src/data/maps/biomes.ts`). Cada espécie tem 2–3 pontos
+  de surgimento espalhados pela zona, 3 criaturas por ponto até o anel 3 e 4 nos anéis 4 e 5: 650 criaturas (antes 255).
+  Pontos sempre alcançáveis a pé, a 7+ tiles da muralha (senão nasciam dentro da vila) e longe de estradas, água e lava.
+- **Knight**: estoca poção de mana pelo consumo (antes não comprava), Golpe Brutal com qualquer vida e Fúria em toda luta
+  que não é fácil; luta fácil só com o Golpe Brutal, sem poção.
+- **Recuo**: a porta escolhida conta a volta pelo portão (casa atrás da muralha não é "perto") e uma porta mais longe da
+  vila do que o herói custa o triplo do trecho — antes ele fugia para um santuário mais para fora, entrava em terra mais
+  forte e ficava preso num laço de fuga (Paladin chegou a passar 33% do tempo recuando).
+- **Medição** (`hero-life`, 3 h do nível 1, sementes 11/23, nível · mortes): no mapa antigo Boladex 37/37 · 0, Maguim
+  41/42 · 0, Mano Cura 43/42 · 0, Distanciado 42/41 · 0. No mapa novo, a cada passo:
+
+  | Versão | Boladex | Maguim | Mano Cura | Distanciado | Mortes |
+  |---|---|---|---|---|---|
+  | 1ª versão (4 criaturas/ponto, perseguição 3×) | 34/32 | 28/30 | 50/51 | 22/47 | 7 |
+  | + 24 santuários e porta pelo portão | 22/42 | 23/26 | 53/53 | 35/37 | 7 |
+  | + perseguição 2× | 37/32 | 18/21 | 50/49 | 13/36 | 3 |
+  | + recuo nunca para fora | 45/36 | 29/39 | 57/51 | 40/46 | 2 |
+  | + 3 criaturas/ponto até o anel 3 (final) | **41/45** | **43/44** | **49/51** | **48/43** | **0** |
+
+  Tempo caçando 75–81%, recuando 1–7%, na vila 12–21%.
+- **Guerra** (`war-life`, 30 min, sementes 7/8): mortes por PK cada um por si 2+4 → 0+1, guildas 1+4 → 1+7; tempo
+  recuando 16–25%. Com santuários perto de toda caça a fuga ficou fácil e a guerra termina mais em fuga. O teste de
+  integração de guerra passou a exigir briga (dano PvP e modo PK em vários heróis) em vez de mortes, que variam demais
+  entre sementes.

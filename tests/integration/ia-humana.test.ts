@@ -16,7 +16,7 @@ import { acceptInvite, invite } from '../../src/game/social/social';
 import { asActor } from '../../src/game/simulation/World';
 import { refreshStats } from '../../src/game/progression/progression';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 const D = GAME_DATA;
 
@@ -98,7 +98,7 @@ describe('reação humana', () => {
     const { sim, w, hs } = withHeroes(['boladex'], 15);
     const h = hs[0]!;
     const wolves = [...w.monsters.values()].filter((m) => m.def.id === 'wolf' && m.alive);
-    sim.teleportPlayer(5, 5);
+    sim.teleportPlayer(...T(5, 5));
     asActor(w, h, () => sim.teleportPlayer(wolves[0]!.x - 3, wolves[0]!.y));
     h.brain.mode = 'hunt';
     h.brain.quarry = 'wolf';
@@ -153,7 +153,7 @@ describe('sessões de jogo, pausas e AFK (jogo de verdade)', () => {
     const { sim, w, hs } = withHeroes(['maguim'], 9);
     w.lifelike = true;
     const h = hs[0]!;
-    asActor(w, h, () => sim.teleportPlayer(48, 30)); // na praça (fora das construções, onde criatura ataca)
+    asActor(w, h, () => sim.teleportPlayer(...T(48, 30))); // na praça (fora das construções, onde criatura ataca)
     h.brain.human.afkUntil = w.now + 60000;
     h.brain.human.sessionEnds = w.now + 3600000;
     const at = { x: h.x, y: h.y };
@@ -175,15 +175,13 @@ describe('conversa entre os heróis', () => {
       h.brain.mode = 'social';
       h.brain.modeUntil = w.now + 120000;
     }
-    const speech: { name: string; text: string; at: number }[] = [];
-    sim.events.on('speech', (e) => speech.push({ name: e.name, text: e.text, at: w.now }));
+    const speech: { name: string; text: string; at: number; key?: string }[] = [];
+    sim.events.on('speech', (e) => speech.push({ name: e.name, text: e.text, at: w.now, key: e.key }));
     advance(sim, 20000, 50);
     const greet = speech.find((s) => s.text.toLowerCase().includes('maguim') || s.text.toLowerCase().includes('boladex'));
     expect(greet).toBeDefined();
-    // a resposta é a fala do outro que cita quem cumprimentou (falas soltas no meio, como "que dia bonito", não contam)
-    const reply = speech.find(
-      (s) => s.name !== greet!.name && s.at > greet!.at && s.text.toLowerCase().includes(greet!.name.toLowerCase()),
-    );
+    // a resposta é a fala de resposta do outro (falas soltas no meio, como "que dia bonito", não contam)
+    const reply = speech.find((s) => s.name !== greet!.name && s.at > greet!.at && s.key === 'replyHero');
     expect(reply).toBeDefined();
     expect(reply!.at - greet!.at).toBeGreaterThanOrEqual(1000); // "digitando"
   });

@@ -7,7 +7,7 @@ import { PixelCanvas } from './lib/canvas.ts';
 import { gridSheet, packAtlas, type AtlasEntry } from './lib/atlas.ts';
 import { buildTileset } from './tiles.ts';
 import { CHARACTERS, FRAME_H, FRAME_W, buildCharacterSheet } from './characters.ts';
-import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBearFrames, buildBoarFrames, buildDragonFrames, buildIceWolfFrames, buildScorpionFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames, buildDireWolfFrames, buildElderBearFrames, buildRedScorpionFrames, buildBehemothFrames, buildIceDragonFrames, buildFireDrakeFrames, buildElderDragonFrames, buildVoidHorrorFrames, buildBogSlimeFrames, buildMagmaSlimeFrames, buildMarshToadFrames, buildCaveSpiderFrames, buildWidowSpiderFrames, buildHyenaFrames, buildStormWolfFrames, buildRhinoBoarFrames, buildCaveBearFrames, buildWyvernFrames, buildBasiliskFrames, buildCrystalScorpionFrames } from './monsters.ts';
+import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBearFrames, buildBoarFrames, buildDragonFrames, buildIceWolfFrames, buildScorpionFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames, buildDireWolfFrames, buildElderBearFrames, buildRedScorpionFrames, buildBehemothFrames, buildIceDragonFrames, buildFireDrakeFrames, buildElderDragonFrames, buildVoidHorrorFrames, buildBogSlimeFrames, buildMagmaSlimeFrames, buildMarshToadFrames, buildCaveSpiderFrames, buildWidowSpiderFrames, buildHyenaFrames, buildStormWolfFrames, buildRhinoBoarFrames, buildCaveBearFrames, buildWyvernFrames, buildBasiliskFrames, buildCrystalScorpionFrames, buildJackalFrames, buildCrocodileFrames } from './monsters.ts';
 import { buildObjects } from './objects.ts';
 import { buildIcons } from './icons.ts';
 import { buildFx } from './fx.ts';
@@ -79,6 +79,9 @@ const monsterSheets: [string, PixelCanvas[], number, number, 'blob' | 'quad'][] 
   ['green_wyvern', buildWyvernFrames(), 44, 34, 'quad'],
   ['basilisk', buildBasiliskFrames(), 40, 26, 'quad'],
   ['crystal_scorpion', buildCrystalScorpionFrames(), 32, 26, 'blob'],
+  // biomas novos
+  ['jackal', buildJackalFrames(), 32, 24, 'quad'],
+  ['crocodile', buildCrocodileFrames(), 40, 26, 'quad'],
 ];
 for (const [key, frames, fw, fh, kind] of monsterSheets) {
   const file = `mon_${key}.png`;

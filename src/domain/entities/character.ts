@@ -57,6 +57,8 @@ export interface CharacterState {
   settings?: CharacterSettings;
   /** Temporada em que o personagem joga (um save de temporada anterior recomeça do nível 1). */
   season?: number;
+  /** Versão do mapa em que a posição foi salva (ver WORLD_VERSION). */
+  world?: number;
   createdAt: number;
   updatedAt: number;
 }

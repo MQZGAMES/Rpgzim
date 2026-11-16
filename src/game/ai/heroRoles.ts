@@ -19,7 +19,9 @@ export interface RoleProfile {
 }
 
 export const ROLES: Readonly<Record<VocationId, RoleProfile>> = {
-  knight: { keepDistance: 0, manaStock: 0, dpsMul: 1, trains: true },
+  // o Knight também vive de magia (Golpe Brutal, Redemoinho de Aço): estoca mana pelo consumo real, sem ir à vila só
+  // por ela (a espada não gasta mana)
+  knight: { keepDistance: 0, manaStock: 2, dpsMul: 1.15, trains: true },
   // o Paladino gasta mana em quase toda luta (Flecha Sagrada, Luz Restauradora): estoca pelo consumo real, como os magos
   paladin: { keepDistance: 3, manaStock: 2, dpsMul: 1.2, trains: false },
   // as magias dos magos crescem com a varinha: somam bem mais que o golpe básico (ver tests/tools/vocation-dps)

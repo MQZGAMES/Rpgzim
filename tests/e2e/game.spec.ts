@@ -2,6 +2,8 @@
 // equipar, negociar, entrar numa casa, salvar e recarregar. A API ?debug é usada apenas para inspecionar o
 // estado e posicionar o personagem perto de alvos (encurta o teste); as ações usam a interface real.
 import { expect, test, type Page } from '@playwright/test';
+// (as posições de teletransporte são as da vila somadas ao deslocamento dela no mundo: +86, +86 — ver
+// src/data/maps/layout.ts; a função roda dentro da página e não enxerga constantes daqui)
 
 type Api = {
   ready(): boolean;
@@ -78,7 +80,7 @@ test('fluxo principal: mover, lutar, magia, loot, equipar, salvar e recarregar',
   const moved = await api(page, (a) => a.player());
   expect(moved.y).toBeGreaterThan(start.y);
   // combate: perto de um slime, seleciona o alvo com Tab e espera o ataque automático vencer
-  await api(page, (a) => a.teleport(80, 22));
+  await api(page, (a) => a.teleport(166, 108));
   const slime = await api(page, (a) => a.teleportNear('slime', 1));
   expect(slime).not.toBeNull();
   await page.keyboard.press('Tab');
@@ -137,7 +139,7 @@ test('loja: conversar com o ferreiro, comprar e vender', async ({ page }, info) 
   test.skip(info.project.name !== 'desktop', 'fluxo de loja validado no desktop');
   await createCharacter(page, 'paladin', 'Lojista');
   const smith = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:smith')!;
-  await api(page, (a) => a.teleport(29, 16));
+  await api(page, (a) => a.teleport(115, 102));
   void smith;
   await page.keyboard.press('KeyE');
   await expect(page.getByTestId('npc-dialog')).toBeVisible();
@@ -161,7 +163,7 @@ test('casa explorável no mesmo mapa', async ({ page }, info) => {
   await createCharacter(page, 'druid', 'Visita');
   const house = (await api(page, (a) => a.buildings())).find((b) => b.id === 'house_rosa')!;
   const doorY = house.y + house.h - 1;
-  await api(page, (a) => a.teleport(29, 46));
+  await api(page, (a) => a.teleport(115, 132));
   await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).walkTo(x!, y!), [house.doorX, doorY - 2]);
   await expect
     .poll(async () => (await api(page, (a) => a.ui())).buildingId, { timeout: 15_000 })
@@ -193,7 +195,7 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   expect(noOverflow).toBe(true);
   // arrasta o joystick para a direita (toque)
-  await api(page, (a) => a.teleport(30, 23));
+  await api(page, (a) => a.teleport(116, 109));
   const before = await api(page, (a) => a.player());
   const zone = (await page.getByTestId('joystick-zone').boundingBox())!;
   const ox = zone.x + zone.width * 0.4;
@@ -210,7 +212,7 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   const after = await api(page, (a) => a.player());
   expect(after.x).toBeGreaterThan(before.x);
   // sem botão de ataque: a magia de ataque mira o mais próximo, lança e começa o ataque básico
-  await api(page, (a) => a.teleport(80, 22));
+  await api(page, (a) => a.teleport(166, 108));
   await api(page, (a) => a.teleportNear('slime', 2));
   const mana = (await api(page, (a) => a.player())).mana;
   await page.getByTestId('spell-arcane_bolt').tap();
@@ -239,7 +241,7 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await expect(page.getByTestId('depot-slot-0')).toHaveAttribute('aria-label', 'Espaço vazio no depósito');
   await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
   // loot no chão: o botão contextual abre a janela
-  await api(page, (a) => a.teleport(80, 22));
+  await api(page, (a) => a.teleport(166, 108));
   const id = await api(page, (a) => a.teleportNear('slime', 1));
   await page.evaluate((m) => (window.__RPGZIM__ as Api & { target(id: string): void }).target(m!), id);
   await expect
@@ -301,7 +303,7 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'knight', 'Dedos');
   await expect(page.getByTestId('joystick')).toHaveCount(0);
-  await api(page, (a) => a.teleport(47, 24));
+  await api(page, (a) => a.teleport(133, 110));
   const before = await api(page, (a) => a.player());
   const zone = (await page.getByTestId('joystick-zone').boundingBox())!;
   await page.touchscreen.tap(zone.x + zone.width * 0.3, zone.y + zone.height * 0.5);
@@ -331,7 +333,8 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
 test('Boladex: aparece na tela inicial, vive sozinho no mundo e pode ser jogado', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop', 'um projeto basta');
   await page.goto('/?debug');
-  await expect(page.getByTestId('slot-boladex')).toContainText('Nv');
+  // (o mundo leva alguns segundos para montar com a máquina ocupada)
+  await expect(page.getByTestId('slot-boladex')).toContainText('Nv', { timeout: 15000 });
   await expect(page.getByRole('button', { name: 'Apagar Boladex' })).toBeVisible();
   await createCharacter(page, 'paladin', 'Parceiro');
   type HeroInfo = { id: string; level: number; mode: string; x: number; y: number };
@@ -400,7 +403,7 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   await expect(page.getByTestId('party-formation-line')).toHaveClass(/btn-gold/);
   // cada membro: chamar ou ir até ele (o painel fecha e você vai andando)
   await expect(page.getByTestId(`party-call-${id}`)).toBeVisible();
-  await api(page, (a) => a.teleport(47, 30));
+  await api(page, (a) => a.teleport(133, 116));
   await page.getByTestId(`party-goto-${id}`).click();
   await expect(page.getByTestId('party-panel')).toHaveCount(0);
   await expect(page.getByText(/Indo até/).first()).toBeVisible();
@@ -411,7 +414,7 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
 }, info) => {
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'knight', 'Mapa');
-  await api(page, (a) => a.teleport(30, 23));
+  await api(page, (a) => a.teleport(116, 109));
   await page.waitForTimeout(500);
   const vp = page.viewportSize()!;
   // toque na parte de cima e na de baixo do mapa (longe dos botões): o personagem sai andando
@@ -428,10 +431,12 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
       .toBe(true);
     await api(page, (a) => {
       a.stop();
-      a.teleport(30, 23);
+      a.teleport(116, 109);
     });
   }
-  // toque no Boladex onde ele aparece na tela: abre o menu dele
+  // toque no Boladex onde ele aparece na tela: abre o menu dele (espera os heróis entrarem: o mundo leva um tempo para
+  // montar quando a máquina está ocupada)
+  await expect.poll(async () => (await api(page, (a) => a.heroes())).length, { timeout: 15000 }).toBeGreaterThan(0);
   const hero = (await api(page, (a) => a.heroes()))[0]!;
   await page.evaluate(
     (p) => (window.__RPGZIM__ as { teleport(x: number, y: number): void }).teleport(p.x, p.y),
@@ -490,7 +495,9 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
 }, info) => {
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'druid', 'Toque');
-  await api(page, (a) => a.teleport(80, 22));
+  // perto de um slime (a magia de alvo sem alvo mira o inimigo mais próximo, até 7 tiles)
+  await api(page, (a) => a.teleport(166, 108));
+  await api(page, (a) => a.teleportNear('slime', 4));
   await page.waitForTimeout(500);
   const fired = () =>
     page.evaluate(() => {
@@ -670,7 +677,7 @@ test('tela inicial: filtro por nome e vocação, ordem por nível; criar persona
 
 test('loja: filtros por categoria e "Posso usar", ordem por nível; atalhos: os 9 espaços visíveis', async ({ page }, info) => {
   await createCharacter(page, 'paladin', 'Filtradora');
-  await api(page, (a) => a.teleport(29, 16));
+  await api(page, (a) => a.teleport(115, 102));
   await page.keyboard.press('KeyE').catch(() => undefined);
   if (info.project.name === 'mobile') await page.getByTestId('interact-button').tap().catch(() => undefined);
   await expect(page.getByTestId('npc-dialog')).toBeVisible();

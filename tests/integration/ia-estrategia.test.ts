@@ -1,3 +1,4 @@
+import { hasLineOfSight } from '../../src/game/combat/combat';
 // Seleção de personagem para atacar, ninguém empurrado para a PZ, aura da Corrida na morte, convite do jogador sempre
 // aceito, legítima defesa em grupo, fuga que não trava e caça escolhida pelo custo-benefício.
 import { describe, expect, it } from 'vitest';
@@ -227,9 +228,14 @@ describe('Druid contra quem foge', () => {
     h.character.health = h.stats.maxHealth;
     h.brain.nextThinkAt = Infinity;
     const m = [...w.monsters.values()].find((x) => x.alive && x.def.id === 'wolf')!;
+    // a 4 tiles do lobo, com linha de visão (a taiga é cheia de pinheiros)
+    const spot =
+      [...Array(81).keys()]
+        .map((i) => ({ x: m.x + (i % 9) - 4, y: m.y + Math.floor(i / 9) - 4 }))
+        .find((c) => Math.max(Math.abs(c.x - m.x), Math.abs(c.y - m.y)) === 4 && !isSolid(w.map, c.x, c.y) && hasLineOfSight(w, c, m)) ?? { x: m.x - 4, y: m.y };
     removeOccupant(w, h);
-    h.x = m.x - 4;
-    h.y = m.y;
+    h.x = spot.x;
+    h.y = spot.y;
     placeOccupant(w, h);
     let cast: string | null = null;
     h.scope.events.on('spellCast', (e) => (cast ??= e.spellId));

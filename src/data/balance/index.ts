@@ -31,5 +31,5 @@ export const BALANCE: BalanceConfig = {
   world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 40 },
   // 6 faixas x 3 espécies; cada faixa com o dobro de vida e ataque da anterior (32x da primeira à última)
   // xpRate: toda a experiência das criaturas pela metade (temporada 2: subir de nível leva o dobro do tempo)
-  creatures: { baseHealth: 40, baseAttack: 5, baseExperience: 12, baseGold: 4.5, tierRatio: 2, xpRatio: 3, goldRatio: 2.2, leashMultiplier: 3, speedScale: 0.7, xpRate: 0.5 },
+  creatures: { baseHealth: 40, baseAttack: 5, baseExperience: 12, baseGold: 4.5, tierRatio: 2, xpRatio: 3, goldRatio: 2.2, leashMultiplier: 2, speedScale: 0.7, xpRate: 0.5 },
 };

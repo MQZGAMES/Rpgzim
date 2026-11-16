@@ -1,3 +1,4 @@
+import { T } from '../helpers';
 // Validação estrutural do mundo: conectividade, áreas protegidas, portas, NPCs e áreas de caça.
 import { describe, expect, it } from 'vitest';
 import { buildWorld } from '../../src/data/maps/world';
@@ -40,7 +41,7 @@ describe('mundo inicial', () => {
     expect(buildingAt(map, map.playerStart.x, map.playerStart.y)?.id).toBe('temple');
   });
   it('tem templo, cidade e área de caça conectados', () => {
-    for (const id of ['temple', 'town', 'wild', 'meadow', 'boarwoods', 'goblincamp']) expect(map.regions.some((r) => r.id === id)).toBe(true);
+    for (const id of ['temple', 'town', 'north_fields', 'east_fields', 'marsh_edge', 'green_hills', 'goblin_camp']) expect(map.regions.some((r) => r.id === id)).toBe(true);
     for (const s of map.spawns) {
       expect(canReachNear(s.x, s.y, 2), `spawn ${s.id}`).toBe(true);
       expect(isPz(map, s.x, s.y)).toBe(false);
@@ -97,7 +98,7 @@ describe('pathfinding e linha de visão', () => {
     const inside = { x: temple.x + 3, y: temple.y + 4 };
     const outside = { x: temple.x + 3, y: temple.y + temple.h + 2 };
     expect(lineOfSight(inside, outside, (x, y) => map.sight[cellIndex(map, x, y)] === 1)).toBe(false);
-    expect(lineOfSight({ x: 47, y: 25 }, { x: 47, y: 23 }, (x, y) => map.sight[cellIndex(map, x, y)] === 1)).toBe(true);
+    expect(lineOfSight({ x: T(47, 25)[0], y: T(47, 25)[1] }, { x: T(47, 23)[0], y: T(47, 23)[1] }, (x, y) => map.sight[cellIndex(map, x, y)] === 1)).toBe(true);
   });
 });
 

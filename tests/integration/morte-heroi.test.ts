@@ -10,7 +10,7 @@ import { damagePlayer, respawnPlayer } from '../../src/game/combat/combat';
 import { canEnter, occupant, removeOccupant, teleport, tryStep } from '../../src/game/movement/movement';
 import type { HeroEntity } from '../../src/game/entities/types';
 import { asActor } from '../../src/game/simulation/World';
-import { advance, makeSim, runUntil } from '../helpers';
+import { advance, makeSim, runUntil, T } from '../helpers';
 
 function setup(heroId: 'boladex' | 'distanciado' | 'maguim' = 'boladex', level = 14) {
   const sim = makeSim('knight', { seed: 21 });
@@ -36,32 +36,32 @@ const killHero = (sim: ReturnType<typeof setup>['sim'], h: HeroEntity) => {
 describe('death releases collision immediately', () => {
   it('a moving hero stops blocking as soon as they die, even while their loot remains', () => {
     const { w, h, sim } = setup();
-    teleport(w, w.human, 30, 23);
-    teleport(w, h, 31, 23);
+    teleport(w, w.human, ...T(30, 23));
+    teleport(w, h, ...T(31, 23));
     expect(tryStep(w, h, 1, 0, 3, false)).toBe(true);
-    expect(canEnter(w, 32, 23, false, w.human.id)).toBe(false);
+    expect(canEnter(w, ...T(32, 23), false, w.human.id)).toBe(false);
     h.character.gold = 100;
     killHero(sim, h);
     expect(h.dead).toBe(true);
     expect(h.move).toBeNull();
-    expect(occupant(w, 32, 23)).toBeUndefined();
-    expect([...w.lootBags.values()].some((b) => b.x === 32 && b.y === 23)).toBe(true);
+    expect(occupant(w, ...T(32, 23))).toBeUndefined();
+    expect([...w.lootBags.values()].some((b) => b.x === T(32, 23)[0] && b.y === T(32, 23)[1])).toBe(true);
     expect(tryStep(w, w.human, 1, 0, 3, false)).toBe(true);
     w.now = w.human.moveEnd;
     expect(tryStep(w, w.human, 1, 0, 3, false)).toBe(true);
-    expect(w.human.x).toBe(32);
+    expect(w.human.x).toBe(T(32, 23)[0]);
   });
 
   it('the human also releases their tile before respawning', () => {
     const { w, h } = setup();
-    teleport(w, w.human, 30, 23);
+    teleport(w, w.human, ...T(30, 23));
     w.human.invulnerableUntil = 0;
     damagePlayer(w, 99999, 'physical', { id: 'x', name: 'Lobo', kind: 'monster' });
     expect(w.human.dead).toBe(true);
-    expect(canEnter(w, 30, 23, false, h.id)).toBe(true);
-    teleport(w, h, 30, 23);
+    expect(canEnter(w, ...T(30, 23), false, h.id)).toBe(true);
+    teleport(w, h, ...T(30, 23));
     respawnPlayer(w);
-    expect(occupant(w, 30, 23)).toBe(h.id);
+    expect(occupant(w, ...T(30, 23))).toBe(h.id);
     expect(occupant(w, w.human.x, w.human.y)).toBe(w.human.id);
   });
 

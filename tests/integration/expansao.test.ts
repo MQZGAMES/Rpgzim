@@ -1,3 +1,4 @@
+import { RINGS, SECTORS, TOWN_CX, TOWN_CY, ringOf, sectorAt, townDistance } from '../../src/data/maps/layout';
 // Expansão: equipamentos até o nível 100, criaturas tardias, vilas novas, portais e heróis viajando.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
@@ -38,7 +39,7 @@ describe('criaturas tardias', () => {
     const onMap = new Set(sim.world.map.spawns.map((s) => s.monsterId));
     const sheets = new Set(Object.keys(manifest.sheets));
     const late = CREATURE_LADDER.filter((r) => r.tier >= 6);
-    expect(late.length).toBe(20); // 16 das Terras Distantes + 4 das Terras do Sul
+    expect(late.length).toBe(21); // 16 tardias + 4 das Terras do Sul + o Colosso de Gelo
     expect(Math.max(...Object.values(GAME_DATA.monsters).map((m) => m.level ?? 0))).toBeGreaterThanOrEqual(
       100,
     );
@@ -78,24 +79,23 @@ describe('uma cidade só: equipamento do nível 100 em Pedraluz e zonas por dist
     expect(Object.keys(GAME_DATA.shops)).toEqual(['equipment', 'potions', 'general']);
   });
 
-  it('quanto mais longe de Pedraluz, mais difícil: o nível da criatura sobe com a distância (por zona)', () => {
+  it('Pedraluz no centro: em qualquer direção, quanto mais longe da muralha, mais forte a criatura (anel a anel)', () => {
     const w = makeSim('knight').world;
-    const home = w.map.playerStart;
-    const levelAt = new Map<string, { dist: number; level: number }[]>();
-    for (const s of w.map.spawns) {
-      const m = GAME_DATA.monsters[s.monsterId]!;
-      if ((m.level ?? 0) < 44) continue;
-      const arr = levelAt.get(m.id) ?? [];
-      arr.push({ dist: Math.hypot(s.x - home.x, s.y - home.y), level: m.level! });
-      levelAt.set(m.id, arr);
+    // a vila fica no meio do mundo
+    expect(Math.abs(TOWN_CX - w.map.width / 2)).toBeLessThan(6);
+    expect(Math.abs(TOWN_CY - w.map.height / 2)).toBeLessThan(6);
+    for (const s of SECTORS) {
+      const byRing: number[][] = RINGS.map(() => []);
+      for (const sp of w.map.spawns) {
+        if (sectorAt(sp.x, sp.y) !== s) continue;
+        byRing[ringOf(townDistance(sp.x, sp.y).d)]!.push(GAME_DATA.monsters[sp.monsterId]!.level ?? 0);
+      }
+      const avg = byRing.map((ls) => ls.reduce((a, b) => a + b, 0) / Math.max(1, ls.length));
+      // cada direção tem criaturas nos cinco anéis, e a média sobe a cada anel
+      for (const [r, ls] of byRing.entries()) expect(ls.length, `${s} anel ${r + 1}`).toBeGreaterThan(0);
+      for (let r = 1; r < avg.length; r++) expect(avg[r]!, `${s} anel ${r + 1}`).toBeGreaterThan(avg[r - 1]! + 5);
+      expect(Math.max(...byRing[0]!), `${s} anel 1`).toBeLessThanOrEqual(8);
+      expect(Math.min(...byRing[4]!), `${s} anel 5`).toBeGreaterThanOrEqual(76);
     }
-    const rows = [...levelAt.entries()]
-      .map(([id, a]) => ({ id, d: a.reduce((s, x) => s + x.dist, 0) / a.length, level: a[0]!.level }))
-      .sort((a, b) => a.d - b.d);
-    const avg = (xs: typeof rows) => xs.reduce((s, r) => s + r.level, 0) / xs.length;
-    const half = rows.length / 2;
-    expect(avg(rows.slice(half))).toBeGreaterThan(avg(rows.slice(0, half)) + 25); // a metade mais longe é bem mais difícil
-    expect(rows.slice(0, 4).every((r) => r.level <= 60)).toBe(true);
-    expect(rows.slice(-4).every((r) => r.level >= 76)).toBe(true);
   });
 });
