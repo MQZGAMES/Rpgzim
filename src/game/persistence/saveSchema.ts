@@ -5,6 +5,7 @@ import { EQUIP_SLOTS, SKILL_IDS, type EquipSlot } from '../../domain/entities/de
 import type { GameData } from '../../domain/entities/gameData';
 import { normalizeHotbar, normalizeHotbarSets } from '../../domain/rules/hotbar';
 import { SEASON, isOldSeason, seasonReset } from '../../domain/rules/season';
+import { WORLD_VERSION } from '../../domain/rules/worldVersion';
 import { addItem } from '../../domain/rules/inventory';
 import { fixMageWeapon } from '../../domain/rules/equipment';
 import { isVocationId } from '../../domain/value-objects/ids';
@@ -148,6 +149,9 @@ export function parseSave(data: GameData, raw: unknown, start?: { x: number; y: 
     return { version: SAVE_VERSION, savedAt: Date.now(), character: fresh, reset: true };
   }
   character.season = typeof c.season === 'number' ? c.season : SEASON;
+  // mapa novo: a posição salva no mapa antigo não vale mais — volta ao templo, com tudo o mais intacto
+  if (!(typeof c.world === 'number' && c.world >= WORLD_VERSION) && start) character.position = { ...start };
+  character.world = WORLD_VERSION;
   return { version: SAVE_VERSION, savedAt: num(file.savedAt, Date.now()), character };
 }
 

@@ -1,3 +1,4 @@
+import { hasLineOfSight } from '../../src/game/combat/combat';
 // Táticas dos heróis: personalidade, magia de área só quando compensa, triagem de cura, socorro, ordens do painel,
 // jogadores perigosos e revanche planejada, meta de equipamento, consumo real e previsão do estoque, loot por valor,
 // retaguarda, as magias novas do Knight e do Paladin, a magia de área mais forte e os atalhos 1–9.
@@ -115,7 +116,12 @@ describe('magias de área e magias novas', () => {
     const { sim, w, h } = rig(['maguim']);
     level(w, h, 20, 10);
     const m = wolf(w);
-    const at = freeNear(w, m.x - 2, m.y);
+    // a 2–3 tiles do lobo, com linha de visão (a taiga é cheia de pinheiros)
+    const at =
+      [...Array(49).keys()]
+        .map((i) => ({ x: m.x + (i % 7) - 3, y: m.y + Math.floor(i / 7) - 3 }))
+        .find((c) => Math.max(Math.abs(c.x - m.x), Math.abs(c.y - m.y)) >= 2 && !isSolid(w.map, c.x, c.y) && !isPz(w.map, c.x, c.y) && hasLineOfSight(w, c, m)) ??
+      freeNear(w, m.x - 2, m.y);
     moveTo(w, h, at.x, at.y);
     m.targetId = h.id;
     const casts: string[] = [];

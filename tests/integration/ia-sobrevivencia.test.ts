@@ -13,7 +13,7 @@ import { asActor } from '../../src/game/simulation/World';
 import { refreshStats } from '../../src/game/progression/progression';
 import { isPz, isSolid } from '../../src/game/world/GameMap';
 import { chebyshev } from '../../src/domain/value-objects/position';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 const D = GAME_DATA;
 
@@ -37,14 +37,14 @@ function setup(heroId: string, level = 20) {
   asActor(w, h, () => refreshStats(w));
   h.character.health = h.stats.maxHealth;
   h.character.mana = h.stats.maxMana;
-  sim.teleportPlayer(20, 40); // (o jogador longe da cena)
-  // um lugar aberto fora da vila (7 casas sem obstáculo para cada lado), limpo das criaturas que moravam ali
+  sim.teleportPlayer(...T(20, 40)); // (o jogador longe da cena)
+  // um lugar aberto fora da vila (6 casas sem obstáculo para cada lado), limpo das criaturas que moravam ali
   let spot: { x: number; y: number } | null = null;
   for (let y = 12; y < w.map.height - 12 && !spot; y++)
-    for (let x = 60; x < w.map.width - 12 && !spot; x++) {
+    for (let x = 12; x < w.map.width - 12 && !spot; x++) {
       let ok = true;
-      for (let dx = -7; dx <= 7 && ok; dx++)
-        for (let dy = -7; dy <= 7 && ok; dy++)
+      for (let dx = -6; dx <= 6 && ok; dx++)
+        for (let dy = -6; dy <= 6 && ok; dy++)
           if (isSolid(w.map, x + dx, y + dy) || isPz(w.map, x + dx, y + dy)) ok = false;
       if (ok) spot = { x, y };
     }

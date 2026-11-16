@@ -1216,7 +1216,13 @@ function survive(w: World, h: HeroEntity): void {
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
   // disciplina de mana: luta fácil não pede poção (a varinha/arco não gasta mana); quanto mais pesada, mais cedo bebe
   const effort = manaEffort(w, h, currentTarget(w));
-  const drinkBelow = shielded ? 0.6 : !isRanged(h.character.vocation) ? 0.35 : effort === 'heavy' ? 0.4 : effort === 'normal' ? 0.25 : 0.1;
+  const drinkBelow = shielded
+    ? 0.6
+    : effort === 'heavy'
+      ? isRanged(h.character.vocation) ? 0.4 : 0.35
+      : effort === 'normal'
+        ? 0.25
+        : 0.1;
   if (manaPct < drinkBelow) {
     // mana no fim (ou com o Escudo de Mana segurando a vida) é emergência; fora disso, o tempo de reação dele
     if (manaPct < Math.min(0.15, drinkBelow) || shielded || reacted(w, h, 'mana')) {
@@ -2030,8 +2036,14 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   const slowed = w.now < target.slowUntil;
   const cast = (id: string): boolean => tryCast(w, h, id);
   // disciplina de mana: luta fácil (uma criatura fraca) é na varinha/arco e na magia barata — sem gastar poção
-  if (voc !== 'knight' && manaEffort(w, h, target) === 'easy') {
-    if (fleeing && !slowed && voc === 'druid' && manaPct > 0.3 && cast('ice_shard')) return;
+  if (manaEffort(w, h, target) === 'easy') {
+    // Knight: o Golpe Brutal é barato e a regeneração dele paga (acelera a caça sem poção)
+    if (voc === 'knight') {
+      if (dist <= 1 && manaPct > 0.3) cast('brutal_strike');
+      return;
+    }
+    // quem foge leva a lentidão (o Estilhaço de Gelo libera no nível 12; antes disso, a Rajada Glacial)
+    if (fleeing && !slowed && voc === 'druid' && manaPct > 0.3 && (cast('ice_shard') || cast('frost_burst'))) return;
     if (voc === 'paladin' && dist <= 2 && target.def.attack.range <= 2 && manaPct > 0.4 && cast('stunning_arrow')) return;
     if (manaPct > 0.55) cast(CHEAP_SPELL[voc]!);
     return;
@@ -2059,9 +2071,10 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         tryCast(w, h, 'crippling_blow')
       )
         return;
-      if ((engagedAround(w, h, h, 2) >= 2 || target.hp > target.def.health * 0.6) && manaPct > 0.5)
-        tryCast(w, h, 'berserk');
-      if (dist <= 1 && hpPct(h) > 0.5 && tryCast(w, h, 'brutal_strike')) return;
+      // Fúria (+30% de velocidade de ataque por 6 s): em toda luta que não é fácil, com mana para o Golpe Brutal depois
+      if (manaPct > 0.35) tryCast(w, h, 'berserk');
+      // (golpe mais forte = luta mais curta = menos dano recebido: sai com qualquer vida)
+      if (dist <= 1 && tryCast(w, h, 'brutal_strike')) return;
       if (dist <= 1 && manaPct > 0.6 && tryCast(w, h, 'crippling_blow')) return;
       if (adjacent >= 3 && manaPct > 0.3) tryCast(w, h, 'steel_whirlwind'); // cercado: o giro acerta todos
       return;
@@ -3050,6 +3063,22 @@ function shookThemOff(w: World, h: HeroEntity): boolean {
   return true;
 }
 
+/**
+ * Custo (em tiles) de recuar até a porta: a distância, passando pelo portão mais conveniente quando ela fica dentro da
+ * vila e ele fora; e uma porta mais longe da vila do que ele (um santuário mais para fora, em terra mais perigosa) custa
+ * o triplo do trecho que avança — recuar é voltar na direção da vila, não fugir para onde as criaturas são mais fortes.
+ */
+function doorCost(w: World, h: HeroEntity, door: { x: number; y: number }): number {
+  const home = w.map.playerStart;
+  const outward = Math.max(0, chebyshev(door, home) - chebyshev(h, home)) * 3;
+  const direct = chebyshev(door, h);
+  const gates = w.map.gates;
+  if (!gates?.length) return direct + outward;
+  const city = (p: { x: number; y: number }) => w.map.city[p.y * w.map.width + p.x] === 1;
+  if (city(h) || !city({ x: door.x, y: door.y - 1 })) return direct + outward;
+  return Math.min(...gates.map((g) => chebyshev(g, h) + chebyshev(g, door)));
+}
+
 function retreat(w: World, h: HeroEntity): void {
   // guerra: fugiu de gente e já está longe dela, com a vida em dia — volta a caçar (não precisa atravessar o mapa até o templo)
   if (
@@ -3094,8 +3123,9 @@ function retreat(w: World, h: HeroEntity): void {
     if (idx >= 0) drinkMana(w, h, idx);
   }
   tryCast(w, h, 'haste');
-  // a porta mais perto (medido: trocar por uma "menos cheia" mais longe matava mais no caminho; a rota já desvia das criaturas)
-  const door = [...w.map.doors].sort((a, b) => chebyshev(a, h) - chebyshev(b, h))[0];
+  // a porta mais perto pelo caminho (medido: trocar por uma "menos cheia" mais longe matava mais no caminho; a rota já
+  // desvia das criaturas). Uma porta da vila, para quem está fora dela, fica atrás da muralha: conta a volta pelo portão.
+  const door = [...w.map.doors].sort((a, b) => doorCost(w, h, a) - doorCost(w, h, b))[0];
   const start = w.map.playerStart;
   const goal = door
     ? { x: door.x, y: door.y - 2 }
@@ -3154,10 +3184,22 @@ function social(w: World, h: HeroEntity): void {
   fidget(w, h);
   if (w.rng.chance(0.08)) heroSay(w, h, 'idle', {}, 25000);
   if (w.rng.chance(0.15)) {
-    // passeia pela praça da vila
-    const plaza = { x: 48, y: 27 };
+    // passeia pela praça da vila (em volta do chafariz)
+    const plaza = plazaOf(w);
     goTo(w, h, plaza.x + w.rng.int(-8, 8), plaza.y + w.rng.int(-4, 4));
   }
+}
+
+/** Praça da vila: o chafariz (ou, sem ele, logo abaixo do templo). */
+const plazaCache = new WeakMap<object, { x: number; y: number }>();
+function plazaOf(w: World): { x: number; y: number } {
+  let p = plazaCache.get(w.map);
+  if (!p) {
+    const f = w.map.props.find((pr) => pr.propId === 'fountain');
+    p = f ? { x: f.x + 1, y: f.y - 1 } : { x: w.map.playerStart.x + 1, y: w.map.playerStart.y + 16 };
+    plazaCache.set(w.map, p);
+  }
+  return p;
 }
 
 // ------------------------------------------------------------------ reações a eventos do próprio herói

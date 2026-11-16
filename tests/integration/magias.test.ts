@@ -40,6 +40,12 @@ function put(sim: GameSimulation, a: { x: number; y: number; id: string }, x: nu
   a.x = x;
   a.y = y;
   w.occupancy.set(y * w.map.width + x, a.id);
+  // criatura levada para outro lugar: a "casa" dela passa a ser ali (senão passaria do limite de perseguição e voltaria)
+  const m = a as { homeX?: number; homeY?: number };
+  if (m.homeX !== undefined) {
+    m.homeX = x;
+    m.homeY = y;
+  }
 }
 
 function clearMonsters(sim: GameSimulation) {

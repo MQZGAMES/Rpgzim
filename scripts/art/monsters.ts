@@ -445,6 +445,11 @@ export function buildHyenaFrames(): PixelCanvas[] {
   const fur = mixRamp(P.dirt, P.sand, 0.55);
   return canineSet({ fur, belly: P.sand[3]!, eye: P.gold[4]!, spots: P.dirt[1]!, mane: P.dirt, hyena: true });
 }
+/** Chacal da Savana: pelagem cor de areia, magro e de orelhas grandes. */
+export function buildJackalFrames(): PixelCanvas[] {
+  const fur = mixRamp(P.dune, P.dirt, 0.35);
+  return canineSet({ fur, belly: P.dune[4]!, eye: P.gold[4]!, mane: mixRamp(P.dirt, P.black, 0.2) });
+}
 /** Lobo da Tempestade: azul elétrico riscado de raios. */
 export function buildStormWolfFrames(): PixelCanvas[] {
   const fur = mixRamp(P.blue, P.arcane, 0.3);
@@ -869,9 +874,17 @@ export function buildWyvernFrames(): PixelCanvas[] {
 }
 
 // ================================================================== BASILISCO (40x26, quad) — lagarto de seis patas
-function basiliskFrame(step: number, dead = false): PixelCanvas {
+interface LizardLook {
+  scale: Ramp;
+  belly: Color;
+  crest: Color;
+  eye: Color;
+}
+const BASILISK: LizardLook = { scale: mixRamp(P.nature, P.gold, 0.25), belly: P.sand[2]!, crest: P.red[3]!, eye: P.gold[5]! };
+
+function basiliskFrame(step: number, dead = false, L: LizardLook = BASILISK): PixelCanvas {
   const c = new PixelCanvas(40, 26);
-  const s = mixRamp(P.nature, P.gold, 0.25);
+  const s = L.scale;
   const bob = step === 0 ? 0 : 1;
   const g = GAIT[dead ? 0 : step]!;
   const legs = (near: boolean) => {
@@ -894,7 +907,7 @@ function basiliskFrame(step: number, dead = false): PixelCanvas {
   for (let i = 0; i < 12; i++) c.disc(8 - i * 0.7, 15 + bob + Math.sin(i / 2 + step * 1.5) * 1.6, 2.2 - i * 0.15, vol(s, 0.5, 0.5)(0, 0, 0, -0.1));
   // corpo baixo e comprido
   c.ellipse(19, 14 + bob, 11, 3.8, vol(s, 0.55, 0.55, 0.1, 21));
-  for (let x = 10; x <= 28; x++) c.paint(x, 17 + bob, P.sand[2]!);
+  for (let x = 10; x <= 28; x++) c.paint(x, 17 + bob, L.belly);
   // faixas escuras nas costas
   for (const x of [12, 16, 20, 24]) c.vline(x, 11 + bob, 13 + bob, s[1]!);
   // cabeça em cunha com crista e olhos que brilham
@@ -902,10 +915,10 @@ function basiliskFrame(step: number, dead = false): PixelCanvas {
   poly(c, [[34, 11 + bob], [39, 12.5 + bob], [34, 15 + bob]], s[3]!);
   c.hline(34, 38, 14 + bob, s[0]!);
   c.set(38, 13 + bob, P.outline);
-  eye(c, 33, 11 + bob, P.gold[5]!);
+  eye(c, 33, 11 + bob, L.eye);
   c.set(34, 11 + bob, P.gold[4]!);
   // crista de espinhos na cabeça e no dorso
-  for (let x = 13; x <= 31; x += 3) poly(c, [[x - 1, 11 + bob], [x, 7.5 + bob + (x > 27 ? -1 : 0)], [x + 1, 11 + bob]], x > 27 ? P.red[3]! : s[1]!);
+  for (let x = 13; x <= 31; x += 3) poly(c, [[x - 1, 11 + bob], [x, 7.5 + bob + (x > 27 ? -1 : 0)], [x + 1, 11 + bob]], x > 27 ? L.crest : s[1]!);
   if (!dead) legs(true);
   c.outline(sel);
   return dead ? deadQuad(c, 4) : c;
@@ -913,4 +926,9 @@ function basiliskFrame(step: number, dead = false): PixelCanvas {
 /** Basilisco: lagarto verde-dourado de seis patas, crista vermelha e olhar que petrifica. */
 export function buildBasiliskFrames(): PixelCanvas[] {
   return [basiliskFrame(0), basiliskFrame(1), basiliskFrame(2), basiliskFrame(0, true)];
+}
+/** Crocodilo do Brejo: o mesmo corpo baixo, em verde-lodo, sem crista vermelha e com olho amarelo. */
+export function buildCrocodileFrames(): PixelCanvas[] {
+  const L: LizardLook = { scale: mixRamp(P.forest, P.mud, 0.35), belly: P.dry[3]!, crest: P.forest[1]!, eye: P.gold[4]! };
+  return [basiliskFrame(0, false, L), basiliskFrame(1, false, L), basiliskFrame(2, false, L), basiliskFrame(0, true, L)];
 }

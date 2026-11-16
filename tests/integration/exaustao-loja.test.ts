@@ -6,7 +6,7 @@ import { countItem } from '../../src/domain/rules/inventory';
 import type { World } from '../../src/game/simulation/World';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
 import { refreshStats } from '../../src/game/progression/progression';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 function druidVsSlime() {
   const sim = makeSim('druid', { seed: 3 });
@@ -15,7 +15,7 @@ function druidVsSlime() {
   c.level = 30;
   c.skills.magic.level = 25;
   refreshStats(w);
-  sim.teleportPlayer(80, 22);
+  sim.teleportPlayer(...T(80, 22));
   advance(sim, 50, 50);
   c.mana = 5000;
   c.health = Math.round(w.player.stats.maxHealth * 0.5);

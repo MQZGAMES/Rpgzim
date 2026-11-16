@@ -1,72 +1,52 @@
-// Mundo inicial contínuo: Templo da Aurora -> Vila de Pedraluz -> Bosque Selvagem.
-// Tudo é montado com tiles e objetos navegáveis (nenhuma imagem de fundo única).
+// Mundo (nov/2026): Pedraluz no centro e quatro direções de biomas ao redor (ver layout.ts e biomes.ts). Quanto
+// mais longe da vila, em qualquer direção, mais fortes as criaturas. A vila é desenhada nas coordenadas locais de
+// sempre (0–72 × 0–77) e montada no centro do mundo por deslocamento (TOWN_X, TOWN_Y): por dentro ela é a mesma.
 import tiles from '../../assets/generated/tiles.json';
 import { PROPS } from '../props';
 import { MapBuilder, Terrain } from '../../game/world/MapBuilder';
-import { buildExpansion } from './expansion';
-import { buildSouth } from './south';
+import { buildBiomes } from './biomes';
+import { TOWN_X, TOWN_Y, WORLD_H, WORLD_W } from './layout';
 import type { GameMap } from '../../game/world/GameMap';
 
-export const WORLD_W = 300;
-/** Ponto de partida (dentro do Templo da Aurora): onde nasce todo personagem novo ou recomeçado. */
-export const PLAYER_START = { x: 47, y: 11 } as const;
-/** Início das Terras Altas (expansão leste, faixas 3 a 6). */
-const EAST = 104;
-/** Altura do mundo: a área original, as Terras Distantes e, abaixo de tudo, as Terras do Sul. */
-export const WORLD_H = 160;
-/** Altura da área original (vila, bosque, pântano, ruínas e Terras Altas). */
-const BASE_H = 118;
-/** Linha da cerca sul da vila: acima dela fica a área original (vila + bosque). */
+export { PLAYER_START, TOWN_BOX, TOWN_X, TOWN_Y, WORLD_H, WORLD_VERSION, WORLD_W, town } from './layout';
+
+/** Linha da muralha sul da vila (coordenada local). */
 const SOUTH = 77;
 
 export function buildWorld(): GameMap {
   const b = new MapBuilder(WORLD_W, WORLD_H, tiles.names, PROPS, 2024);
+  b.translate(TOWN_X, TOWN_Y, () => buildTown(b));
+  buildBiomes(b);
+  return b.build();
+}
+
+/** A Vila de Pedraluz, em coordenadas locais (0–72 × 0–77), com muralha e portão nos quatro lados. */
+function buildTown(b: MapBuilder): void {
   const TOWN_TREES = ['tree_oak', 'tree_oak_b', 'tree_apple', 'tree_oak'];
-  const WILD_TREES = ['tree_forest', 'tree_oak', 'tree_pine', 'tree_pine_b', 'tree_forest', 'tree_oak_b'];
 
   // ------------------------------------------------------------------ regiões
   // área protegida só dentro das construções (casas, lojas, banco, templo): as ruas são livres
-  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 0, y: 0, w: 72, h: SOUTH, pz: false, city: true, music: 'town', priority: 1 });
+  b.region({ id: 'town', name: 'Vila de Pedraluz', x: 2, y: 2, w: 70, h: SOUTH - 2, pz: false, city: true, music: 'town', priority: 1 });
   b.region({ id: 'temple', name: 'Templo da Aurora', x: 39, y: 3, w: 17, h: 14, pz: false, city: true, music: 'temple', priority: 3 });
-  b.region({ id: 'wild', name: 'Bosque Selvagem', x: 72, y: 0, w: 32, h: SOUTH, pz: false, music: 'wild', priority: 1 });
-  b.region({ id: 'swamp', name: 'Pântano Sombrio', x: 0, y: SOUTH, w: 49, h: BASE_H - SOUTH, pz: false, music: 'wild', priority: 1 });
-  b.region({ id: 'hills', name: 'Colinas dos Lobos', x: 49, y: SOUTH, w: 55, h: 21, pz: false, music: 'wild', priority: 1 });
-  b.region({ id: 'ruins', name: 'Ruínas Antigas', x: 49, y: SOUTH + 21, w: 55, h: BASE_H - SOUTH - 21, pz: false, music: 'wild', priority: 1 });
-  b.region({ id: 'meadow', name: 'Clareira dos Slimes', x: 73, y: 24, w: 18, h: 20, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'boarwoods', name: 'Mata dos Javalis', x: 73, y: 3, w: 29, h: 18, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'goblincamp', name: 'Acampamento Goblin', x: 76, y: 47, w: 26, h: 27, pz: false, music: 'wild', priority: 2 });
-  // Terras Altas (leste): uma área por faixa de força das criaturas
-  b.region({ id: 'highlands', name: 'Terras Altas', x: EAST, y: 0, w: 170 - EAST, h: BASE_H, pz: false, music: 'wild', priority: 1 });
-  b.region({ id: 'banditwood', name: 'Floresta dos Bandidos', x: EAST + 1, y: 3, w: 32, h: 38, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'canyon', name: 'Cânion dos Escorpiões', x: 137, y: 3, w: 30, h: 22, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'orcfort', name: 'Fortaleza Orc', x: 137, y: 25, w: 30, h: 22, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'frost', name: 'Bosque Gélido', x: EAST + 1, y: 41, w: 32, h: 39, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'citadel', name: 'Cidadela Sombria', x: 137, y: 47, w: 30, h: 33, pz: false, music: 'wild', priority: 2 });
-  b.region({ id: 'lair', name: 'Covil do Dragão', x: EAST + 1, y: 80, w: 62, h: 35, pz: false, music: 'wild', priority: 2 });
 
   // ------------------------------------------------------------------ terreno base
-  b.dark({ x: 72, y: 0, w: 32, h: 22 });
-  b.dark({ x: 76, y: 46, w: 28, h: 30 });
-  // lago oeste da vila e lagoa do bosque
+  // lago oeste da vila
   b.ellipse(13, 30, 6.5, 5, Terrain.Water, 0.25);
-  b.ellipse(95, 33, 5, 6, Terrain.Water, 0.25);
   // praça, pátio do templo e avenida principal
   b.ellipse(48, 27.5, 11.5, 6.8, Terrain.Cobble, 0.2);
   b.rect({ x: 42, y: 16, w: 11, h: 4 }, Terrain.Cobble);
   b.rect({ x: 45, y: 16, w: 5, h: 6 }, Terrain.Cobble);
   b.path([[24, 22], [70, 22]], 3, Terrain.Cobble);
   b.reserve({ x: 36, y: 20, w: 25, h: 15 });
-  // estradas de terra
-  b.path([[6, 22], [24, 22]], 3);
+  // estradas de terra (a avenida segue até o portão oeste; uma rua sobe até o portão norte)
+  b.path([[0, 22], [24, 22]], 3);
   b.path([[36, 32], [35, 40], [35, 48]], 2);
   b.path([[60, 32], [61, 40], [61, 48]], 2);
   b.path([[20, 48], [70, 48]], 2);
   b.path([[48, 34], [48, 38]], 2);
   b.path([[22, 48], [18, 54]], 2);
-  // estrada para o bosque e trilhas internas
-  b.path([[70, 22], [80, 22], [84, 26], [84, 36], [86, 42], [88, 50], [90, 56]], 3);
-  b.path([[82, 22], [86, 16], [88, 10], [92, 7]], 2);
-  b.path([[84, 30], [89, 31]], 2);
+  b.path([[24, 0], [24, 21]], 3);
+  b.path([[35, 48], [36, 60], [37, 70], [37, 79]], 2);
 
   // ------------------------------------------------------------------ Templo da Aurora (nascimento, área segura)
   b.building({ id: 'temple', sideWindows: [{ side: 'l', y: 9 }, { side: 'r', y: 9 }], name: 'Templo da Aurora', x: 40, y: 4, w: 15, h: 12, wall: 'marble', interior: 'temple', floor: 'marble', roof: 'slate', doorX: 47, windows: [42, 44, 50, 52], interiorWindows: [44, 50] });
@@ -78,7 +58,7 @@ export function buildWorld(): GameMap {
   b.prop('banner', 43, 5, { force: true }).prop('banner', 51, 5, { force: true });
   b.prop('candle', 41, 6).prop('candle', 53, 6).prop('plant', 41, 13).prop('plant', 53, 13);
   b.npc('priest', 48, 8, 'down');
-  b.playerStart = { ...PLAYER_START };
+  b.start(47, 11);
   for (const [x, n] of [[46, 'steps_l'], [47, 'steps_m'], [48, 'steps_r']] as const) b.floorTile(x, 16, n);
   b.prop('brazier', 44, 17).prop('brazier', 50, 17);
   b.prop('planter', 42, 19).prop('planter', 52, 19);
@@ -153,166 +133,30 @@ export function buildWorld(): GameMap {
   b.prop('sack', 18, 54).prop('barrel', 8, 62);
   b.sign(14, 66, 'Fazenda do Seu Joaquim');
 
-  // ------------------------------------------------------------------ portão leste e cerca da vila
+  // ------------------------------------------------------------------ muralha e portões (norte, leste, sul e oeste)
+  b.gate(24, 0).gate(74, 22).gate(37, 79).gate(0, 22);
+  for (let x = 2; x <= 72; x++) if (x < 23 || x > 25) b.prop('palisade', x, 2);
   for (let y = 3; y < SOUTH; y++) if (y < 20 || y > 24) b.prop('palisade', 72, y);
+  for (let y = 3; y < SOUTH; y++) if (y < 20 || y > 24) b.prop('palisade', 2, y);
+  for (let x = 2; x < 72; x++) if (x < 36 || x > 39) b.prop('palisade', x, SOUTH);
+  // leste
   b.prop('lamp_post', 71, 19).prop('lamp_post', 71, 25);
   b.npc('guard', 70, 19, 'down');
-  b.sign(74, 19, 'Bosque Selvagem — perigo! Slimes, javalis e goblins.');
-
-  // ------------------------------------------------------------------ Bosque Selvagem
-  b.spawn('slimes_a', 'slime', 79, 29, 4, 4);
-  b.spawn('slimes_b', 'slime', 88, 37, 3, 3);
-  b.spawn('boars_a', 'boar', 82, 11, 5, 3);
-  b.spawn('boars_b', 'boar', 95, 13, 4, 3);
-  b.spawn('goblins_a', 'goblin', 90, 60, 5, 4);
-  b.spawn('goblins_b', 'goblin', 96, 68, 3, 2);
-  // acampamento goblin
-  b.ellipse(90, 60, 8, 6, Terrain.Dirt, 0.4);
-  b.reserve({ x: 82, y: 54, w: 17, h: 13 });
-  b.prop('campfire', 90, 60);
-  b.prop('tent', 84, 57).prop('tent', 95, 56).prop('tent', 86, 65);
-  b.prop('totem', 88, 55).prop('totem', 93, 64).prop('bones', 92, 58).prop('bones', 86, 61).prop('crate', 97, 61).prop('barrel', 83, 62);
-  for (const x of [80, 81, 82, 98, 99, 100]) b.prop('palisade', x, 52);
-  for (const y of [53, 54, 66, 67]) {
-    b.prop('palisade', 80, y);
-    b.prop('palisade', 100, y);
-  }
-  // lagoa e clareira
-  for (const [x, y] of [[93, 31], [96, 35], [94, 36]] as const) b.decorTile(x, y, 'decor_lilypad');
-  b.scatterDecor({ x: 74, y: 24, w: 18, h: 20 }, ['decor_tallgrass', 'decor_flowers_yellow', 'decor_mushrooms'], 0.12, 41);
-  b.prop('log', 77, 34).prop('stump', 86, 27).prop('rock_medium', 90, 27).prop('rock_large', 80, 40);
-  b.prop('rock_large_b', 92, 22).prop('log', 96, 18).prop('stump', 78, 15);
-
-  // chefe do acampamento (raro, reaparece em 2 minutos)
-  b.spawn('goblin_chief', 'goblin_chief', 91, 62, 1, 1);
-
-  // ------------------------------------------------------------------ expansão sul
-  // cerca sul da vila com portão
-  for (let x = 3; x < 72; x++) if (x < 36 || x > 39) b.prop('palisade', x, SOUTH);
-  b.path([[35, 48], [36, 60], [37, 70], [37, 80], [32, 86], [24, 92], [20, 100]], 2);
+  b.sign(74, 19, 'Leste: Campos do Leste, Savana Dourada, Mar de Areia, Dunas Rubras e o Vulcão Adormecido.');
+  // sul
   b.prop('lamp_post', 35, SOUTH - 1).prop('lamp_post', 40, SOUTH - 1);
   b.npc('guard_south', 41, SOUTH - 2, 'down');
-  b.sign(41, SOUTH + 1, 'Pântano Sombrio — sapos venenosos. Ao leste: Colinas dos Lobos e Ruínas Antigas.');
-  // trilhas: acampamento goblin -> colinas -> ruínas; pântano -> ruínas
-  b.path([[88, 66], [88, 74], [85, 82], [80, 90], [76, 98], [74, 106]], 2);
-  b.path([[20, 100], [32, 104], [46, 106], [60, 106], [74, 106], [90, 108]], 2);
-  b.path([[37, 80], [50, 84], [62, 86], [70, 86], [85, 82]], 2);
+  b.sign(41, SOUTH + 1, 'Sul: Margem do Pântano, Pântano Sombrio, Selva Alagada, Pântano Corrompido e a Necrópole.');
+  // norte
+  b.prop('lamp_post', 22, 3).prop('lamp_post', 26, 3);
+  b.npc('guard_north', 27, 4, 'down');
+  b.sign(27, 0, 'Norte: Campos do Norte, Taiga dos Pinheiros, Tundra Uivante, Geleira Eterna e o Pico do Inverno.');
+  // oeste
+  b.prop('lamp_post', 3, 19).prop('lamp_post', 3, 25);
+  b.npc('guard_west', 4, 18, 'right');
+  b.sign(0, 19, 'Oeste: Colinas Verdes, Ruínas Antigas, Montanhas de Ferro, Charneca das Presas e o Abismo Primordial.');
 
-  // Pântano Sombrio: grama escura, poças, juncos e cogumelos
-  b.dark({ x: 3, y: SOUTH + 1, w: 46, h: BASE_H - SOUTH - 4 });
-  for (const [cx, cy, rx, ry] of [[12, 84, 4, 3], [28, 96, 5, 3.5], [10, 108, 4.5, 3], [40, 112, 4, 2.5], [44, 92, 3.5, 3], [18, 96, 2.5, 2]] as const)
-    b.ellipse(cx, cy, rx, ry, Terrain.Water, 0.35);
-  b.scatterDecor({ x: 3, y: SOUTH + 1, w: 46, h: BASE_H - SOUTH - 4 }, ['decor_reeds', 'decor_mushrooms', 'decor_tallgrass', 'decor_lilypad'], 0.12, 61);
-  b.spawn('toads_a', 'toad', 18, 88, 4, 4);
-  b.spawn('toads_b', 'toad', 34, 100, 4, 3);
-  b.spawn('toads_c', 'toad', 16, 110, 3, 3);
-  b.prop('log', 24, 84).prop('stump', 8, 98).prop('bones', 38, 96).prop('log', 30, 110);
-
-  // Colinas dos Lobos: rochas e pinheiros
-  b.dark({ x: 49, y: SOUTH + 1, w: 52, h: 20 }, 2);
-  b.prop('rock_large', 58, 80).prop('rock_large_b', 74, 88).prop('rock_large', 92, 84).prop('rock_medium', 66, 92).prop('rock_large_b', 98, 94);
-  b.spawn('wolves_a', 'wolf', 64, 84, 4, 3);
-  b.spawn('wolves_b', 'wolf', 86, 80, 4, 3);
-  b.spawn('wolves_c', 'wolf', 94, 92, 3, 3);
-
-  // Ruínas Antigas: calçamento quebrado, pilares, estátuas e ossos
-  b.ellipse(66, 106, 9, 5, Terrain.Cobble, 0.6);
-  b.ellipse(88, 109, 8, 4.5, Terrain.Cobble, 0.6);
-  b.reserve({ x: 56, y: 100, w: 42, h: 15 });
-  for (const [x, y] of [[59, 102], [63, 102], [69, 102], [73, 102], [59, 110], [73, 110], [82, 105], [94, 105], [82, 113], [94, 113]] as const) b.prop('pillar', x, y);
-  b.prop('statue', 66, 103).prop('statue', 88, 106).prop('bones', 62, 108).prop('bones', 85, 111).prop('bones', 91, 110).prop('rock_medium', 70, 112).prop('totem', 97, 102);
-  b.spawn('spiders_a', 'spider', 60, 106, 3, 3);
-  b.spawn('spiders_b', 'spider', 96, 110, 3, 2);
-  b.spawn('skeletons_a', 'skeleton', 68, 108, 3, 3);
-  b.spawn('skeletons_b', 'skeleton', 88, 109, 3, 3);
-
-  // ------------------------------------------------------------------ Terras Altas (expansão leste)
-  // trilhas de acesso: Mata dos Javalis -> Floresta dos Bandidos; acampamento goblin -> Bosque Gélido;
-  // colinas/ruínas -> Covil do Dragão; espinha norte-sul ligando todas as áreas
-  b.path([[94, 10], [104, 10], [116, 14], [128, 12], [136, 12], [150, 14]], 2);
-  b.path([[98, 60], [106, 58], [118, 56], [130, 58], [136, 56], [148, 60]], 2);
-  b.path([[98, 92], [106, 92], [116, 96], [128, 98], [140, 98], [154, 98]], 2);
-  b.path([[136, 8], [136, 30], [136, 46], [136, 66], [136, 84], [136, 104]], 2);
-  b.sign(105, 12, 'Terras Altas — perigo extremo. Bandidos e ursos ao leste; mais além, orcs, gelo, a cidadela e o dragão.');
-
-  // Floresta dos Bandidos (faixa 3): mata fechada, acampamento com barracas
-  b.dark({ x: EAST + 1, y: 3, w: 32, h: 38 }, 3);
-  b.ellipse(122, 24, 6, 4, Terrain.Dirt, 0.4);
-  b.reserve({ x: 115, y: 19, w: 15, h: 10 });
-  b.prop('campfire', 122, 24).prop('tent', 117, 21).prop('tent', 126, 21).prop('crate', 119, 27).prop('barrel', 125, 27).prop('log', 115, 25);
-  b.spawn('bandits_a', 'bandit', 120, 24, 4, 4);
-  b.spawn('bandits_b', 'bandit', 112, 8, 4, 3);
-  b.spawn('bears_a', 'bear', 116, 34, 4, 3);
-  b.spawn('bears_b', 'bear', 130, 6, 3, 2);
-
-  // Cânion dos Escorpiões (faixa 4): terra batida e rochas
-  b.ellipse(150, 12, 12, 7, Terrain.Dirt, 0.5);
-  b.ellipse(160, 20, 6, 4, Terrain.Dirt, 0.5);
-  b.prop('rock_large', 142, 8).prop('rock_large_b', 156, 6).prop('rock_large', 162, 14).prop('rock_medium', 146, 17).prop('rock_large_b', 154, 21).prop('bones', 150, 11).prop('bones', 158, 18);
-  b.spawn('scorpions_a', 'scorpion', 148, 11, 4, 4);
-  b.spawn('scorpions_b', 'scorpion', 160, 18, 3, 3);
-
-  // Fortaleza Orc (faixas 4 e 5): pátio de pedra cercado por paliçada; xamãs no centro
-  b.ellipse(152, 36, 10, 7, Terrain.Cobble, 0.25);
-  b.reserve({ x: 140, y: 27, w: 25, h: 18 });
-  for (let x = 141; x <= 163; x++) if (x < 150 || x > 153) b.prop('palisade', x, 28);
-  for (let y = 29; y <= 44; y++) {
-    b.prop('palisade', 141, y);
-    b.prop('palisade', 163, y);
-  }
-  b.prop('brazier', 148, 33).prop('brazier', 156, 33).prop('tent', 144, 40).prop('tent', 159, 40).prop('totem', 152, 31).prop('banner', 150, 30, { force: true }).prop('banner', 154, 30, { force: true });
-  b.prop('crate', 145, 31).prop('barrel', 160, 31).prop('bones', 152, 42);
-  b.spawn('orcs_a', 'orc', 147, 36, 4, 4);
-  b.spawn('orcs_b', 'orc', 158, 38, 3, 3);
-  b.spawn('shamans_a', 'orc_shaman', 152, 35, 2, 2);
-
-  // Bosque Gélido (faixa 5): lagos, pinheiros e pedras
-  b.dark({ x: EAST + 1, y: 41, w: 32, h: 39 }, 2);
-  for (const [cx, cy, rx, ry] of [[114, 52, 4, 3], [128, 66, 5, 3.5], [112, 74, 3.5, 2.5]] as const) b.ellipse(cx, cy, rx, ry, Terrain.Water, 0.3);
-  b.prop('rock_large', 120, 46).prop('rock_large_b', 130, 54).prop('rock_medium', 108, 62).prop('rock_large', 124, 76).prop('log', 116, 68);
-  b.spawn('icewolves_a', 'ice_wolf', 120, 52, 4, 3);
-  b.spawn('icewolves_b', 'ice_wolf', 122, 64, 4, 3);
-  b.spawn('icewolves_c', 'ice_wolf', 118, 74, 3, 2);
-
-  // Cidadela Sombria (faixa 5): ruína de pedra com pilares e estátuas
-  b.ellipse(152, 62, 11, 9, Terrain.Cobble, 0.35);
-  b.reserve({ x: 140, y: 52, w: 25, h: 21 });
-  for (const [x, y] of [[143, 56], [149, 55], [155, 55], [161, 56], [143, 68], [161, 68], [149, 70], [155, 70]] as const) b.prop('pillar', x, y);
-  b.prop('statue', 152, 58).prop('brazier', 147, 60).prop('brazier', 157, 60).prop('bones', 145, 64).prop('bones', 159, 65).prop('banner', 150, 57, { force: true }).prop('banner', 154, 57, { force: true });
-  b.spawn('darkknights_a', 'dark_knight', 148, 63, 3, 3);
-  b.spawn('darkknights_b', 'dark_knight', 157, 66, 3, 3);
-
-  // Covil do Dragão (faixa 6): trolls na entrada, lichs na cripta, dragões no fundo
-  b.ellipse(116, 96, 9, 6, Terrain.Dirt, 0.45);
-  b.ellipse(134, 104, 7, 5, Terrain.Cobble, 0.4);
-  b.ellipse(154, 100, 11, 9, Terrain.Dirt, 0.4);
-  b.reserve({ x: 144, y: 92, w: 20, h: 18 });
-  b.prop('rock_large', 110, 88).prop('rock_large_b', 122, 102).prop('rock_large', 146, 92).prop('rock_large_b', 162, 96).prop('rock_large', 150, 108);
-  b.prop('bones', 112, 98).prop('bones', 152, 98).prop('bones', 158, 104).prop('bones', 148, 102).prop('statue', 134, 100).prop('pillar', 130, 101).prop('pillar', 138, 101).prop('brazier', 134, 107);
-  b.spawn('trolls_a', 'troll', 116, 96, 4, 3);
-  b.spawn('trolls_b', 'troll', 120, 108, 3, 2);
-  b.spawn('liches_a', 'lich', 134, 104, 3, 3);
-  b.spawn('dragons_a', 'young_dragon', 154, 98, 3, 2);
-  b.spawn('dragons_b', 'young_dragon', 158, 106, 2, 1);
-
-  // ------------------------------------------------------------------ expansão leste (vilas e zonas do nível 44 ao 100)
-  buildExpansion(b);
-  // ------------------------------------------------------------------ Terras do Sul (faixa nova de caça, sem cidade)
-  buildSouth(b, WORLD_H);
-
-  // ------------------------------------------------------------------ vegetação e decoração procedural
-  b.forestBorder(3, WILD_TREES);
-  // Terras Altas
-  b.scatter({ x: EAST, y: 3, w: 33, h: 38 }, { props: ['tree_forest', 'tree_oak_b', 'tree_pine', 'bush_dark', 'stump', 'tree_forest'], density: 0.18, salt: 71, spacing: 1 });
-  b.scatter({ x: 137, y: 3, w: 30, h: 22 }, { props: ['rock_small', 'rock_medium', 'stump', 'bush_dark'], density: 0.07, salt: 72, spacing: 1 });
-  b.scatter({ x: EAST, y: 41, w: 33, h: 39 }, { props: ['tree_pine', 'tree_pine_b', 'rock_small', 'rock_medium', 'tree_pine'], density: 0.15, salt: 73, spacing: 1 });
-  b.scatter({ x: 137, y: 45, w: 30, h: 35 }, { props: ['tree_forest', 'rock_small', 'bush_dark', 'stump'], density: 0.07, salt: 74, spacing: 1 });
-  b.scatter({ x: EAST, y: 80, w: 63, h: 35 }, { props: ['rock_small', 'rock_medium', 'tree_forest', 'bush_dark', 'stump'], density: 0.08, salt: 75, spacing: 1 });
-  b.scatterDecor({ x: EAST, y: 3, w: 63, h: 112 }, ['decor_pebbles', 'decor_tallgrass', 'decor_leaves', 'decor_crack', 'decor_mushrooms'], 0.07, 76);
-  b.scatter({ x: 3, y: SOUTH + 1, w: 46, h: BASE_H - SOUTH - 4 }, { props: ['tree_forest', 'tree_pine', 'bush_dark', 'stump', 'tree_forest'], density: 0.13, salt: 31, spacing: 1 });
-  b.scatter({ x: 49, y: SOUTH + 1, w: 52, h: 20 }, { props: ['tree_pine', 'tree_pine_b', 'rock_small', 'rock_medium', 'tree_forest', 'bush_dark'], density: 0.13, salt: 32, spacing: 1 });
-  b.scatter({ x: 49, y: SOUTH + 21, w: 52, h: BASE_H - SOUTH - 24 }, { props: ['tree_forest', 'rock_small', 'bush_dark', 'stump'], density: 0.08, salt: 33, spacing: 1 });
-  b.scatterDecor({ x: 49, y: SOUTH + 1, w: 52, h: BASE_H - SOUTH - 4 }, ['decor_pebbles', 'decor_tallgrass', 'decor_leaves', 'decor_crack'], 0.08, 62);
+  // ------------------------------------------------------------------ jardins e bordas da vila
   // jardins e bordas da vila
   b.scatter({ x: 3, y: 3, w: 36, h: 17 }, { props: [...TOWN_TREES, 'bush', 'bush_flower'], density: 0.2, salt: 11, spacing: 1 });
   b.scatter({ x: 56, y: 3, w: 15, h: 9 }, { props: [...TOWN_TREES, 'bush'], density: 0.22, salt: 12, spacing: 1 });
@@ -321,13 +165,6 @@ export function buildWorld(): GameMap {
   b.scatter({ x: 3, y: 66, w: 20, h: 8 }, { props: TOWN_TREES, density: 0.3, salt: 15, spacing: 1 });
   b.scatter({ x: 54, y: 30, w: 17, h: 8 }, { props: ['bush', 'bush_flower', 'tree_oak'], density: 0.12, salt: 16, spacing: 1 });
   b.scatter({ x: 24, y: 26, w: 12, h: 11 }, { props: ['bush', 'bush_flower', 'tree_apple'], density: 0.12, salt: 17, spacing: 1 });
-  // bosque
-  b.scatter({ x: 73, y: 3, w: 29, h: 20 }, { props: [...WILD_TREES, 'bush_dark', 'rock_small', 'rock_medium'], density: 0.17, salt: 21, spacing: 1 });
-  b.scatter({ x: 73, y: 23, w: 29, h: 24 }, { props: ['tree_oak', 'bush', 'bush_berry', 'rock_small', 'tree_forest'], density: 0.09, salt: 22, spacing: 1 });
-  b.scatter({ x: 73, y: 47, w: 29, h: 27 }, { props: [...WILD_TREES, 'bush_dark', 'rock_medium', 'stump'], density: 0.15, salt: 23, spacing: 1 });
   // decoração plana
   b.scatterDecor({ x: 3, y: 3, w: 69, h: 70 }, ['decor_flowers_white', 'decor_flowers_pink', 'decor_flowers_yellow', 'decor_pebbles', 'decor_tallgrass'], 0.045, 51);
-  b.scatterDecor({ x: 72, y: 3, w: 29, h: 70 }, ['decor_tallgrass', 'decor_mushrooms', 'decor_leaves', 'decor_pebbles', 'decor_flowers_blue'], 0.08, 52);
-
-  return b.build();
 }

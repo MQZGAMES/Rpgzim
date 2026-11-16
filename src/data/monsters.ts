@@ -7,6 +7,7 @@ import type { Element } from '../domain/value-objects/element';
 import { BALANCE } from './balance';
 import { LATE_SPECIES } from './monsters.late';
 import { southSpecies } from './monsters.south';
+import { biomeSpecies } from './monsters.biomes';
 import { GEAR_TIERS } from './gearTiers';
 
 export interface Species {
@@ -552,7 +553,8 @@ const list: Species[] = [
   },
 ];
 
-const all: Species[] = [...list, ...LATE_SPECIES, ...southSpecies(GEAR_TIERS)];
+const base: Species[] = [...list, ...LATE_SPECIES, ...southSpecies(GEAR_TIERS)];
+const all: Species[] = [...base, ...biomeSpecies(base)];
 export const MONSTERS: Readonly<Record<string, MonsterDef>> = Object.fromEntries(
   all.map((s) => [s.id, build(s)]),
 );

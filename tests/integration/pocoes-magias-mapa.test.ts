@@ -15,7 +15,7 @@ import { acceptInvite, invite, partyOf } from '../../src/game/social/social';
 import { asActor } from '../../src/game/simulation/World';
 import { parseSave, toSaveFile } from '../../src/game/persistence/saveSchema';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 const D = GAME_DATA;
 
@@ -141,7 +141,11 @@ describe('magia de ataque também é o ataque básico', () => {
     const sim = makeSim('sorcerer', { seed: 5 });
     const w = sim.world;
     const p = w.player;
-    const m = [...w.monsters.values()].find((x) => x.def.id === 'slime')! as MonsterEntity;
+    // um slime sem outra criatura a 5 tiles (ele tem de ser o mais próximo do jogador)
+    const all = [...w.monsters.values()];
+    const m = all.find(
+      (x) => x.def.id === 'slime' && !all.some((o) => o !== x && Math.max(Math.abs(o.x - x.x), Math.abs(o.y - x.y)) <= 5),
+    )! as MonsterEntity;
     removeOccupant(w, p);
     p.x = m.x - 2;
     p.y = m.y;
@@ -162,8 +166,7 @@ describe('guardas da vila', () => {
     const p = w.player;
     const boar = [...w.monsters.values()].find((x) => x.def.id === 'boar')! as MonsterEntity;
     removeOccupant(w, boar as unknown as HeroEntity);
-    boar.x = 66;
-    boar.y = 22; // avenida da vila, perto do portão leste
+    [boar.x, boar.y] = T(66, 22); // avenida da vila, perto do portão leste
     boar.homeX = boar.x;
     boar.homeY = boar.y;
     boar.state = 'idle';
@@ -245,6 +248,5 @@ describe('Terras do Sul', () => {
         trophy,
       ).toBe(true);
     }
-    expect(sim.world.map.height).toBe(160);
   });
 });

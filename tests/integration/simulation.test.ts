@@ -12,7 +12,7 @@ import { createRng } from '../../src/domain/value-objects/rng';
 import { countItem } from '../../src/domain/rules/inventory';
 import { isMoving } from '../../src/game/movement/movement';
 import { buildingAt } from '../../src/game/world/GameMap';
-import { advance, fixedLoot, makeSim, runUntil, worldMap } from '../helpers';
+import { advance, fixedLoot, makeSim, runUntil, worldMap, T } from '../helpers';
 import { damagePlayer, hasLineOfSight, monsterSource } from '../../src/game/combat/combat';
 import { refreshStats } from '../../src/game/progression/progression';
 import { isPz } from '../../src/game/world/GameMap';
@@ -48,7 +48,7 @@ describe('movimento', () => {
   it('move em 8 direções com velocidade normalizada na diagonal', () => {
     const sim = makeSim('knight');
     const p = sim.world.player;
-    sim.teleportPlayer(30, 23); // avenida, área aberta
+    sim.teleportPlayer(...T(30, 23)); // avenida, área aberta
     const start = { x: p.x, y: p.y };
     sim.setMoveDir({ dx: 1, dy: 0 });
     advance(sim, 2000);
@@ -56,10 +56,10 @@ describe('movimento', () => {
     expect(straight).toBeGreaterThanOrEqual(5); // ~3 tiles/s (ritmo de celular)
     sim.setMoveDir(null);
     runUntil(sim, () => !isMoving(p, sim.now), 2000);
-    sim.teleportPlayer(30, 23);
+    sim.teleportPlayer(...T(30, 23));
     sim.setMoveDir({ dx: 1, dy: 1 });
     advance(sim, 2000);
-    const diag = p.x - 30;
+    const diag = p.x - T(30, 23)[0];
     expect(diag).toBeGreaterThanOrEqual(3);
     // diagonal percorre ~1/sqrt(2) tiles por eixo em relação ao reto
     expect(diag).toBeLessThan(straight);
@@ -69,7 +69,7 @@ describe('movimento', () => {
     const a = makeSim('knight', { seed: 1 });
     const b = makeSim('knight', { seed: 1 });
     for (const s of [a, b]) {
-      s.teleportPlayer(30, 23);
+      s.teleportPlayer(...T(30, 23));
       s.setMoveDir({ dx: 1, dy: 0 });
     }
     for (let t = 0; t < 1200; t += 16) a.update(16);
@@ -91,8 +91,9 @@ describe('movimento', () => {
   it('clique para andar usa pathfinding até o destino', () => {
     const sim = makeSim('knight');
     const p = sim.world.player;
-    expect(sim.walkTo(47, 24)).toBe(true);
-    expect(runUntil(sim, () => p.x === 47 && p.y === 24, 15000)).toBe(true);
+    const [gx, gy] = T(47, 24);
+    expect(sim.walkTo(gx, gy)).toBe(true);
+    expect(runUntil(sim, () => p.x === gx && p.y === gy, 15000)).toBe(true);
   });
 
   it('entra e sai de uma casa pela porta, no mesmo mapa, com a porta abrindo', () => {
@@ -188,7 +189,7 @@ describe('combate e progressão', () => {
     runUntil(sim, () => !slime.alive, 30000);
     let hits = 0;
     sim.events.on('attack', (e) => e.sourceId === slime.id && hits++);
-    sim.teleportPlayer(47, 24);
+    sim.teleportPlayer(...T(47, 24));
     expect(runUntil(sim, () => slime.alive, slime.def.respawnMs + 5000, 50)).toBe(true);
     expect(hits).toBe(0);
   });
@@ -356,7 +357,7 @@ describe('inventário, lojas e save', () => {
   it('salva e recarrega o jogo restaurando o estado', async () => {
     const sim = makeSim('paladin');
     const p = sim.world.player;
-    sim.teleportPlayer(30, 23);
+    sim.teleportPlayer(...T(30, 23));
     p.character.gold = 999;
     p.character.experience = 300;
     p.character.level = 3;
@@ -371,8 +372,7 @@ describe('inventário, lojas e save', () => {
       rng: createRng(1),
       restorePosition: true,
     });
-    expect(sim2.world.player.x).toBe(30);
-    expect(sim2.world.player.y).toBe(23);
+    expect([sim2.world.player.x, sim2.world.player.y]).toEqual(T(30, 23));
     expect(sim2.world.player.character.gold).toBe(999);
     expect(sim2.world.player.character.inventory.some(Boolean)).toBe(true);
   });
@@ -382,7 +382,7 @@ describe('ajustes de jogabilidade', () => {
   it('janela de loot mostra todos os sacos ao redor; o que sobra continua no respectivo saco', () => {
     const sim = makeSim('knight');
     const w = sim.world;
-    sim.teleportPlayer(80, 22);
+    sim.teleportPlayer(...T(80, 22));
     const p = w.player;
     const mk = (id: string, x: number, y: number, itemId: string, count: number, gold: number) =>
       w.lootBags.set(id, {
@@ -421,7 +421,7 @@ describe('ajustes de jogabilidade', () => {
     const sim = makeSim('knight');
     const w = sim.world;
     const p = w.player;
-    sim.teleportPlayer(80, 22);
+    sim.teleportPlayer(...T(80, 22));
     p.character.inventory.fill({ itemId: 'dagger', count: 1 });
     w.lootBags.set('a', {
       id: 'a',
@@ -562,7 +562,8 @@ describe('Shielding e armas de treino', () => {
     return p.character.skills.shielding;
   }
 
-  it('treina com 2 monstros atacando mesmo com dano de terra; parado sem atacar não treina', () => {
+  // (simulação de 3 min de jogo: o mundo tem centenas de criaturas, então leva mais que os 5 s padrão)
+  it('treina com 2 monstros atacando mesmo com dano de terra; parado sem atacar não treina', { timeout: 30_000 }, () => {
     const k = shieldingAfter('knight', 120_000);
     expect(k.level).toBeGreaterThan(12);
     const idle = shieldingAfter('knight', 60_000, false);
@@ -755,6 +756,9 @@ describe('grupo, PK e modo de ataque', () => {
     const slime = nearestMonster(sim, 'slime');
     placeNear(sim, slime, 4);
     slime.state = 'idle';
+    // o slime quase não anda (senão ele vem até o jogador e o "seguir" não precisaria andar)
+    slime.slowUntil = Infinity;
+    slime.slowFactor = 0.01;
     sim.setStandAttack(true);
     const start = { x: w.human.x, y: w.human.y };
     sim.setTarget(slime.id);
@@ -888,9 +892,10 @@ describe('Boladex não trava no jogador', () => {
     const door = w.map.doors.find((d) => d.buildingId === 'temple')!;
     sim.teleportPlayer(door.x, door.y); // em pé na porta
     expect([w.human.x, w.human.y]).toEqual([door.x, door.y]);
-    // o herói sai do templo para caçar: precisa passar pela porta
-    runUntil(sim, () => h.y > door.y + 2, 30000, 50);
-    expect(h.y).toBeGreaterThan(door.y + 2);
+    // o herói sai do templo para caçar: precisa passar pela porta (e depois segue para o portão que quiser)
+    const away = () => buildingAt(w.map, h.x, h.y)?.id !== 'temple' && Math.max(Math.abs(h.x - door.x), Math.abs(h.y - door.y)) > 2;
+    runUntil(sim, away, 30000, 50);
+    expect(away()).toBe(true);
     // e ninguém "some" da ocupação: cada um está registrado no tile onde está (houve troca de lugar)
     expect(w.occupancy.get(w.human.y * w.map.width + w.human.x)).toBe(w.human.id);
     expect(w.occupancy.get(h.y * w.map.width + h.x)).toBe(h.id);

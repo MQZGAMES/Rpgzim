@@ -126,7 +126,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Depois deste portão começa o Bosque Selvagem: slimes perto da trilha, javalis ao norte e um acampamento goblin ao sul, com seu chefe. Mais ao sul ficam as Colinas dos Lobos e as Ruínas Antigas. Pelo portão sul da vila chega-se ao Pântano Sombrio. A leste do bosque ficam as Terras Altas: bandidos, ursos, escorpiões, a Fortaleza Orc, o Bosque Gélido, a Cidadela Sombria e o Covil do Dragão — só para os mais fortes. Atenção: só dentro das casas, lojas, banco e templo ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
+        text: 'Pedraluz fica no meio do mundo: quanto mais longe da vila, em qualquer direção, mais fortes as criaturas. Por este portão, a leste: os Campos do Leste (slimes e o acampamento goblin), a Savana Dourada (chacais, saqueadores e orcs), o Mar de Areia (escorpiões, hienas, rinocerontes e as múmias das ruínas), as Dunas Rubras e, no fim, o Vulcão Adormecido. Na estrada há santuários, áreas protegidas para descansar. Atenção: só dentro das construções ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
         options: [close],
       },
     ],
@@ -166,7 +166,39 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Ao sul fica o Pântano Sombrio e, mais além, as terras do sul: o Brejo das Sanguessugas, o Ninho das Aranhas, a Savana Rachada e o Desfiladeiro das Serpes. Se alguma criatura passar do portão, a guarda dá conta — mas quem a trouxe não leva nada por isso.',
+        text: 'Ao sul: a Margem do Pântano (sapos e lodos), o Pântano Sombrio (aranhas e sapos do brejo), a Selva Alagada (crocodilos, serpes e trolls), o Pântano Corrompido e, no fim, a Necrópole Esquecida. Se alguma criatura passar do portão, a guarda dá conta — mas quem a trouxe não leva nada por isso.',
+        options: [close],
+      },
+    ],
+  },
+  {
+    id: 'guard_north',
+    name: 'Guarda Bento',
+    title: 'Sentinela do portão norte',
+    sprite: 'npc_guard',
+    wanderRadius: 0,
+    guard: true,
+    greeting: 'Agasalhe-se se for longe.',
+    dialog: [
+      {
+        id: 'start',
+        text: 'Ao norte o frio aumenta a cada passo: os Campos do Norte (slimes e javalis), a Taiga dos Pinheiros (lobos, bandidos e ursos), a Tundra Uivante (lobos de gelo, ursos das cavernas e o yeti), a Geleira Eterna e, no topo, o Pico do Inverno. Os santuários da estrada são protegidos: dá para descansar neles.',
+        options: [close],
+      },
+    ],
+  },
+  {
+    id: 'guard_west',
+    name: 'Guarda Íris',
+    title: 'Sentinela do portão oeste',
+    sprite: 'npc_guard',
+    wanderRadius: 0,
+    guard: true,
+    greeting: 'As montanhas chamam?',
+    dialog: [
+      {
+        id: 'start',
+        text: 'A oeste: as Colinas Verdes, as Ruínas Antigas (esqueletos, aranhas e lobos), as Montanhas de Ferro (xamãs orcs, o Chefe Goblin, cavaleiros sombrios e liches), a Charneca das Presas (lobos atrozes, ogros e o dragão jovem) e, no fim, o Abismo Primordial. Quanto mais longe da vila, mais fortes as criaturas.',
         options: [close],
       },
     ],

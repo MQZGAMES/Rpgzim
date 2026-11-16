@@ -90,6 +90,8 @@ export interface MapLayers {
   decor: Int32Array;
   floor: Int32Array;
   walls: Int32Array;
+  /** Lava (primeiro quadro; o jogo anima trocando o quadro, como a água). */
+  lava: Int32Array;
 }
 
 export interface GameMap {
@@ -99,6 +101,12 @@ export interface GameMap {
   layers: MapLayers;
   /** Configuração de autotile da água por célula (para animar trocando o quadro). */
   waterConfig: Uint8Array;
+  /** Configuração de autotile da lava por célula. */
+  lavaConfig: Uint8Array;
+  /** Bioma de cada célula (0 grama, 1 neve, 2 areia, 3 cinza, 4 lama, 5 savana). */
+  biome: Uint8Array;
+  /** Zona de caça de cada célula (índice em `regions`; -1 = nenhuma). */
+  zone: Int16Array;
   /** 1 = bloqueia movimento. */
   solid: Uint8Array;
   /** 1 = bloqueia linha de visão (paredes, árvores, rochas grandes). */
@@ -117,6 +125,8 @@ export interface GameMap {
   regions: RegionDef[];
   signs: SignDef[];
   playerStart: TilePos;
+  /** Portões da cidade (lado de fora): quem está fora só chega às portas da vila passando por eles. */
+  gates?: TilePos[];
 }
 
 export const inBounds = (m: GameMap, x: number, y: number): boolean => x >= 0 && y >= 0 && x < m.width && y < m.height;
@@ -136,9 +146,28 @@ export function blocksSight(m: GameMap, x: number, y: number): boolean {
 
 export function regionAt(m: GameMap, x: number, y: number): RegionDef | null {
   let best: RegionDef | null = null;
-  for (const r of m.regions)
+  // zona de caça (formato livre): vale como prioridade 1, abaixo das áreas especiais (vila, templo, acampamentos)
+  const z = inBounds(m, x, y) && m.zone ? m.zone[cellIndex(m, x, y)]! : -1;
+  const zoneRegion = z >= 0 ? m.regions[z]! : null;
+  for (let i = 0; i < m.regions.length; i++) {
+    const r = m.regions[i]!;
+    if (m.zone && isZone(m, i)) continue;
     if (x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h && (!best || r.priority > best.priority)) best = r;
+  }
+  if (zoneRegion && (!best || zoneRegion.priority >= best.priority)) return zoneRegion;
   return best;
+}
+
+/** As regiões que são zonas (formato livre) ficam marcadas na primeira consulta. */
+const zoneIndexCache = new WeakMap<GameMap, Set<number>>();
+function isZone(m: GameMap, i: number): boolean {
+  let set = zoneIndexCache.get(m);
+  if (!set) {
+    set = new Set<number>();
+    for (const z of m.zone) if (z >= 0) set.add(z);
+    zoneIndexCache.set(m, set);
+  }
+  return set.has(i);
 }
 
 export function buildingAt(m: GameMap, x: number, y: number): BuildingDef | null {

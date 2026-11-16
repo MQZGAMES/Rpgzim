@@ -106,7 +106,7 @@ function oak(name: string, ramp: Ramp, seed: number, fruit?: Color) {
   add(name, c);
 }
 
-function pine(name: string, seed: number) {
+function pine(name: string, seed: number, snow = false) {
   const c = new PixelCanvas(26, 48);
   trunk(c, 13, 38, 45, 4);
   const tiers = [
@@ -129,6 +129,124 @@ function pine(name: string, seed: number) {
     }
   }
   c.set(13, 2, P.forest[4]!);
+  // neve nas camadas: o topo de cada degrau do pinheiro fica branco (com sombra azul logo abaixo)
+  if (snow)
+    for (let y = 1; y < 40; y++)
+      for (let x = 0; x < 26; x++) {
+        if (!c.isOpaque(x, y)) continue;
+        if (!c.isOpaque(x, y - 1)) c.set(x, y, hash2(x, y, seed) < 0.3 ? P.snow[4]! : P.snow[5]!);
+        else if (!c.isOpaque(x, y - 2) && hash2(x, y, seed + 1) < 0.6) c.set(x, y, P.snow[2]!);
+      }
+  c.outline(darkOutline);
+  add(name, c);
+}
+
+/** Árvore seca, sem folhas: tronco cinza e galhos tortos (tundra, pântano corrompido e terras queimadas). */
+function deadTree(name: string, seed: number, ramp: Ramp = P.wood) {
+  const c = new PixelCanvas(30, 44);
+  const rnd = mulberry32(seed);
+  const bark = (x: number, y: number, t: number) => (t < 0.3 ? mix(ramp[3]!, P.stone[3]!, 0.5) : t < 0.7 ? mix(ramp[2]!, P.stone[2]!, 0.5) : mix(ramp[1]!, P.stone[1]!, 0.5));
+  for (let y = 18; y <= 41; y++) {
+    const half = 2 + (y > 37 ? (y - 37) * 0.6 : 0);
+    for (let x = Math.floor(15 - half); x < Math.ceil(15 + half); x++) c.set(x, y, bark(x, y, (x - (15 - half)) / (2 * half)));
+  }
+  const branch = (x0: number, y0: number, dx: number, len: number) => {
+    let x = x0;
+    let y = y0;
+    for (let k = 0; k < len; k++) {
+      c.set(Math.round(x), Math.round(y), bark(0, 0, k / len));
+      if (k < len / 2) c.set(Math.round(x), Math.round(y) + 1, bark(0, 0, 0.9));
+      x += dx * (0.8 + rnd() * 0.4);
+      y -= 0.7 + rnd() * 0.5;
+    }
+  };
+  branch(15, 22, -0.9, 10);
+  branch(15, 20, 0.9, 11);
+  branch(14, 26, -1, 7);
+  branch(16, 28, 1, 6);
+  branch(15, 18, 0.2, 12);
+  c.outline(darkOutline);
+  add(name, c);
+}
+
+/** Acácia da savana: tronco fino e copa larga e achatada. */
+function acacia(name: string, seed: number) {
+  const c = new PixelCanvas(40, 42);
+  trunk(c, 20, 18, 39, 4);
+  c.line(20, 22, 13, 14, P.wood[2]!);
+  c.line(20, 22, 27, 14, P.wood[2]!);
+  canopy(c, [{ x: 20, y: 11, r: 8 }, { x: 11, y: 12, r: 6 }, { x: 29, y: 12, r: 6 }, { x: 15, y: 9, r: 5 }, { x: 25, y: 9, r: 5 }], P.dry, seed);
+  // achata: corta a copa acima de y 5 e abaixo de y 16
+  for (let y = 0; y < 42; y++) for (let x = 0; x < 40; x++) if ((y < 5 || (y > 16 && y < 18)) && c.isOpaque(x, y) && Math.abs(x - 20) > 2) c.set(x, y, 0);
+  c.outline(darkOutline);
+  add(name, c);
+}
+
+/** Árvore do pântano: copa escura e baixa, com musgo pendurado. */
+function swampTree(name: string, seed: number) {
+  const c = new PixelCanvas(36, 46);
+  trunk(c, 18, 26, 43, 6);
+  canopy(c, [{ x: 18, y: 16, r: 11 }, { x: 9, y: 21, r: 7 }, { x: 27, y: 21, r: 7 }, { x: 18, y: 9, r: 7 }], P.mud.map((col) => mix(col, P.forest[3]!, 0.55)), seed);
+  const rnd = mulberry32(seed);
+  for (let i = 0; i < 9; i++) {
+    const x = 6 + Math.floor(rnd() * 24);
+    let y0 = 0;
+    for (let y = 45; y > 0; y--) if (c.isOpaque(x, y) && y < 30) {
+      y0 = y;
+      break;
+    }
+    if (!y0) continue;
+    const len = 3 + Math.floor(rnd() * 6);
+    for (let k = 1; k <= len; k++) c.set(x, y0 + k, k === len ? P.green[2]! : P.green[1]!);
+  }
+  c.outline(darkOutline);
+  add(name, c);
+}
+
+/** Cacto do deserto: coluna com braços e espinhos. */
+function cactus(name: string, arms: number) {
+  const c = new PixelCanvas(18, 30);
+  const col = (x0: number, y0: number, y1: number, w: number) => {
+    for (let y = y0; y <= y1; y++)
+      for (let x = x0; x < x0 + w; x++) {
+        const t = (x - x0) / w;
+        c.set(x, y, t < 0.3 ? P.green[4]! : t < 0.7 ? P.green[3]! : P.green[2]!);
+        if ((x + y) % 4 === 0 && t > 0.2 && t < 0.8) c.set(x, y, P.green[1]!);
+      }
+    for (let x = x0 + 1; x < x0 + w - 1; x++) c.set(x, y0 - 1, P.green[4]!);
+  };
+  col(7, 4, 28, 5);
+  if (arms > 0) {
+    col(2, 9, 16, 3);
+    for (let x = 4; x <= 7; x++) for (let y = 15; y <= 17; y++) c.set(x, y, P.green[3]!);
+  }
+  if (arms > 1) {
+    col(13, 12, 19, 3);
+    for (let x = 11; x <= 13; x++) for (let y = 18; y <= 20; y++) c.set(x, y, P.green[2]!);
+  }
+  c.set(9, 3, P.pink[3]!);
+  c.set(10, 3, P.pink[2]!);
+  c.outline(darkOutline);
+  add(name, c);
+}
+
+/** Cristais de gelo: prismas azulados com brilho. */
+function iceCrystal(name: string, seed: number) {
+  const c = new PixelCanvas(22, 28);
+  const rnd = mulberry32(seed);
+  const prism = (cx: number, base: number, h: number, w: number) => {
+    for (let y = base - h; y <= base; y++) {
+      const half = y < base - h + w ? ((y - (base - h)) / w) * (w / 2) : w / 2;
+      for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half); x++) {
+        const t = (x - (cx - half)) / (2 * half + 0.01);
+        c.set(x, y, t < 0.35 ? P.ice[4]! : t < 0.7 ? P.ice[3]! : P.ice[2]!);
+      }
+    }
+    c.set(Math.round(cx) - 1, base - h + 2, P.white);
+  };
+  prism(11, 26, 22, 6);
+  prism(6, 26, 13 + Math.floor(rnd() * 3), 4);
+  prism(16, 26, 15 + Math.floor(rnd() * 3), 4);
   c.outline(darkOutline);
   add(name, c);
 }
@@ -139,6 +257,15 @@ oak('tree_forest', P.forest, 13);
 oak('tree_apple', P.grass, 14, P.red[3]!);
 pine('tree_pine', 15);
 pine('tree_pine_b', 16);
+pine('tree_pine_snow', 17, true);
+pine('tree_pine_snow_b', 18, true);
+deadTree('tree_dead', 19);
+deadTree('tree_dead_b', 20, P.leather);
+acacia('tree_acacia', 25);
+swampTree('tree_swamp', 26);
+cactus('cactus', 2);
+cactus('cactus_b', 1);
+iceCrystal('crystal_ice', 27);
 
 // arbustos
 function bush(name: string, seed: number, accent?: Color, ramp: Ramp = P.grass) {
@@ -153,7 +280,7 @@ bush('bush_flower', 23, P.pink[3]!);
 bush('bush_dark', 24, undefined, P.forest);
 
 // ---------------------------------------------------------------- rochas e madeira
-function rock(name: string, w: number, h: number, blobs: Blob[], seed: number, moss = false) {
+function rock(name: string, w: number, h: number, blobs: Blob[], seed: number, moss = false, ramp: Ramp = P.stone, cap?: 'snow' | 'lava') {
   const c = new PixelCanvas(w, h);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
@@ -162,9 +289,10 @@ function rock(name: string, w: number, h: number, blobs: Blob[], seed: number, m
       if (!best) continue;
       const nx = (x + 0.5 - best.x) / best.r;
       const ny = ((y + 0.5 - best.y) * 1.25) / best.r;
-      let col = lit(P.stone, nx, ny, 0.1);
-      if (hash2(x, y, seed) < 0.06) col = P.stone[1]!;
+      let col = lit(ramp, nx, ny, 0.1);
+      if (hash2(x, y, seed) < 0.06) col = ramp[1]!;
       if (moss && ny < -0.35 && hash2(x, y, seed + 1) < 0.75) col = ny < -0.6 ? P.grass[4]! : P.grass[3]!;
+      if (cap === 'snow' && ny < -0.3 && hash2(x, y, seed + 2) < 0.85) col = ny < -0.55 ? P.snow[5]! : P.snow[3]!;
       c.set(x, y, col);
     }
   // rachaduras
@@ -173,7 +301,7 @@ function rock(name: string, w: number, h: number, blobs: Blob[], seed: number, m
     let x = Math.floor(w * 0.3 + rnd() * w * 0.4);
     let y = Math.floor(h * 0.35 + rnd() * h * 0.2);
     for (let k = 0; k < 4; k++) {
-      c.paint(x, y, P.stone[1]!);
+      c.paint(x, y, cap === 'lava' ? (k % 2 ? P.fire[3]! : P.fire[4]!) : ramp[1]!);
       x += rnd() < 0.5 ? 1 : 0;
       y += 1;
     }
@@ -185,6 +313,12 @@ rock('rock_small', 14, 11, [{ x: 7, y: 6.5, r: 6 }], 31);
 rock('rock_medium', 20, 15, [{ x: 9, y: 9, r: 8 }, { x: 13.5, y: 10, r: 5.5 }], 32, true);
 rock('rock_large', 32, 24, [{ x: 13, y: 13, r: 11 }, { x: 22, y: 15, r: 8 }, { x: 8, y: 17, r: 6 }], 33, true);
 rock('rock_large_b', 30, 22, [{ x: 15, y: 12, r: 11 }, { x: 8, y: 15, r: 6 }, { x: 23, y: 16, r: 5.5 }], 34);
+rock('rock_snow', 20, 15, [{ x: 9, y: 9, r: 8 }, { x: 13.5, y: 10, r: 5.5 }], 35, false, P.stone, 'snow');
+rock('rock_snow_large', 32, 24, [{ x: 13, y: 13, r: 11 }, { x: 22, y: 15, r: 8 }, { x: 8, y: 17, r: 6 }], 36, false, P.stone, 'snow');
+rock('rock_basalt', 20, 15, [{ x: 9, y: 9, r: 8 }, { x: 13.5, y: 10, r: 5.5 }], 37, false, P.ash, 'lava');
+rock('rock_basalt_large', 32, 24, [{ x: 13, y: 13, r: 11 }, { x: 22, y: 15, r: 8 }, { x: 8, y: 17, r: 6 }], 38, false, P.ash, 'lava');
+rock('rock_red', 20, 15, [{ x: 9, y: 9, r: 8 }, { x: 13.5, y: 10, r: 5.5 }], 39, false, P.redsand);
+rock('rock_red_large', 30, 22, [{ x: 15, y: 12, r: 11 }, { x: 8, y: 15, r: 6 }, { x: 23, y: 16, r: 5.5 }], 40, false, P.redsand);
 
 function stump() {
   const c = new PixelCanvas(16, 13);

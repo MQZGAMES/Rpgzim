@@ -58,9 +58,8 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   velocidade anterior, um pouco mais lentas que o jogador (dá para se posicionar e fugir).
 
 ## O que existe
-- Mundo contínuo (170×118 tiles): Templo da Aurora → Vila de Pedraluz → Bosque Selvagem → Pântano Sombrio,
-  Colinas dos Lobos e Ruínas Antigas e, a leste, as **Terras Altas** (Floresta dos Bandidos, Cânion dos Escorpiões,
-  Fortaleza Orc, Bosque Gélido, Cidadela Sombria e Covil do Dragão), com autotile, água animada, iluminação aditiva e **casas exploráveis no
+- Mundo contínuo (245×250 tiles) com **Pedraluz no centro** e quatro direções de biomas ao redor (ver *Mundo com
+  Pedraluz no centro*, abaixo), com autotile, água e lava animadas, iluminação aditiva e **casas exploráveis no
   mesmo mapa** (telhado some ao entrar; o interior aparece em frente a portas e janelas).
 - 4 vocações (Sorcerer, Druid, Paladin, Knight), **13 magias**, 99 itens com equipamentos até o nível 18,
   **18 criaturas em 6 patamares** (cada patamar tem o dobro de vida e ataque do anterior; ver `docs/BALANCE.md`),
@@ -82,7 +81,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
 
 ## Expansão: níveis 24 a 100
 - **Uma cidade só**: Pedraluz continua sendo a única cidade. Todo o equipamento do nível 24 ao 100 e as poções espirituais/divinas são vendidos lá (peças de luta na Ferraria, de mago na Alquimia) e os troféus das criaturas são comprados pelo valor cheio.
-- **Zonas de caça por distância**: o mapa (300×128) segue a leste das Terras Altas com oito zonas, cada uma mais difícil que a anterior quanto mais longe de Pedraluz — Charneca das Presas, Montanha Branca, Dunas Rubras, Lago Congelado, Pântano Corrompido, Vulcão Adormecido, Portal Infernal e Abismo Primordial. Dentro de cada zona a espécie mais fraca fica na borda oeste (perto da cidade) e a mais forte na borda leste.
+- **Zonas de caça por distância**: em qualquer direção, quanto mais longe da muralha de Pedraluz, mais fortes as criaturas (cinco anéis; ver *Mundo com Pedraluz no centro*).
 - **Equipamentos**: 11 faixas de material (Obsidiana a Primórdio) × 19 peças, geradas por fórmula em `src/data/items.gear.ts`.
 - **Criaturas**: 16 espécies novas (nível 44 a 100) com troféu próprio. As faixas tardias crescem mais devagar que as primeiras. `tests/tools/calibrate.test.ts` imprime a margem de luta de cada vocação contra cada espécie.
 - **Arcos sem munição**: não há mais flechas; o dano do Paladino vem do ataque do arco (e das magias). As flechas antigas viraram loot vendável.
@@ -572,3 +571,29 @@ Resumo e decisões em [`docs/BALANCE.md`](docs/BALANCE.md); tabela gerada com as
 
 Assets: toda a arte é gerada por `scripts/art/` (licença do próprio projeto). Fontes: Nunito (interface) e
 Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
+
+## Mundo com Pedraluz no centro (nov/2026)
+- **A vila no meio do mundo** (245×250 tiles), com muralha e portão nos quatro lados (guardas Tomé, Lia, Bento e Íris).
+  Por dentro ela é a mesma de sempre: o desenho é montado em coordenadas locais e deslocado para o centro
+  (`src/data/maps/layout.ts`, `MapBuilder.translate`).
+- **Cinco anéis de distância** a partir da muralha (níveis 1–8, 9–20, 20–42, 44–71 e 72–103) e **quatro direções**, cada
+  uma com uma sequência de biomas (`src/data/maps/biomes.ts`):
+  - **Norte (gelo)**: Campos do Norte → Taiga dos Pinheiros → Tundra Uivante → Geleira Eterna → Pico do Inverno;
+  - **Leste (sol)**: Campos do Leste → Savana Dourada → Mar de Areia → Dunas Rubras → Vulcão Adormecido (lava);
+  - **Sul (água)**: Margem do Pântano → Pântano Sombrio → Selva Alagada → Pântano Corrompido → Necrópole Esquecida;
+  - **Oeste (montanhas)**: Colinas Verdes → Ruínas Antigas → Montanhas de Ferro → Charneca das Presas → Abismo Primordial.
+- **Chão novo** gerado pelos scripts de arte: neve, areia (clara e vermelha), cinza vulcânica, lama e savana seca, com as
+  bordas de caminhos, calçamento e água na cor de cada bioma, e **lava animada** (intransponível). Objetos novos:
+  pinheiros com neve, árvores secas, acácias, árvores de pântano, cactos, rochas com neve, basalto com veios de lava,
+  rochas vermelhas e cristais de gelo.
+- **Estradas** saem dos quatro portões e um **anel viário** liga os braços; **24 santuários** (áreas protegidas sem
+  lojas) na entrada de cada anel e nas laterais do anel 4, para descansar e se abrigar.
+- **Marcos**: Acampamento Goblin, Acampamento dos Bandidos, Toca do Yeti, Lago Congelado, Oásis Escondido, Ruínas do
+  Faraó, Acampamento dos Senhores da Guerra, Lago de Lava e Cratera do Vulcão, Cemitério dos Reis, Cripta Profunda,
+  Fortaleza Orc, Forte do Chefe Goblin (o chefe saiu da área de iniciante), Cidadela Sombria, Cripta do Lich, Covil do
+  Dragão, Portal Infernal e Trono do Abismo.
+- **Criaturas por bioma**: 650 criaturas (antes 255), cada espécie com 2–3 pontos de surgimento espalhados pela zona; na
+  mesma faixa de nível as direções dividem algumas espécies e têm outras próprias. **Seis criaturas novas**: Chacal da
+  Savana (9), Saqueador do Deserto (15), Crocodilo do Brejo (23), Múmia (34), Yeti (39) e Colosso de Gelo (92).
+- **Saves antigos**: a posição salva no mapa antigo volta ao templo (versão do mapa no save), sem perder nada.
+

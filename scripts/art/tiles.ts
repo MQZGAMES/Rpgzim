@@ -63,6 +63,97 @@ for (let i = 0; i < 6; i++) add(`grass_${i}`, grassBase(100 + i, { tufts: 3 + (i
 for (let i = 0; i < 3; i++) add(`grass_flowers_${i}`, grassBase(200 + i, { flowers: 2 + i, tufts: 2 }));
 for (let i = 0; i < 4; i++) add(`grass_dark_${i}`, grassBase(300 + i, { dark: true, tufts: 4 + i }));
 
+// ---------------------------------------------------------------- biomas (chão de neve, areia, cinza, lama e savana)
+// Cada bioma tem uma rampa própria (escuro → claro) e um detalhe que se repete sem marcar a grade: neve com
+// brilhos e montinhos, areia com ondulações, cinza com brasas, lama com poças e savana com tufos secos.
+const BIOME_RAMPS = { snow: P.snow, sand: P.dune, redsand: P.redsand, ash: P.ash, mud: P.mud, dry: P.dry } as const;
+type BiomeKind = 'snow' | 'sand' | 'ash' | 'mud' | 'dry';
+
+function biomeBase(kind: BiomeKind, seed: number, dark = false): PixelCanvas {
+  const c = tile();
+  const r = kind === 'sand' && dark ? BIOME_RAMPS.redsand : BIOME_RAMPS[kind];
+  const off = dark && kind !== 'sand' ? -1 : 0;
+  const base = r[2 + off]!;
+  const light = r[3 + off]!;
+  const shade = r[1 + off]!;
+  c.fill(base);
+  for (let y = 0; y < T; y++)
+    for (let x = 0; x < T; x++) {
+      const n = periodicNoise(x, y, T, 8, 21 + seed % 7) * 0.6 + periodicNoise(x, y, T, 4, 22) * 0.4;
+      if (n > 0.64 && bayer(x, y) < (n - 0.64) * 4) c.set(x, y, light);
+      if (n < 0.32 && bayer(x, y) < (0.32 - n) * 3) c.set(x, y, shade);
+    }
+  const rnd = mulberry32(seed);
+  const at = (x: number, y: number, col: Color) => c.set((x + T) % T, (y + T) % T, col);
+  if (kind === 'snow') {
+    // montinhos (sombra azul embaixo, topo branco) e brilhos
+    for (let i = 0; i < 3; i++) {
+      const x = Math.floor(rnd() * T);
+      const y = Math.floor(rnd() * T);
+      at(x, y, r[4]!);
+      at(x + 1, y, r[5]!);
+      at(x - 1, y + 1, r[1]!);
+      at(x, y + 1, r[1]!);
+      at(x + 1, y + 1, r[2]!);
+    }
+    for (let i = 0; i < 2; i++) at(Math.floor(rnd() * T), Math.floor(rnd() * T), P.white);
+  } else if (kind === 'sand') {
+    // ondulações das dunas: linhas curvas e contínuas entre tiles
+    for (let x = 0; x < T; x++) {
+      const y = (Math.round(4 + Math.sin(((x + seed) / T) * Math.PI * 2) * 1.5) + T) % T;
+      at(x, y, shade);
+      at(x, y - 1, light);
+      const y2 = (y + 8) % T;
+      if (x % 3 !== 0) at(x, y2, shade);
+    }
+    if (rnd() < 0.6) at(Math.floor(rnd() * T), Math.floor(rnd() * T), r[0]!);
+  } else if (kind === 'ash') {
+    // rachaduras finas e brasas
+    let x = Math.floor(rnd() * T);
+    let y = Math.floor(rnd() * T);
+    for (let k = 0; k < 6; k++) {
+      at(x, y, r[0]!);
+      x += rnd() < 0.5 ? 1 : -1;
+      y += 1;
+    }
+    const embers = dark ? 3 : 1;
+    for (let i = 0; i < embers; i++) {
+      const ex = Math.floor(rnd() * T);
+      const ey = Math.floor(rnd() * T);
+      at(ex, ey, P.fire[3]!);
+      if (dark) at(ex + 1, ey, P.fire[2]!);
+    }
+  } else if (kind === 'mud') {
+    // poças com reflexo
+    for (let i = 0; i < 2; i++) {
+      const px = Math.floor(rnd() * T);
+      const py = Math.floor(rnd() * T);
+      for (let k = -1; k <= 1; k++) at(px + k, py, r[0]!);
+      at(px, py, mix(r[0]!, P.water[2]!, 0.4));
+      at(px - 1, py - 1, r[3]!);
+    }
+  } else {
+    // savana: tufos secos em "v"
+    for (let i = 0; i < 4; i++) {
+      const x = Math.floor(rnd() * T);
+      const y = Math.floor(rnd() * T);
+      at(x, y, shade);
+      at(x + 2, y, shade);
+      at(x + 1, y + 1, shade);
+      at(x, y - 1, r[4]!);
+      at(x + 2, y - 1, r[4]!);
+    }
+  }
+  return c;
+}
+
+const BIOME_VARIANTS: Record<BiomeKind, [number, number]> = { snow: [6, 3], sand: [6, 3], ash: [4, 3], mud: [4, 3], dry: [6, 3] };
+for (const kind of Object.keys(BIOME_VARIANTS) as BiomeKind[]) {
+  const [n, d] = BIOME_VARIANTS[kind];
+  for (let i = 0; i < n; i++) add(`${kind}_${i}`, biomeBase(kind, 600 + i * 13 + kind.length, false));
+  for (let i = 0; i < d; i++) add(`${kind}_dark_${i}`, biomeBase(kind, 700 + i * 17 + kind.length, true));
+}
+
 // ---------------------------------------------------------------- autotile por cantos
 type MaskFn = (x: number, y: number) => boolean;
 
@@ -216,6 +307,47 @@ add('cobble_15_b', terrainTile(15, cobbleStyle(502), 9, 0));
 add('cobble_15_c', terrainTile(15, cobbleStyle(503), 9, 0));
 add('cobble_15_d', terrainTile(15, cobbleStyle(504), 9, 0));
 for (let f = 0; f < 3; f++) for (let cfg = 1; cfg < 16; cfg++) add(`water_${f}_${cfg}`, terrainTile(cfg, waterStyle(f), 13, 0, f));
+
+// Bordas por bioma: o contorno externo dos caminhos, do calçamento e da água usa a cor do chão em volta (na neve,
+// na areia, na cinza, na lama e na savana), em vez da grama. A configuração 15 (cheia) não tem borda e é a mesma.
+const RIM: Record<BiomeKind, { dirt: Color; cobble: Color; shore: Color }> = {
+  snow: { dirt: BIOME_RAMPS.snow[1]!, cobble: BIOME_RAMPS.snow[2]!, shore: BIOME_RAMPS.snow[1]! },
+  sand: { dirt: BIOME_RAMPS.sand[1]!, cobble: BIOME_RAMPS.sand[1]!, shore: BIOME_RAMPS.sand[1]! },
+  ash: { dirt: BIOME_RAMPS.ash[1]!, cobble: BIOME_RAMPS.ash[1]!, shore: BIOME_RAMPS.ash[0]! },
+  mud: { dirt: BIOME_RAMPS.mud[2]!, cobble: BIOME_RAMPS.mud[1]!, shore: BIOME_RAMPS.mud[1]! },
+  dry: { dirt: BIOME_RAMPS.dry[1]!, cobble: BIOME_RAMPS.dry[1]!, shore: BIOME_RAMPS.dry[1]! },
+};
+for (const kind of Object.keys(RIM) as BiomeKind[]) {
+  const rim = RIM[kind];
+  const dirtB: TerrainStyle = { ...dirtStyle, outerRim: (x, y) => (hash2(x, y, 43) < 0.55 ? rim.dirt : 0) };
+  const cobB = { ...cobbleStyle(501), outerRim: (x: number, y: number) => (hash2(x, y, 77) < 0.7 ? rim.cobble : 0) };
+  for (let cfg = 1; cfg < 15; cfg++) {
+    add(`dirt_${kind}_${cfg}`, terrainTile(cfg, dirtB, 7, 0));
+    add(`cobble_${kind}_${cfg}`, terrainTile(cfg, cobB, 9, 0));
+  }
+  for (let f = 0; f < 3; f++)
+    for (let cfg = 1; cfg < 15; cfg++)
+      add(`water_${kind}_${f}_${cfg}`, terrainTile(cfg, { ...waterStyle(f), outerRim: () => rim.shore }, 13, 0, f));
+}
+
+// lava animada (só nas terras vulcânicas): crosta escura, veios brilhantes que se movem e borda de basalto
+function lavaInterior(x: number, y: number, frame: number): Color {
+  const f = P.fire;
+  const n = periodicNoise(x, y, T, 8, 140 + frame) * 0.7 + periodicNoise(x, y, T, 4, 150) * 0.3;
+  if (n > 0.72) return f[5]!;
+  if (n > 0.58) return f[4]!;
+  if (n > 0.4) return f[3]!;
+  if (hash2(x, y, 160 + frame) > 0.96) return f[4]!;
+  return n < 0.22 ? f[1]! : f[2]!;
+}
+const lavaStyle = (frame: number): TerrainStyle => ({
+  interior: (x, y) => lavaInterior(x, y, frame),
+  innerRim: () => P.fire[1]!,
+  innerRim2: () => mix(P.fire[2]!, P.fire[1]!, 0.5),
+  outerRim: () => BIOME_RAMPS.ash[0]!,
+});
+for (let f = 0; f < 3; f++) for (let cfg = 1; cfg < 16; cfg++) add(`lava_${f}_${cfg}`, terrainTile(cfg, lavaStyle(f), 17, 0, f));
+
 
 // ---------------------------------------------------------------- pisos internos
 function woodFloor(seed: number): PixelCanvas {
@@ -761,6 +893,64 @@ decor('decor_crack', (c) => {
   c.line(7, 8, 6, 12, P.dirt[1]!);
   c.line(7, 8, 11, 9, P.dirt[1]!);
 }, 11);
+
+// decoração dos biomas
+decor('decor_snow_tuft', (c, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const x = 2 + Math.floor(rnd() * 11);
+    const y = 4 + Math.floor(rnd() * 9);
+    c.hline(x - 1, x + 2, y, BIOME_RAMPS.snow[5]!);
+    c.hline(x - 2, x + 3, y + 1, BIOME_RAMPS.snow[4]!);
+    c.hline(x - 2, x + 3, y + 2, BIOME_RAMPS.snow[1]!);
+  }
+}, 21);
+decor('decor_ice_crack', (c) => {
+  c.line(2, 5, 7, 8, BIOME_RAMPS.snow[0]!);
+  c.line(7, 8, 13, 6, BIOME_RAMPS.snow[0]!);
+  c.line(7, 8, 9, 13, BIOME_RAMPS.snow[0]!);
+  c.set(8, 7, P.white);
+}, 22);
+decor('decor_sand_stones', (c, rnd) => {
+  for (let i = 0; i < 4; i++) {
+    const x = 2 + Math.floor(rnd() * 12);
+    const y = 2 + Math.floor(rnd() * 12);
+    c.set(x, y, BIOME_RAMPS.sand[4]!);
+    c.set(x + 1, y, BIOME_RAMPS.sand[1]!);
+    c.set(x, y + 1, BIOME_RAMPS.sand[0]!);
+  }
+}, 23);
+decor('decor_skull', (c) => {
+  c.ellipse(8, 8, 3.2, 2.8, P.bone[3]!);
+  c.ellipse(8, 9, 2.4, 1.6, P.bone[2]!);
+  c.set(7, 8, P.outline);
+  c.set(9, 8, P.outline);
+  c.hline(7, 9, 11, P.bone[1]!);
+  c.line(11, 11, 14, 12, P.bone[2]!);
+}, 24);
+decor('decor_ember', (c, rnd) => {
+  for (let i = 0; i < 5; i++) {
+    const x = 2 + Math.floor(rnd() * 12);
+    const y = 2 + Math.floor(rnd() * 12);
+    c.set(x, y, P.fire[i % 2 ? 3 : 4]!);
+    c.set(x + 1, y, P.fire[1]!);
+  }
+}, 25);
+decor('decor_mud_bubbles', (c, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const x = 3 + Math.floor(rnd() * 10);
+    const y = 3 + Math.floor(rnd() * 10);
+    c.ellipse(x, y, 1.6, 1.2, BIOME_RAMPS.mud[0]!);
+    c.set(x - 1, y - 1, BIOME_RAMPS.mud[4]!);
+  }
+}, 26);
+decor('decor_dry_tuft', (c, rnd) => {
+  for (let i = 0; i < 10; i++) {
+    const x = 1 + Math.floor(rnd() * 14);
+    const h = 3 + Math.floor(rnd() * 4);
+    const y0 = 14 - Math.floor(rnd() * 4);
+    for (let k = 0; k < h; k++) c.set(x + (k > h - 2 ? (i % 2 ? 1 : -1) : 0), y0 - k, k > h - 3 ? BIOME_RAMPS.dry[5]! : BIOME_RAMPS.dry[3]!);
+  }
+}, 27);
 
 // ---------------------------------------------------------------- montagem
 export function buildTileset(): { image: PixelCanvas; names: Record<string, number>; columns: number } {

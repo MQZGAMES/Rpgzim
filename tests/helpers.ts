@@ -1,3 +1,4 @@
+import { TOWN_X, TOWN_Y } from '../src/data/maps/layout';
 import { GAME_DATA } from '../src/data';
 import { buildWorld } from '../src/data/maps/world';
 import type { VocationId } from '../src/domain/value-objects/ids';
@@ -41,3 +42,9 @@ export const fixedLoot: LootGenerator = { roll: () => ({ items: [{ itemId: 'slim
 export function advance(sim: GameSimulation, ms: number, step = 16): void {
   for (let t = 0; t < ms; t += step) sim.update(Math.min(step, ms - t));
 }
+
+/**
+ * Coordenadas do desenho da vila (locais, as de sempre: avenida em 30,23, praça em 48,30, portão leste em 72,22) no
+ * mundo, onde a vila fica no centro (ver src/data/maps/layout.ts).
+ */
+export const T = (x: number, y: number): [number, number] => [x + TOWN_X, y + TOWN_Y];

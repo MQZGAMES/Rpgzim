@@ -36,6 +36,12 @@ function putAt(sim: GameSimulation, a: { x: number; y: number; id: string }, x: 
   a.x = x;
   a.y = y;
   w.occupancy.set(y * w.map.width + x, a.id);
+  // criatura levada para outro lugar: a "casa" dela passa a ser ali (senão passaria do limite de perseguição e voltaria)
+  const m = a as { homeX?: number; homeY?: number };
+  if (m.homeX !== undefined) {
+    m.homeX = x;
+    m.homeY = y;
+  }
 }
 
 /** Tile livre fora da área protegida, longe dos monstros (campo aberto ao sul da vila). */
@@ -95,7 +101,7 @@ describe('monstros trocam de alvo pelo mais próximo', () => {
     const { sim, w } = withHero();
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
-    const monster = [...w.monsters.values()].find((m) => m.alive)!;
+    const monster = [...w.monsters.values()].filter((m) => m.alive).sort((a, b) => chebyshev(a, spot) - chebyshev(b, spot))[0]!; // (a mais perto do campo: de longe ela voltaria para casa)
     putAt(sim, monster, spot.x + 2, spot.y);
     monster.targetId = w.human.id;
     monster.state = 'chasing';
@@ -388,7 +394,7 @@ describe('Knight em grupo "lura" criaturas', () => {
       trail: [],
     };
     h.brain.mode = 'follow';
-    const monster = [...w.monsters.values()][0]!;
+    const monster = [...w.monsters.values()].sort((a, b) => chebyshev(a, spot) - chebyshev(b, spot))[0]!; // (a mais perto do campo)
     monster.alive = true;
     monster.def = { ...monster.def, aggroRadius: 0 }; // ociosa: não vem sozinha
     putAt(sim, monster, spot.x + 6, spot.y);

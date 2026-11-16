@@ -59,6 +59,14 @@ export const P = {
   nature: ramp('#142e12', '#2e5c18', '#5c9626', '#9ccc42', '#dcf486'),
   heal: ramp('#124a30', '#25875a', '#4fd08a', '#a6f8c4', '#f0fff4'),
   blood: ramp('#3a0a12', '#7a1420', '#b8222c', '#e04a44'),
+
+  // biomas (chão, objetos e criaturas de cada direção do mundo)
+  snow: ramp('#5f7896', '#8ea7c6', '#bccfe6', '#dfe9f6', '#f4f8fd', '#ffffff'),
+  dune: ramp('#8a6a48', '#b8955f', '#d6b57a', '#e8cd95', '#f4e2b4', '#fbf0d2'),
+  redsand: ramp('#4e2219', '#7a3524', '#a24c2f', '#c2683e', '#d98a55', '#ecae7a'),
+  ash: ramp('#141217', '#221f26', '#322d36', '#453e48', '#5a5160', '#71677a'),
+  mud: ramp('#17140d', '#252012', '#372f19', '#4a3f22', '#5e512c', '#73653a'),
+  dry: ramp('#4a4318', '#6c6321', '#958b32', '#b8ad49', '#d2c76b', '#e9e09a'),
 } as const;
 
 export type Ramp = readonly Color[];

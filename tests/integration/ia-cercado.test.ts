@@ -11,7 +11,7 @@ import { setTarget } from '../../src/game/combat/combat';
 import { asActor } from '../../src/game/simulation/World';
 import { refreshStats } from '../../src/game/progression/progression';
 import { isPz } from '../../src/game/world/GameMap';
-import { advance, makeSim } from '../helpers';
+import { advance, makeSim, T } from '../helpers';
 
 const D = GAME_DATA;
 
@@ -26,7 +26,7 @@ function setup(heroId: string, level = 20) {
   asActor(w, h, () => refreshStats(w));
   h.character.health = h.stats.maxHealth;
   h.character.mana = h.stats.maxMana;
-  sim.teleportPlayer(20, 40); // (o jogador longe da cena)
+  sim.teleportPlayer(...T(20, 40)); // (o jogador longe da cena)
   // um lugar aberto fora da vila, com as 8 casas em volta livres
   let spot: { x: number; y: number } | null = null;
   for (let y = 34; y < 80 && !spot; y++)

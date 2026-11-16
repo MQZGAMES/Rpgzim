@@ -14,7 +14,7 @@ import { canAttackActor, configureParty, hasSkull } from '../../src/game/social/
 import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
 import { isPz } from '../../src/game/world/GameMap';
 import { buildSnapshot } from '../../src/integration/game-ui-bridge/snapshot';
-import { advance, makeSim, runUntil } from '../helpers';
+import { advance, makeSim, runUntil, T } from '../helpers';
 import { asActor } from '../../src/game/simulation/World';
 import { planWalk } from '../../src/game/movement/walk';
 
@@ -157,9 +157,15 @@ describe('vocações', () => {
   it('Golpe Brutal do Knight sem alvo mira o inimigo mais próximo e sai ao chegar nele', () => {
     const sim = makeSim('knight', { seed: 3 });
     const w = sim.world;
-    const slime = [...w.monsters.values()]
-      .filter((m) => m.def.id === 'slime')
-      .sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
+    const all = [...w.monsters.values()];
+    const slime = all.filter((m) => m.def.id === 'slime').sort((a, b) => chebyshev(a, w.player) - chebyshev(b, w.player))[0]!;
+    // os slimes surgem em trio: os vizinhos saem de cena (este tem de ser o inimigo mais próximo)
+    for (const o of all)
+      if (o !== slime && chebyshev(o, slime) <= 6) {
+        o.alive = false;
+        o.respawnAt = Infinity;
+        w.occupancy.delete(o.y * w.map.width + o.x);
+      }
     // 3 tiles do slime, fora da área protegida
     const spot = [...Array(49).keys()]
       .map((i) => ({ x: slime.x + (i % 7) - 3, y: slime.y + Math.floor(i / 7) - 3 }))
@@ -347,12 +353,13 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
   it('tocar num tile bloqueado guarda um destino alcançável (o replanejamento não trava)', () => {
     const sim = makeSim('knight');
     const w = sim.world;
-    sim.teleportPlayer(30, 23);
+    sim.teleportPlayer(...T(30, 23));
     // procura um tile sólido (árvore, muro, água) perto
     let solid: { x: number; y: number } | null = null;
+    const [ax, ay] = T(30, 23);
     for (let r = 2; r < 12 && !solid; r++)
       for (let dx = -r; dx <= r && !solid; dx++)
-        if (w.map.solid[(23 + r) * w.map.width + 30 + dx]) solid = { x: 30 + dx, y: 23 + r };
+        if (w.map.solid[(ay + r) * w.map.width + ax + dx]) solid = { x: ax + dx, y: ay + r };
     expect(solid).not.toBeNull();
     expect(sim.walkTo(solid!.x, solid!.y)).toBe(true);
     const goal = w.player.pathGoal!;
@@ -363,7 +370,7 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
   it('viagem pelo mini mapa atravessa o mundo até a área escolhida', () => {
     const sim = makeSim('knight');
     const w = sim.world;
-    const lair = w.map.regions.find((r) => r.id === 'canyon')!;
+    const lair = w.map.regions.find((r) => r.id === 'pharaoh_ruins')!;
     expect(sim.travelTo(lair.x + Math.floor(lair.w / 2), lair.y + Math.floor(lair.h / 2))).toBe(true);
     const goal = w.player.pathGoal!;
     runUntil(
@@ -388,7 +395,8 @@ describe('clique no mapa, mini mapa e lista de personagens', () => {
     expect(chebyshev(h, w.human)).toBeLessThanOrEqual(4);
   });
 
-  it('no grupo (mesmo com treino liberado) o Boladex nunca ataca nem desafia você por conta própria', () => {
+  // (5 min de jogo simulado: leva mais que os 5 s padrão)
+  it('no grupo (mesmo com treino liberado) o Boladex nunca ataca nem desafia você por conta própria', { timeout: 30_000 }, () => {
     const { sim, h, w } = withHero();
     party(sim, w.human.id, [w.human.id, h.id]);
     w.social.party!.friendlyFire = true;
@@ -499,7 +507,7 @@ describe('mini mapa: toque em lugar sem acesso', () => {
   it('tocar no meio de um lago leva até a margem mais próxima (não falha)', () => {
     const sim = makeSim('knight');
     const w = sim.world;
-    sim.teleportPlayer(30, 23);
+    sim.teleportPlayer(...T(30, 23));
     // centro de um lago: tile de água cercado de água
     let lake: { x: number; y: number } | null = null;
     for (let i = 0; i < w.map.width * w.map.height && !lake; i++) {

@@ -1230,6 +1230,36 @@ export const CHARACTERS: CharacterSpec[] = [
     held: 'staffOrb',
     ramps: { skin: [...P.bone, P.white], hair: P.gold, cloth: P.purple.map((c) => mix(c, P.black, 0.3)), accent: P.gold, gear: P.gold.map((c) => mix(c, P.purple[2]!, 0.35)), gearAccent: P.gold, boots: P.gold },
   },
+  // ---- criaturas dos biomas (deserto, gelo e necrópole)
+  {
+    id: 'nomad',
+    head: 'short',
+    body: 'robe',
+    gear: 'hood',
+    held: 'spear',
+    ramps: { skin: P.skinDark, hair: P.hairBlack, cloth: P.dune.map((c) => mix(c, P.dirt[2]!, 0.25)), accent: P.red, gear: P.dune, gearAccent: P.red, boots: P.leather },
+  },
+  {
+    id: 'yeti',
+    head: 'goblin',
+    body: 'tunic',
+    held: 'hammer',
+    ramps: { skin: P.snow, hair: P.snow, cloth: P.snow.map((c) => mix(c, P.ice[2]!, 0.25)), accent: P.ice, pants: P.snow, boots: P.ice },
+  },
+  {
+    id: 'mummy',
+    head: 'skull',
+    body: 'tunic',
+    held: 'swordShield',
+    ramps: { skin: P.dune.map((c) => mix(c, P.bone[2]!, 0.4)), hair: P.dune, cloth: P.bone.map((c) => mix(c, P.dune[2]!, 0.4)), accent: P.gold, pants: P.bone, boots: P.dune },
+  },
+  {
+    id: 'frost_colossus',
+    head: 'goblin',
+    body: 'tunic',
+    held: 'hammer',
+    ramps: { skin: P.ice, hair: P.ice, cloth: P.ice.map((c) => mix(c, P.stone[2]!, 0.35)), accent: P.snow, pants: P.ice.map((c) => mix(c, P.black, 0.15)), boots: P.ice },
+  },
   {
     id: 'goblin',
     head: 'goblin',
