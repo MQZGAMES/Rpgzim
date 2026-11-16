@@ -1401,6 +1401,7 @@ function townReason(w: World, h: HeroEntity): string | null {
   // mana acabando (e dinheiro para repor)
   // (só vale a viagem com ouro para um reforço de verdade: ida e volta custam mais que comprar duas poções)
   if (
+    ROLES[h.character.vocation].manaTrips &&
     manaGoal(w, h) &&
     manaStock(w, h) < manaGoal(w, h) * 0.3 &&
     spendable >= Math.max(45 * 6, manaRestockCost(w, h) * 0.5)

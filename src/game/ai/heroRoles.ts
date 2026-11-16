@@ -11,14 +11,20 @@ export interface RoleProfile {
   dpsMul: number;
   /** Treina com a arma de treino quando está atrasado nas skills. */
   trains: boolean;
+  /**
+   * Volta à vila só para repor mana (o ataque depende dela). O Paladino ataca com o arco sem mana: sem poção ele só
+   * deixa de usar magias e repõe a mana na próxima ida à vila por outro motivo.
+   */
+  manaTrips?: boolean;
 }
 
 export const ROLES: Readonly<Record<VocationId, RoleProfile>> = {
   knight: { keepDistance: 0, manaStock: 0, dpsMul: 1, trains: true },
-  paladin: { keepDistance: 3, manaStock: 0.6, dpsMul: 1.2, trains: false },
+  // o Paladino gasta mana em quase toda luta (Flecha Sagrada, Luz Restauradora): estoca pelo consumo real, como os magos
+  paladin: { keepDistance: 3, manaStock: 2, dpsMul: 1.2, trains: false },
   // as magias dos magos crescem com a varinha: somam bem mais que o golpe básico (ver tests/tools/vocation-dps)
-  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 2, trains: false },
-  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.75, trains: false },
+  sorcerer: { keepDistance: 3, manaStock: 2.5, dpsMul: 2, trains: false, manaTrips: true },
+  druid: { keepDistance: 3, manaStock: 2.5, dpsMul: 1.75, trains: false, manaTrips: true },
 };
 
 export const isRanged = (v: VocationId): boolean => ROLES[v].keepDistance > 0;

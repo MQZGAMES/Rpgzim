@@ -180,10 +180,10 @@ describe('poções acabando', () => {
 });
 
 describe('magias de criar poção', () => {
-  it('Sorcerer cria Poção de Mana Média por 3,2x a mana que ela recupera (e Druid a de Vida Média)', () => {
+  it('Sorcerer cria Poção de Mana Média por 2,25x a mana que ela recupera (e Druid a de Vida Média)', () => {
     for (const [voc, spell, item, cost] of [
-      ['sorcerer', 'conjure_mana', 'potion_mana_great', 150 * 3.2],
-      ['druid', 'conjure_health', 'potion_health_great', 180 * 3.2],
+      ['sorcerer', 'conjure_mana', 'potion_mana_great', Math.round(150 * 2.25)],
+      ['druid', 'conjure_health', 'potion_health_great', Math.round(180 * 2.25)],
     ] as const) {
       const sim = makeSim(voc, { seed: 3 });
       const w = sim.world;
