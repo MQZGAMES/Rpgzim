@@ -36,6 +36,10 @@ function offer(w: World, side: 'sell' | 'buy', owner: string, itemId: string, co
   w.market.offers.push({ id: `x${++w.market.seq}`, side, ownerId: owner, ownerName: owner, itemId, count, price, at });
 }
 
+/** Menor preço de venda do item nas lojas. */
+const shopPrice = (id: string) =>
+  Math.min(...Object.values(GAME_DATA.shops).flatMap((sh) => sh.sells.filter((o) => o.itemId === id).map((o) => o.price)));
+
 describe('mercado: o corretor e o que ele negocia', () => {
   it('o corretor fica ao lado da banqueira e abre o mercado (separado do depósito)', () => {
     const sim = makeSim('knight');
@@ -296,7 +300,7 @@ describe('mercado: os heróis negociam', () => {
     const { w, h, asHero } = setup(10);
     offer(w, 'sell', 'x', 'potion_health', 40, 30);
     offer(w, 'sell', 'y', 'potion_health', 40, 80); // acima da loja: não compra
-    offer(w, 'sell', 'z', 'sword_steel', 1, 500); // a loja cobra 900
+    offer(w, 'sell', 'z', 'sword_steel', 1, 500); // a loja cobra 585
     h.character.gold = 3000;
     h.character.inventory = h.character.inventory.map(() => null);
     asHero(() => heroHelpers.marketing(w, h));
@@ -307,13 +311,15 @@ describe('mercado: os heróis negociam', () => {
 
   it('o que precisa para evoluir e não acha: deixa a oferta de quanto paga; com ouro para a loja, cancela e compra lá', () => {
     const { w, h, asHero } = setup(15);
+    // sem ouro para a loja (90% do preço dela no banco)
+    const shop = shopPrice('armor_plate');
     h.character.gold = 0;
-    h.character.bankGold = 2400;
-    h.brain.goal = { itemId: 'armor_plate', price: 2700 };
+    h.character.bankGold = Math.floor(shop * 0.9);
+    h.brain.goal = { itemId: 'armor_plate', price: shop };
     asHero(() => heroHelpers.marketing(w, h));
     const bid = w.market.offers.find((o) => o.ownerId === h.character.id && o.side === 'buy');
     expect(bid?.itemId).toBe('armor_plate');
-    expect(bid!.price).toBeLessThan(2700); // paga menos que a loja
+    expect(bid!.price).toBeLessThan(shop); // paga menos que a loja
     expect(escrowOf(w.market, h.character.id)).toBe(bid!.price);
     // alguém anuncia pelo preço da oferta: fecha na hora e a armadura chega no depósito
     offer(w, 'sell', 'vendedor', 'armor_plate', 1, bid!.price);
@@ -324,12 +330,14 @@ describe('mercado: os heróis negociam', () => {
 
   it('com ouro para comprar a meta na loja, cancela a oferta de compra (o ouro volta ao banco)', () => {
     const { w, h, asHero } = setup(15);
+    // sem ouro para a loja (90% do preço dela no banco)
+    const shop = shopPrice('armor_plate');
     h.character.gold = 0;
-    h.character.bankGold = 2400;
-    h.brain.goal = { itemId: 'armor_plate', price: 2700 };
+    h.character.bankGold = Math.floor(shop * 0.9);
+    h.brain.goal = { itemId: 'armor_plate', price: shop };
     asHero(() => heroHelpers.marketing(w, h));
     expect(escrowOf(w.market, h.character.id)).toBeGreaterThan(0);
-    h.character.bankGold += 3000;
+    h.character.bankGold += shop;
     asHero(() => heroHelpers.marketing(w, h));
     expect(escrowOf(w.market, h.character.id)).toBe(0);
   });

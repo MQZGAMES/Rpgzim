@@ -22,7 +22,8 @@ function gearIndex(level: number): number {
 function loot(s: Late): LootEntry[] {
   const k = gearIndex(TIER_LEVELS[s.tier]!);
   const tier = GEAR_TIERS[k]!;
-  const gear = DROP_KINDS.map((kind): LootEntry => ({ itemId: `${kind}_${tier.id}`, chance: s.elite ? 0.006 : 0.0025, min: 1, max: 1 }));
+  // elite: 0,3% por peça (era 0,6%: o Dragão Ancião valia ~5x as criaturas vizinhas por abate)
+  const gear = DROP_KINDS.map((kind): LootEntry => ({ itemId: `${kind}_${tier.id}`, chance: s.elite ? 0.003 : 0.0025, min: 1, max: 1 }));
   return [{ itemId: s.trophy, chance: 0.5, min: 1, max: 1 }, { itemId: s.potion, chance: 0.12, min: 1, max: 2 }, ...gear];
 }
 

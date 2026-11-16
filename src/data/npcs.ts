@@ -1,6 +1,8 @@
 // NPCs, diálogos e lojas.
 import type { NpcDef, ShopDef } from '../domain/entities/definitions';
 import { potionBuyback, withLateStock } from './npcs.gear';
+import { ITEMS } from './items';
+import { adjustedPrice } from './pricing';
 
 const close = { label: 'Até logo', action: 'close' } as const;
 
@@ -204,7 +206,7 @@ const list: NpcDef[] = [
 export const NPCS: Readonly<Record<string, NpcDef>> = Object.fromEntries(list.map((n) => [n.id, n]));
 
 const sellPct = (price: number) => Math.max(1, Math.round(price * 0.35));
-const equipmentSells: [string, number][] = [
+const equipmentSellsBase: [string, number][] = [
   ['training_sword', 40],
   ['training_axe', 40],
   ['training_club', 40],
@@ -255,7 +257,7 @@ const equipmentSells: [string, number][] = [
   ['sword_dragon', 6200],
   ['armor_royal', 6800],
 ];
-const potionSells: [string, number][] = [
+const potionSellsBase: [string, number][] = [
   ['training_wand', 40],
   ['potion_health', 40],
   ['potion_mana', 45],
@@ -287,6 +289,11 @@ const potionSells: [string, number][] = [
   ['wand_void', 5400],
   ['rod_glacier', 5400],
 ];
+
+// preços com os ajustes de nov/2026 (poção de mana e equipamento dos níveis 8–23, ver pricing.ts)
+const adjust = (rows: [string, number][]): [string, number][] => rows.map(([id, p]) => [id, adjustedPrice(ITEMS[id], p)]);
+const equipmentSells = adjust(equipmentSellsBase);
+const potionSells = adjust(potionSellsBase);
 
 const list2: ShopDef[] = [
   {

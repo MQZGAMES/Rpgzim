@@ -390,24 +390,27 @@ describe('modo guerra: IA', () => {
     expect(partyOf(w, h.id)).toBe(w.social.party);
   });
 
-  it('simulação: cada um por si por 16 min — há mortes por PK', () => {
-    const sim = makeSim('knight', { seed: 24 });
-    const hs = [
-      addHero(sim, 'boladex', 25),
-      addHero(sim, 'maguim', 25),
-      addHero(sim, 'mano_cura', 25),
-      addHero(sim, 'distanciado', 25),
-      addHero(sim, 'extra_1', 20),
-      addHero(sim, 'extra_2', 30),
-    ];
-    // todos começam no mesmo campo (longe do templo), para a guerra começar logo
-    const at = field(sim);
-    hs.forEach((h, i) => put(sim, h, at.x + (i % 3) * 2, at.y + Math.floor(i / 3) * 2));
+  it('simulação: cada um por si por 16 min — há mortes por PK (somando 3 sementes)', () => {
+    // uma semente só é frágil: qualquer mudança de economia ou de IA muda quem encontra quem no mapa
     let pvpDeaths = 0;
-    for (const h of hs) h.scope.events.on('playerDied', (e) => void (e.byPlayer && pvpDeaths++));
-    sim.setWar('ffa');
-    advance(sim, 16 * 60000, 50);
+    for (const seed of [23, 24, 25]) {
+      const sim = makeSim('knight', { seed });
+      const hs = [
+        addHero(sim, 'boladex', 25),
+        addHero(sim, 'maguim', 25),
+        addHero(sim, 'mano_cura', 25),
+        addHero(sim, 'distanciado', 25),
+        addHero(sim, 'extra_1', 20),
+        addHero(sim, 'extra_2', 30),
+      ];
+      // todos começam no mesmo campo (longe do templo), para a guerra começar logo
+      const at = field(sim);
+      hs.forEach((h, i) => put(sim, h, at.x + (i % 3) * 2, at.y + Math.floor(i / 3) * 2));
+      for (const h of hs) h.scope.events.on('playerDied', (e) => void (e.byPlayer && pvpDeaths++));
+      sim.setWar('ffa');
+      advance(sim, 16 * 60000, 50);
+    }
     expect(pvpDeaths).toBeGreaterThan(0);
     // Victims may already have skulls: unjust-kill penalties are tested in the controlled scenario above.
-  }, 120000);
+  }, 300000);
 });

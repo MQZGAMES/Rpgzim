@@ -1,6 +1,7 @@
 // Itens do jogo. IDs são estáveis: nunca renomeie um id existente (saves dependem dele).
 import type { ItemDef } from '../domain/entities/definitions';
 import { GEAR_ITEMS } from './items.gear';
+import { adjustedPrice } from './pricing';
 import { TROPHY_ITEMS } from './monsters.late';
 import { SOUTH_TROPHY_ITEMS } from './monsters.south';
 
@@ -1349,5 +1350,5 @@ const list: ItemDef[] = [
 ];
 
 export const ITEMS: Readonly<Record<string, ItemDef>> = Object.fromEntries(
-  [...list, ...GEAR_ITEMS, ...TROPHY_ITEMS, ...SOUTH_TROPHY_ITEMS].map((i) => [i.id, i]),
+  [...list, ...GEAR_ITEMS, ...TROPHY_ITEMS, ...SOUTH_TROPHY_ITEMS].map((i) => [i.id, { ...i, value: adjustedPrice(i, i.value) }]),
 );

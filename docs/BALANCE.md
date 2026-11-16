@@ -370,3 +370,20 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - `tests/tools/hero-spells.test.ts` passou a contar a vida só de quem está no grupo do Druid e ao alcance da cura
   (antes contava qualquer herói, mesmo fora do grupo). Com isso, ninguém junto do Druid ficou abaixo de 70% de vida
   nas sementes 11/23, nem antes nem depois.
+
+## Preços (nov/2026)
+Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e para as lojas):
+- **Poção de mana** ~30% mais barata, ~0,56 de ouro por ponto (era ~0,8; a de vida é ~0,5): Pequena 45 → 34,
+  Média 120 → 84, Grande 240 → 168, Espiritual 400 → 280, Divina 720 → 504. A maior nunca custa mais por ponto.
+- **Equipamento dos níveis 8 a 23** 35% mais barato (o conjunto custava 150–300 abates numa fase em que se sobe de
+  nível a cada 30–50).
+- **Escada do fim do jogo**: preço ×1,65 por faixa (era ×1,8; `GROW.value` em `items.gear.ts`).
+- **Elite** (Dragão Ancião): 0,3% por peça de equipamento (era 0,6%); valor por abate ~69 mil → ~18 mil (vizinhas
+  ~14 mil).
+- Conjunto de Knight em abates da faixa: nv 8 149 → 112 · nv 15 308 → 211 · nv 24 249 → 242 · nv 40 247 → 220 ·
+  nv 64 338 → 279 · nv 80 434 → 356 · nv 96 601 → 473 (o loot de equipamento também ficou mais barato, então o fim
+  do jogo ainda sobe).
+- Medido (`hero-life`, 3 h do nível 1, sementes 11/23, nível · poções de mana): Boladex 36/33 → 32/37 · 62/57 → 60/59;
+  Maguim 39/45 → 41/42 · 717/689 → 468/592; Mano Cura 42/41 → 43/42 · 193/208 → 123/134; Distanciado 41/34 → 42/41 ·
+  183/197 → 213/186. Nenhuma morte.
+- Teste "cada um por si tem mortes por PK" soma 3 sementes (uma só era frágil a qualquer mudança de economia/IA).

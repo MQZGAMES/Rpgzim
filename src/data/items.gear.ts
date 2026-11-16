@@ -40,7 +40,9 @@ const PROJECTILE: Record<string, string> = {
 };
 
 /** Crescimento por faixa: ataque, armadura, vida/mana e preço. */
-export const GROW = { atk: 1.15, arm: 1.12, bonus: 1.2, value: 1.8 } as const;
+// value: preço ×1,65 por faixa (era 1,8: a renda por abate cresce ~1,6 por faixa e o conjunto passava de 250 para 600
+// abates no fim do jogo)
+export const GROW = { atk: 1.15, arm: 1.12, bonus: 1.2, value: 1.65 } as const;
 const ATK_SKILLS = ['sword', 'axe', 'club', 'distance'] as const;
 
 function build(): ItemDef[] {
