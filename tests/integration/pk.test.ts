@@ -419,3 +419,36 @@ describe('PK: o tempo é o do relógio (não o do jogo ativo)', () => {
     expect(skullOf(w, human.id)).toBeNull();
   });
 });
+
+describe('tipo de mundo', () => {
+  it('PvP Enforced: matar e atacar não dão caveira nem morte injusta, só o PZ lock; entrar apaga as caveiras', () => {
+    const { sim, h, w, human } = world();
+    kill(sim, human, h);
+    expect(skullOf(w, human.id)?.kind).toBe('white');
+    sim.setWorldPvp('enforced');
+    expect(w.social.pvp).toBe(true);
+    expect(skullOf(w, human.id)).toBeNull();
+    expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    for (let i = 0; i < 4; i++) {
+      if (h.dead) asActor(w, h, () => respawnPlayer(w));
+      kill(sim, human, h);
+    }
+    expect(skullOf(w, human.id)).toBeNull();
+    expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
+    expect(isPzLocked(w, human.id)).toBe(true);
+    expect(buildSnapshot(sim).worldPvp).toBe('enforced');
+    expect(human.character.flags.pvpEnforced).toBe(true);
+  });
+
+  it('voltar para PvP religa as caveiras; Sem PvP desliga os ataques', () => {
+    const { sim, h, w, human } = world();
+    sim.setWorldPvp('enforced');
+    sim.setWorldPvp('pvp');
+    expect(w.social.enforced).toBe(false);
+    kill(sim, human, h);
+    expect(skullOf(w, human.id)?.kind).toBe('white');
+    sim.setWorldPvp('off');
+    expect(w.social.pvp).toBe(false);
+    expect(buildSnapshot(sim).worldPvp).toBe('off');
+  });
+});

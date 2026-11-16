@@ -50,6 +50,11 @@ export interface SocialState {
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
+  /**
+   * PvP Enforced: com o PK ligado, todos podem se matar sem caveira, morte injusta nem vingança (fica só o PZ lock de
+   * combate). As perdas normais da morte continuam.
+   */
+  enforced: boolean;
   /** Caveira de cada personagem: tipo e até quando. */
   skulls: Map<string, SkullState>;
   /** PZ lock: até quando o personagem não pode entrar em áreas protegidas. */
@@ -82,8 +87,16 @@ export interface WarState {
 }
 export const GUILD_NAMES = ['Red', 'Blue'] as const;
 
-export function newSocialState(pvp = false, war: WarMode = 'off'): SocialState {
+/** Tipo de mundo: sem PvP, PvP (ataques com caveiras) ou PvP Enforced (ataques sem caveiras). */
+export type WorldPvpMode = 'off' | 'pvp' | 'enforced';
+
+export function worldPvpMode(w: World): WorldPvpMode {
+  return !w.social.pvp ? 'off' : w.social.enforced ? 'enforced' : 'pvp';
+}
+
+export function newSocialState(pvp = false, war: WarMode = 'off', enforced = false): SocialState {
   return {
+    enforced,
     war: { mode: war, guilds: new Map() },
     party: null,
     heroParties: [],
@@ -737,6 +750,12 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
   w.social.aggressions.set(`${attackerId}>${victimId}`, pkNow(w));
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
+  if (w.social.enforced) {
+    // PvP Enforced: ninguém ganha caveira; o combate só renova o PZ lock
+    touchCombat(w, attackerId);
+    touchCombat(w, victimId);
+    return;
+  }
   const victim = skullOf(w, victimId)?.kind ?? null;
   if (hasRevenge(w, attackerId, victimId)) {
     // vingança contra quem o matou injustamente: só o PZ lock, sem caveira
@@ -778,6 +797,7 @@ export function registerPlayerKill(
 ): void {
   if (killerId === victimId) return;
   lockPz(w, killerId, PZ_LOCK_KILL_MS);
+  if (w.social.enforced) return; // PvP Enforced: matar não dá caveira nem conta morte injusta
   // a vingança (a vítima tinha matado o killer injustamente há pouco) é justa: só o PZ lock
   if (victimId && hasRevenge(w, killerId, victimId)) {
     w.social.revenge.delete(`${killerId}>${victimId}`);

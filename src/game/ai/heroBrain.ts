@@ -3714,7 +3714,8 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
     (humanHp < 0.4 ? 0.3 : 0) +
     (skull ? 0.45 : 0) -
     aff * 0.9 +
-    (b.mood < 0 ? 0.15 : 0) -
+    (b.mood < 0 ? 0.15 : 0) +
+    (w.social.enforced ? 0.15 : 0) - // PvP Enforced: matar não dá caveira, então vale mais a pena
     t.caution * 0.3;
   if (desire > 0.75 && ratio > 0.9 && w.rng.chance(0.55)) return startPk(w, h, human.id, 'greed');
   return false;

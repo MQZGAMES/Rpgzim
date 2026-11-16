@@ -46,6 +46,8 @@ import {
   GUILD_NAMES,
   guildOf,
   type WarMode,
+  worldPvpMode,
+  type WorldPvpMode,
 } from '../../game/social/social';
 import { allActors } from '../../game/simulation/World';
 import { heroActivity } from '../../game/ai/heroBrain';
@@ -218,6 +220,8 @@ export interface UiSnapshot {
   /** Convite de grupo recebido e ainda válido. */
   invite: { fromId: string; fromName: string } | null;
   pvp: boolean;
+  /** Tipo de mundo: sem PvP, PvP (com caveiras) ou PvP Enforced (sem caveiras). */
+  worldPvp: WorldPvpMode;
   /** Modo guerra e, na guerra de guildas, quem está em cada uma (a sua é `mine`). */
   war: {
     mode: WarMode;
@@ -677,6 +681,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
     party: partyView(sim),
     invite: inv ? { fromId: inv.fromId, fromName: actorName(w, inv.fromId) } : null,
     pvp: w.social.pvp,
+    worldPvp: worldPvpMode(w),
     war: {
       mode: w.social.war.mode,
       mine: guildOf(w, p.id),
