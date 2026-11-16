@@ -589,7 +589,9 @@ function needMargin(w: World, h: HeroEntity): number {
     (h.hero.temperament.bravery - 0.5) * 0.4 -
     h.brain.bold * 0.35 +
     (h.brain.frugal ? 0.3 : 0) +
-    scarce +
+    scarce -
+    // em grupo o dano e a cura se somam: aceita lutas mais duras (até -0,45 com 3 colegas por perto)
+    Math.min(3, alliesNear(w, h)) * 0.15 +
     // quem luta de longe não aguenta ser cercado (as criaturas contornam e tomam as casas em volta): mais folga
     (isRanged(h.character.vocation) ? 0.2 : 0) +
     personaOf(h.hero.temperament).margin
@@ -690,7 +692,10 @@ export function bestUpgrade(
       const cur = h.character.equipment[def.slot];
       const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
       if (gain < 5) continue; // melhora irrelevante não vale a viagem nem o ouro
-      if (!best || gain / o.price > best.gain / best.price)
+      // ganho por moeda, mas preço abaixo de 15% do orçamento conta como 15%: com dinheiro, a peça barata não leva
+      // vantagem (antes um nível 35 que perdeu tudo comprava a clava de madeira de 25 de ouro com 8 mil no banco)
+      const floor = Math.max(1, budget * 0.15);
+      if (!best || gain / Math.max(o.price, floor) > best.gain / Math.max(best.price, floor))
         best = { itemId: o.itemId, price: o.price, shopId: shop.id, gain };
     }
   return best;
@@ -1573,7 +1578,7 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     (t.bravery - 0.5) * 3 +
     h.brain.mood -
     (potionsOf(w, h) === 0 ? 4 : h.brain.frugal ? 3 : 0) +
-    alliesNear(w, h) * 2;
+    alliesNear(w, h) * 4;
   const need = needMargin(w, h);
   // quantas da presa ele puxa de uma vez: sozinho 2-3 (o corajoso puxa mais); em grupo, mais uma por colega
   const pull = Math.min(6, Math.round(2 + t.bravery + alliesNear(w, h)));
@@ -1613,6 +1618,9 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     // memória longa: cada morte lá pesa, e o peso some aos poucos (meia-vida de ~40 min)
     if (st?.deaths) safety /= 1 + st.deaths * 0.25 * Math.exp(-(w.now - st.lastDeathAt) / (40 * 60000));
     let score = rate * safety ** 1.5 * warSpotFactor(w, h, spawns);
+    // foco em subir: criatura muito abaixo do nível dele rende pouco por tempo — só fica se não houver coisa melhor
+    const gap = h.character.level - min;
+    if (gap > 8) score *= Math.max(0.2, 1 - (gap - 8) * 0.07);
     // a caça que mais rendeu de verdade (já conhecida, sem morte recente) ganha um empurrão: ele volta para ela
     if (st && st.ms > 5 * 60000 && id === favoriteHunt(h) && w.now - st.lastDeathAt > 30 * 60000)
       score *= 1.15;
@@ -2798,13 +2806,22 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       if (idx >= 0 && equipItem(w, idx)) heroSay(w, h, 'upgrade', { item: w.data.items[need.itemId]!.name }, 0);
     }
   }
-  if (step.buyPotions) {
+  // sem arma e ela é vendida em outra loja da rota: não gasta aqui o ouro dela em poções
+  const weaponElsewhere =
+    unarmed(h) &&
+    (() => {
+      const need = bestUpgrade(w, h, c.gold + c.bankGold - 5, 'mainHand');
+      return !!need && !shop.sells.some((o) => o.itemId === need.itemId);
+    })();
+  if (step.buyPotions && !weaponElsewhere) {
     // mana primeiro para os magos (é o dano deles); os demais gastam menos nisso
     const manaOffers = potionOffers(w, shop, 'mana', h);
     const manaOffer = pickPotionOffer(w, manaOffers, h.stats.maxMana * 0.5);
     if (manaOffer && manaGoal(w, h)) {
       const per = w.data.items[manaOffer.itemId]?.use?.mana ?? 60;
-      const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' ? 0.7 : 0.2;
+      // recomeçando sem equipamento (perdeu tudo numa morte): a armadura vem antes de um estoque grande de mana
+      const regearing = Object.values(c.equipment).filter(Boolean).length < 4;
+      const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' && !regearing ? 0.7 : 0.25;
       // o que falta em poções do tamanho dele (as pequenas que sobraram serão vendidas)
       const qty = Math.min(
         Math.ceil((manaGoal(w, h) - goodStock(w, h, 'mana', per)) / per),
