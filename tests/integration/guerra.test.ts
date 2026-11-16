@@ -390,8 +390,8 @@ describe('modo guerra: IA', () => {
     expect(partyOf(w, h.id)).toBe(w.social.party);
   });
 
-  it('simulação: cada um por si por 8 min — há mortes por PK', () => {
-    const sim = makeSim('knight', { seed: 23 });
+  it('simulação: cada um por si por 16 min — há mortes por PK', () => {
+    const sim = makeSim('knight', { seed: 24 });
     const hs = [
       addHero(sim, 'boladex', 25),
       addHero(sim, 'maguim', 25),
@@ -406,7 +406,7 @@ describe('modo guerra: IA', () => {
     let pvpDeaths = 0;
     for (const h of hs) h.scope.events.on('playerDied', (e) => void (e.byPlayer && pvpDeaths++));
     sim.setWar('ffa');
-    advance(sim, 8 * 60000, 50);
+    advance(sim, 16 * 60000, 50);
     expect(pvpDeaths).toBeGreaterThan(0);
     // Victims may already have skulls: unjust-kill penalties are tested in the controlled scenario above.
   }, 120000);

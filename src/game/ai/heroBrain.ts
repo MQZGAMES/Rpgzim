@@ -3775,7 +3775,7 @@ function pk(w: World, h: HeroEntity): void {
     // volta a caçar (e pega o que caiu, se estiver perto)
     return startHunt(w, h, b.quarry ?? chooseQuarry(w, h));
   }
-  if (isPz(w.map, victim.x, victim.y) || chebyshev(victim, h) > 14) {
+  if (isPz(w.map, victim.x, victim.y) || chebyshev(victim, h) > (atWar(w) ? 18 : 14)) {
     heroSay(w, h, 'pkEscaped', { player: victim.character.name }, 60000);
     return setMode(w, h, 'decide');
   }
@@ -3802,9 +3802,11 @@ function warPkCheck(w: World, h: HeroEntity, victim: PlayerEntity): boolean {
   const elapsed = w.now - b.stepStartedAt;
   const used = (b.pkPotions ?? potionsOf(w, h)) - potionsOf(w, h);
   const vhp = victim.character.health / Math.max(1, victim.stats.maxHealth);
+  const teamwork = allActors(w).some((a) => a !== h && a.targetId === victim.id && isWarAlly(w, h.id, a.id)) ? 1.4 : 1;
   const stale =
-    (elapsed > 45000 && vhp > 0.35 && used >= 6) ||
-    (elapsed > 60000 && vhp > 0.25) ||
+    // (com colegas no mesmo alvo, insiste mais: o time acaba vencendo a cura do outro)
+    (elapsed > 45000 * teamwork && vhp > 0.35 && used >= 6) ||
+    (elapsed > 60000 * teamwork && vhp > 0.25) ||
     // (não alcança a vítima: atrás de criaturas, do outro lado de um obstáculo — bater nas criaturas em volta não conta)
     (elapsed > 20000 && !attackedRecently(w, h.id, victim.id, 15000));
   if (stale) {
@@ -3959,12 +3961,16 @@ function warNeed(w: World, h: HeroEntity, foe: PlayerEntity | null): number {
 /** Nota de um alvo de guerra (maior = melhor): caveira primeiro, depois vantagem, vida baixa, foco do time e rixa. */
 function warTargetScore(w: World, h: HeroEntity, foe: PlayerEntity, odds: number): number {
   const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
-  const focused = allActors(w).some((a) => a !== h && a.targetId === foe.id && isWarAlly(w, h.id, a.id));
+  const focusers = allActors(w).filter((a) => a !== h && a.targetId === foe.id && isWarAlly(w, h.id, a.id)).length;
+  const guilds = w.social.war.mode === 'guilds';
+  // guildas: o time inteiro no mesmo alvo (cada colega já nele pesa mais) e o curandeiro do outro lado cai primeiro
+  const healer = guilds && foe.character.vocation === 'druid' ? 0.6 : 0;
   return (
     warSkullBonus(w, h, foe) * 1.2 +
     Math.min(odds, 3) * 0.6 +
-    (1 - foeHp) * 0.8 +
-    (focused ? 0.5 : 0) +
+    (1 - foeHp) * (guilds ? 1.1 : 0.8) +
+    Math.min(3, focusers) * (guilds ? 0.7 : 0.4) +
+    healer +
     (h.brain.grudge?.id === foe.id ? 0.6 : 0) -
     affinityOf(h, foe.id) * 0.4 -
     chebyshev(foe, h) * 0.04
@@ -3991,7 +3997,9 @@ function thinkWar(w: World, h: HeroEntity): boolean {
     // 1) perigo: o meu lado perde feio para os inimigos em volta
     const close = foes.filter((f) => chebyshev(f, h) <= 7);
     const pressure = close.reduce((s2, f) => s2 + power(f), 0);
-    const flee = warRecovering(w, h) || skullOf(w, h.id)?.kind === 'red' ? 0.9 : 0.7;
+    const mode = w.social.war.mode;
+    const flee =
+      warRecovering(w, h) || skullOf(w, h.id)?.kind === 'red' ? 0.9 : mode === 'ffa' ? 0.55 : alliesNear(w, h) ? 0.6 : 0.7;
     if (close.length && sideStrength(w, h) / Math.max(1, pressure) < flee) {
       const worst = [...close].sort((a, c) => power(c) - power(a))[0]!;
       if (warFlee(w, h, worst)) return true;
@@ -4004,8 +4012,10 @@ function thinkWar(w: World, h: HeroEntity): boolean {
       for (const foe of foes) {
         const odds = warOdds(w, h, foe);
         const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
-        const finisher = foeHp < 0.25 && odds >= (recovering ? 1.1 : 0.9) && hp > 0.35;
-        if (!(odds >= warNeed(w, h, foe) && hp > 0.55 && !onTruce(w, h, foe.id)) && !finisher) continue;
+        const finisher = foeHp < 0.35 && odds >= (recovering ? 1.1 : 0.85) && hp > 0.35;
+        // guildas: não entra sozinho (vira presa fácil) — só com um aliado perto ou com folga grande
+        const alone = mode === 'guilds' && !alliesNear(w, h) && odds < warNeed(w, h, foe) + 0.5;
+        if ((!(odds >= warNeed(w, h, foe) && hp > 0.55 && !onTruce(w, h, foe.id)) || alone) && !finisher) continue;
         const score = warTargetScore(w, h, foe, odds);
         if (!best || score > best.score) best = { foe, score };
       }
@@ -4042,7 +4052,8 @@ function warAssist(w: World, h: HeroEntity): boolean {
   if (warRecovering(w, h) || engagedByMonsters(w, h)) return false;
   let best: { foe: PlayerEntity; ally: PlayerEntity; d: number } | null = null;
   for (const ally of allActors(w)) {
-    if (ally === h || ally.dead || !isWarAlly(w, h.id, ally.id) || chebyshev(ally, h) > 35) continue;
+    const reach = w.social.war.mode === 'guilds' ? 55 : 35; // guilda: atravessa o mapa para socorrer o time
+    if (ally === h || ally.dead || !isWarAlly(w, h.id, ally.id) || chebyshev(ally, h) > reach) continue;
     for (const foe of warEnemiesNear(w, ally, 8)) {
       if (!(attackedRecently(w, foe.id, ally.id, 5000) || ally.targetId === foe.id) || inTown(w, foe))
         continue;
