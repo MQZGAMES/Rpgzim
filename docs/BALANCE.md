@@ -297,3 +297,30 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   39 / 0); Maguim 41 / 0 · 39 / 0 (43 / 0 · 47 / 0); Mano Cura 43 / 0 · 33 / 1 (42 / 0 · 43 / 0); Distanciado
   31 / 3 · 30 / 1 (33 / 1 · 33 / 1). Uma magia de ataque a cada 2 s tira um pouco do ritmo de todos (mais dos magos);
   curar sem esperar o ataque compensa parte nas mortes.
+
+## Loot em grupo, tipos de mundo, criação de poções, Paladin e IA (nov/2026)
+- **Loot em grupo**: criatura morta pelo grupo divide o ouro igualmente entre quem estava perto (o resto da divisão vai
+  para quem tem a vez) e os itens vão inteiros para um membro por vez (rodízio), não importa quem abra o saco. Saco de
+  morte de jogador/NPC humano e itens jogados no chão: quem pegar primeiro leva tudo.
+- **Pegar tudo / loot automático**: primeiro o ouro, depois as pilhas de maior valor de venda (de todos os sacos ao
+  alcance); com a mochila cheia, fica no chão o que vale menos.
+- **Tipo de mundo** (Configurações): Sem PvP · PvP (caveiras, PZ lock, morte injusta) · PvP Enforced (todos se atacam
+  sem caveira nem morte injusta; fica o PZ lock de combate; as perdas da morte continuam).
+- **Criação de poções**: custo de mana por ponto 2,4 / 2,25 / 2,1 / 1,9 / 1,7 (era 3,4 / 3,2 / 3 / 2,7 / 2,4). Para não
+  virar fábrica de ouro, as lojas pagam 35% do preço pelas poções (era 50%).
+- **Paladin**: estoca mana pelo consumo real e não volta à vila só por mana (o arco ataca sem ela); arco/lança colado no
+  alvo 0,75 de acerto e de dano (era 0,5). Em 3 h sozinho (sementes 11/23): nível 38 / 34 (antes 25 / 25), 0 mortes;
+  tempo na vila 27% → 13%.
+- **Recuperação depois de perder tudo**: a escolha de equipamento não favorece mais o item mais barato do jogo quando
+  há ouro (piso de 15% do orçamento no "ganho por moeda"); sem arma, não gasta em poções o ouro da arma de outra loja;
+  recomeçando sem armadura, o mago guarda menos ouro para mana. `tests/tools/hero-recovery.test.ts` (nível 35, 8 mil
+  no banco, 30 min): os quatro com 6–7 peças e +2 a +5 níveis, 0 mortes.
+- **Coragem e foco em subir**: em grupo exige menos margem (−0,15 por colega, até 3) e considera caças mais altas; criatura
+  mais de 8 níveis abaixo dele perde valor (−7% por nível, até −80%). Veteranos nível 45: caçam sobretudo níveis 36–52
+  (antes 23–31), 0 mortes. Do nível 1 em 3 h (sementes 11/23): Boladex 34/32, Maguim 28/28, Mano Cura 42/41,
+  Distanciado 36/37. O Sorcerer continua o mais pobre (gasta tudo em mana) — pendente.
+- **Guerra**: foge mais tarde (cada um por si 0,55; guilda com aliado perto 0,6; antes 0,7), finaliza inimigo com < 35%
+  de vida, persegue até 18 tiles. Guildas: o time foca o mesmo alvo, o Druid inimigo cai primeiro, ninguém entra sozinho
+  sem folga grande e socorre aliados a até 55 tiles. Medido (8 heróis, 30 min): tempo atacando 17–27% → 21–41%, recuo
+  10–19% → 7–16%, mortes 1–2 → 2–3. Com o dano entre personagens pela metade, as poções curam quase tudo o que um
+  atacante tira: as mortes dependem de vários no mesmo alvo.
