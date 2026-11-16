@@ -1945,6 +1945,14 @@ function engagedAround(
 }
 
 /** Alguma criatura parada (fora da briga) a até `radius` do ponto? A magia de área a acordaria e puxaria um trem. */
+/** Criaturas paradas (sem alvo) que uma magia de área em `at` acordaria. */
+function idleAround(w: World, at: { x: number; y: number }, radius: number): number {
+  let n = 0;
+  for (const m of w.monsters.values())
+    if (m.alive && !m.targetId && m.state !== 'returning' && chebyshev(m, at) <= radius && !isPz(w.map, m.x, m.y)) n++;
+  return n;
+}
+
 function wakesIdle(w: World, at: { x: number; y: number }, radius: number): boolean {
   for (const m of w.monsters.values())
     if (
@@ -1970,40 +1978,36 @@ function castsNow(w: World, h: HeroEntity, adjacent: number): boolean {
 function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: number): void {
   const voc = h.character.vocation;
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
-  const rich = manaPct > (voc === 'knight' ? 0.4 : 0.7);
+  // com mana para seguir lutando o limite é a exaustão (uma magia de ataque a cada 2 s): vale a que mais tira por uso;
+  // com a mana curta, a que mais tira por ponto de mana
+  const rich = manaPct > 0.4;
+  // acordar criaturas paradas com a área: em grupo até 2 a mais (o grupo segura); sozinho só 1 e com a vida boa
+  const wakesIdle = (at: { x: number; y: number }, r: number) =>
+    idleAround(w, at, r) > (alliesNear(w, h) > 0 ? 2 : hpPct(h) > 0.6 ? 1 : 0);
   // o Druid em grupo é a cura do time: não gasta em dano a mana que vai salvar um colega
   const reserve = voc === 'druid' && alliesNear(w, h) > 0 ? 0.15 : 0;
-  // em grupo: a magia de área vai no meio do bolo de criaturas (o tanque as junta), não só no alvo atual
-  if (alliesNear(w, h) > 0 && (voc === 'druid' || voc === 'paladin')) {
-    const spellId = voc === 'druid' ? 'frost_burst' : 'arrow_rain';
-    const single = voc === 'druid' ? 'earth_thorn' : 'holy_arrow';
+  // magia de área mirada (Rajada Glacial, Chuva de Fogo, Chuva de Flechas): vai no meio do bolo de criaturas na briga
+  // (onde acerta mais), não só em volta do alvo atual — sozinho ou em grupo. Fica com o alvo de antes para o resto.
+  const areaAt = (spellId: string, single: string, minMana: number): boolean => {
     const spell = w.data.spells[spellId];
-    const cl = spell && bestClusterTarget(w, h, spell.range, spell.radius ?? 1);
-    if (
-      spell &&
-      cl &&
-      cl.m.id !== target.id &&
-      manaPct > 0.3 + reserve &&
-      !wakesIdle(w, cl.m, spell.radius ?? 1) &&
-      aoeWorth(w, h, spellId, single, cl.n, rich)
-    ) {
-      const keep = target.id;
-      setTarget(w, cl.m.id);
-      if (tryCast(w, h, spellId)) {
-        setTarget(w, keep);
-        return;
-      }
-      setTarget(w, keep);
-    }
-  }
+    if (!spell || manaPct <= minMana || !spell.vocations.includes(voc)) return false;
+    const cl = bestClusterTarget(w, h, spell.range, spell.radius ?? 1);
+    if (!cl || cl.n < 2 || wakesIdle(cl.m, spell.radius ?? 1) || !aoeWorth(w, h, spellId, single, cl.n, rich)) return false;
+    const keep = target.id;
+    if (cl.m.id !== keep) setTarget(w, cl.m.id);
+    const ok = tryCast(w, h, spellId);
+    if (cl.m.id !== keep) setTarget(w, keep);
+    return ok;
+  };
+  // briga com 2+ criaturas (dele ou do grupo) por perto: a área vem antes do golpe de misericórdia de alvo único
+  const crowd = engagedAround(w, h, h, 5) >= 2;
   const dist = chebyshev(target, h);
   const fleeing = isFleeing(w, h, target) || target.state === 'returning';
   const slowed = w.now < target.slowUntil;
-  const around = (r: number) => engagedAround(w, h, target, r, target) + 1;
   const cast = (id: string): boolean => tryCast(w, h, id);
   // golpe de misericórdia: o básico já mata (não gasta mana) ou a magia mais barata que mata
   // (o giro/área do Knight e a lentidão em quem foge continuam valendo antes)
-  if (voc !== 'knight' && !fleeing) {
+  if (voc !== 'knight' && !fleeing && !crowd) {
     const fin = smartStrike(w, h, target, SINGLE_SPELLS[voc], voc === 'paladin' ? 0.25 : 0.2 + reserve, false);
     // (com várias criaturas na briga, o "básico já mata" não impede a magia de área logo abaixo)
     if (fin === 'cast' || (fin === 'skip' && engagedAround(w, h, h, 4) <= 1)) return;
@@ -2011,7 +2015,7 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   switch (voc) {
     case 'knight':
       if (
-        !wakesIdle(w, h, 2) &&
+        !wakesIdle(h, 2) &&
         aoeWorth(w, h, 'steel_whirlwind', 'brutal_strike', engagedAround(w, h, h, 2), rich) &&
         tryCast(w, h, 'steel_whirlwind')
       )
@@ -2039,18 +2043,12 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         tryCast(w, h, 'mana_shield');
       if (
         manaPct > 0.3 &&
-        !wakesIdle(w, h, 4) &&
+        !wakesIdle(h, 4) &&
         aoeWorth(w, h, 'fire_nova', 'flame_lance', engagedAround(w, h, h, 4), rich) &&
         cast('fire_nova')
       )
         return;
-      if (
-        manaPct > 0.35 &&
-        !wakesIdle(w, target, 1) &&
-        aoeWorth(w, h, 'inferno_rain', 'flame_lance', around(1), rich) &&
-        cast('inferno_rain')
-      )
-        return;
+      if (areaAt('inferno_rain', 'flame_lance', 0.35)) return;
       if (manaPct > 0.4 && cast('thunder_strike')) return;
       if (manaPct > 0.3 && cast('flame_lance')) return;
       if (manaPct > 0.2) cast('arcane_bolt');
@@ -2065,13 +2063,7 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         !h.buffs.some((b) => b.kind === 'manaShield')
       )
         tryCast(w, h, 'mana_shield');
-      if (
-        manaPct > 0.3 + reserve &&
-        !wakesIdle(w, target, 2) &&
-        aoeWorth(w, h, 'frost_burst', 'earth_thorn', around(2), rich) &&
-        cast('frost_burst')
-      )
-        return;
+      if (areaAt('frost_burst', 'earth_thorn', 0.3 + reserve)) return;
       if (manaPct > 0.2 + reserve) cast('earth_thorn');
       return;
     case 'paladin': {
@@ -2083,16 +2075,10 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
         cast('stunning_arrow')
       )
         return;
-      if (
-        manaPct > 0.3 &&
-        !wakesIdle(w, target, 2) &&
-        aoeWorth(w, h, 'arrow_rain', 'holy_arrow', around(2), rich) &&
-        cast('arrow_rain')
-      )
-        return;
+      if (areaAt('arrow_rain', 'holy_arrow', 0.3)) return;
       if (
         manaPct > 0.35 &&
-        !wakesIdle(w, h, 2) &&
+        !wakesIdle(h, 2) &&
         aoeWorth(w, h, 'sacred_fire', 'holy_arrow', engagedAround(w, h, h, 2), rich) &&
         cast('sacred_fire')
       )
