@@ -155,17 +155,17 @@ describe('compra e venda', () => {
     expect(c.gold).toBe(10);
     expect(JSON.stringify(c.inventory)).toBe(inv);
   });
-  it('a alquimia compra poções pela metade do preço, mas o "vender tudo" não as leva', () => {
+  it('a alquimia compra poções por 35% do preço, mas o "vender tudo" não as leva', () => {
     const c = char();
     const potions = D.shops['potions']!;
     for (const o of potions.sells.filter((s) => s.itemId.startsWith('potion_')))
-      expect(potions.buys.find((b) => b.itemId === o.itemId)?.price).toBe(Math.floor(o.price / 2));
+      expect(potions.buys.find((b) => b.itemId === o.itemId)?.price).toBe(Math.floor((o.price * 35) / 100));
     c.inventory.fill(null);
     addItem(D, c.inventory, 'potion_health', 4);
     expect(sellAllPreview(c, potions)).toEqual([]);
     const g = c.gold;
-    expect(sell(c, potions, 'potion_health', 4)).toEqual({ ok: true, total: 80 });
-    expect(c.gold).toBe(g + 80);
+    expect(sell(c, potions, 'potion_health', 4)).toEqual({ ok: true, total: 56 });
+    expect(c.gold).toBe(g + 56);
   });
   it('rejeita compra com mochila cheia', () => {
     const c = char();

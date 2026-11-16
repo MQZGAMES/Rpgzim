@@ -646,8 +646,12 @@ const CONJURES: readonly (readonly [string, string, number, number, 'druid' | 's
   ['conjure_mana_divine', 'potion_mana_divine', 900, 75, 'sorcerer', 'mana divina'],
 ];
 const CONJURE_NAMES = ['Pequena', 'Média', 'Grande', 'Espiritual', 'Divina'] as const;
-/** Custo em mana por ponto recuperado, por tamanho (pequena → divina). */
-const CONJURE_COST = [3.4, 3.2, 3, 2.7, 2.4] as const;
+/**
+ * Custo em mana por ponto recuperado, por tamanho (pequena → divina). Com a mana natural fixa por vocação (como no
+ * Tibia) criar ficou 30% mais barato; as lojas pagam 35% (não 50%) pelas poções, então criar para vender rende o
+ * mesmo ouro por ponto de mana de antes (~0,1). Sempre acima de 1 (criar mana com mana nunca dá lucro de mana).
+ */
+const CONJURE_COST = [2.4, 2.25, 2.1, 1.9, 1.7] as const;
 
 function conjureSpell(
   [id, itemId, amount, potionLevel, voc, words]: (typeof CONJURES)[number],

@@ -1,6 +1,6 @@
 // NPCs, diálogos e lojas.
 import type { NpcDef, ShopDef } from '../domain/entities/definitions';
-import { withLateStock } from './npcs.gear';
+import { potionBuyback, withLateStock } from './npcs.gear';
 
 const close = { label: 'Até logo', action: 'close' } as const;
 
@@ -300,10 +300,10 @@ const list2: ShopDef[] = [
     name: 'Alquimia da Selene',
     sells: [...potionSells.map(([itemId, price]) => ({ itemId, price })), { itemId: 'amulet_loss', price: 10000 }],
     buys: [
-      // poções voltam pela metade do preço; o resto pela porcentagem normal de revenda
+      // poções voltam por 35% do preço (POTION_BUYBACK); o resto pela porcentagem normal de revenda
       ...potionSells.map(([itemId, price]) => ({
         itemId,
-        price: itemId.startsWith('potion') ? Math.floor(price / 2) : sellPct(price),
+        price: itemId.startsWith('potion') ? potionBuyback(price) : sellPct(price),
       })),
       { itemId: 'slime_gel', price: 5 },
       { itemId: 'goblin_charm', price: 70 },
