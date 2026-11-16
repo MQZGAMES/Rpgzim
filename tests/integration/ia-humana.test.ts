@@ -180,7 +180,10 @@ describe('conversa entre os heróis', () => {
     advance(sim, 20000, 50);
     const greet = speech.find((s) => s.text.toLowerCase().includes('maguim') || s.text.toLowerCase().includes('boladex'));
     expect(greet).toBeDefined();
-    const reply = speech.find((s) => s.name !== greet!.name && s.at > greet!.at);
+    // a resposta é a fala do outro que cita quem cumprimentou (falas soltas no meio, como "que dia bonito", não contam)
+    const reply = speech.find(
+      (s) => s.name !== greet!.name && s.at > greet!.at && s.text.toLowerCase().includes(greet!.name.toLowerCase()),
+    );
     expect(reply).toBeDefined();
     expect(reply!.at - greet!.at).toBeGreaterThanOrEqual(1000); // "digitando"
   });

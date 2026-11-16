@@ -3,6 +3,7 @@
 // ("spell:id", "item:id", "potion:health"), compatível com saves antigos (só ids de magia).
 import type { GameData } from '../entities/gameData';
 import type { VocationId } from '../value-objects/ids';
+import { currentSpellId } from './spells';
 
 /** Atalhos 1–9: a mesma ordem (e os mesmos números) no celular e no computador. */
 export const HOTBAR_SIZE = 9;
@@ -33,6 +34,13 @@ export function defaultHotbar(data: GameData, vocation: VocationId): string[] {
   return [...spells, 'potion:health', 'potion:mana'];
 }
 
+/** Atalho salvo com um grau de magia removido (`fire_nova_3`) vira a magia base. */
+function migrate(data: GameData, e: HotbarEntry): HotbarEntry {
+  if (e?.kind !== 'spell') return e;
+  const id = currentSpellId(data.spells, e.id);
+  return id ? { kind: 'spell', id } : e;
+}
+
 function valid(data: GameData, vocation: VocationId, e: HotbarEntry): boolean {
   if (!e) return false;
   if (e.kind === 'spell') return !!data.spells[e.id] && data.spells[e.id]!.vocations.includes(vocation);
@@ -50,8 +58,10 @@ export function normalizeHotbar(data: GameData, vocation: VocationId, raw: reado
   const base = legacy ? [...list.slice(0, LEGACY_SIZE - 2), ...new Array(Math.max(0, LEGACY_SIZE - 2 - list.length)).fill(''), 'potion:health', 'potion:mana'] : list;
   const out: string[] = [];
   for (let i = 0; i < HOTBAR_SIZE; i++) {
-    const e = parseHotbarEntry(base[i]);
-    out.push(valid(data, vocation, e) ? encodeHotbarEntry(e) : '');
+    const e = migrate(data, parseHotbarEntry(base[i]));
+    // (dois graus da mesma magia na barra viram a mesma magia: a repetida some)
+    const code = valid(data, vocation, e) ? encodeHotbarEntry(e) : '';
+    out.push(code && out.includes(code) ? '' : code);
   }
   // barra antiga (6 ou 8 atalhos): as magias da vocação que ainda não estão na barra ocupam os atalhos novos
   const grown = legacy ? LEGACY_SIZE : list.length;

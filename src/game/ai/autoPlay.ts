@@ -7,7 +7,6 @@ import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
 import { POTION, isReady } from '../../domain/rules/cooldowns';
 import { canDrink, potionKind } from '../../domain/rules/potions';
-import { spellTiers } from '../../domain/rules/spells';
 
 export interface AutoSettings {
   /** Pegar o loot ao alcance sozinho. */
@@ -113,11 +112,7 @@ function autoHealSpell(w: World, a: AutoSettings): boolean {
     castCheck(w, sap).ok
   )
     return castSpell(w, sap.id);
-  // a cura no maior grau já liberado (Respiro Vital III, II ou I) que a mana paga
-  const light = spellTiers(w.data.spells, 'light_heal')
-    .map((id) => w.data.spells[id]!)
-    .reverse()
-    .find((sp) => castCheck(w, sp).ok);
+  const light = w.data.spells.light_heal;
   const mine = p.character.health / Math.max(1, p.stats.maxHealth);
   if (a.spellHeal && mine < a.healBelow && light && castCheck(w, light).ok) return castSpell(w, light.id);
   return false;

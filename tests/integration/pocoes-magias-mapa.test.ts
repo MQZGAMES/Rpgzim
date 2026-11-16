@@ -6,7 +6,7 @@ import { GAME_DATA } from '../../src/data';
 import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
 import { bestPotionFor, potionsByKind } from '../../src/domain/rules/potions';
-import { spellTiers } from '../../src/domain/rules/spells';
+import { normalizeHotbar } from '../../src/domain/rules/hotbar';
 import { spellRange } from '../../src/domain/rules/damage';
 import type { HeroEntity, MonsterEntity } from '../../src/game/entities/types';
 import { heroHelpers } from '../../src/game/ai/heroBrain';
@@ -112,71 +112,27 @@ describe('magias de criação de cada poção', () => {
   });
 });
 
-describe('magias de grau II e III', () => {
-  it('cada vocação ganha graus II/III da magia de alvo único, da de área e da cura, nos mesmos níveis', () => {
-    const levels = (voc: keyof typeof D.vocations) =>
-      D.vocations[voc].spells
-        .map((id) => D.spells[id]!)
-        .filter(
-          (s) =>
-            s.baseId &&
-            [
-              'arcane_bolt',
-              'fire_nova',
-              'earth_thorn',
-              'frost_burst',
-              'holy_arrow',
-              'arrow_rain',
-              'brutal_strike',
-              'steel_whirlwind',
-              'light_heal',
-            ].includes(s.baseId),
-        )
-        .map((s) => s.minLevel)
-        .sort((a, b) => a - b)
-        .join(',');
-    expect(levels('sorcerer')).toBe(levels('knight'));
-    expect(levels('druid')).toBe(levels('paladin'));
-    expect(levels('sorcerer')).toBe(levels('paladin'));
-    for (const voc of Object.keys(D.vocations) as (keyof typeof D.vocations)[])
-      expect(D.vocations[voc].spells.filter((id) => D.spells[id]!.baseId).length).toBeGreaterThanOrEqual(6);
+describe('magias sem graus', () => {
+  it('cada magia existe uma vez só', () => {
+    // sem graus II/III: cada magia existe uma vez só
+    for (const id of Object.keys(D.spells)) expect(id).not.toMatch(/_[23]$/);
   });
 
-  it('o II e o III batem mais forte e custam mais mana por ponto de dano', () => {
-    const t = spellTiers(D.spells, 'arcane_bolt');
-    expect(t).toEqual(['arcane_bolt', 'arcane_bolt_2', 'arcane_bolt_3']);
-    const avg = (id: string) => {
-      const [a, b] = spellRange(D.spells[id]!.formula!, { level: 60, power: 40, weaponAttack: 0 }, 1);
+  it('sem graus: o dano da magia cresce com o nível e o Magic Level', () => {
+    const avg = (level: number, power: number) => {
+      const [a, b] = spellRange(D.spells.arcane_bolt!.formula!, { level, power, weaponAttack: 0 }, 1);
       return (a + b) / 2;
     };
-    expect(avg(t[1]!)).toBeGreaterThan(avg(t[0]!) * 1.3);
-    expect(avg(t[2]!)).toBeGreaterThan(avg(t[1]!) * 1.2);
-    expect(D.spells[t[2]!]!.manaCost / avg(t[2]!)).toBeGreaterThan(D.spells[t[0]!]!.manaCost / avg(t[0]!));
-    expect(D.spells.arcane_bolt_2!.name).toBe('Faísca Arcana II');
+    expect(avg(60, 40)).toBeGreaterThan(avg(20, 15) * 2);
+    expect(avg(60, 40)).toBeGreaterThan(avg(60, 20));
+    expect(D.spells.arcane_bolt!.name).toBe('Faísca Arcana');
   });
 
-  it('a IA usa o maior grau liberado com mana sobrando e o I com a mana curta', () => {
-    const sim = makeSim('knight', { seed: 2 });
-    const w = sim.world;
-    const h = heroOf(sim, 'maguim', 50, 40);
-    sim.update(16);
-    const slime = [...w.monsters.values()].find((m) => m.alive)!;
-    slime.hp = 1e9; // não morre no primeiro golpe
-    const casts: string[] = [];
-    w.events.on('spellCast', (e) => e.casterId === h.id && casts.push(e.spellId));
-    asActor(w, h, () => {
-      removeOccupant(w, h);
-      h.x = slime.x + 2;
-      h.y = slime.y;
-      placeOccupant(w, h);
-      h.targetId = slime.id;
-      h.character.mana = h.stats.maxMana;
-      heroHelpers.tryCast(w, h, 'arcane_bolt');
-      for (const k of Object.keys(h.cooldowns)) delete (h.cooldowns as Record<string, number>)[k];
-      h.character.mana = Math.floor(h.stats.maxMana * 0.3);
-      heroHelpers.tryCast(w, h, 'arcane_bolt');
-    });
-    expect(casts).toEqual(['arcane_bolt_3', 'arcane_bolt']);
+  it('save antigo com grau na barra (fire_nova_3) vira a magia base, sem repetir', () => {
+    const bar = normalizeHotbar(D, 'sorcerer', ['spell:fire_nova_3', 'spell:fire_nova', 'spell:arcane_bolt_2', '', '', '', '', 'potion:health', 'potion:mana']);
+    expect(bar[0]).toBe('spell:fire_nova');
+    expect(bar[1]).toBe('');
+    expect(bar[2]).toBe('spell:arcane_bolt');
   });
 });
 

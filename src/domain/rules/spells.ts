@@ -96,13 +96,17 @@ export function castFailMessage(reason: CastFailReason, detail?: string): string
   }
 }
 
-/** Graus de uma magia (I, II, III), do mais fraco ao mais forte (os ids II/III terminam em _2 e _3). */
-export function spellTiers(spells: Readonly<Record<string, SpellDef>>, id: string): string[] {
-  const root = spells[id]?.baseId ?? id;
-  return [root, `${root}_2`, `${root}_3`].filter((x) => spells[x]?.baseId === root || x === root);
+/**
+ * Id atual de uma magia salva: os antigos graus II/III (`fire_nova_2`, `fire_nova_3`) viraram a magia base. Retorna o
+ * próprio id se ele existe, o da base se for um grau removido, ou null.
+ */
+export function currentSpellId(spells: Readonly<Record<string, SpellDef>>, id: string): string | null {
+  if (spells[id]) return id;
+  const m = /^(.+)_[23]$/.exec(id);
+  return m && spells[m[1]!] ? m[1]! : null;
 }
 
-/** All grades of the same spell share their individual cooldown. */
+/** Chave da recarga individual de uma magia. */
 export function spellCooldownKey(spell: SpellDef): string {
-  return `spell:${spell.baseId ?? spell.id}`;
+  return `spell:${spell.id}`;
 }

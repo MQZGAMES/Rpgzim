@@ -225,7 +225,7 @@ describe('delays fechados e Cura Intensa', () => {
       if (i.type === 'potion')
         expect(allowed.has(i.use!.cooldownMs), `${i.id} ${i.use!.cooldownMs}`).toBe(true);
     const cura = GAME_DATA.spells.sap_blessing!;
-    expect(cura.name).toBe('Cura Intensa I');
+    expect(cura.name).toBe('Cura Intensa');
     expect(cura.manaCost).toBe(56);
     expect(cura.partyRadius).toBe(12);
     expect(cura.buff).toBeUndefined();

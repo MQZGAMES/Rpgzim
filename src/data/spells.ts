@@ -568,66 +568,6 @@ const list: SpellDef[] = [
   },
 ];
 
-// ---------------------------------------------------------------- magias por nível (II e III)
-// Versões mais fortes das magias principais de cada vocação, liberadas com o nível: mais dano (ou cura) por
-// conjuração, mas pagando mais mana por ponto — o I continua valendo quando a mana está curta. Cada vocação ganha a
-// mesma coisa: a magia de alvo único e a de área (mais a cura de todos), nos mesmos níveis.
-const ROMAN = ['', 'I', 'II', 'III'] as const;
-/** [magia base, nível do II, nível do III] */
-const TIERED: readonly (readonly [string, number, number])[] = [
-  ['arcane_bolt', 20, 45],
-  ['fire_nova', 30, 60],
-  ['earth_thorn', 20, 45],
-  ['frost_burst', 30, 60],
-  ['holy_arrow', 20, 45],
-  ['arrow_rain', 30, 60],
-  ['brutal_strike', 20, 45],
-  ['steel_whirlwind', 30, 60],
-  ['light_heal', 25, 50],
-];
-/** Por grau: multiplicador do efeito, da mana e o Magic Level a mais (magos / demais vocações). */
-const TIER_SCALE = {
-  2: { power: 1.4, mana: 1.6, ml: [6, 2] },
-  3: { power: 1.85, mana: 2.3, ml: [14, 5] },
-} as const;
-
-function tierOf(base: SpellDef, tier: 2 | 3, minLevel: number): SpellDef {
-  const k = TIER_SCALE[tier];
-  const mage = base.vocations.every((v) => v === 'sorcerer' || v === 'druid');
-  const durationOnly = base.buff?.kind === 'haste' || base.buff?.kind === 'manaShield';
-  const manaScale = durationOnly ? 1 : base.conjure ? tier : k.mana;
-  return {
-    ...base,
-    id: `${base.id}_${tier}`,
-    name: `${base.name} ${ROMAN[tier]}`,
-    words: `${base.words} ${ROMAN[tier].toLowerCase()}`,
-    description: base.conjure
-      ? `Cria um lote de ${base.conjure.count * tier} poções na mochila, com custo proporcional à quantidade.`
-      : base.buff
-        ? `Evolução de ${base.name}: mantém a intensidade do efeito e amplia sua duração.`
-        : base.description,
-    minLevel,
-    minMagicLevel: base.minMagicLevel + k.ml[mage ? 0 : 1],
-    manaCost: Math.round(base.manaCost * manaScale),
-    ...(base.manaPerLevel ? { manaPerLevel: Math.round(base.manaPerLevel * manaScale * 100) / 100 } : {}),
-    ...(base.formula
-      ? {
-          formula: {
-            ...base.formula,
-            levelFactor: base.formula.levelFactor * k.power,
-            powerFactor: base.formula.powerFactor * k.power,
-            base: Math.round(base.formula.base * k.power),
-          },
-        }
-      : {}),
-    // Buffs improve uptime, never movement speed or damage absorption.
-    ...(base.buff ? { buff: { ...base.buff, durationMs: base.buff.durationMs * tier } } : {}),
-    // Batch creation keeps the same cost per potion and existing item IDs.
-    ...(base.conjure ? { conjure: { ...base.conjure, count: base.conjure.count * tier } } : {}),
-    tier,
-    baseId: base.id,
-  };
-}
 
 // ---------------------------------------------------------------- magias de criação (uma por tamanho de poção)
 // O Druid cria as poções de vida e o Sorcerer as de mana, de cada tamanho, um pouco depois do nível em que a poção
@@ -710,22 +650,17 @@ const originals = [
   ...list.map((x) => conjures.find((c) => c.id === x.id) ?? x),
   ...conjures.filter((c) => !byId.has(c.id)),
 ];
-const base = originals.map((x) => ({ ...x, name: `${x.name} I`, tier: 1 }));
-const extra = originals.flatMap((spell) => {
-  const existing = TIERED.find(([id]) => id === spell.id);
-  // Preserve established unlocks; later spells progress at +20 / +45 levels.
-  const l2 = existing?.[1] ?? spell.minLevel + 20;
-  const l3 = existing?.[2] ?? spell.minLevel + 45;
-  return [tierOf(spell, 2, l2), tierOf(spell, 3, l3)];
-});
+// Sem graus (II/III): cada magia existe uma vez só e o efeito cresce pelo nível e pelo Magic Level/skill da fórmula.
+// Saves antigos com graus na barra viram a magia base (ver normalizeHotbar). As magias de criação guardam o tamanho da
+// poção em `tier` (1 = pequena … 5 = divina), só para ordenar.
+const base = originals;
 
-export const SPELLS: Readonly<Record<string, SpellDef>> = Object.fromEntries(
-  [...base, ...extra].map((s) => [s.id, s]),
-);
+export const SPELLS: Readonly<Record<string, SpellDef>> = Object.fromEntries(base.map((s) => [s.id, s]));
 
-/** Magias novas (graus II/III e criação de poções) de cada vocação, na ordem em que vão liberando. */
+/** Magias novas (criação de poções) de cada vocação, na ordem em que vão liberando. */
 export function extraSpellsFor(voc: string): string[] {
-  return [...base.filter((s) => !byId.has(s.id)), ...extra]
+  return base
+    .filter((s) => !byId.has(s.id))
     .filter((x) => (x.vocations as readonly string[]).includes(voc))
     .sort((a, b) => a.minLevel - b.minLevel)
     .map((x) => x.id);

@@ -33,7 +33,7 @@ import {
   SAFE_MARGIN,
 } from './heroThreat';
 import { castCheck, castSpell } from '../abilities/spells';
-import { spellManaCost, spellTiers } from '../../domain/rules/spells';
+import { spellManaCost } from '../../domain/rules/spells';
 
 import { bestPotionFor, canDrink, potionAmount, potionsByKind, usablePotionCount } from '../../domain/rules/potions';
 import { aoeWorth, backlineStep, focusPick, personaOf, spellAverage } from './heroTactics';
@@ -1142,7 +1142,7 @@ function smartStrike(
   const reserve = minManaPct * h.stats.maxMana;
   let best: { id: string; cost: number } | null = null;
   for (const base of ids)
-    for (const id of spellTiers(w.data.spells, base)) {
+    for (const id of [base]) {
       const s = w.data.spells[id];
       if (!s || !s.vocations.includes(voc) || lv < s.minLevel || !castCheck(w, s).ok) continue;
       const cost = Math.max(1, spellManaCost(s, lv));
@@ -1214,9 +1214,12 @@ function survive(w: World, h: HeroEntity): void {
   if (attackers.length >= 2 && pct < 0.75) tryCast(w, h, 'iron_roar');
   // mana baixa no meio da luta: bebe poção de mana para não ficar inútil (magias são o principal dano)
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
-  if (manaPct < (isRanged(h.character.vocation) ? (shielded ? 0.6 : 0.4) : 0.35)) {
+  // disciplina de mana: luta fácil não pede poção (a varinha/arco não gasta mana); quanto mais pesada, mais cedo bebe
+  const effort = manaEffort(w, h, currentTarget(w));
+  const drinkBelow = shielded ? 0.6 : !isRanged(h.character.vocation) ? 0.35 : effort === 'heavy' ? 0.4 : effort === 'normal' ? 0.25 : 0.1;
+  if (manaPct < drinkBelow) {
     // mana no fim (ou com o Escudo de Mana segurando a vida) é emergência; fora disso, o tempo de reação dele
-    if (manaPct < 0.15 || shielded || reacted(w, h, 'mana')) {
+    if (manaPct < Math.min(0.15, drinkBelow) || shielded || reacted(w, h, 'mana')) {
       const idx = pickManaPotion(w, h);
       if (idx >= 0) drinkMana(w, h, idx);
       delete h.brain.human.noticed.mana;
@@ -1360,18 +1363,6 @@ function pickManaPotion(w: World, h: HeroEntity): number {
 function tryCast(w: World, h: HeroEntity, spellId: string): boolean {
   const spell = w.data.spells[spellId];
   if (!spell || !spell.vocations.includes(h.character.vocation)) return false;
-  // graus II/III: a cura sai sempre no maior grau liberado; o ataque, no maior só com mana sobrando (eles gastam mais
-  // mana por ponto de dano — com a mana curta o I rende mais)
-  const tiers = spellTiers(w.data.spells, spellId);
-  if (tiers.length > 1) {
-    const rich = h.character.mana >= h.stats.maxMana * 0.45;
-    for (const id of [...tiers].reverse()) {
-      const t = w.data.spells[id]!;
-      if ((t.tier ?? 1) > 1 && t.effect === 'damage' && !rich) continue;
-      if (t.vocations.includes(h.character.vocation) && castCheck(w, t).ok) return castSpell(w, id);
-    }
-    return false;
-  }
   if (!castCheck(w, spell).ok) return false;
   return castSpell(w, spellId);
 }
@@ -1863,6 +1854,12 @@ function restingForMana(w: World, h: HeroEntity): boolean {
   const voc = h.character.vocation;
   if (voc !== 'sorcerer' && voc !== 'druid') return false;
   const b = h.brain;
+  // caça fácil (presa bem abaixo do nível dele): a varinha dá conta, não para nem bebe poção por mana
+  const prey = w.data.monsters[b.quarry ?? ''];
+  if (prey && !prey.elite && (prey.level ?? 1) < h.character.level - 3 && !partyOf(w, h.id)) {
+    b.manaRest = false;
+    return false;
+  }
   const pct = h.character.mana / Math.max(1, h.stats.maxMana);
   if (pct < 0.3) b.manaRest = true;
   else if (pct >= 0.6) b.manaRest = false;
@@ -1977,6 +1974,31 @@ function castsNow(w: World, h: HeroEntity, adjacent: number): boolean {
   return hpPct(h) <= 0.6 || adjacent >= 2 || !w.rng.chance(1 - profileOf(h).apm);
 }
 
+/**
+ * Disciplina de mana: quanto a luta pede de magia (e de poção de mana).
+ * - `easy`: uma criatura só, bem abaixo do nível dele — varinha/arco e, com mana sobrando, a magia barata;
+ * - `normal`: duas criaturas ou uma do nível dele — magias fortes e área quando compensam;
+ * - `heavy`: três ou mais, chefe ou vida abaixo da metade — tudo, e poção de mana para manter o ritmo.
+ */
+export type ManaEffort = 'easy' | 'normal' | 'heavy';
+function manaEffort(w: World, h: HeroEntity, target?: MonsterEntity | null): ManaEffort {
+  const n = Math.max(engagedAround(w, h, h, 6), target ? 1 : 0);
+  const lv = h.character.level;
+  const hard = (m: MonsterEntity) => !!m.def.elite || (m.def.level ?? 1) >= lv - 3;
+  const anyHard = (target && hard(target)) || [...w.monsters.values()].some((m) => m.alive && m.targetId === h.id && hard(m));
+  if (n >= 3 || hpPct(h) < 0.5 || target?.def.elite || (n >= 2 && anyHard)) return 'heavy';
+  if (n >= 2 || anyHard) return 'normal';
+  return 'easy';
+}
+
+/** A magia barata de cada vocação (a que segura o ritmo sem pedir poção). */
+const CHEAP_SPELL: Record<string, string> = {
+  sorcerer: 'arcane_bolt',
+  druid: 'earth_thorn',
+  paladin: 'holy_arrow',
+  knight: 'brutal_strike',
+};
+
 function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: number): void {
   const voc = h.character.vocation;
   const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
@@ -2007,6 +2029,13 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   const fleeing = isFleeing(w, h, target) || target.state === 'returning';
   const slowed = w.now < target.slowUntil;
   const cast = (id: string): boolean => tryCast(w, h, id);
+  // disciplina de mana: luta fácil (uma criatura fraca) é na varinha/arco e na magia barata — sem gastar poção
+  if (voc !== 'knight' && manaEffort(w, h, target) === 'easy') {
+    if (fleeing && !slowed && voc === 'druid' && manaPct > 0.3 && cast('ice_shard')) return;
+    if (voc === 'paladin' && dist <= 2 && target.def.attack.range <= 2 && manaPct > 0.4 && cast('stunning_arrow')) return;
+    if (manaPct > 0.55) cast(CHEAP_SPELL[voc]!);
+    return;
+  }
   // golpe de misericórdia: o básico já mata (não gasta mana) ou a magia mais barata que mata
   // (o giro/área do Knight e a lentidão em quem foge continuam valendo antes)
   if (voc !== 'knight' && !fleeing && !crowd) {
