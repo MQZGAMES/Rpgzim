@@ -2,6 +2,7 @@
 // para a Ferraria e as de mago para a Alquimia; as lojas também compram os troféus das criaturas pelo valor cheio.
 import type { ShopDef } from '../domain/entities/definitions';
 import { GEAR_ITEMS } from './items.gear';
+import { MANA_POTION_PRICE } from './pricing';
 import { TROPHY_ITEMS as LATE_TROPHIES } from './monsters.late';
 import { SOUTH_TROPHY_ITEMS } from './monsters.south';
 
@@ -18,7 +19,8 @@ const isMageGear = (id: string) => MAGE_KINDS.some((k) => id.startsWith(k));
 
 const fighter = GEAR_ITEMS.filter((i) => !!i.slot && !isMageGear(i.id));
 const mage = GEAR_ITEMS.filter((i) => !!i.slot && isMageGear(i.id));
-const POTIONS: [string, number][] = [['potion_health_spirit', 340], ['potion_health_divine', 560], ['potion_mana_spirit', 400], ['potion_mana_divine', 720]];
+// poção de mana com o desconto de nov/2026 (ver pricing.ts)
+const POTIONS: [string, number][] = [['potion_health_spirit', 340], ['potion_health_divine', 560], ['potion_mana_spirit', MANA_POTION_PRICE.potion_mana_spirit!], ['potion_mana_divine', MANA_POTION_PRICE.potion_mana_divine!]];
 
 /** Acrescenta as faixas tardias às lojas de Pedraluz. */
 export function withLateStock(shops: ShopDef[]): ShopDef[] {
