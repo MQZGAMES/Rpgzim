@@ -436,7 +436,7 @@ describe('tipo de mundo', () => {
     expect(skullOf(w, human.id)).toBeNull();
     expect(w.social.unjust.get(human.id) ?? []).toHaveLength(0);
     expect(isPzLocked(w, human.id)).toBe(true);
-    expect(buildSnapshot(sim).worldPvp).toBe('enforced');
+    expect(buildSnapshot(sim, 1).worldPvp).toBe('enforced');
     expect(human.character.flags.pvpEnforced).toBe(true);
   });
 
@@ -449,6 +449,6 @@ describe('tipo de mundo', () => {
     expect(skullOf(w, human.id)?.kind).toBe('white');
     sim.setWorldPvp('off');
     expect(w.social.pvp).toBe(false);
-    expect(buildSnapshot(sim).worldPvp).toBe('off');
+    expect(buildSnapshot(sim, 1).worldPvp).toBe('off');
   });
 });
