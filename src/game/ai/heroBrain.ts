@@ -49,7 +49,7 @@ import {
   setTarget,
 } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
-import { equipItem, nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
+import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
 import { marketBuyNow, marketCancel, marketOffer, marketSellAll, marketSellNow } from '../economy/marketService';
@@ -2490,7 +2490,7 @@ function collectLootWhileFighting(w: World, h: HeroEntity): void {
       .filter(Boolean)
       .map((s) => [s!.itemId, countItem(h.character.inventory, s!.itemId)]),
   );
-  for (const bag of nearbyLootBags(w)) if (heroMayLoot(w, h, bag)) takeLoot(w, bag.id, 'all');
+  takeAllNearbyLoot(w, (bag) => heroMayLoot(w, h, bag));
   w.ui.lootId = null;
   equipBagUpgrades(w, h);
   for (const st of h.character.inventory) {

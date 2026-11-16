@@ -37,6 +37,7 @@ import {
   registerPlayerKill,
   skullOf,
   touchCombat,
+  nextLootReceiver,
   xpReceivers,
 } from '../social/social';
 import { gainExperience, refreshStats, trainPlayerSkill } from '../progression/progression';
@@ -357,9 +358,14 @@ function killMonster(w: World, m: MonsterEntity, byGuard = false): void {
     for (const a of [w.human, ...w.heroes.values()]) if (a.targetId === m.id) a.targetId = null;
     return;
   }
+  const p = w.player;
+  // XP e loot: sozinho fica com tudo; em grupo, XP e ouro divididos igualmente entre os membros vivos e próximos, e os
+  // itens vão inteiros para um membro por vez (rodízio)
+  const receivers = xpReceivers(w, p.id, pos);
   const loot = w.loot.roll(m.def);
   if (loot.items.length || loot.gold > 0) {
     const id = nextId(w, 'loot');
+    const lootTo = nextLootReceiver(w, p.id, receivers);
     w.lootBags.set(id, {
       id,
       x: m.x,
@@ -368,14 +374,12 @@ function killMonster(w: World, m: MonsterEntity, byGuard = false): void {
       gold: loot.gold,
       expiresAt: w.now + w.data.balance.world.lootDecayMs,
       sourceName: m.def.name,
+      ...(lootTo ? { party: { shareIds: receivers.map((r) => r.id), lootTo } } : {}),
     });
     w.events.emit('lootDropped', { containerId: id, position: pos });
   }
-  const p = w.player;
   p.character.stats.monstersKilled += 1;
   if (p.targetId === m.id) setTarget(w, null);
-  // XP: sozinho fica com tudo; em grupo, dividida igualmente entre os membros vivos e próximos
-  const receivers = xpReceivers(w, p.id, pos);
   if (receivers.length <= 1) {
     message(w, `Você derrotou: ${m.def.name} (+${m.def.experience} XP).`, 'combat');
     gainExperience(w, m.def.experience);
@@ -595,7 +599,7 @@ function dropDeathLoot(w: World, victim: PlayerEntity, redSkull: boolean): void 
   w.events.emit('itemsChanged', {});
   message(
     w,
-    `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu (qualquer um pode pegar; o que você mesmo recuperar não é dividido com o grupo).`,
+    `Você perdeu tudo da mochila e ${gold} de ouro: está no chão onde você caiu (quem pegar primeiro leva tudo, inclusive você).`,
     'warning',
   );
   if (lostEquip.length) message(w, `Também caiu equipamento: ${lostEquip.join(', ')}.`, 'warning');

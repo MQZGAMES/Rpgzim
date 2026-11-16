@@ -28,6 +28,8 @@ export interface Party {
   sparMode?: 'training' | 'duel';
   /** Últimas posições do líder (para a formação em fila). */
   trail: { x: number; y: number }[];
+  /** Rodízio do loot: índice (em `members`) de quem recebe os itens da próxima criatura. */
+  lootTurn?: number;
   /** Grupo de uma guilda (guerra de guildas): fixo, ninguém entra nem sai por convite. */
   guild?: 0 | 1;
 }
@@ -473,6 +475,25 @@ export function passLeadership(w: World, leaderId: string, toId: string): PartyF
 }
 
 /** Quem recebe parte da XP de um monstro abatido por `killerId` (o próprio, ou o grupo próximo e vivo). */
+/**
+ * Quem leva os itens da próxima criatura do grupo: o próximo membro do rodízio que esteja entre os que receberam a XP
+ * (vivo e perto). Sem grupo, ninguém (o saco é de quem pegar).
+ */
+export function nextLootReceiver(w: World, killerId: string, receivers: readonly PlayerEntity[]): string | null {
+  const p = partyOf(w, killerId);
+  if (!p || receivers.length <= 1) return null;
+  const n = p.members.length;
+  const start = p.lootTurn ?? 0;
+  for (let k = 0; k < n; k++) {
+    const id = p.members[(start + k) % n]!;
+    if (receivers.some((r) => r.id === id)) {
+      p.lootTurn = (start + k + 1) % n;
+      return id;
+    }
+  }
+  return null;
+}
+
 export function xpReceivers(w: World, killerId: string, at: { x: number; y: number }): PlayerEntity[] {
   const killer = actorById(w, killerId);
   if (!killer) return [];
