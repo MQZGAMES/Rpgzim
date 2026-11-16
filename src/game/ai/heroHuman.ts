@@ -1,7 +1,7 @@
 // Jeito de gente: o que faz um herói parecer uma pessoa jogando, e não um robô perfeito. Cada herói tem um perfil
 // fixo (tirado do temperamento e do id): tempo de reação, ritmo de magias, jeito de escrever no chat e o tamanho das
 // sessões de jogo e das pausas. A IA (heroBrain) usa o perfil para reagir com um atraso humano, falar do jeito dele,
-// fazer pausas, ficar AFK de vez em quando e deslogar/voltar como um jogador de verdade.
+// fazer pausas e deslogar/voltar como um jogador de verdade (sem ficar AFK parado no mundo).
 import type { HeroDef } from '../../domain/entities/definitions';
 
 /** Jeito de escrever: animado (exclamações), casual (gírias, abreviações, sem acento), educado, seco (curto, sem festa). */
@@ -17,8 +17,6 @@ export interface HumanProfile {
   sessionMin: readonly [number, number];
   /** Duração da pausa fora do jogo (min). */
   breakMin: readonly [number, number];
-  /** Chance de ficar AFK alguns minutos ao terminar uma visita à vila. */
-  afkChance: number;
 }
 
 /** Os heróis da casa têm o jeito de escrever deles; os personagens criados ganham um pelo id. */
@@ -44,10 +42,9 @@ export function humanProfile(hero: Pick<HeroDef, 'id' | 'temperament'>): HumanPr
     reactionMs: Math.round(230 + (1 - t.caution) * 260 + frac(hero.id, 1) * 140),
     apm: 0.86 + t.discipline * 0.12,
     style: STYLE_OF[hero.id] ?? STYLES[Math.floor(frac(hero.id, 2) * STYLES.length)]!,
-    // quem é disciplinado joga sessões mais longas; o sociável para mais vezes para conversar (AFK)
+    // quem é disciplinado joga sessões mais longas
     sessionMin: [Math.round(45 + t.discipline * 30), Math.round(80 + t.discipline * 35)],
     breakMin: [6, Math.round(14 + (1 - t.discipline) * 10)],
-    afkChance: 0.04 + t.sociability * 0.08,
   };
 }
 

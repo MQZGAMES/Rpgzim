@@ -793,8 +793,6 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
       b.pkLostTo = null;
       restoreMainWeapon(w, h);
       setMode(w, h, 'decide');
-      // como gente: depois de morrer, às vezes dá uma respirada no templo antes de voltar
-      if (w.lifelike && w.rng.chance(0.3)) b.human.afkUntil = w.now + (30 + w.rng.next() * 60) * 1000;
     }
     return;
   }
@@ -2735,15 +2733,6 @@ function town(w: World, h: HeroEntity): void {
     b.nextTownAt = w.now + (manaGoal(w, h) ? 3 : 5) * 60000;
     b.prepare = false;
     dropJunk(w, h);
-    // às vezes, como gente, fica um pouco AFK antes de voltar a caçar
-    if (maybeAfk(w, h)) {
-      w.ui.shop = null;
-      w.ui.depot = null;
-      w.ui.market = null;
-      w.ui.dialog = null;
-      b.after = 'decide';
-      return setMode(w, h, 'decide');
-    }
     w.ui.shop = null;
     w.ui.depot = null;
     w.ui.market = null;
@@ -5197,14 +5186,6 @@ function humanRoutine(w: World, h: HeroEntity): boolean {
     return true;
   }
   return false;
-}
-
-/** Termina uma visita à vila: às vezes fica AFK uns minutos (numa loja ou no templo, em lugar seguro). */
-function maybeAfk(w: World, h: HeroEntity): boolean {
-  if (!w.lifelike || !isPz(w.map, h.x, h.y) || !freeToLeave(w, h) || !w.rng.chance(profileOf(h).afkChance)) return false;
-  h.brain.human.afkUntil = w.now + (60 + w.rng.next() * 150) * 1000;
-  heroSay(w, h, 'afk', {}, 0);
-  return true;
 }
 
 /** Cumprimenta quem chega perto na vila (e o outro responde depois de "digitar"); um cumprimento por pessoa a cada 10 min. */

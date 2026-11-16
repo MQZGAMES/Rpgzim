@@ -65,7 +65,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   **18 criaturas em 6 patamares** (cada patamar tem o dobro de vida e ataque do anterior; ver `docs/BALANCE.md`),
   com IA que contorna obstáculos (A*) e, ao se afastar demais do ponto de nascimento (3× a distância antiga),
   volta por teleporte com a vida cheia; loot, ouro, 3 lojas,
-  **Banco de Pedraluz** (depósito de 40 espaços e ouro guardado, seguros na morte), NPC tutorial.
+  **Banco de Pedraluz** (depósito de 50 espaços e ouro guardado, seguros na morte; mochila de 28 espaços), NPC tutorial.
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.

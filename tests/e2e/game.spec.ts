@@ -261,8 +261,14 @@ test('mercado: corretor ao lado da banqueira, vender (categoria → item → anu
   await page.getByTestId('interact-button').click();
   await page.getByRole('button', { name: 'Abrir mercado' }).click();
   await expect(page.getByTestId('market-panel')).toBeVisible();
-  // Vender → Machados → Machadinha: o preço já vem sugerido; anuncia com um toque
+  // Vender + "Somente disponível": só as categorias do que ele tem (a Machadinha, sim; varinha, não)
   await page.getByTestId('market-mode-sell').click();
+  await page.getByTestId('market-only-available').click();
+  await expect(page.getByTestId('market-cat-axe')).toBeVisible();
+  await expect(page.getByTestId('market-cat-wand')).toHaveCount(0);
+  await page.getByTestId('market-only-available').click();
+  await expect(page.getByTestId('market-cat-wand')).toBeVisible();
+  // Vender → Machados → Machadinha: o preço já vem sugerido; anuncia com um toque
   await page.getByTestId('market-cat-axe').click();
   await page.getByTestId('market-item-axe_hand').click();
   await expect(page.getByTestId('market-guide')).toBeVisible();

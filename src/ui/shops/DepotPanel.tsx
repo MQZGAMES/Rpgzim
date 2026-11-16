@@ -100,7 +100,7 @@ export function DepotPanel() {
                     Guardar loot
                   </PixelButton>
                 </div>
-                <div className="grid grid-cols-5 gap-1">
+                <div className="grid grid-cols-7 gap-1">
                   {inv.map((it, i) => (
                     <ItemCell
                       key={i}
@@ -117,7 +117,7 @@ export function DepotPanel() {
                 <div className="mb-1 text-[12px] text-muted">
                   Depósito {used}/{depot.items.length}
                 </div>
-                <div className="grid max-h-[34dvh] grid-cols-5 gap-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[300px]">
+                <div className="grid max-h-[34dvh] grid-cols-7 gap-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[300px]">
                   {depot.items.map((it, i) => (
                     <ItemCell
                       key={i}

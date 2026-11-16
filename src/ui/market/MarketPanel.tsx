@@ -5,6 +5,8 @@
 //      atributos, se é melhor ou pior que o seu e o preço (comprando: menor anúncio; vendendo: maior oferta e o último
 //      negócio);
 //   4. O item: todas as ofertas e as ações com valores sugeridos pela oferta e procura (MarketItem).
+// "Somente disponível" (vale nos dois modos): vendendo, só o que você tem; comprando, só o que dá para comprar (anúncio
+// no mercado ou à venda na loja). Esconde também as categorias vazias.
 import { useMemo, useState } from 'react';
 import { MARKET_CATEGORIES, type CatalogItem, type MarketCategoryId } from '../../domain/rules/marketCatalog';
 import { useSession, useSnap } from '../../integration/game-ui-bridge/hooks';
@@ -49,7 +51,7 @@ export function MarketPanel() {
   const [screen, setScreen] = useState<Screen>({ kind: 'cats' });
   const [voc, setVoc] = useState<VocFilter>('mine');
   const [sort, setSort] = useState<Sort>('level-asc');
-  const [onlyOffers, setOnlyOffers] = useState(false);
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [query, setQuery] = useState('');
   if (!market) return null;
   const byId = new Map(catalog.map((c) => [c.itemId, c]));
@@ -58,16 +60,12 @@ export function MarketPanel() {
   const vocOk = (it: CatalogItem) =>
     voc === 'all' || !it.vocations || it.vocations.includes((voc === 'mine' ? vocation : voc) as never);
   const viewAll = screen.kind === 'list' && screen.cat === 'all';
+  /** Dá para comprar agora: alguém anuncia no mercado ou a loja vende. */
+  const buyable = (it: CatalogItem) => priceOf(it) !== null || market.quotes[it.itemId]?.shopSells != null;
   const listFor = (items: CatalogItem[]) =>
     items
       .filter((it) => (mode === 'sell' ? (market.owned[it.itemId] ?? 0) > 0 : true))
-      .filter(
-        (it) =>
-          mode === 'sell' ||
-          !(onlyOffers || viewAll) ||
-          priceOf(it) !== null ||
-          market.quotes[it.itemId]?.shopSells != null,
-      )
+      .filter((it) => mode === 'sell' || !(onlyAvailable || viewAll) || buyable(it))
       .filter(vocOk)
       .sort((a, b) => {
         if (sort.startsWith('level'))
@@ -155,6 +153,21 @@ export function MarketPanel() {
           <span>
             Seu ouro <Coin n={market.money} />
           </span>
+          {(mode === 'buy' || mode === 'sell') && (
+            <PixelButton
+              variant={onlyAvailable ? 'gold' : 'stone'}
+              className={chip(onlyAvailable)}
+              onClick={() => setOnlyAvailable(!onlyAvailable)}
+              title={
+                mode === 'sell'
+                  ? 'Só o que você tem para vender'
+                  : 'Só o que tem para comprar (no mercado ou na loja)'
+              }
+              data-testid="market-only-available"
+            >
+              {onlyAvailable ? '✓ ' : ''}Somente disponível
+            </PixelButton>
+          )}
           {market.escrow > 0 && (
             <span>
               Reservado <Coin n={market.escrow} className="text-mana-light" />
@@ -193,6 +206,8 @@ export function MarketPanel() {
           ) : screen.kind === 'cats' ? (
             <Categories
               mode={tradeMode}
+              onlyAvailable={onlyAvailable}
+              buyable={buyable}
               catalog={catalog}
               query={query}
               setQuery={setQuery}
@@ -240,16 +255,6 @@ export function MarketPanel() {
                       {label}
                     </PixelButton>
                   ))}
-                  {mode === 'buy' && !viewAll && (
-                    <PixelButton
-                      variant={onlyOffers ? 'gold' : 'stone'}
-                      className={chip(onlyOffers)}
-                      onClick={() => setOnlyOffers(!onlyOffers)}
-                      data-testid="market-only-offers"
-                    >
-                      Só à venda
-                    </PixelButton>
-                  )}
                 </div>
               </div>
               {mode === 'sell' && (
@@ -289,6 +294,8 @@ export function MarketPanel() {
 /** 2) Categorias: quantas ofertas (comprando) ou itens seus (vendendo) há em cada uma; e a busca por nome. */
 function Categories({
   mode,
+  onlyAvailable,
+  buyable,
   catalog,
   query,
   setQuery,
@@ -298,6 +305,9 @@ function Categories({
   onItem,
 }: {
   mode: 'buy' | 'sell';
+  /** Esconde as categorias sem nada disponível (vendendo: sem itens seus; comprando: nada para comprar). */
+  onlyAvailable: boolean;
+  buyable: (it: CatalogItem) => boolean;
   catalog: CatalogItem[];
   query: string;
   setQuery: (q: string) => void;
@@ -317,6 +327,10 @@ function Categories({
         0,
       );
   const total = MARKET_CATEGORIES.reduce((s, c) => s + count(c.id), 0);
+  const available = (cat: MarketCategoryId) =>
+    catalog.some(
+      (c) => c.category === cat && (mode === 'sell' ? (market.owned[c.itemId] ?? 0) > 0 : buyable(c)),
+    );
   return (
     <div data-testid="market-categories">
       <input
@@ -340,35 +354,46 @@ function Categories({
             Explorar todos os itens ({total})
           </PixelButton>
           {mode === 'sell' && <QuickSellAll items={catalog} />}
-          {groups.map((g) => (
-            <div key={g} className="mb-2">
-              <div className="mb-1 text-[12px] text-muted">{g}</div>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {MARKET_CATEGORIES.filter((c) => c.group === g).map((c) => {
-                  const n = count(c.id);
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => onCat(c.id)}
-                      className={`frame-slot relative flex min-h-[76px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
-                      data-testid={`market-cat-${c.id}`}
-                    >
-                      <ItemIcon icon={c.icon} size={26} />
-                      <span className="text-[10px] leading-tight text-parchment">{c.name}</span>
-                      {n > 0 && (
-                        <span
-                          className={`text-outline absolute right-[2px] top-[1px] text-[10px] ${mode === 'sell' ? 'text-heal' : 'text-gold-light'}`}
-                        >
-                          {n}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+          {groups.map((g) => {
+            const cats = MARKET_CATEGORIES.filter(
+              (c) => c.group === g && (!onlyAvailable || available(c.id)),
+            );
+            if (!cats.length) return null;
+            return (
+              <div key={g} className="mb-2">
+                <div className="mb-1 text-[12px] text-muted">{g}</div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {cats.map((c) => {
+                    const n = count(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => onCat(c.id)}
+                        className={`frame-slot relative flex min-h-[76px] flex-col items-center justify-center gap-[2px] !border-[5px] px-[2px] text-center ${mode === 'sell' && !n ? 'opacity-50' : ''}`}
+                        data-testid={`market-cat-${c.id}`}
+                      >
+                        <ItemIcon icon={c.icon} size={26} />
+                        <span className="text-[10px] leading-tight text-parchment">{c.name}</span>
+                        {n > 0 && (
+                          <span
+                            className={`text-outline absolute right-[2px] top-[1px] text-[10px] ${mode === 'sell' ? 'text-heal' : 'text-gold-light'}`}
+                          >
+                            {n}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+          {onlyAvailable && !MARKET_CATEGORIES.some((c) => available(c.id)) && (
+            <p className="mb-2 text-[12px] text-muted" data-testid="market-nothing-available">
+              {mode === 'sell' ? 'Você não tem nada para vender.' : 'Nada à venda agora.'}
+            </p>
+          )}
         </>
       )}
       <p className="text-[11px] text-muted">
