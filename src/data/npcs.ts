@@ -126,7 +126,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Pedraluz fica no meio do mundo: quanto mais longe da vila, em qualquer direção, mais fortes as criaturas. Por este portão, a leste: os Campos do Leste (slimes e o acampamento goblin), a Savana Dourada (chacais, saqueadores e orcs), o Mar de Areia (escorpiões, hienas, rinocerontes e as múmias das ruínas), as Dunas Rubras e, no fim, o Vulcão Adormecido. Na estrada há santuários, áreas protegidas para descansar. Atenção: só dentro das construções ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
+        text: 'Pedraluz fica no meio do mundo: quanto mais longe da vila, em qualquer direção, mais fortes as criaturas. Por este portão, a leste: os Campos do Leste (slimes e o acampamento goblin), a Savana Dourada (chacais, saqueadores e orcs), o Mar de Areia (escorpiões, hienas, rinocerontes e as múmias das ruínas), as Dunas Rubras e, no fim, o Vulcão Adormecido. O caminho é longo e não há abrigo lá fora: o único lugar protegido é aqui na vila, então leve poções para a volta. Atenção: só dentro das construções ninguém pode lutar; nas ruas, cuidado com monstros e com o PK.',
         options: [close],
       },
     ],
@@ -182,7 +182,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Ao norte o frio aumenta a cada passo: os Campos do Norte (slimes e javalis), a Taiga dos Pinheiros (lobos, bandidos e ursos), a Tundra Uivante (lobos de gelo, ursos das cavernas e o yeti), a Geleira Eterna e, no topo, o Pico do Inverno. Os santuários da estrada são protegidos: dá para descansar neles.',
+        text: 'Ao norte o frio aumenta a cada passo: os Campos do Norte (slimes e javalis), a Taiga dos Pinheiros (lobos, bandidos e ursos), a Tundra Uivante (lobos de gelo, ursos das cavernas e o yeti), a Geleira Eterna e, no topo, o Pico do Inverno. Lá fora não há onde se abrigar: descanso, só no Templo e nas casas da vila.',
         options: [close],
       },
     ],

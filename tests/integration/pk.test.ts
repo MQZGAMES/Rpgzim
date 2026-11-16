@@ -1,3 +1,4 @@
+import { totalXpForLevel } from '../../src/domain/rules/experience';
 // PK estilo Tibia: caveiras branca/amarela/vermelha, PZ lock, mortes injustas, renovação de 30 s, perdas da morte,
 // Amuleto da Perda e persistência entre sessões.
 import { describe, expect, it } from 'vitest';
@@ -450,5 +451,69 @@ describe('tipo de mundo', () => {
     sim.setWorldPvp('off');
     expect(w.social.pvp).toBe(false);
     expect(buildSnapshot(sim, 1).worldPvp).toBe('off');
+  });
+});
+
+describe('PvP Enforced: a experiência perdida vai para quem matou', () => {
+  const extra = (sim: GameSimulation, id: string) => {
+    const def = GAME_DATA.heroes[id]!;
+    const c = createCharacter(GAME_DATA, { id: def.slotId, name: def.name, vocation: def.vocation, now: 0, position: sim.world.map.playerStart });
+    const m = sim.addHero(def, c);
+    m.brain.nextThinkAt = Infinity;
+    return m;
+  };
+  /** A vítima no nível 20 com 80% do nível: a perda é de meio nível e não desce de nível. */
+  const prepVictim = (sim: GameSimulation, v: HeroEntity) => {
+    const cfg = sim.world.data.balance.experience;
+    const lo = totalXpForLevel(20, cfg);
+    v.character.level = 20;
+    v.character.experience = lo + Math.floor((totalXpForLevel(21, cfg) - lo) * 0.8);
+    return v.character.experience;
+  };
+  const hitBy = (sim: GameSimulation, v: HeroEntity, src: HeroEntity | GameSimulation['world']['human'], raw: number) => {
+    const w = sim.world;
+    v.invulnerableUntil = 0;
+    registerAggression(w, src.id, v.id);
+    asActor(w, v, () => damagePlayer(w, raw, 'fire', actorSource(src), true));
+  };
+
+  it('um matador recebe toda a experiência que a vítima perdeu', () => {
+    const { sim, h, w, human } = world();
+    sim.setWorldPvp('enforced');
+    const before = prepVictim(sim, h);
+    const mine = human.character.experience;
+    h.character.health = h.stats.maxHealth = 300;
+    hitBy(sim, h, human, 800); // (dano entre personagens vale metade)
+    expect(h.dead).toBe(true);
+    const lost = before - h.character.experience;
+    expect(lost).toBeGreaterThan(0);
+    expect(human.character.experience - mine).toBe(lost);
+    expect(w.social.enforced).toBe(true);
+  });
+
+  it('dois matadores dividem em partes iguais', () => {
+    const { sim, h, human } = world();
+    sim.setWorldPvp('enforced');
+    const m = extra(sim, 'maguim');
+    const before = prepVictim(sim, h);
+    const a0 = human.character.experience;
+    const b0 = m.character.experience;
+    h.character.health = h.stats.maxHealth = 600;
+    hitBy(sim, h, m, 300);
+    hitBy(sim, h, human, 1200); // (dano entre personagens vale metade)
+    expect(h.dead).toBe(true);
+    const share = Math.floor((before - h.character.experience) / 2);
+    expect(human.character.experience - a0).toBe(share);
+    expect(m.character.experience - b0).toBe(share);
+  });
+
+  it('no PvP comum (com caveiras) ninguém ganha a experiência de quem morreu', () => {
+    const { sim, h, human } = world();
+    prepVictim(sim, h);
+    const mine = human.character.experience;
+    h.character.health = h.stats.maxHealth = 300;
+    hitBy(sim, h, human, 800); // (dano entre personagens vale metade)
+    expect(h.dead).toBe(true);
+    expect(human.character.experience).toBe(mine);
   });
 });

@@ -44,6 +44,10 @@ describe('complete spell progression', () => {
       expect(details).not.toContain('?');
       if (s.buff) expect(details).toContain(`${s.buff.durationMs / 1000}s`);
       if (s.formula) expect(details).toContain('Resultado arredondado');
+      // os graus foram removidos: o texto não pode mais citá-los; "ML" só aparece em fórmula que usa Magic Level
+      expect(details).not.toMatch(/Graus? I/);
+      if (s.formula?.kind !== 'magic') expect(details).not.toContain('ML = Magic Level');
+      expect(details).not.toMatch(/\b1 casas\b/);
     }
   });
 });

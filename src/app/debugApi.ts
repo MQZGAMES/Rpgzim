@@ -85,6 +85,48 @@ export function installDebugApi(session: GameSession, getGame?: () => Phaser.Gam
     },
     /** Dispara um aviso de PK na tela (para conferir a interface). */
     pkNotice: (text: string, danger = true) => sim.world.human.scope.events.emit('pkNotice', { text, danger }),
+    /** Faz um herói (ou o jogador, id 'player') "falar": mostra o balão acima do nome (para conferir a interface). */
+    speak: (id: string, text: string) => {
+      const a = id === 'player' ? sim.world.player : (sim.world.heroes.get(id) ?? null);
+      if (!a) return false;
+      sim.events.emit('speech', { entityId: a.id, name: a.character.name, text, position: { x: a.x, y: a.y } });
+      return true;
+    },
+    /** Balões de fala na tela: texto e ponto de apoio (a ponta do balão fica 1 px abaixo dele), em pixels do mundo. */
+    bubbles: () => {
+      const game = getGame?.();
+      const scene = game?.scene.getScene('world');
+      if (!scene) return [];
+      const out: { text: string; x: number; y: number }[] = [];
+      for (const o of scene.children.list) {
+        const c = o as Phaser.GameObjects.Container;
+        if (c.type !== 'Container' || c.list.length !== 2) continue;
+        const [g, t] = c.list as [Phaser.GameObjects.GameObject, Phaser.GameObjects.Text];
+        if (g.type !== 'Graphics' || t.type !== 'Text') continue;
+        out.push({ text: t.text, x: c.x, y: c.y });
+      }
+      return out;
+    },
+    /** Retângulo do nome de uma entidade (pixels do mundo), para conferir a posição dos balões e ícones. */
+    nameBox: (text: string) => {
+      const game = getGame?.();
+      const scene = game?.scene.getScene('world');
+      if (!scene) return null;
+      let found: { x: number; y: number; w: number; h: number } | null = null;
+      const visit = (list: Phaser.GameObjects.GameObject[]) => {
+        for (const o of list) {
+          const t = o as Phaser.GameObjects.Text;
+          if (t.type === 'Text' && t.text === text && t.parentContainer?.visible) {
+            const b = t.getBounds();
+            found = { x: b.x, y: b.y, w: b.width, h: b.height };
+          }
+          const c = o as Phaser.GameObjects.Container;
+          if (Array.isArray(c.list)) visit(c.list);
+        }
+      };
+      visit(scene.children.list);
+      return found;
+    },
     /** Convida o herói para o grupo (ele aceita na hora). */
     invite: (id: string) => sim.partyInvite(id),
     /** Relógio do jogo em ms (anda mais devagar que o real quando os quadros demoram). */

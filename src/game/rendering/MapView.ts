@@ -17,8 +17,10 @@ export class MapView {
       for (let y = 0; y < map.height; y++) rows.push(Array.from(data.subarray(y * W, y * W + W)));
       return rows;
     };
+    // insertNull: célula vazia (-1) vira null em vez de um objeto Tile. As 12 camadas cobrem o mundo inteiro e quase
+    // todas são esparsas (água, lava, pisos, paredes): sem isso o Phaser criava ~1,5 milhão de objetos no mapa dobrado
     const layer = (data: Int32Array | number[][], depth: number) => {
-      const tm = scene.make.tilemap({ data: Array.isArray(data) ? data : to2d(data), tileWidth: 16, tileHeight: 16 });
+      const tm = scene.make.tilemap({ data: Array.isArray(data) ? data : to2d(data), tileWidth: 16, tileHeight: 16, insertNull: true });
       const ts = tm.addTilesetImage('tiles', 'tiles', 16, 16, 0, 0)!;
       const l = tm.createLayer(0, ts, 0, 0)!;
       l.setDepth(depth);

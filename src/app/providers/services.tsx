@@ -33,7 +33,10 @@ export function useServices(): Services {
 export function detectTouch(): boolean {
   if (typeof window === 'undefined') return false;
   if (new URLSearchParams(window.location.search).has('touch')) return true;
-  return window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window;
+  const mq = (q: string) => window.matchMedia?.(q).matches ?? false;
+  if (mq('(pointer: coarse)')) return true;
+  // notebook com tela de toque: tem mouse ou touchpad (any-pointer: fine) e fica com a interface do desktop
+  return 'ontouchstart' in window && !mq('(any-pointer: fine)');
 }
 
 export function ServicesProvider({ children, fallback }: { children: ReactNode; fallback: ReactNode }) {

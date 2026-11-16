@@ -58,14 +58,14 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   velocidade anterior, um pouco mais lentas que o jogador (dá para se posicionar e fugir).
 
 ## O que existe
-- Mundo contínuo (245×250 tiles) com **Pedraluz no centro** e quatro direções de biomas ao redor (ver *Mundo com
+- Mundo contínuo (347×352 tiles) com **Pedraluz no centro** e quatro direções de biomas ao redor (ver *Mundo com
   Pedraluz no centro*, abaixo), com autotile, água e lava animadas, iluminação aditiva e **casas exploráveis no
   mesmo mapa** (telhado some ao entrar; o interior aparece em frente a portas e janelas).
 - 4 vocações (Sorcerer, Druid, Paladin, Knight), **13 magias**, 99 itens com equipamentos até o nível 18,
   **18 criaturas em 6 patamares** (cada patamar tem o dobro de vida e ataque do anterior; ver `docs/BALANCE.md`),
   com IA que contorna obstáculos (A*) e, ao se afastar demais do ponto de nascimento (3× a distância antiga),
   volta por teleporte com a vida cheia; loot, ouro, 3 lojas,
-  **Banco de Pedraluz** (depósito de 40 espaços e ouro guardado, seguros na morte), NPC tutorial.
+  **Banco de Pedraluz** (depósito de 50 espaços e ouro guardado, seguros na morte; mochila de 28 espaços), NPC tutorial.
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
@@ -225,9 +225,8 @@ consistente, contorno colorido (sel-out), olhos com brilho e anatomia mais clara
     desloga. Volta sozinho depois de 6 a 24 min ("voltei"). Em *Personagens online*, quem está fora aparece em *Numa
     pausa (voltam sozinhos)*, com os minutos que faltam; dá para deslogá-lo por lá. **Quem está no seu grupo nunca sai
     para a pausa.**
-  - **AFK de vez em quando**: às vezes, depois da vila, fica de 1 a 3,5 min parado na área protegida (4% a 12% das
-    visitas). Depois de morrer, fica 30 a 90 s (3 vezes em 10). Na lista ele aparece como *ausente (AFK)* e volta na
-    hora se for atacado.
+  - **Sem AFK** (nov/2026): depois da vila ou de morrer ele volta direto à caça (antes ficava de 30 s a 3,5 min parado
+    no templo, às vezes). As pausas de sessão (deslogar e voltar sozinho) continuam.
   - **Conversa de MMO**:
     - cumprimenta quem encontra na vila, e o outro responde depois de "digitar" (1,5 a 4 s);
     - dá "gz" nos níveis redondos (e a partir do 15), inclusive os seus;
@@ -257,8 +256,9 @@ retirar) — e pensado primeiro para o celular.
 - **Jornada em 4 toques**: *Comprar / Vender / Minhas ofertas* → **categoria** (Espadas, Machados, Maças, Arcos e
   lanças, Varinhas, Cajados, Escudos, Livros, Capacetes, Armaduras, Calças, Botas, Anéis, Amuletos, Poções de vida e
   de mana — cada uma mostra quanto está à venda, ou quanto você tem) → **lista** com filtro por vocação (Todas, a sua
-  ou uma específica) e ordem por **nível** ou **preço** (crescente/decrescente; comprando, *Só à venda*) → **item**.
-  Também dá para procurar pelo nome.
+  ou uma específica) e ordem por **nível** ou **preço** (crescente/decrescente) → **item**. Também dá para procurar
+  pelo nome. O filtro **Somente disponível** (no topo) esconde o que não dá para negociar agora: comprando, só o que
+  alguém vende (ou a loja tem); vendendo, só o que você tem na mochila. Categorias vazias somem.
 - **Na lista, ao lado de cada item**: nível para usar, atributos (Atq, Def/Arm, Vida, Mana, ML…), se é **▲ melhor** ou
   **▼ pior** que o que você usa (com +/− de ataque e defesa), *requer nv X* ou *não usa*, e o preço do modo: comprando, o
   **menor anúncio** (e quantos há); vendendo, a **maior oferta de compra** e o **último negócio**.
@@ -573,11 +573,11 @@ Assets: toda a arte é gerada por `scripts/art/` (licença do próprio projeto).
 Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
 
 ## Mundo com Pedraluz no centro (nov/2026)
-- **A vila no meio do mundo** (245×250 tiles), com muralha e portão nos quatro lados (guardas Tomé, Lia, Bento e Íris).
-  Por dentro ela é a mesma de sempre: o desenho é montado em coordenadas locais e deslocado para o centro
-  (`src/data/maps/layout.ts`, `MapBuilder.translate`).
-- **Cinco anéis de distância** a partir da muralha (níveis 1–8, 9–20, 20–42, 44–71 e 72–103) e **quatro direções**, cada
-  uma com uma sequência de biomas (`src/data/maps/biomes.ts`):
+- **A vila no meio do mundo** (347×352 tiles; era 245×250 até a 2ª versão, abaixo), com muralha e portão nos quatro
+  lados (guardas Tomé, Lia, Bento e Íris). Por dentro ela é a mesma de sempre: o desenho é montado em coordenadas locais
+  e deslocado para o centro (`src/data/maps/layout.ts`, `MapBuilder.translate`).
+- **Cinco anéis de distância** a partir da muralha (até 22, 48, 76, 103 e 138 tiles; níveis 1–8, 9–20, 20–42, 44–71 e
+  72–103) e **quatro direções**, cada uma com uma sequência de biomas (`src/data/maps/biomes.ts`):
   - **Norte (gelo)**: Campos do Norte → Taiga dos Pinheiros → Tundra Uivante → Geleira Eterna → Pico do Inverno;
   - **Leste (sol)**: Campos do Leste → Savana Dourada → Mar de Areia → Dunas Rubras → Vulcão Adormecido (lava);
   - **Sul (água)**: Margem do Pântano → Pântano Sombrio → Selva Alagada → Pântano Corrompido → Necrópole Esquecida;
@@ -586,14 +586,40 @@ Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
   bordas de caminhos, calçamento e água na cor de cada bioma, e **lava animada** (intransponível). Objetos novos:
   pinheiros com neve, árvores secas, acácias, árvores de pântano, cactos, rochas com neve, basalto com veios de lava,
   rochas vermelhas e cristais de gelo.
-- **Estradas** saem dos quatro portões e um **anel viário** liga os braços; **24 santuários** (áreas protegidas sem
-  lojas) na entrada de cada anel e nas laterais do anel 4, para descansar e se abrigar.
+- **Estradas** saem dos quatro portões e um **anel viário** (a 36 tiles da muralha) liga os braços. **Sem santuários**
+  desde a 2ª versão: a única área protegida é a vila (Templo e construções) — quem caça longe planeja a volta.
 - **Marcos**: Acampamento Goblin, Acampamento dos Bandidos, Toca do Yeti, Lago Congelado, Oásis Escondido, Ruínas do
   Faraó, Acampamento dos Senhores da Guerra, Lago de Lava e Cratera do Vulcão, Cemitério dos Reis, Cripta Profunda,
   Fortaleza Orc, Forte do Chefe Goblin (o chefe saiu da área de iniciante), Cidadela Sombria, Cripta do Lich, Covil do
   Dragão, Portal Infernal e Trono do Abismo.
-- **Criaturas por bioma**: 650 criaturas (antes 255), cada espécie com 2–3 pontos de surgimento espalhados pela zona; na
-  mesma faixa de nível as direções dividem algumas espécies e têm outras próprias. **Seis criaturas novas**: Chacal da
-  Savana (9), Saqueador do Deserto (15), Crocodilo do Brejo (23), Múmia (34), Yeti (39) e Colosso de Gelo (92).
-- **Saves antigos**: a posição salva no mapa antigo volta ao templo (versão do mapa no save), sem perder nada.
+- **Criaturas por bioma**: 578 criaturas em 173 pontos (antes 255), cada espécie com 2–3 pontos de surgimento
+  espalhados pela zona; na mesma faixa de nível as direções dividem algumas espécies e têm outras próprias. **Seis
+  criaturas novas**: Chacal da Savana (9), Saqueador do Deserto (15), Crocodilo do Brejo (23), Múmia (34), Yeti (39) e
+  Colosso de Gelo (92).
+- **Saves antigos**: a posição salva num mapa anterior volta ao templo (versão do mapa no save), sem perder nada.
+
+### 2ª versão: área dobrada, sem santuários (nov/2026)
+- **Área dobrada** (61 mil → 122 mil tiles) com a mesma dinâmica: vila no centro, quatro braços e cinco anéis, cada
+  anel ~1,6× mais fundo. Os marcos ficaram no mesmo anel e na mesma posição relativa; os lagos cresceram.
+- **Mesma quantidade de criaturas** (575 → 578: o Acampamento Goblin passou a caber os 3 pontos): elas ficam mais
+  espalhadas, não mais numerosas.
+- **Sem os 24 santuários**: só o Templo (e as construções da vila) protege. A fuga dos heróis sempre volta para a vila.
+- **Heróis**: com a área vazia, em vez de esperar até 20 s parados pelo renascimento, já seguem para outro ponto da
+  mesma presa quando a caminhada até lá é mais curta que a espera.
+- **Montagem do mundo** com uma tabela de zonas (antes ~60 passadas pelo mapa inteiro): 0,45 s para o dobro da área
+  (antes 0,41 s para a metade).
+
+### Outras mudanças da mesma rodada (nov/2026)
+- **PvP Enforced** (Configurações → tipo de mundo): a experiência que a vítima perde ao morrer vai para quem a matou
+  (quem bateu nela no último minuto), dividida em partes iguais. Nos outros tipos de mundo nada muda.
+- **Mochila de 28 espaços** (era 20) e **depósito de 50** (era 40); saves antigos crescem sem perder nada.
+- **Heróis sem AFK** (ver *Temporada 2*).
+- **Desktop**: nomes de personagens e criaturas maiores e proporcionais ao zoom (18 px num monitor 1280×800, 23 px em
+  1920×1080; antes 16 e 11 px fixos), escudo de grupo e caveira **ao lado do nome** (antes ficavam soltos sobre a
+  cabeça), números de dano e balões de fala no mesmo tamanho proporcional, e o balão de fala acima do nome (antes o
+  cobria). Notebook com tela de toque e mouse fica com a interface de desktop.
+- **Grimório**: tirada a frase "Graus I, II e III compartilham a recarga" (os graus não existem mais), "ML = Magic Level"
+  só nas magias que usam ML e "1 casa" no singular.
+- **Fala dos heróis**: "vou caçar X em Y" passa a dizer a zona certa (antes toda caça fora de um marco virava "Campos do
+  Norte").
 

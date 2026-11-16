@@ -5,11 +5,15 @@
 //   W  montanhas: colinas → ruínas → montanhas → charneca → abismo        E  sol: campos → savana → deserto → dunas → vulcão
 //                         S  água: margem → pântano → selva alagada → pântano corrompido → necrópole
 
-export const WORLD_W = 245;
-export const WORLD_H = 250;
+//
+// 2ª versão (nov/2026): área dobrada (245×250 → 347×352, de 61 mil para 122 mil tiles). A vila é a mesma; os braços
+// ficaram ~1,6× mais fundos (de ~87 para 138 tiles da muralha até a borda) e cada anel cresceu na mesma proporção.
+
+export const WORLD_W = 347;
+export const WORLD_H = 352;
 /** Canto superior esquerdo do desenho da vila (ela é montada em coordenadas locais 0–72 × 0–77). */
-export const TOWN_X = 86;
-export const TOWN_Y = 86;
+export const TOWN_X = 136;
+export const TOWN_Y = 136;
 /** Coordenadas do desenho da vila (local) no mundo. */
 export const town = (x: number, y: number): { x: number; y: number } => ({ x: x + TOWN_X, y: y + TOWN_Y });
 /** Ponto de partida (dentro do Templo da Aurora): onde nasce todo personagem novo ou recomeçado. */
@@ -26,12 +30,15 @@ export const SECTORS: readonly Sector[] = ['N', 'E', 'S', 'W'];
 
 /** Anéis de distância (em tiles a partir da muralha) e a faixa de nível das criaturas de cada um. */
 export const RINGS = [
-  { d0: 1, d1: 14, levels: [1, 8] },
-  { d0: 15, d1: 30, levels: [9, 20] },
-  { d0: 31, d1: 48, levels: [20, 42] },
-  { d0: 49, d1: 65, levels: [44, 71] },
-  { d0: 66, d1: 99, levels: [72, 103] },
+  { d0: 1, d1: 22, levels: [1, 8] },
+  { d0: 23, d1: 48, levels: [9, 20] },
+  { d0: 49, d1: 76, levels: [20, 42] },
+  { d0: 77, d1: 103, levels: [44, 71] },
+  { d0: 104, d1: 160, levels: [72, 103] },
 ] as const;
+
+/** Até onde as criaturas surgem (a borda do mundo fica a 138 tiles da muralha, com 3 de mata fechada). */
+export const SPAWN_MAX_D = 134;
 
 /** Distância até a muralha (0 = dentro da vila) e os afastamentos horizontal e vertical. */
 export function townDistance(x: number, y: number): { d: number; dx: number; dy: number } {

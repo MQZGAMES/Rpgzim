@@ -2,7 +2,7 @@
 // equipar, negociar, entrar numa casa, salvar e recarregar. A API ?debug é usada apenas para inspecionar o
 // estado e posicionar o personagem perto de alvos (encurta o teste); as ações usam a interface real.
 import { expect, test, type Page } from '@playwright/test';
-// (as posições de teletransporte são as da vila somadas ao deslocamento dela no mundo: +86, +86 — ver
+// (as posições de teletransporte são as da vila somadas ao deslocamento dela no mundo: +136, +136 — ver
 // src/data/maps/layout.ts; a função roda dentro da página e não enxerga constantes daqui)
 
 type Api = {
@@ -80,7 +80,7 @@ test('fluxo principal: mover, lutar, magia, loot, equipar, salvar e recarregar',
   const moved = await api(page, (a) => a.player());
   expect(moved.y).toBeGreaterThan(start.y);
   // combate: perto de um slime, seleciona o alvo com Tab e espera o ataque automático vencer
-  await api(page, (a) => a.teleport(166, 108));
+  await api(page, (a) => a.teleport(216, 158));
   const slime = await api(page, (a) => a.teleportNear('slime', 1));
   expect(slime).not.toBeNull();
   await page.keyboard.press('Tab');
@@ -139,7 +139,7 @@ test('loja: conversar com o ferreiro, comprar e vender', async ({ page }, info) 
   test.skip(info.project.name !== 'desktop', 'fluxo de loja validado no desktop');
   await createCharacter(page, 'paladin', 'Lojista');
   const smith = (await api(page, (a) => a.npcs())).find((n) => n.id === 'npc:smith')!;
-  await api(page, (a) => a.teleport(115, 102));
+  await api(page, (a) => a.teleport(165, 152));
   void smith;
   await page.keyboard.press('KeyE');
   await expect(page.getByTestId('npc-dialog')).toBeVisible();
@@ -163,7 +163,7 @@ test('casa explorável no mesmo mapa', async ({ page }, info) => {
   await createCharacter(page, 'druid', 'Visita');
   const house = (await api(page, (a) => a.buildings())).find((b) => b.id === 'house_rosa')!;
   const doorY = house.y + house.h - 1;
-  await api(page, (a) => a.teleport(115, 132));
+  await api(page, (a) => a.teleport(165, 182));
   await page.evaluate(([x, y]) => (window.__RPGZIM__ as Api).walkTo(x!, y!), [house.doorX, doorY - 2]);
   await expect
     .poll(async () => (await api(page, (a) => a.ui())).buildingId, { timeout: 15_000 })
@@ -195,7 +195,7 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   expect(noOverflow).toBe(true);
   // arrasta o joystick para a direita (toque)
-  await api(page, (a) => a.teleport(116, 109));
+  await api(page, (a) => a.teleport(166, 159));
   const before = await api(page, (a) => a.player());
   const zone = (await page.getByTestId('joystick-zone').boundingBox())!;
   const ox = zone.x + zone.width * 0.4;
@@ -212,7 +212,7 @@ test('mobile: joystick move o personagem e o HUD cabe na tela', async ({ page },
   const after = await api(page, (a) => a.player());
   expect(after.x).toBeGreaterThan(before.x);
   // sem botão de ataque: a magia de ataque mira o mais próximo, lança e começa o ataque básico
-  await api(page, (a) => a.teleport(166, 108));
+  await api(page, (a) => a.teleport(216, 158));
   await api(page, (a) => a.teleportNear('slime', 2));
   const mana = (await api(page, (a) => a.player())).mana;
   await page.getByTestId('spell-arcane_bolt').tap();
@@ -241,7 +241,7 @@ test('banco: guardar item e ouro; botão de loot clicável no desktop', async ({
   await expect(page.getByTestId('depot-slot-0')).toHaveAttribute('aria-label', 'Espaço vazio no depósito');
   await page.locator('[role=dialog] button[aria-label=Fechar]').first().click();
   // loot no chão: o botão contextual abre a janela
-  await api(page, (a) => a.teleport(166, 108));
+  await api(page, (a) => a.teleport(216, 158));
   const id = await api(page, (a) => a.teleportNear('slime', 1));
   await page.evaluate((m) => (window.__RPGZIM__ as Api & { target(id: string): void }).target(m!), id);
   await expect
@@ -261,8 +261,14 @@ test('mercado: corretor ao lado da banqueira, vender (categoria → item → anu
   await page.getByTestId('interact-button').click();
   await page.getByRole('button', { name: 'Abrir mercado' }).click();
   await expect(page.getByTestId('market-panel')).toBeVisible();
-  // Vender → Machados → Machadinha: o preço já vem sugerido; anuncia com um toque
+  // Vender + "Somente disponível": só as categorias do que ele tem (a Machadinha, sim; varinha, não)
   await page.getByTestId('market-mode-sell').click();
+  await page.getByTestId('market-only-available').click();
+  await expect(page.getByTestId('market-cat-axe')).toBeVisible();
+  await expect(page.getByTestId('market-cat-wand')).toHaveCount(0);
+  await page.getByTestId('market-only-available').click();
+  await expect(page.getByTestId('market-cat-wand')).toBeVisible();
+  // Vender → Machados → Machadinha: o preço já vem sugerido; anuncia com um toque
   await page.getByTestId('market-cat-axe').click();
   await page.getByTestId('market-item-axe_hand').click();
   await expect(page.getByTestId('market-guide')).toBeVisible();
@@ -303,7 +309,7 @@ test('mobile: toque duplo equipa; toque curto na área do joystick anda até o p
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'knight', 'Dedos');
   await expect(page.getByTestId('joystick')).toHaveCount(0);
-  await api(page, (a) => a.teleport(133, 110));
+  await api(page, (a) => a.teleport(183, 160));
   const before = await api(page, (a) => a.player());
   const zone = (await page.getByTestId('joystick-zone').boundingBox())!;
   await page.touchscreen.tap(zone.x + zone.width * 0.3, zone.y + zone.height * 0.5);
@@ -403,7 +409,7 @@ test('HUD social: modo de ataque, PK e menu do Boladex com convite para grupo', 
   await expect(page.getByTestId('party-formation-line')).toHaveClass(/btn-gold/);
   // cada membro: chamar ou ir até ele (o painel fecha e você vai andando)
   await expect(page.getByTestId(`party-call-${id}`)).toBeVisible();
-  await api(page, (a) => a.teleport(133, 116));
+  await api(page, (a) => a.teleport(183, 166));
   await page.getByTestId(`party-goto-${id}`).click();
   await expect(page.getByTestId('party-panel')).toHaveCount(0);
   await expect(page.getByText(/Indo até/).first()).toBeVisible();
@@ -414,7 +420,7 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
 }, info) => {
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'knight', 'Mapa');
-  await api(page, (a) => a.teleport(116, 109));
+  await api(page, (a) => a.teleport(166, 159));
   await page.waitForTimeout(500);
   const vp = page.viewportSize()!;
   // toque na parte de cima e na de baixo do mapa (longe dos botões): o personagem sai andando
@@ -431,7 +437,7 @@ test('mobile: toque no mapa em cima e embaixo, no Boladex (posição real na tel
       .toBe(true);
     await api(page, (a) => {
       a.stop();
-      a.teleport(116, 109);
+      a.teleport(166, 159);
     });
   }
   // toque no Boladex onde ele aparece na tela: abre o menu dele (espera os heróis entrarem: o mundo leva um tempo para
@@ -496,7 +502,7 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   test.skip(info.project.name !== 'mobile', 'somente emulação mobile');
   await createCharacter(page, 'druid', 'Toque');
   // perto de um slime (a magia de alvo sem alvo mira o inimigo mais próximo, até 7 tiles)
-  await api(page, (a) => a.teleport(166, 108));
+  await api(page, (a) => a.teleport(216, 158));
   await api(page, (a) => a.teleportNear('slime', 4));
   await page.waitForTimeout(500);
   const fired = () =>
@@ -620,7 +626,7 @@ test('mobile: atalho segurado repete e PARA ao soltar; vãos entre atalhos não 
   await expect(page.getByTestId('bag-organize')).toBeVisible();
 });
 
-test('PK: caveira e PZ lock no HUD, nome menor no celular e 9 atalhos', async ({ page }, info) => {
+test('PK: caveira e PZ lock no HUD, tamanho do nome, balão acima do nome e 9 atalhos', async ({ page }, info) => {
   await createCharacter(page, 'paladin', 'Marca');
   const isMobile = info.project.name === 'mobile';
   // 9 atalhos configuráveis (1–9), na mesma ordem no celular e no desktop
@@ -635,14 +641,34 @@ test('PK: caveira e PZ lock no HUD, nome menor no celular e 9 atalhos', async ({
   );
   await expect(page.getByTestId('pk-skull')).toBeVisible();
   await expect(page.getByTestId('pk-pzlock')).toContainText('PZ');
-  // tamanho do nome: menor no celular (11 px), maior no desktop (16 px)
-  const css = await page.evaluate(() => {
-    const a = window.__RPGZIM__ as unknown as { worldTexts(): { text: string; fontSize: string }[] };
-    const t = a.worldTexts().find((x) => x.text === 'Marca');
-    return t ? parseFloat(t.fontSize) / window.devicePixelRatio : 0;
-  });
-  if (isMobile) expect(css).toBeLessThanOrEqual(12.5);
-  else expect(css).toBeGreaterThanOrEqual(15);
+  // tamanho do nome: fixo e menor no celular (11 px); no desktop cresce com o zoom (tile de 64 px → 18 px)
+  const nameCss = () =>
+    page.evaluate(() => {
+      const a = window.__RPGZIM__ as unknown as { worldTexts(): { text: string; fontSize: string }[] };
+      const t = a.worldTexts().find((x) => x.text === 'Marca');
+      return t ? parseFloat(t.fontSize) / window.devicePixelRatio : 0;
+    });
+  if (isMobile) expect(await nameCss()).toBeLessThanOrEqual(12.5);
+  else {
+    expect(await nameCss()).toBeGreaterThanOrEqual(17);
+    // monitor maior: o personagem fica maior na tela (tile de 80 px) e o nome acompanha
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await expect.poll(nameCss).toBeGreaterThanOrEqual(21);
+  }
+  // o balão de fala fica acima do nome (antes ficava 2 px acima do desenho e cobria o nome)
+  type Box = { x: number; y: number; w: number; h: number };
+  await page.evaluate(() =>
+    (window.__RPGZIM__ as unknown as { speak(id: string, t: string): boolean }).speak('player', 'Alguém quer caçar comigo nos campos?'),
+  );
+  // folga entre a ponta do balão e o topo do nome (≥ 0: não cobre); null até o balão ser posicionado
+  const gap = () =>
+    page.evaluate(() => {
+      const a = window.__RPGZIM__ as unknown as { bubbles(): { y: number }[]; nameBox(t: string): Box | null };
+      const b = a.bubbles()[0];
+      const n = a.nameBox('Marca');
+      return b && n && b.y !== 0 ? n.y + 0.5 - (b.y + 1) : null;
+    });
+  await expect.poll(gap).toBeGreaterThanOrEqual(0);
 });
 
 test('tela inicial: filtro por nome e vocação, ordem por nível; criar personagem de dentro do jogo (joga com a IA)', async ({ page }, info) => {
@@ -677,7 +703,7 @@ test('tela inicial: filtro por nome e vocação, ordem por nível; criar persona
 
 test('loja: filtros por categoria e "Posso usar", ordem por nível; atalhos: os 9 espaços visíveis', async ({ page }, info) => {
   await createCharacter(page, 'paladin', 'Filtradora');
-  await api(page, (a) => a.teleport(115, 102));
+  await api(page, (a) => a.teleport(165, 152));
   await page.keyboard.press('KeyE').catch(() => undefined);
   if (info.project.name === 'mobile') await page.getByTestId('interact-button').tap().catch(() => undefined);
   await expect(page.getByTestId('npc-dialog')).toBeVisible();

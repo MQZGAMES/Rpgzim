@@ -262,7 +262,8 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   pequenas (≈ 4.250 de ouro pelo preço da loja). Mercado, depósito e banco zeram.
 - **Perfil humano** (`src/game/ai/heroHuman.ts`): reação = 230 + (1 − cautela)·260 + sorteio fixo·140 ms; magias fora de
   aperto = 86% + disciplina·12%; sessão = 45 + disc·30 a 80 + disc·35 min; pausa = 6 a 14 + (1 − disc)·10 min; AFK
-  depois da vila = 4% + sociabilidade·8% (1 a 3,5 min). Nos heróis da casa: Boladex 394 ms / sessão 62–99 min,
+  depois da vila = 4% + sociabilidade·8% (1 a 3,5 min; **removido em nov/2026**: os heróis não ficam mais AFK, nem
+  depois da vila nem depois de morrer). Nos heróis da casa: Boladex 394 ms / sessão 62–99 min,
   Maguim 415 / 60–98, Mano Cura 405 / 63–101, Distanciado 436 / 68–106.
 - **Medição sozinho** (`hero-life`, 3 h, 2 sementes, nível / mortes): Boladex 35,5 / 1 · Maguim 40,5 / 0,5 ·
   Mano Cura 43,5 / 0 · Distanciado 28 / 0,5 (antes 57,5 / 0 · 52,5 / 1 · 56 / 1 · 46,5 / 5). A queda acompanha a XP
@@ -306,7 +307,11 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - **Pegar tudo / loot automático**: primeiro o ouro, depois as pilhas de maior valor de venda (de todos os sacos ao
   alcance); com a mochila cheia, fica no chão o que vale menos.
 - **Tipo de mundo** (Configurações): Sem PvP · PvP (caveiras, PZ lock, morte injusta) · PvP Enforced (todos se atacam
-  sem caveira nem morte injusta; fica o PZ lock de combate; as perdas da morte continuam).
+  sem caveira nem morte injusta; fica o PZ lock de combate; as perdas da morte continuam). No PvP Enforced, a XP que a
+  vítima perde (50%, ver morte) vai para quem bateu nela no último minuto, em partes iguais (nov/2026): matar gente
+  passa a render XP, mas só o que a vítima perdeu — nenhuma XP é criada.
+- **Mochila 28, depósito 50** (eram 20 e 40; nov/2026): mais loot por viagem de caça, o que ajuda no mapa maior
+  (menos idas à vila por mochila cheia).
 - **Criação de poções**: custo de mana por ponto 2,4 / 2,25 / 2,1 / 1,9 / 1,7 (era 3,4 / 3,2 / 3 / 2,7 / 2,4). Para não
   virar fábrica de ouro, as lojas pagam 35% do preço pelas poções (era 50%).
 - **Paladin**: estoca mana pelo consumo real e não volta à vila só por mana (o arco ataca sem ela); arco/lança colado no
@@ -392,7 +397,8 @@ Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e
 ## Mundo com Pedraluz no centro (nov/2026)
 - Mapa 245×250 com a vila no centro; cinco anéis de distância a partir da muralha (níveis 1–8, 9–20, 20–42, 44–71,
   72–103) em quatro direções de biomas (`src/data/maps/layout.ts`, `src/data/maps/biomes.ts`). Cada espécie tem 2–3 pontos
-  de surgimento espalhados pela zona, 3 criaturas por ponto até o anel 3 e 4 nos anéis 4 e 5: 650 criaturas (antes 255).
+  de surgimento espalhados pela zona, 3 criaturas por ponto até o anel 3 e 4 nos anéis 4 e 5: 575 criaturas em 172 pontos
+  (antes 255; os "650" anotados aqui antes eram da 1ª versão, com 4 por ponto em todos os anéis).
   Pontos sempre alcançáveis a pé, a 7+ tiles da muralha (senão nasciam dentro da vila) e longe de estradas, água e lava.
 - **Knight**: estoca poção de mana pelo consumo (antes não comprava), Golpe Brutal com qualquer vida e Fúria em toda luta
   que não é fácil; luta fácil só com o Golpe Brutal, sem poção.
@@ -415,3 +421,62 @@ Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e
   recuando 16–25%. Com santuários perto de toda caça a fuga ficou fácil e a guerra termina mais em fuga. O teste de
   integração de guerra passou a exigir briga (dano PvP e modo PK em vários heróis) em vez de mortes, que variam demais
   entre sementes.
+
+## Mundo de área dobrada, sem santuários (nov/2026, 2ª versão)
+- **Mapa 347×352** (122 mil tiles, o dobro de 245×250) com a mesma vila no centro. Os braços ficaram ~1,6× mais fundos
+  (138 tiles da muralha à borda) e os anéis cresceram na mesma proporção: até 22, 48, 76, 103 e 138 tiles (antes 14,
+  30, 48, 65 e ~86). Marcos no mesmo anel e na mesma posição relativa; anel viário a 36 tiles (era 23); cristas entre os
+  braços a partir de 41 tiles, com passagem de 6 tiles a cada 28.
+- **Mesma quantidade de criaturas**: 578 em 173 pontos (antes 575 em 172; o Acampamento Goblin passou a caber os 3
+  pontos). Mesmo tamanho de grupo (3 por ponto até o anel 3, 4 nos anéis 4 e 5).
+- **Territórios de caça**: os pontos de uma espécie ficam a no máximo `MAX_GAP` = 31/44/53/70/78 tiles (por anel) do
+  vizinho mais próximo da mesma espécie. Distância média até o vizinho, por anel: mapa antigo 24/32/35/52/46; área
+  dobrada sem limite 31/41/53/69/66; com limite **22/31/34/52/43**. O espaço a mais fica entre os territórios.
+- **Sem os 24 santuários**: só o Templo (e as construções da vila) protege. A fuga sempre volta para a vila (portas só
+  da vila).
+- **Andar ou esperar** (`betterToMove` em `heroBrain.ts`): com a área vazia, o herói ia esperar até 20 s pelo
+  renascimento; agora já parte para outro ponto da presa com criaturas vivas se a caminhada até lá é mais curta que a
+  espera pelo próximo renascimento daqui.
+- **Medição** (`hero-life`, 3 h do nível 1, sementes 11/23, nível; mortes somadas):
+
+  | Versão | Boladex | Maguim | Mano Cura | Distanciado | Média | Mortes |
+  |---|---|---|---|---|---|---|
+  | Mapa antigo (com santuários) | 40/48 | 44/34 | 51/51 | 42/43 | 44,1 | 2 |
+  | Área dobrada, sem santuários | 36/41 | 44/39 | 43/45 | 44/45 | 42,1 | 0 |
+  | + andar ou esperar | 38/37 | 46/42 | 49/48 | 47/49 | 44,5 | 0 |
+  | + territórios de caça (final) | **41/43** | **46/37** | **51/50** | **49/46** | **45,4** | **0** |
+
+  Sem os ajustes, o Knight matava 36% menos por minuto de caça (corpo a corpo, andava mais entre os pontos) e ficava
+  abaixo do nível 40 em 3 h. Tempo caçando 72–81%, na vila 16–22%, recuando 1–9%.
+- **Guerra** (`war-life`, 30 min, sementes 7/8, mortes por PK): cada um por si 0+1 → 3+0, guildas 1+3 → 1+3; mortes
+  por criatura 3 → 1; tempo recuando 16–25% → 8–13% (sem santuário perto, recuar custa mais e eles brigam mais).
+- **Desempenho no navegador** (desktop, `performance.memory` depois de entrar no jogo): mapa antigo 163 MB; área
+  dobrada 297 MB; com `insertNull` nas 12 camadas do tilemap (célula vazia vira `null` em vez de um objeto `Tile`)
+  **76 MB**. Entrar no jogo: 6,2 s → 5,7 s. Montagem do mundo (Node): 0,41 s → 0,45 s com a tabela de zonas (sem ela,
+  0,89 s). Objetos de cenário 5.772 → 9.844.
+
+## Magic Level: avaliação (nov/2026)
+Só avaliação, sem mudança. Números de `spellRange` (média antes de armadura/resistência) com o ML medido em 3 h
+(Sorcerer 38 no nv 40, Druid 32 no nv 50, Paladin 21 no nv 42, Knight 13 no nv 44); níveis 70/100 com ML projetado
+pelo custo exponencial do ML (cada nível de ML custa 18% a mais de mana para magos, 30% para o Paladin e 40% para o
+Knight).
+- **Ataque dos magos** (Sorcerer e Druid): o ML responde por 63–73% do dano das magias em qualquer nível; +10 de ML
+  dá +29–33% no nv 20, +18–21% no nv 40–50 e +12–14% no nv 100. Adequado: o dano cresce com ML, nível e varinha.
+- **Paladin e Knight atacam pela skill**, não pelo ML (as magias de ataque deles são do tipo distância/corpo a corpo):
+  +10 de skill dá +7–17% (Paladin) e +10–28% (Knight). O ML só pesa nas curas deles.
+- **Curas**: o ML responde por 50–79% da cura (menos na Segundo Fôlego do Knight, 4–6%, que é pelo nível). Três
+  pontos fracos:
+  1. **Respiro Vital barato demais para mago**: 20 mana fixos curam 35–41% da vida até o nv 50 (8–9 de vida por mana).
+     O Druid regenera 15 de mana a cada 2 s e a cura gasta 20 a cada 2 s: dá para curar ~180 por 2 s por quase 10 min
+     só com a regeneração. É a "cura infinita" que a regeneração mais lenta queria evitar.
+  2. **As curas "fortes" quase não curam mais que a leve em si mesmo**: por lançamento, Luz Restauradora (Paladin) =
+     1,2× a Respiro Vital por 2,5× a mana; Segundo Fôlego (Knight) = 1,4× por 3×; Cura Intensa (Druid) = 1,4× por 3×
+     — mas ela também cura o grupo a até 12 tiles, então em grupo vale. Como todas dividem a exaustão de cura (2 s),
+     sozinho a leve é quase sempre a melhor escolha.
+  3. **Cura perde força com o nível**: o ML empaca (custo exponencial) e a vida cresce linear. Respiro Vital do Sorcerer
+     41% da vida no nv 20 → 25% no nv 100; Cura Intensa 61% → 42%; Luz Restauradora 23% → 16%; Respiro Vital do
+     Knight 8% → 5%.
+- **Recomendação** (não aplicada; mudaria a sobrevivência de todos e precisa da mesma bateria de simulações): Respiro
+  Vital com custo por nível e ML com peso menor (~15–20% da vida), e as curas fortes com 2,5–3× a cura leve por
+  lançamento (Luz Restauradora com mais peso de ML, Segundo Fôlego em % da vida; a Cura Intensa pode ficar como está
+  por curar o grupo). Assim a cura forte vira a de emergência e o custo de mana da cura sobe com o nível.

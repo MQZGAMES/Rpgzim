@@ -7,7 +7,7 @@ import type { World } from '../simulation/World';
 import { atWar, isWarEnemy, sameGuild, skullSeenBy } from '../social/social';
 import { DEPTH, ySort } from './depth';
 import { SHEETS } from '../../assets';
-import { worldText, snapWorld, dprSafe, cssToWorld, getWorldTextZoom } from './text';
+import { worldText, snapWorld, cssToWorld, getWorldTextZoom, setWorldTextSize, worldTextScale } from './text';
 
 /** Barra de vida (pixels do mundo): mais larga (≈ largura do personagem), fina como antes. */
 const BAR_W = 20;
@@ -18,11 +18,20 @@ const HUMANOID_ROWS = { down: 0, left: 1, right: 2, up: 3 } as const;
 /** Estilo do nome: o do jogador/herói é maior (é informação de combate); o de criatura é discreto. */
 export type NameKind = 'actor' | 'creature';
 
-/** Tamanho do nome na tela (px CSS): maior no desktop; no celular, menor (a tela é pequena e o zoom já amplia). */
+/**
+ * Tamanho do nome na tela (px CSS). No desktop é o tamanho num tile de 64 px e cresce com o zoom (`worldTextScale`):
+ * antes era fixo (16 e 11 px) e ficava miúdo em monitores grandes. No celular é fixo e menor (a tela é pequena).
+ */
 const NAME_STYLE: Record<NameKind, { desktop: number; touch: number; weight: number }> = {
-  actor: { desktop: 16, touch: 11, weight: 800 },
-  creature: { desktop: 11, touch: 9, weight: 700 },
+  actor: { desktop: 18, touch: 11, weight: 800 },
+  creature: { desktop: 15, touch: 9, weight: 700 },
 };
+
+/** Tamanho do nome (px CSS) para o tipo de tela e o zoom atual da câmera. */
+export function nameSize(kind: NameKind, touch: boolean, zoom?: number, dpr?: number): number {
+  const s = NAME_STYLE[kind];
+  return touch ? s.touch : Math.round(s.desktop * worldTextScale(false, zoom, dpr));
+}
 
 export class CreatureView {
   readonly container: Phaser.GameObjects.Container;
@@ -33,7 +42,8 @@ export class CreatureView {
   private labelText = '';
   private labelColor = '';
   private labelKind: NameKind = 'creature';
-  /** Ícones ao lado do nome (escudo de grupo, caveira de PK), como no Tibia. */
+  private labelSize = 0;
+  /** Ícones à direita do nome (escudo de grupo, caveira de PK). */
   private badges: Phaser.GameObjects.Image[] = [];
   private badgeKey = '';
   private layoutZoom = 0;
@@ -72,22 +82,28 @@ export class CreatureView {
   /** Nome sempre visível acima da barra de vida (na fonte da interface). */
   setName(text: string, color: string, nameKind: NameKind = this.labelKind): void {
     if (text === this.labelText && color === this.labelColor && this.label && nameKind === this.labelKind) return;
+    const kindChanged = nameKind !== this.labelKind;
     this.labelText = text;
     this.labelColor = color;
     this.labelKind = nameKind;
-    const style = NAME_STYLE[nameKind];
-    const size = this.scene.registry.get('touch') ? style.touch : style.desktop;
+    const weight = NAME_STYLE[nameKind].weight;
     if (!this.label) {
-      this.label = worldText(this.scene, 0, 0, text, { size, color, weight: style.weight });
+      this.labelSize = nameSize(nameKind, this.touch);
+      this.label = worldText(this.scene, 0, 0, text, { size: this.labelSize, color, weight });
       this.label.setOrigin(0.5, 1);
       this.container.add(this.label);
     } else {
-      this.label.setText(text).setColor(color).setFontSize(`${size * dprSafe()}px`);
+      this.label.setText(text).setColor(color);
+      if (kindChanged) this.label.setFontStyle(String(weight));
     }
     this.layoutLabel();
   }
 
-  /** Ícones abaixo da barra de vida, à direita (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
+  private get touch(): boolean {
+    return !!this.scene.registry.get('touch');
+  }
+
+  /** Ícones à direita do nome (ex.: ['ui_shield_member', 'ui_skull_white']); vazio remove. */
   setBadges(frames: readonly string[]): void {
     const key = frames.join('|');
     if (key === this.badgeKey) return;
@@ -102,25 +118,42 @@ export class CreatureView {
   }
 
   /**
-   * Layout do Tibia: o nome fica CENTRALIZADO acima da barra de vida; os ícones (escudo de grupo e caveira) ficam logo
-   * abaixo da barra, começando na ponta direita dela. Os ícones mantêm o tamanho na tela em qualquer zoom.
+   * O nome fica centralizado acima da barra de vida e os ícones (escudo de grupo e caveira) logo à direita dele, na
+   * mesma altura e do tamanho da letra. Antes os ícones ficavam abaixo da barra, sobre a cabeça do personagem, e eram
+   * confundidos com parte do desenho. Nome e ícones mudam de tamanho com o zoom (no desktop).
    */
   private layoutLabel(): void {
     if (!this.label) return;
     this.layoutZoom = getWorldTextZoom();
-    const touch = !!this.scene.registry.get('touch');
-    const icon = cssToWorld(touch ? 13 : 18);
-    const gap = cssToWorld(1);
+    const size = nameSize(this.labelKind, this.touch);
+    if (size !== this.labelSize) {
+      this.labelSize = size;
+      setWorldTextSize(this.label, size);
+    }
     const barTop = this.headTop - 3; // topo da barra (ver setHealthBar)
-    this.label.setPosition(0, barTop - 2);
-    const iconTop = barTop + BAR_H + 2;
+    const bottom = barTop - 2;
+    this.label.setPosition(0, bottom);
+    if (!this.badges.length) return;
+    // centro dos ícones na altura do meio das maiúsculas: linha de base (fundo − descendente − meia borda) − 0,36 em
+    const k = this.label.scaleY; // pixel do canvas do texto → pixel do mundo
+    const baseline = bottom - (this.label.getTextMetrics().descent + this.label.style.strokeThickness / 2) * k;
+    const cy = snapWorld(baseline - cssToWorld(size * 0.36));
+    const icon = cssToWorld(Math.max(12, Math.round(size * 1.05)));
+    const gap = cssToWorld(2);
+    const x0 = this.label.displayWidth / 2 + gap;
     this.badges.forEach((b, i) => {
-      b.setDisplaySize(icon, icon).setPosition(snapWorld(BAR_W / 2 - icon * 0.25 + i * (icon + gap) + icon / 2), snapWorld(iconTop + icon / 2));
+      b.setDisplaySize(icon, icon).setPosition(snapWorld(x0 + i * (icon + gap) + icon / 2), cy);
     });
   }
 
   get height(): number {
     return this.sprite.height;
+  }
+
+  /** Topo do nome (ou da barra de vida, sem nome), relativo ao pé: o balão de fala fica acima dele. */
+  get labelTop(): number {
+    const bottom = this.headTop - 5;
+    return this.label?.visible ? bottom - this.label.displayHeight : bottom;
   }
 
   setLabelVisible(v: boolean): void {

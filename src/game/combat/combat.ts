@@ -542,11 +542,26 @@ function killPlayer(w: World, killer: DamageSource): void {
   const sparring = killer.kind === 'player' && isSparring(w, killer.id, p.id);
   // a morte conta para todo personagem que bateu nela no último minuto (em grupo, cada um que participou; o dano das
   // criaturas não tira o crédito de ninguém — matar alguém junto com monstros também é morte injusta)
-  if (!sparring)
-    for (const killerId of killCredits(w, p.id))
-      registerPlayerKill(w, killerId, skullBefore, c.name, p.id);
+  const credits = sparring ? [] : killCredits(w, p.id);
+  for (const killerId of credits) registerPlayerKill(w, killerId, skullBefore, c.name, p.id);
+  // PvP Enforced: a experiência que a vítima perdeu vai para quem a matou, dividida em partes iguais
+  if (w.social.enforced && credits.length) shareDeathXp(w, credits, before - c.experience, c.name);
   onPlayerDeath(w, p.id);
   if (!sparring) dropDeathLoot(w, p, skullBefore === 'red');
+}
+
+/** PvP Enforced: divide a experiência perdida pela vítima entre os personagens que a mataram (os vivos, em partes iguais). */
+function shareDeathXp(w: World, killerIds: readonly string[], xpLost: number, victimName: string): void {
+  const killers = killerIds.map((id) => actorById(w, id)).filter((a): a is PlayerEntity => !!a && !a.dead);
+  if (!killers.length || xpLost <= 0) return;
+  const share = Math.floor(xpLost / killers.length);
+  if (share <= 0) return;
+  message(w, `Sua experiência perdida (${xpLost}) foi para quem te matou.`, 'warning');
+  for (const k of killers)
+    asActor(w, k, () => {
+      message(w, `+${share} XP: a experiência que ${victimName} perdeu${killers.length > 1 ? ` (dividida por ${killers.length})` : ''}.`, 'combat');
+      gainExperience(w, share);
+    });
 }
 
 /**

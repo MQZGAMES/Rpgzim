@@ -131,20 +131,25 @@ describe('escada de criaturas', () => {
 
 describe('vocações', () => {
   it('paladino colado no alvo erra mais e bate mais fraco do que a 2+ tiles', () => {
+    // 3 sementes (~90 ataques por distância): com uma só (~30 ataques) a razão oscilava ±10% em volta do esperado
+    // (0,75 de acerto × 0,75 de dano ≈ 0,56) e o teste dependia da sorte da sequência
     const total = (dist: number) => {
-      const { sim, h, w } = withHero('paladin', 7);
-      sim.setPvp(true);
-      const spot = openField(sim);
-      sim.teleportPlayer(spot.x, spot.y);
-      putAt(sim, h, spot.x + dist, spot.y);
-      h.brain.nextThinkAt = Infinity; // boneco de treino parado
-      sim.setStandAttack(true);
       let dmg = 0;
-      sim.events.on('damage', (e) => e.targetId === h.id && e.sourceId === w.human.id && (dmg += e.amount));
-      sim.setTarget(h.id);
-      for (let t = 0; t < 60000; t += 500) {
-        h.character.health = h.stats.maxHealth;
-        advance(sim, 500, 50);
+      for (const seed of [7, 8, 9]) {
+        const { sim, h, w } = withHero('paladin', seed);
+        clearMonsters(sim); // só o duelo conta
+        sim.setPvp(true);
+        const spot = openField(sim);
+        sim.teleportPlayer(spot.x, spot.y);
+        putAt(sim, h, spot.x + dist, spot.y);
+        h.brain.nextThinkAt = Infinity; // boneco de treino parado
+        sim.setStandAttack(true);
+        sim.events.on('damage', (e) => e.targetId === h.id && e.sourceId === w.human.id && (dmg += e.amount));
+        sim.setTarget(h.id);
+        for (let t = 0; t < 60000; t += 500) {
+          h.character.health = h.stats.maxHealth;
+          advance(sim, 500, 50);
+        }
       }
       return dmg;
     };

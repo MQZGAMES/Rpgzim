@@ -347,6 +347,9 @@ describe('modo lurar', () => {
       m.targetId = null;
       m.x = start.x + 8 + i;
       m.y = start.y;
+      // a "casa" vai junto: longe do ponto de surgimento dela, a criatura voltava para lá na hora
+      m.homeX = m.x;
+      m.homeY = m.y;
     });
     h.character.level = 20;
     h.character.inventory[0] = { itemId: 'potion_health', count: 40 };
@@ -389,13 +392,19 @@ describe('atacar cancela o seguir do jogador', () => {
     m.hp = 1e6;
     m.x = p.x + 3;
     m.y = p.y;
+    m.homeX = m.x; // (senão volta para o ponto de surgimento, longe dali)
+    m.homeY = m.y;
     p.targetId = m.id;
     advance(sim, 700, 50);
     expect(p.following).toBe(false);
     expect(p.path?.length ?? 0).toBe(0);
-    // sem alvo e sem combate por 6 s: volta a seguir
+    // sem alvo e sem combate por 6 s: volta a seguir (a criatura sai de cena: perto dele, ela continuaria a luta)
     p.targetId = null;
     p.lastAttackAt = w.now;
+    m.alive = false;
+    m.respawnAt = Infinity;
+    m.targetId = null;
+    w.occupancy.delete(m.y * w.map.width + m.x);
     advance(sim, 3000, 50);
     expect(p.following).toBe(false);
     advance(sim, 4500, 50);

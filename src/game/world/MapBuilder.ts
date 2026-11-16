@@ -433,13 +433,13 @@ export class MapBuilder {
     return this;
   }
   /**
-   * Região de formato livre (zona de caça): todas as células em que `inside` é verdadeiro. O retângulo `def` só
-   * delimita a busca; o nome que aparece na tela segue a forma exata da zona (ver regionAt).
+   * Região de formato livre (zona de caça): todas as células em que `inside` é verdadeiro. O retângulo `area` (padrão:
+   * o de `def`) só delimita a busca; o nome que aparece na tela segue a forma exata da zona (ver regionAt).
    */
-  zoneRegion(def: RegionDef, inside: (x: number, y: number) => boolean): this {
+  zoneRegion(def: RegionDef, inside: (x: number, y: number) => boolean, area: Rect = def): this {
     const index = this.regions.length;
     this.regions.push(def);
-    this.forRect(def, (x, y) => {
+    this.forRect(area, (x, y) => {
       if (inside(x, y)) this.zone[this.idx(x, y)] = index;
     });
     return this;
