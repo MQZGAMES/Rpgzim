@@ -5,6 +5,10 @@ import { GEAR_ITEMS } from './items.gear';
 import { TROPHY_ITEMS as LATE_TROPHIES } from './monsters.late';
 import { SOUTH_TROPHY_ITEMS } from './monsters.south';
 
+/** Quanto a loja paga por uma poção (fração do preço de venda): baixo, para criar poções e vender não virar fábrica de ouro. */
+export const POTION_BUYBACK = 0.35;
+export const potionBuyback = (price: number): number => Math.floor((price * Math.round(POTION_BUYBACK * 100)) / 100);
+
 /** Troféus que a Alquimia e a Banca compram pelo valor cheio (faixas tardias e terras do sul). */
 const TROPHY_ITEMS = [...LATE_TROPHIES, ...SOUTH_TROPHY_ITEMS];
 
@@ -21,7 +25,7 @@ export function withLateStock(shops: ShopDef[]): ShopDef[] {
   return shops.map((s) => {
     if (s.id === 'equipment') return { ...s, sells: [...s.sells, ...fighter.map((i) => ({ itemId: i.id, price: i.value }))], buys: [...s.buys, ...GEAR_ITEMS.map((i) => ({ itemId: i.id, price: sellPct(i.value) }))] };
     if (s.id === 'potions')
-      return { ...s, sells: [...s.sells, ...mage.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price }))], buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price: Math.floor(price / 2) }))] };
+      return { ...s, sells: [...s.sells, ...mage.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price }))], buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value })), ...POTIONS.map(([itemId, price]) => ({ itemId, price: potionBuyback(price) }))] };
     if (s.id === 'general') return { ...s, buys: [...s.buys, ...TROPHY_ITEMS.map((i) => ({ itemId: i.id, price: i.value }))] };
     return s;
   }).map((s, _i, all) => {

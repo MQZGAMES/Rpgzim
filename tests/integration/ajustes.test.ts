@@ -1,5 +1,7 @@
 // Ajustes: trava de venda, escada de criaturas, paladino colado no alvo, magia de alvo do Knight,
 // Bênção da Seiva em grupo e as regras do grupo (formação, alvo, treino entre membros).
+import { nextLootReceiver } from '../../src/game/social/social';
+import { lootUnitValue } from '../../src/game/inventory/inventoryService';
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
 import { countItem } from '../../src/domain/rules/inventory';
@@ -517,10 +519,9 @@ describe('mini mapa: toque em lugar sem acesso', () => {
 });
 
 describe('loot do chão no grupo', () => {
-  it('o ouro e os itens do chão são divididos igualmente; o resto (ímpar) fica com quem pegou', () => {
+  it('criatura do grupo: ouro dividido (resto com quem tem a vez) e itens inteiros para quem tem a vez, não para quem pegou', () => {
     const { sim, h, w } = withHero();
     party(sim, w.human.id, [w.human.id, h.id]);
-    // saco com 7 de ouro e 5 gelatinas: 2 pessoas -> cada um leva 3 de ouro e 2 gelatinas; o resto vai para o humano
     w.lootBags.set('test-bag', {
       id: 'test-bag',
       x: w.human.x,
@@ -529,6 +530,7 @@ describe('loot do chão no grupo', () => {
       items: [{ itemId: 'slime_gel', count: 5 }],
       sourceName: 'Teste',
       expiresAt: Infinity,
+      party: { shareIds: [w.human.id, h.id], lootTo: h.id },
     });
     w.ui.lootId = 'test-bag';
     const gold = { human: w.human.character.gold, hero: h.character.gold };
@@ -537,10 +539,37 @@ describe('loot do chão no grupo', () => {
       hero: countItem(h.character.inventory, 'slime_gel'),
     };
     sim.takeLoot('all');
-    expect(w.human.character.gold - gold.human).toBe(4);
-    expect(h.character.gold - gold.hero).toBe(3);
-    expect(countItem(w.human.character.inventory, 'slime_gel') - gel.human).toBe(3);
-    expect(countItem(h.character.inventory, 'slime_gel') - gel.hero).toBe(2);
+    expect(w.human.character.gold - gold.human).toBe(3);
+    expect(h.character.gold - gold.hero).toBe(4);
+    expect(countItem(w.human.character.inventory, 'slime_gel') - gel.human).toBe(0);
+    expect(countItem(h.character.inventory, 'slime_gel') - gel.hero).toBe(5);
     expect(w.lootBags.has('test-bag')).toBe(false);
+  });
+
+  it('o rodízio passa a vez a cada criatura, só entre quem está perto e vivo', () => {
+    const { sim, h, w } = withHero();
+    party(sim, w.human.id, [w.human.id, h.id]);
+    const both = [w.human, h];
+    const turns = [0, 1, 2, 3].map(() => nextLootReceiver(w, w.human.id, both));
+    expect(turns).toEqual([w.human.id, h.id, w.human.id, h.id]);
+    // o herói longe (fora da divisão): a vez cai em quem está perto
+    expect(nextLootReceiver(w, w.human.id, [w.human, h].slice(0, 1))).toBeNull();
+  });
+
+  it('pegar tudo leva primeiro o que vale mais quando a mochila só tem espaço para uma pilha', () => {
+    const { w, sim } = withHero();
+    const inv = w.human.character.inventory;
+    for (let i = 0; i < inv.length; i++) inv[i] = { itemId: 'training_sword', count: 1 };
+    inv[inv.length - 1] = null;
+    const cheap = Object.values(w.data.items).find((i) => i.id === 'slime_gel')!;
+    const rich = Object.values(w.data.items)
+      .filter((i) => i.slot && !i.stackable)
+      .sort((a, b) => lootUnitValue(w, b.id) - lootUnitValue(w, a.id))[0]!;
+    w.lootBags.set('a', { id: 'a', x: w.human.x, y: w.human.y, gold: 0, items: [{ itemId: cheap.id, count: 1 }], sourceName: 'A', expiresAt: Infinity });
+    w.lootBags.set('b', { id: 'b', x: w.human.x, y: w.human.y, gold: 0, items: [{ itemId: rich.id, count: 1 }], sourceName: 'B', expiresAt: Infinity });
+    w.ui.lootId = 'a';
+    sim.takeLoot('all');
+    expect(countItem(inv, rich.id)).toBe(1);
+    expect(countItem(inv, cheap.id)).toBe(0);
   });
 });

@@ -180,10 +180,10 @@ describe('poções acabando', () => {
 });
 
 describe('magias de criar poção', () => {
-  it('Sorcerer cria Poção de Mana Média por 3,2x a mana que ela recupera (e Druid a de Vida Média)', () => {
+  it('Sorcerer cria Poção de Mana Média por 2,25x a mana que ela recupera (e Druid a de Vida Média)', () => {
     for (const [voc, spell, item, cost] of [
-      ['sorcerer', 'conjure_mana', 'potion_mana_great', 150 * 3.2],
-      ['druid', 'conjure_health', 'potion_health_great', 180 * 3.2],
+      ['sorcerer', 'conjure_mana', 'potion_mana_great', Math.round(150 * 2.25)],
+      ['druid', 'conjure_health', 'potion_health_great', Math.round(180 * 2.25)],
     ] as const) {
       const sim = makeSim(voc, { seed: 3 });
       const w = sim.world;
@@ -248,7 +248,7 @@ describe('saco de morte sem trava e mana na PZ', () => {
     expect(w.human.character.gold).toBe(before + 500);
   });
 
-  it('o próprio saco de morte não é dividido com o grupo; o de outro personagem é', () => {
+  it('saco de morte de personagem não é dividido com o grupo: quem pegar leva tudo', () => {
     const { sim, w, h } = setup('boladex');
     const p = w.human;
     w.social.party = {
@@ -278,7 +278,7 @@ describe('saco de morte sem trava e mana na PZ', () => {
     sim.takeLoot('all');
     expect(p.character.gold).toBe(g0 + 400);
     expect(h.character.gold).toBe(hg0);
-    // saco de morte de um estranho: dividido como loot comum
+    // saco de morte de um estranho: também é de quem pegar primeiro, sem divisão
     w.lootBags.set('other', {
       id: 'other',
       ownerId: 'outro',
@@ -290,8 +290,10 @@ describe('saco de morte sem trava e mana na PZ', () => {
       sourceName: 'outro (morto)',
     });
     w.ui.lootId = 'other';
+    const g1 = p.character.gold;
     sim.takeLoot('all');
-    expect(h.character.gold).toBe(hg0 + 200);
+    expect(p.character.gold).toBe(g1 + 400);
+    expect(h.character.gold).toBe(hg0);
   });
 
   it('a PZ não recupera mana e a bênção do sacerdote só cura vida', () => {

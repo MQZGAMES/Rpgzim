@@ -49,7 +49,7 @@ import {
   setTarget,
 } from '../combat/combat';
 import { chooseDialogOption, interactWith, LOOT_RANGE } from '../interaction/interaction';
-import { equipItem, nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
+import { equipItem, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { buyItem, sellItem } from '../economy/shopService';
 import { bankGold } from '../economy/depotService';
 import { marketBuyNow, marketCancel, marketOffer, marketSellAll, marketSellNow } from '../economy/marketService';
@@ -589,7 +589,9 @@ function needMargin(w: World, h: HeroEntity): number {
     (h.hero.temperament.bravery - 0.5) * 0.4 -
     h.brain.bold * 0.35 +
     (h.brain.frugal ? 0.3 : 0) +
-    scarce +
+    scarce -
+    // em grupo o dano e a cura se somam: aceita lutas mais duras (até -0,45 com 3 colegas por perto)
+    Math.min(3, alliesNear(w, h)) * 0.15 +
     // quem luta de longe não aguenta ser cercado (as criaturas contornam e tomam as casas em volta): mais folga
     (isRanged(h.character.vocation) ? 0.2 : 0) +
     personaOf(h.hero.temperament).margin
@@ -690,7 +692,10 @@ export function bestUpgrade(
       const cur = h.character.equipment[def.slot];
       const gain = valueFor(h, def) - (cur ? valueFor(h, w.data.items[cur.itemId]!) : 0);
       if (gain < 5) continue; // melhora irrelevante não vale a viagem nem o ouro
-      if (!best || gain / o.price > best.gain / best.price)
+      // ganho por moeda, mas preço abaixo de 15% do orçamento conta como 15%: com dinheiro, a peça barata não leva
+      // vantagem (antes um nível 35 que perdeu tudo comprava a clava de madeira de 25 de ouro com 8 mil no banco)
+      const floor = Math.max(1, budget * 0.15);
+      if (!best || gain / Math.max(o.price, floor) > best.gain / Math.max(best.price, floor))
         best = { itemId: o.itemId, price: o.price, shopId: shop.id, gain };
     }
   return best;
@@ -1401,6 +1406,7 @@ function townReason(w: World, h: HeroEntity): string | null {
   // mana acabando (e dinheiro para repor)
   // (só vale a viagem com ouro para um reforço de verdade: ida e volta custam mais que comprar duas poções)
   if (
+    ROLES[h.character.vocation].manaTrips &&
     manaGoal(w, h) &&
     manaStock(w, h) < manaGoal(w, h) * 0.3 &&
     spendable >= Math.max(45 * 6, manaRestockCost(w, h) * 0.5)
@@ -1572,7 +1578,7 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     (t.bravery - 0.5) * 3 +
     h.brain.mood -
     (potionsOf(w, h) === 0 ? 4 : h.brain.frugal ? 3 : 0) +
-    alliesNear(w, h) * 2;
+    alliesNear(w, h) * 4;
   const need = needMargin(w, h);
   // quantas da presa ele puxa de uma vez: sozinho 2-3 (o corajoso puxa mais); em grupo, mais uma por colega
   const pull = Math.min(6, Math.round(2 + t.bravery + alliesNear(w, h)));
@@ -1612,6 +1618,9 @@ function scoreQuarries(w: World, h: HeroEntity, explore = false): QuarryScore[] 
     // memória longa: cada morte lá pesa, e o peso some aos poucos (meia-vida de ~40 min)
     if (st?.deaths) safety /= 1 + st.deaths * 0.25 * Math.exp(-(w.now - st.lastDeathAt) / (40 * 60000));
     let score = rate * safety ** 1.5 * warSpotFactor(w, h, spawns);
+    // foco em subir: criatura muito abaixo do nível dele rende pouco por tempo — só fica se não houver coisa melhor
+    const gap = h.character.level - min;
+    if (gap > 8) score *= Math.max(0.2, 1 - (gap - 8) * 0.07);
     // a caça que mais rendeu de verdade (já conhecida, sem morte recente) ganha um empurrão: ele volta para ela
     if (st && st.ms > 5 * 60000 && id === favoriteHunt(h) && w.now - st.lastDeathAt > 30 * 60000)
       score *= 1.15;
@@ -2490,7 +2499,7 @@ function collectLootWhileFighting(w: World, h: HeroEntity): void {
       .filter(Boolean)
       .map((s) => [s!.itemId, countItem(h.character.inventory, s!.itemId)]),
   );
-  for (const bag of nearbyLootBags(w)) if (heroMayLoot(w, h, bag)) takeLoot(w, bag.id, 'all');
+  takeAllNearbyLoot(w, (bag) => heroMayLoot(w, h, bag));
   w.ui.lootId = null;
   equipBagUpgrades(w, h);
   for (const st of h.character.inventory) {
@@ -2797,13 +2806,22 @@ function shopping(w: World, h: HeroEntity, step: Extract<TownStep, { kind: 'shop
       if (idx >= 0 && equipItem(w, idx)) heroSay(w, h, 'upgrade', { item: w.data.items[need.itemId]!.name }, 0);
     }
   }
-  if (step.buyPotions) {
+  // sem arma e ela é vendida em outra loja da rota: não gasta aqui o ouro dela em poções
+  const weaponElsewhere =
+    unarmed(h) &&
+    (() => {
+      const need = bestUpgrade(w, h, c.gold + c.bankGold - 5, 'mainHand');
+      return !!need && !shop.sells.some((o) => o.itemId === need.itemId);
+    })();
+  if (step.buyPotions && !weaponElsewhere) {
     // mana primeiro para os magos (é o dano deles); os demais gastam menos nisso
     const manaOffers = potionOffers(w, shop, 'mana', h);
     const manaOffer = pickPotionOffer(w, manaOffers, h.stats.maxMana * 0.5);
     if (manaOffer && manaGoal(w, h)) {
       const per = w.data.items[manaOffer.itemId]?.use?.mana ?? 60;
-      const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' ? 0.7 : 0.2;
+      // recomeçando sem equipamento (perdeu tudo numa morte): a armadura vem antes de um estoque grande de mana
+      const regearing = Object.values(c.equipment).filter(Boolean).length < 4;
+      const share = isRanged(h.character.vocation) && h.character.vocation !== 'paladin' && !regearing ? 0.7 : 0.25;
       // o que falta em poções do tamanho dele (as pequenas que sobraram serão vendidas)
       const qty = Math.min(
         Math.ceil((manaGoal(w, h) - goodStock(w, h, 'mana', per)) / per),
@@ -3714,7 +3732,8 @@ function thinkPvp(w: World, h: HeroEntity): boolean {
     (humanHp < 0.4 ? 0.3 : 0) +
     (skull ? 0.45 : 0) -
     aff * 0.9 +
-    (b.mood < 0 ? 0.15 : 0) -
+    (b.mood < 0 ? 0.15 : 0) +
+    (w.social.enforced ? 0.15 : 0) - // PvP Enforced: matar não dá caveira, então vale mais a pena
     t.caution * 0.3;
   if (desire > 0.75 && ratio > 0.9 && w.rng.chance(0.55)) return startPk(w, h, human.id, 'greed');
   return false;
@@ -3756,7 +3775,7 @@ function pk(w: World, h: HeroEntity): void {
     // volta a caçar (e pega o que caiu, se estiver perto)
     return startHunt(w, h, b.quarry ?? chooseQuarry(w, h));
   }
-  if (isPz(w.map, victim.x, victim.y) || chebyshev(victim, h) > 14) {
+  if (isPz(w.map, victim.x, victim.y) || chebyshev(victim, h) > (atWar(w) ? 18 : 14)) {
     heroSay(w, h, 'pkEscaped', { player: victim.character.name }, 60000);
     return setMode(w, h, 'decide');
   }
@@ -3783,9 +3802,11 @@ function warPkCheck(w: World, h: HeroEntity, victim: PlayerEntity): boolean {
   const elapsed = w.now - b.stepStartedAt;
   const used = (b.pkPotions ?? potionsOf(w, h)) - potionsOf(w, h);
   const vhp = victim.character.health / Math.max(1, victim.stats.maxHealth);
+  const teamwork = allActors(w).some((a) => a !== h && a.targetId === victim.id && isWarAlly(w, h.id, a.id)) ? 1.4 : 1;
   const stale =
-    (elapsed > 45000 && vhp > 0.35 && used >= 6) ||
-    (elapsed > 60000 && vhp > 0.25) ||
+    // (com colegas no mesmo alvo, insiste mais: o time acaba vencendo a cura do outro)
+    (elapsed > 45000 * teamwork && vhp > 0.35 && used >= 6) ||
+    (elapsed > 60000 * teamwork && vhp > 0.25) ||
     // (não alcança a vítima: atrás de criaturas, do outro lado de um obstáculo — bater nas criaturas em volta não conta)
     (elapsed > 20000 && !attackedRecently(w, h.id, victim.id, 15000));
   if (stale) {
@@ -3940,12 +3961,16 @@ function warNeed(w: World, h: HeroEntity, foe: PlayerEntity | null): number {
 /** Nota de um alvo de guerra (maior = melhor): caveira primeiro, depois vantagem, vida baixa, foco do time e rixa. */
 function warTargetScore(w: World, h: HeroEntity, foe: PlayerEntity, odds: number): number {
   const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
-  const focused = allActors(w).some((a) => a !== h && a.targetId === foe.id && isWarAlly(w, h.id, a.id));
+  const focusers = allActors(w).filter((a) => a !== h && a.targetId === foe.id && isWarAlly(w, h.id, a.id)).length;
+  const guilds = w.social.war.mode === 'guilds';
+  // guildas: o time inteiro no mesmo alvo (cada colega já nele pesa mais) e o curandeiro do outro lado cai primeiro
+  const healer = guilds && foe.character.vocation === 'druid' ? 0.6 : 0;
   return (
     warSkullBonus(w, h, foe) * 1.2 +
     Math.min(odds, 3) * 0.6 +
-    (1 - foeHp) * 0.8 +
-    (focused ? 0.5 : 0) +
+    (1 - foeHp) * (guilds ? 1.1 : 0.8) +
+    Math.min(3, focusers) * (guilds ? 0.7 : 0.4) +
+    healer +
     (h.brain.grudge?.id === foe.id ? 0.6 : 0) -
     affinityOf(h, foe.id) * 0.4 -
     chebyshev(foe, h) * 0.04
@@ -3972,7 +3997,9 @@ function thinkWar(w: World, h: HeroEntity): boolean {
     // 1) perigo: o meu lado perde feio para os inimigos em volta
     const close = foes.filter((f) => chebyshev(f, h) <= 7);
     const pressure = close.reduce((s2, f) => s2 + power(f), 0);
-    const flee = warRecovering(w, h) || skullOf(w, h.id)?.kind === 'red' ? 0.9 : 0.7;
+    const mode = w.social.war.mode;
+    const flee =
+      warRecovering(w, h) || skullOf(w, h.id)?.kind === 'red' ? 0.9 : mode === 'ffa' ? 0.55 : alliesNear(w, h) ? 0.6 : 0.7;
     if (close.length && sideStrength(w, h) / Math.max(1, pressure) < flee) {
       const worst = [...close].sort((a, c) => power(c) - power(a))[0]!;
       if (warFlee(w, h, worst)) return true;
@@ -3985,8 +4012,10 @@ function thinkWar(w: World, h: HeroEntity): boolean {
       for (const foe of foes) {
         const odds = warOdds(w, h, foe);
         const foeHp = foe.character.health / Math.max(1, foe.stats.maxHealth);
-        const finisher = foeHp < 0.25 && odds >= (recovering ? 1.1 : 0.9) && hp > 0.35;
-        if (!(odds >= warNeed(w, h, foe) && hp > 0.55 && !onTruce(w, h, foe.id)) && !finisher) continue;
+        const finisher = foeHp < 0.35 && odds >= (recovering ? 1.1 : 0.85) && hp > 0.35;
+        // guildas: não entra sozinho (vira presa fácil) — só com um aliado perto ou com folga grande
+        const alone = mode === 'guilds' && !alliesNear(w, h) && odds < warNeed(w, h, foe) + 0.5;
+        if ((!(odds >= warNeed(w, h, foe) && hp > 0.55 && !onTruce(w, h, foe.id)) || alone) && !finisher) continue;
         const score = warTargetScore(w, h, foe, odds);
         if (!best || score > best.score) best = { foe, score };
       }
@@ -4023,7 +4052,8 @@ function warAssist(w: World, h: HeroEntity): boolean {
   if (warRecovering(w, h) || engagedByMonsters(w, h)) return false;
   let best: { foe: PlayerEntity; ally: PlayerEntity; d: number } | null = null;
   for (const ally of allActors(w)) {
-    if (ally === h || ally.dead || !isWarAlly(w, h.id, ally.id) || chebyshev(ally, h) > 35) continue;
+    const reach = w.social.war.mode === 'guilds' ? 55 : 35; // guilda: atravessa o mapa para socorrer o time
+    if (ally === h || ally.dead || !isWarAlly(w, h.id, ally.id) || chebyshev(ally, h) > reach) continue;
     for (const foe of warEnemiesNear(w, ally, 8)) {
       if (!(attackedRecently(w, foe.id, ally.id, 5000) || ally.targetId === foe.id) || inTown(w, foe))
         continue;

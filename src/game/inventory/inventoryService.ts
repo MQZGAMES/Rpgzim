@@ -6,7 +6,7 @@ import { addItem, maxStackOf, removeAt } from '../../domain/rules/inventory';
 import type { World } from '../simulation/World';
 import type { LootContainer } from '../entities/types';
 import { message, nextId, warnThrottled } from '../simulation/World';
-import { xpReceivers } from '../social/social';
+import { actorById } from '../social/social';
 import type { PlayerEntity } from '../entities/types';
 import { refreshStats } from '../progression/progression';
 
@@ -111,75 +111,91 @@ function afterEquipmentChange(w: World): void {
   w.events.emit('saveRequested', { reason: 'equipment' });
 }
 
-/** Coleta itens de um saco de loot: índice específico ou tudo ('all'). Ouro vai direto para a bolsa. */
+/** Valor de venda de uma unidade: o melhor preço que uma loja paga (sem loja, o valor de referência do item). */
+export function lootUnitValue(w: World, itemId: string): number {
+  let best = 0;
+  for (const shop of Object.values(w.data.shops)) for (const o of shop.buys) if (o.itemId === itemId && o.price > best) best = o.price;
+  return best || (w.data.items[itemId]?.value ?? 0);
+}
+
 /**
- * Loot dividido no grupo: cada membro perto e vivo recebe a mesma parte (ouro e cada item); o que sobra da
- * divisão (resto) fica com quem pegou. Quem não cabe na mochila deixa o excedente no saco para o próximo.
+ * Saco de criatura morta pelo grupo: o ouro é dividido igualmente entre quem estava perto no abate (o resto da divisão
+ * fica com quem tem a vez) e os itens vão inteiros para quem tem a vez no rodízio, não importa quem abriu o saco. O que
+ * não couber na mochila dele (ou se ele saiu do mundo/morreu) fica para quem está pegando.
  */
-function splitWithParty(w: World, bag: LootContainer, which: number | 'all'): void {
+function deliverPartyLoot(w: World, bag: LootContainer, which: number | 'all'): void {
+  const share = bag.party!;
   const picker = w.player;
-  const members = xpReceivers(w, picker.id, bag).filter((m) => m.id !== picker.id);
-  if (!members.length) return;
-  const n = members.length + 1;
-  const share = (total: number) => Math.floor(total / n);
-  const give = (m: PlayerEntity, itemId: string, count: number) => {
-    const got = addItem(w.data, m.character.inventory, itemId, count);
-    if (got > 0 && m === w.human)
-      message(w, `Dividido do grupo: ${got}x ${w.data.items[itemId]?.name ?? itemId}.`, 'loot');
-    if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
-    return got;
+  const alive = (id: string) => {
+    const a = actorById(w, id);
+    return a && !a.dead ? a : null;
   };
-  // ouro: a parte de cada um; o resto fica no saco (vai com quem pegou)
+  const notifySave = (m: PlayerEntity) => {
+    if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
+  };
+  const owner = alive(share.lootTo) ?? picker;
   if (bag.gold > 0 && (which === 'all' || which === -1)) {
-    const g = share(bag.gold);
+    const members = share.shareIds.map(alive).filter((a): a is PlayerEntity => !!a);
+    if (!members.includes(picker)) members.push(picker);
+    const per = Math.floor(bag.gold / members.length);
+    let rest = bag.gold - per * members.length;
     for (const m of members) {
-      if (!g) break;
+      const g = per + (m === owner ? rest : 0);
+      if (m === owner) rest = 0;
+      if (g <= 0) continue;
       m.character.gold += g;
-      bag.gold -= g;
-      if (m === w.human) message(w, `Dividido do grupo: +${g} de ouro.`, 'loot');
-      if (m !== w.human) w.human.scope.events.emit('heroSaveRequested', { heroId: m.id, reason: 'loot' });
+      if (m === w.human) message(w, `+${g} de ouro (dividido no grupo).`, 'loot');
+      if (m === picker) w.events.emit('goldChanged', { amount: m.character.gold, delta: g });
+      notifySave(m);
     }
+    bag.gold = 0;
   }
-  // itens: cada item do saco (ou o escolhido) é repartido; a sobra da divisão continua no saco
+  if (owner === picker) return; // os itens seguem o caminho normal da coleta
   const indices = which === 'all' ? bag.items.map((_, i) => i) : which >= 0 ? [which] : [];
   for (const i of indices) {
     const st = bag.items[i];
     if (!st) continue;
-    const per = share(st.count);
-    if (per <= 0) continue;
-    for (const m of members) {
-      if (st.count < per) break;
-      const got = give(m, st.itemId, per);
-      st.count -= got;
-    }
+    const name = w.data.items[st.itemId]?.name ?? st.itemId;
+    const got = addItem(w.data, owner.character.inventory, st.itemId, st.count);
+    if (got <= 0) continue;
+    st.count -= got;
+    if (owner === w.human) message(w, `Loot do grupo (sua vez): ${got}x ${name}.`, 'loot');
+    else if (picker === w.human) message(w, `${got}x ${name} foi para ${owner.character.name} (vez dele no loot).`, 'loot');
+    notifySave(owner);
   }
-  // (sem remover aqui: `takeLoot` usa os índices e apaga os sacos vazios)
+  // pilhas entregues (count 0) saem do saco no fim de `takeLoot`; a sobra (mochila do dono cheia) fica para quem pega
 }
 
+/** Coleta itens de um saco de loot: índice específico ou tudo ('all'). Ouro vai direto para a bolsa. */
 export function takeLoot(w: World, containerId: string, which: number | 'all'): void {
   const bag = w.lootBags.get(containerId);
   const c = w.player.character;
   if (!bag || w.player.dead || Math.max(Math.abs(bag.x - w.player.x), Math.abs(bag.y - w.player.y)) > 1) return;
-  // sem trava: qualquer um pega qualquer saco a qualquer momento. Só não divide com o grupo o que você mesmo jogou
-  // no chão e o saco do seu próprio corpo; o saco de morte de outro personagem é dividido como um loot comum
-  if (!bag.dropped && bag.ownerId !== w.player.id) splitWithParty(w, bag, which);
+  // sem trava: qualquer um pega qualquer saco a qualquer momento. Loot de criatura morta pelo grupo segue o rodízio
+  // (ouro dividido, itens para quem tem a vez); saco de morte de personagem e itens jogados no chão: quem pegar leva tudo
+  if (bag.party && !bag.dropped) deliverPartyLoot(w, bag, which);
   if (bag.gold > 0 && (which === 'all' || which === -1)) {
     c.gold += bag.gold;
     w.events.emit('goldChanged', { amount: c.gold, delta: bag.gold });
     message(w, `+${bag.gold} de ouro.`, 'loot');
     bag.gold = 0;
   }
-  const indices = which === 'all' ? bag.items.map((_, i) => i) : which >= 0 ? [which] : [];
+  // pegar tudo: as pilhas mais valiosas primeiro (se a mochila encher, fica para trás o que vale menos)
+  const stacks =
+    which === 'all'
+      ? [...bag.items].sort((a, b) => lootUnitValue(w, b.itemId) * b.count - lootUnitValue(w, a.itemId) * a.count)
+      : which >= 0 && bag.items[which]
+        ? [bag.items[which]!]
+        : [];
   let full = false;
-  for (const i of indices.reverse()) {
-    const st = bag.items[i];
-    if (!st) continue;
+  for (const st of stacks) {
+    if (st.count <= 0) continue;
     const added = addItem(w.data, c.inventory, st.itemId, st.count);
     if (added > 0) message(w, `Coletado: ${added}x ${w.data.items[st.itemId]?.name ?? st.itemId}.`, 'loot');
     st.count -= added;
-    if (st.count <= 0) bag.items.splice(i, 1);
-    else full = true;
+    if (st.count > 0) full = true;
   }
+  bag.items = bag.items.filter((st) => st.count > 0);
   if (full) warnThrottled(w, 'invfull', 'Mochila cheia! Venda ou descarte itens.', 1500);
   if (!bag.items.length && bag.gold <= 0) {
     w.lootBags.delete(bag.id);
@@ -197,9 +213,20 @@ export function nearbyLootBags(w: World): LootContainer[] {
     .sort((a, b) => Math.abs(a.x - p.x) + Math.abs(a.y - p.y) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)));
 }
 
-/** Pega tudo de todos os sacos ao alcance; o que não couber continua no respectivo saco. */
-export function takeAllNearbyLoot(w: World): void {
-  for (const bag of nearbyLootBags(w)) takeLoot(w, bag.id, 'all');
+/**
+ * Pega tudo dos sacos ao alcance (filtro opcional): primeiro o ouro, depois as pilhas de maior valor de venda, de
+ * qualquer saco; com a mochila cheia, o que vale menos fica no chão.
+ */
+export function takeAllNearbyLoot(w: World, accept: (bag: LootContainer) => boolean = () => true): void {
+  const bags = nearbyLootBags(w).filter(accept);
+  for (const bag of bags) if (bag.gold > 0) takeLoot(w, bag.id, -1);
+  const stacks = bags
+    .flatMap((bag) => bag.items.map((st) => ({ bag, st, value: lootUnitValue(w, st.itemId) * st.count })))
+    .sort((a, b) => b.value - a.value);
+  for (const { bag, st } of stacks) {
+    const i = bag.items.indexOf(st);
+    if (i >= 0 && w.lootBags.has(bag.id)) takeLoot(w, bag.id, i);
+  }
 }
 
 /** Pega só o ouro de todos os sacos ao alcance. */

@@ -91,6 +91,7 @@ import {
   guildOf,
   setWarMode,
   type WarMode,
+  type WorldPvpMode,
 } from '../social/social';
 import { addHero, heroSnapshot } from '../ai/heroes';
 import { updateCityGuards } from '../world/guards';
@@ -213,7 +214,11 @@ export class GameSimulation {
       heroes: new Map(),
       auto: { ...DEFAULT_AUTO },
       social: Object.assign(
-        newSocialState(c.flags.pvp === true, c.flags.war ? (c.flags.warGuilds ? 'guilds' : 'ffa') : 'off'),
+        newSocialState(
+          c.flags.pvp === true,
+          c.flags.war ? (c.flags.warGuilds ? 'guilds' : 'ffa') : 'off',
+          c.flags.pvpEnforced === true,
+        ),
         { clock: opts.clock },
       ),
       monsters: new Map(),
@@ -935,15 +940,45 @@ export class GameSimulation {
     const fail = disbandParty(w, w.player.id);
     if (fail) warnThrottled(w, `party:${fail}`, PARTY_FAIL_MESSAGE[fail], 600);
   }
+  /**
+   * Tipo de mundo: 'off' (sem PvP), 'pvp' (ataques com caveiras) ou 'enforced' (ataques sem caveiras: entrar nele
+   * apaga as caveiras, mortes injustas e vinganças de todos).
+   */
+  setWorldPvp(mode: WorldPvpMode): void {
+    const w = this.world;
+    const enforced = mode === 'enforced';
+    w.social.enforced = enforced;
+    w.human.character.flags.pvpEnforced = enforced;
+    if (enforced) {
+      w.social.skulls.clear();
+      w.social.unjust.clear();
+      w.social.revenge.clear();
+      for (const a of allActors(w)) savePk(w, a);
+    }
+    if (mode === 'off') {
+      this.setPvp(false);
+      return;
+    }
+    if (!w.social.pvp) this.setPvp(true, true);
+    message(
+      w,
+      enforced
+        ? 'Mundo PvP Enforced: todos podem se atacar fora das áreas protegidas, sem caveiras nem morte injusta.'
+        : 'Mundo PvP: ataques entre personagens valem com caveiras, PZ lock e morte injusta.',
+      'warning',
+    );
+    w.events.emit('socialChanged', {});
+  }
   /** Permissão de PK (ataque entre personagens). Desligar encerra os ataques em andamento. */
-  setPvp(on: boolean): void {
+  setPvp(on: boolean, quiet = false): void {
     const w = this.world;
     // desligar o PK encerra também a guerra (que depende dele)
     if (!on && atWar(w)) this.setWar('off', true);
     w.social.pvp = on;
     w.human.character.flags.pvp = on;
     if (!on) for (const a of allActors(w)) if (a.targetId && !w.monsters.has(a.targetId)) a.targetId = null;
-    message(
+    if (!quiet)
+      message(
       w,
       on ? 'PK ativado: personagens podem se atacar fora das áreas protegidas.' : 'PK desativado.',
       on ? 'warning' : 'system',

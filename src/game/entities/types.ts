@@ -135,6 +135,11 @@ export interface LootContainer {
   sourceName: string;
   /** Itens jogados no chão por um personagem: não dividem com o grupo e o pegar-tudo automático ignora. */
   dropped?: boolean;
+  /**
+   * Loot de criatura morta por um grupo: o ouro é dividido entre `shareIds` (quem estava perto no abate) e os itens vão
+   * para `lootTo` (rodízio do grupo), não importa quem abra o saco.
+   */
+  party?: { shareIds: string[]; lootTo: string };
 }
 
 export interface Corpse {

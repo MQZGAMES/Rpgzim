@@ -98,6 +98,8 @@ export function SettingsPanel({
       </label>
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Ajudas automáticas</h3>
       <AutoOptions />
+      <h3 className="mb-1 mt-3 text-[13px] text-gold">Tipo de mundo</h3>
+      <WorldPvpOptions />
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Modo guerra</h3>
       <WarOptions />
       <h3 className="mb-1 mt-3 text-[13px] text-gold">Controles</h3>
@@ -237,6 +239,40 @@ function AutoOptions() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Tipo de mundo: sem PvP, PvP (com caveiras) ou PvP Enforced (todos se matam sem caveira). */
+function WorldPvpOptions() {
+  const session = useSession();
+  const mode = useSnap((s) => s.worldPvp);
+  const options = [
+    ['off', 'Sem PvP'],
+    ['pvp', 'PvP'],
+    ['enforced', 'PvP Enforced'],
+  ] as const;
+  return (
+    <div data-testid="world-pvp-options">
+      <div className="flex flex-wrap gap-2 py-1">
+        {options.map(([v, l]) => (
+          <PixelButton
+            key={v}
+            variant={mode === v ? 'gold' : 'stone'}
+            onClick={() => mode !== v && session.setWorldPvp(v)}
+            data-testid={`world-pvp-${v}`}
+          >
+            {l}
+          </PixelButton>
+        ))}
+      </div>
+      <p className="text-[12px] text-muted">
+        {mode === 'off'
+          ? 'Ninguém ataca outros personagens.'
+          : mode === 'pvp'
+            ? 'Ataques entre personagens fora das áreas protegidas, com caveiras, PZ lock e morte injusta (3 em 24 h dão caveira vermelha).'
+            : 'Todos podem se matar fora das áreas protegidas, sem caveira nem morte injusta. Fica só o PZ lock de combate; as perdas normais da morte continuam.'}
+      </p>
     </div>
   );
 }

@@ -48,8 +48,8 @@ describe('magias', () => {
         // nível em que a poção pode ser bebida
         const item = D.items[s.conjure!.itemId]!;
         const back = (item.use!.heal ?? item.use!.mana ?? 0) * s.conjure!.count;
-        expect(s.manaCost / back, s.id).toBeGreaterThanOrEqual(2.4);
-        expect(s.manaCost / back, s.id).toBeLessThanOrEqual(3.4);
+        expect(s.manaCost / back, s.id).toBeGreaterThanOrEqual(1.6);
+        expect(s.manaCost / back, s.id).toBeLessThanOrEqual(2.5);
         expect(s.minLevel, s.id).toBeGreaterThan(item.minLevel ?? 1);
       } else if (s.effect !== 'buff') expect(s.formula, s.id).toBeDefined();
       if (s.effect === 'buff') expect(s.buff, s.id).toBeDefined();

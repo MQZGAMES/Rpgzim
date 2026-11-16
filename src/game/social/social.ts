@@ -28,6 +28,8 @@ export interface Party {
   sparMode?: 'training' | 'duel';
   /** Últimas posições do líder (para a formação em fila). */
   trail: { x: number; y: number }[];
+  /** Rodízio do loot: índice (em `members`) de quem recebe os itens da próxima criatura. */
+  lootTurn?: number;
   /** Grupo de uma guilda (guerra de guildas): fixo, ninguém entra nem sai por convite. */
   guild?: 0 | 1;
 }
@@ -48,6 +50,11 @@ export interface SocialState {
   invites: PartyInvite[];
   /** Permissão de PK (ligada pelo jogador). */
   pvp: boolean;
+  /**
+   * PvP Enforced: com o PK ligado, todos podem se matar sem caveira, morte injusta nem vingança (fica só o PZ lock de
+   * combate). As perdas normais da morte continuam.
+   */
+  enforced: boolean;
   /** Caveira de cada personagem: tipo e até quando. */
   skulls: Map<string, SkullState>;
   /** PZ lock: até quando o personagem não pode entrar em áreas protegidas. */
@@ -80,8 +87,16 @@ export interface WarState {
 }
 export const GUILD_NAMES = ['Red', 'Blue'] as const;
 
-export function newSocialState(pvp = false, war: WarMode = 'off'): SocialState {
+/** Tipo de mundo: sem PvP, PvP (ataques com caveiras) ou PvP Enforced (ataques sem caveiras). */
+export type WorldPvpMode = 'off' | 'pvp' | 'enforced';
+
+export function worldPvpMode(w: World): WorldPvpMode {
+  return !w.social.pvp ? 'off' : w.social.enforced ? 'enforced' : 'pvp';
+}
+
+export function newSocialState(pvp = false, war: WarMode = 'off', enforced = false): SocialState {
   return {
+    enforced,
     war: { mode: war, guilds: new Map() },
     party: null,
     heroParties: [],
@@ -473,6 +488,25 @@ export function passLeadership(w: World, leaderId: string, toId: string): PartyF
 }
 
 /** Quem recebe parte da XP de um monstro abatido por `killerId` (o próprio, ou o grupo próximo e vivo). */
+/**
+ * Quem leva os itens da próxima criatura do grupo: o próximo membro do rodízio que esteja entre os que receberam a XP
+ * (vivo e perto). Sem grupo, ninguém (o saco é de quem pegar).
+ */
+export function nextLootReceiver(w: World, killerId: string, receivers: readonly PlayerEntity[]): string | null {
+  const p = partyOf(w, killerId);
+  if (!p || receivers.length <= 1) return null;
+  const n = p.members.length;
+  const start = p.lootTurn ?? 0;
+  for (let k = 0; k < n; k++) {
+    const id = p.members[(start + k) % n]!;
+    if (receivers.some((r) => r.id === id)) {
+      p.lootTurn = (start + k + 1) % n;
+      return id;
+    }
+  }
+  return null;
+}
+
 export function xpReceivers(w: World, killerId: string, at: { x: number; y: number }): PlayerEntity[] {
   const killer = actorById(w, killerId);
   if (!killer) return [];
@@ -716,6 +750,12 @@ export function registerAggression(w: World, attackerId: string, victimId: strin
   w.social.aggressions.set(`${attackerId}>${victimId}`, pkNow(w));
   if (isSparring(w, attackerId, victimId)) return; // treino no grupo não dá caveira nem PZ lock
   lockPz(w, attackerId, PZ_LOCK_ATTACK_MS);
+  if (w.social.enforced) {
+    // PvP Enforced: ninguém ganha caveira; o combate só renova o PZ lock
+    touchCombat(w, attackerId);
+    touchCombat(w, victimId);
+    return;
+  }
   const victim = skullOf(w, victimId)?.kind ?? null;
   if (hasRevenge(w, attackerId, victimId)) {
     // vingança contra quem o matou injustamente: só o PZ lock, sem caveira
@@ -757,6 +797,7 @@ export function registerPlayerKill(
 ): void {
   if (killerId === victimId) return;
   lockPz(w, killerId, PZ_LOCK_KILL_MS);
+  if (w.social.enforced) return; // PvP Enforced: matar não dá caveira nem conta morte injusta
   // a vingança (a vítima tinha matado o killer injustamente há pouco) é justa: só o PZ lock
   if (victimId && hasRevenge(w, killerId, victimId)) {
     w.social.revenge.delete(`${killerId}>${victimId}`);

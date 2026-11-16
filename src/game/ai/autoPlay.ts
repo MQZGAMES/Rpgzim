@@ -2,7 +2,7 @@
 // São opções do jogador (guardadas no aparelho); os heróis têm a própria IA e não passam por aqui.
 import { chebyshev } from '../../domain/value-objects/position';
 import { castCheck, castSpell } from '../abilities/spells';
-import { nearbyLootBags, takeLoot, useInventoryItem } from '../inventory/inventoryService';
+import { takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
 import { POTION, isReady } from '../../domain/rules/cooldowns';
@@ -148,5 +148,5 @@ export function updateAutoPlay(w: World): void {
     }
   }
   // pega o loot ao alcance (menos o que você mesmo jogou no chão)
-  if (a.autoLoot) for (const bag of nearbyLootBags(w)) if (!bag.dropped) takeLoot(w, bag.id, 'all');
+  if (a.autoLoot) takeAllNearbyLoot(w, (bag) => !bag.dropped);
 }
