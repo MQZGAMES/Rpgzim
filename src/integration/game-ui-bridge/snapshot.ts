@@ -116,8 +116,6 @@ export interface SpellView {
   reason: string | null;
   target: string;
   color: string;
-  /** Grau da magia (2 = II, 3 = III); 0 nas magias sem graus. */
-  tier: number;
 }
 
 /** Uma oferta do livro do mercado. */
@@ -541,7 +539,6 @@ function spellView(sim: GameSimulation, id: string): SpellView {
     reason: check.ok ? null : castFailMessage(check.reason, check.detail),
     target: s.target,
     color: s.vfx.color,
-    tier: s.baseId ? (s.tier ?? 0) : 0,
   };
 }
 

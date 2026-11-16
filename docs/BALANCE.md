@@ -346,3 +346,27 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   vida 382/353 s → 217/214 s; < 50% 36/28 s → 27/21 s; 0 mortes. Do nível 1 em 3 h: Boladex 35/32, Maguim 31/30,
   Mano Cura 43/44, Distanciado 37/38 (todos iguais ou um pouco acima), 0 mortes. O Sorcerer ainda bebe 560–690 poções
   de mana em 3 h e termina sem ouro: com a magia mais barata ele lança mais (27 → 32–37 magias/min) em vez de poupar.
+
+## Disciplina de mana e magias sem graus (nov/2026)
+- **Sem graus II/III**: cada magia existe uma vez; o efeito cresce só pela fórmula (nível e Magic Level/skill, e a arma).
+  Barras salvas com graus (`fire_nova_3`) viram a magia base, sem repetir. As magias de criação fazem uma poção por vez.
+- **Disciplina de mana da IA** (`manaEffort` em `heroBrain.ts`):
+  - fácil (uma criatura bem abaixo do nível dele): varinha/arco e a magia barata só com mana > 55%; lentidão em quem
+    foge (Druid) e flecha atordoante se encostam (Paladin). Poção de mana só abaixo de 10%. O mago não para para
+    "descansar a mana" em caça fácil sozinho (a varinha é grátis);
+  - normal (2 criaturas ou uma do nível dele): rotação completa; poção abaixo de 25%;
+  - pesado (3+, chefe ou vida < 50%): rotação completa com área; poção abaixo de 40%.
+- **Medição** (`hero-life`, 3 h do nível 1, sementes 11/23, nível · ouro+banco · poções de mana · mortes):
+
+  | Herói | Antes | Agora |
+  |---|---|---|
+  | Boladex | 35/32 · 7,1k/2,9k · 62/56 · 0 | 36/33 · 3,6k/3,2k · 62/57 · 0 |
+  | Maguim | 31/30 · 0,5k/0,3k · 559/691 · 0 | 39/45 · 11,7k/23,3k · 717/689 · 0 |
+  | Mano Cura | 43/44 · 22k/5,7k · 199/173 · 0 | 42/41 · 5,6k/24,7k · 193/208 · 0 |
+  | Distanciado | 37/38 · 4,5k/8,4k · 238/239 · 0 | 41/34 · 4k/5,3k · 183/197 · 0 |
+
+  O Sorcerer ainda bebe ~700 poções em 3 h, mas agora caça presas do nível dele (rende muito mais XP e ouro) e
+  termina rico. Guerra (30 min, sementes 7/8): mortes por PK 3+3 → 2+4 (cada um por si) e 2+3 → 1+4 (guildas).
+- `tests/tools/hero-spells.test.ts` passou a contar a vida só de quem está no grupo do Druid e ao alcance da cura
+  (antes contava qualquer herói, mesmo fora do grupo). Com isso, ninguém junto do Druid ficou abaixo de 70% de vida
+  nas sementes 11/23, nem antes nem depois.

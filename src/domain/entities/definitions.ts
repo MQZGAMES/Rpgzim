@@ -149,10 +149,8 @@ export interface SpellDef {
   buff?: { kind: BuffKind; value: number; durationMs: number };
   /** Efeito adicional aplicado aos alvos atingidos. */
   slow?: { factor: number; durationMs: number };
-  /** Grau da magia (I = 1, II = 2, III = 3; criação: tamanho da poção). */
+  /** Magias de criação: tamanho da poção (1 = pequena … 5 = divina), para ordenar. */
   tier?: number;
-  /** Magia de grau II/III: id da versão I. */
-  baseId?: string;
   /** Magia de criação: coloca este item na mochila. */
   conjure?: { itemId: string; count: number };
   /** Cura/bênção também alcança os membros do grupo neste raio (tiles). */

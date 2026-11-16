@@ -206,14 +206,14 @@ describe('vida despencando', () => {
 });
 
 describe('mago e mana', () => {
-  function hunting(mana: number) {
+  function hunting(mana: number, quarry = 'slime') {
     const { w, h } = setup('maguim', 15);
     // uma criatura fraca e sozinha, parada a 3 tiles (a régua aprova com folga)
-    const prey = put(w, h, 3, 0, (m) => m.def.id === 'slime', new Set());
+    const prey = put(w, h, 3, 0, (m) => m.def.id === quarry, new Set());
     prey.state = 'idle';
     prey.targetId = null;
     h.brain.mode = 'hunt';
-    h.brain.quarry = 'slime';
+    h.brain.quarry = quarry;
     h.brain.spot = { x: prey.x, y: prey.y };
     h.brain.modeUntil = w.now + 600000;
     h.character.inventory = h.character.inventory.map((st) =>
@@ -230,8 +230,14 @@ describe('mago e mana', () => {
     expect(h.targetId).toBe(prey.id);
   });
 
-  it('sem mana (e sem poção de mana), espera antes de puxar a próxima', () => {
-    const { h } = hunting(0.1);
+  it('sem mana numa caça fácil (presa bem abaixo do nível): segue puxando com a varinha, sem parar', () => {
+    const { h, prey } = hunting(0.1);
+    expect(h.brain.manaRest).toBe(false);
+    expect(h.targetId).toBe(prey.id);
+  });
+
+  it('sem mana (e sem poção de mana) numa caça do nível dele, espera antes de puxar a próxima', () => {
+    const { h } = hunting(0.1, 'cave_spider');
     expect(h.targetId).toBeNull();
     expect(h.brain.manaRest).toBe(true);
   });
