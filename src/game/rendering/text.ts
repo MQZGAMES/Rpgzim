@@ -66,6 +66,24 @@ export function getWorldTextZoom(): number {
   return zoom;
 }
 
+/**
+ * Escala dos textos do mundo no desktop. O personagem cresce com o zoom (tile de 64 px CSS em 1280×800, 80 px em
+ * 1920×1080, 112 px em 2560×1440) e um texto de tamanho fixo ficava miúdo ao lado dele. Base: tile de 64 px = 1.
+ * No toque é sempre 1: os tamanhos do celular já são calibrados para a tela pequena.
+ */
+export function worldTextScale(touch: boolean, z = zoom, d = dpr): number {
+  if (touch) return 1;
+  const tileCss = (16 * z) / d;
+  return Math.min(1.75, Math.max(1, tileCss / 64));
+}
+
+/** Muda o tamanho (px CSS) de um texto do mundo, mantendo a borda proporcional à fonte. */
+export function setWorldTextSize(t: Phaser.GameObjects.Text, size: number): void {
+  const px = size * dpr;
+  t.setFontSize(`${px}px`);
+  if (t.style.strokeThickness > 0) t.setStroke(t.style.stroke, Math.max(2, Math.round(px * 0.22)));
+}
+
 /** Fator de densidade do dispositivo (o texto do mundo é desenhado em pixels físicos). */
 export function dprSafe(): number {
   return dpr;

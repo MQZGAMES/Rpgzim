@@ -10,7 +10,7 @@ import type { HeroLineKey, ItemDef } from '../../domain/entities/definitions';
 import { chebyshev } from '../../domain/value-objects/position';
 import { addItem, countItem, freeSlots, removeAt } from '../../domain/rules/inventory';
 import { isUpgrade, itemScore } from '../../domain/rules/itemPower';
-import { isPz, isSolid } from '../world/GameMap';
+import { isPz, isSolid, regionAt } from '../world/GameMap';
 import type { HeroEntity, MonsterEntity, NpcEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { allActors, asActor } from '../simulation/World';
@@ -1674,11 +1674,9 @@ function startHunt(w: World, h: HeroEntity, quarry = chooseQuarry(w, h)): void {
   h.brain.spot = spawn ? { x: spawn.x, y: spawn.y } : null;
   setMode(w, h, 'hunt', (10 + w.rng.next() * 8) * 60000);
   const def = w.data.monsters[quarry];
-  const region = spawn
-    ? w.map.regions
-        .filter((r) => spawn.x >= r.x && spawn.x < r.x + r.w && spawn.y >= r.y && spawn.y < r.y + r.h)
-        .sort((a, b) => b.priority - a.priority)[0]
-    : undefined;
+  // a zona pela forma exata (as zonas de caça cobrem o mapa todo no retângulo: pelo retângulo, toda caça fora de um
+  // marco virava "Campos do Norte")
+  const region = spawn ? regionAt(w.map, spawn.x, spawn.y) : null;
   heroSay(w, h, 'hunt', { monster: def?.name ?? quarry, area: region?.name ?? 'a caça' }, 4 * 60000);
 }
 
@@ -1837,8 +1835,11 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
   const spot = b.spot;
   if (!spot) return startHunt(w, h);
   if (!b.noTargetSince) b.noTargetSince = w.now;
-  if (w.now - b.noTargetSince > 20000 && quarry) {
-    // a área esvaziou (outro caçador, respawn lento): vai para o ponto com mais monstros vivos
+  const idle = w.now - b.noTargetSince;
+  // a área esvaziou (outro caçador, respawn lento): vai para o ponto com mais monstros vivos. Espera no máximo 20 s e
+  // sai antes se andar até lá leva menos que esperar o próximo renascimento daqui (no mapa de área dobrada, esperar
+  // parado custava caro: com isto o Druid voltou de 44 para 48,5 de nível médio em 3 h; ver docs/BALANCE.md)
+  if (quarry && idle > 2500 && (idle > 20000 || betterToMove(w, h, quarry, b.spot ?? spot))) {
     b.noTargetSince = w.now;
     const best = bestSpawn(w, h, quarry);
     if (best) b.spot = best;
@@ -2161,6 +2162,21 @@ function keepDistance(w: World, h: HeroEntity): void {
   }
   const step = backlineStep(w, h, melee, tank, currentTarget(w) ?? null, Math.max(1, h.stats.weapon.range));
   if (step) tryStep(w, h, step.dx, step.dy, speedOf(w, h), false);
+}
+
+/**
+ * Vale mais andar até outro ponto da presa (com criaturas vivas) do que esperar o próximo renascimento aqui? Sem
+ * criatura morta neste ponto (elas só se afastaram ou estão com outro caçador), espera como antes.
+ */
+function betterToMove(w: World, h: HeroEntity, quarry: string, here: { x: number; y: number }): boolean {
+  const sp = w.map.spawns.find((s) => s.monsterId === quarry && s.x === here.x && s.y === here.y);
+  if (!sp) return false;
+  let soonest = Infinity;
+  for (const m of w.monsters.values()) if (m.spawnId === sp.id && !m.alive) soonest = Math.min(soonest, m.respawnAt - w.now);
+  if (soonest === Infinity) return false;
+  const best = bestSpawn(w, h, quarry);
+  if (!best || (best.x === here.x && best.y === here.y)) return false;
+  return (chebyshev(best, h) / Math.max(0.5, speedOf(w, h))) * 1000 < soonest;
 }
 
 /** Ponto de surgimento da presa com mais monstros vivos (empate: o mais perto). */
@@ -3054,8 +3070,9 @@ function shookThemOff(w: World, h: HeroEntity): boolean {
 
 /**
  * Custo (em tiles) de recuar até a porta: a distância, passando pelo portão mais conveniente quando ela fica dentro da
- * vila e ele fora; e uma porta mais longe da vila do que ele (um santuário mais para fora, em terra mais perigosa) custa
- * o triplo do trecho que avança — recuar é voltar na direção da vila, não fugir para onde as criaturas são mais fortes.
+ * vila e ele fora; e uma porta mais longe da vila do que ele (em terra mais perigosa) custa o triplo do trecho que avança
+ * — recuar é voltar na direção da vila, não fugir para onde as criaturas são mais fortes. (Desde a 2ª versão do mundo
+ * as únicas portas são as da vila: não há santuários no caminho.)
  */
 function doorCost(w: World, h: HeroEntity, door: { x: number; y: number }): number {
   const home = w.map.playerStart;

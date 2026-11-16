@@ -213,6 +213,9 @@ describe('herói cercado longe do líder', () => {
       m.y = spot.y + (i === 2 ? 1 : i === 1 ? 0 : 0);
       if (i === 1) m.x = spot.x - 1;
       if (i === 2) m.x = spot.x;
+      // a "casa" vai junto: longe do ponto de surgimento dela, a criatura voltava para lá na hora
+      m.homeX = m.x;
+      m.homeY = m.y;
     });
     let fought = false;
     for (let t = 0; t < 4000 && !fought; t += 100) {

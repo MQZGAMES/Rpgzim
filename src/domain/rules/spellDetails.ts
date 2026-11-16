@@ -2,6 +2,7 @@
 import { WAND_SPELL_SCALE } from './damage';
 
 const n = (value: number) => Number(value.toFixed(3)).toLocaleString('pt-BR');
+const tiles = (v: number) => `${v} ${v === 1 ? 'casa' : 'casas'}`;
 
 /** Coefficients come directly from the spell used by combat. */
 export function spellDetails(s: SpellDef): string[] {
@@ -21,10 +22,11 @@ export function spellDetails(s: SpellDef): string[] {
     lines.push(
       `${s.effect === 'heal' ? 'Cura' : 'Dano'}: ${formula}${wand} × bônus da vocação × (${n(f.min)} a ${n(f.max)}). Resultado arredondado.`,
     );
+    const ml = f.kind === 'magic' ? '; ML = Magic Level' : '';
     lines.push(
       s.effect === 'heal'
-        ? 'Recuperação limitada à vida máxima; ML = Magic Level.'
-        : 'Dano por alvo, antes de armadura, resistências e reduções; ML = Magic Level.',
+        ? `Recuperação limitada à vida máxima${ml}.`
+        : `Dano por alvo, antes de armadura, resistências e reduções${ml}.`,
     );
   }
   if (s.buff) {
@@ -46,9 +48,8 @@ export function spellDetails(s: SpellDef): string[] {
   if (s.conjure)
     lines.push(`Cria ${s.conjure.count} poção(ões) por uso. O lote inteiro precisa caber na mochila.`);
   if (s.slow) lines.push(`Lentidão: ${n((1 - s.slow.factor) * 100)}% por ${n(s.slow.durationMs / 1000)}s.`);
-  if (s.partyRadius) lines.push(`Também afeta aliados do grupo em até ${s.partyRadius} casas.`);
-  if (s.radius) lines.push(`Raio da área: ${s.radius} casas.`);
-  if (s.range) lines.push(`Alcance: ${s.range} casas, com linha de visão.`);
-  lines.push('Graus I, II e III compartilham a recarga.');
+  if (s.partyRadius) lines.push(`Também afeta aliados do grupo em até ${tiles(s.partyRadius)}.`);
+  if (s.radius) lines.push(`Raio da área: ${tiles(s.radius)}.`);
+  if (s.range) lines.push(`Alcance: ${tiles(s.range)}, com linha de visão.`);
   return lines;
 }

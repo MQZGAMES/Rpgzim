@@ -59,7 +59,7 @@ function field(sim: GameSimulation): { x: number; y: number } {
     m.respawnAt = Infinity;
   }
   const s0 = w.map.playerStart;
-  // longe de qualquer área protegida (como numa caça): perto de um santuário ou da vila, quem perde só corre para dentro
+  // longe de qualquer área protegida (como numa caça): perto da vila, quem perde só corre para dentro
   const pzCells: { x: number; y: number }[] = [];
   for (let y = 0; y < w.map.height; y++)
     for (let x = 0; x < w.map.width; x++) if (isPz(w.map, x, y) || w.map.city[y * w.map.width + x]) pzCells.push({ x, y });
@@ -407,7 +407,7 @@ describe('modo guerra: IA', () => {
       addHero(sim, 'extra_1', 20),
       addHero(sim, 'extra_2', 30),
     ];
-    // todos começam no mesmo campo (longe do templo e dos santuários), para a guerra começar logo
+    // todos começam no mesmo campo (longe da vila), para a guerra começar logo
     const at = field(sim);
     hs.forEach((h, i) => put(sim, h, at.x + (i % 3) * 2, at.y + Math.floor(i / 3) * 2));
     const ids = new Set(hs.map((h) => h.id));

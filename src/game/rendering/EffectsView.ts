@@ -9,7 +9,7 @@ import type { SfxName } from '../audio/AudioService';
 import type { EntityViews } from './EntityViews';
 import { actorById } from '../social/social';
 import { DEPTH, ySort } from './depth';
-import { worldText } from './text';
+import { worldText, worldTextScale } from './text';
 
 const ELEMENT_COLOR: Record<Element, number> = {
   physical: 0xe04a44,
@@ -142,7 +142,7 @@ export class EffectsView {
   // ------------------------------------------------------------------ utilidades
   floatText(text: string, x: number, y: number, color: number, duration = 800, delay = 0, size = 8): void {
     const t = worldText(this.scene, Math.round(x), Math.round(y), text, {
-      size: Math.round(size * 1.6),
+      size: Math.round(size * 1.6 * this.textScale),
       color: `#${color.toString(16).padStart(6, '0')}`,
     });
     t.setOrigin(0.5, 1).setDepth(DEPTH.text);
@@ -217,6 +217,11 @@ export class EffectsView {
   private vis(id: string) {
     const v = this.views.get(id);
     return v && v.container.visible ? v : undefined;
+  }
+
+  /** Números e balões crescem com o zoom no desktop, como os nomes (ver worldTextScale). */
+  private get textScale(): number {
+    return worldTextScale(!!this.scene.registry.get('touch'));
   }
 
   /** O tile está na área visível (com uma pequena margem)? */
@@ -394,9 +399,9 @@ export class EffectsView {
     if (!v) return;
     this.bubbles.get(entityId)?.box.destroy();
     const t = worldText(this.scene, 0, 0, text, {
-      size: 12,
+      size: Math.round(12 * this.textScale),
       color: '#fbf8ef',
-      wrap: 170,
+      wrap: Math.round(170 * this.textScale),
       weight: 700,
       stroke: null,
     });
@@ -530,7 +535,8 @@ export class EffectsView {
       const cam = this.scene.cameras.main.worldView;
       const fitted = Phaser.Math.Clamp(v.container.x, cam.x + b.halfWidth, cam.right - b.halfWidth);
       const x = Math.abs(fitted - v.container.x) <= 24 ? fitted : v.container.x;
-      b.box.setPosition(Math.round(x), v.container.y - v.height - 2);
+      // (antes ficava 2 px acima do sprite e cobria o nome)
+      b.box.setPosition(Math.round(x), Math.round(v.container.y + v.labelTop - 1));
     }
   }
 

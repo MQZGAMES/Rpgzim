@@ -76,5 +76,7 @@ export default defineConfig({
     include: process.env.RPGZIM_TOOLS ? ['tests/tools/**/*.test.ts'] : ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',
     setupFiles: ['tests/setup.ts'],
+    // muitos testes simulam minutos de jogo num mundo com centenas de criaturas: com a suíte em paralelo, 5 s é pouco
+    testTimeout: 30_000,
   },
 });
