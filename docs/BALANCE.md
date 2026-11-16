@@ -324,3 +324,13 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   sem folga grande e socorre aliados a até 55 tiles. Medido (8 heróis, 30 min): tempo atacando 17–27% → 21–41%, recuo
   10–19% → 7–16%, mortes 1–2 → 2–3. Com o dano entre personagens pela metade, as poções curam quase tudo o que um
   atacante tira: as mortes dependem de vários no mesmo alvo.
+
+## Magias de área na caça (nov/2026)
+- Com 2+ criaturas na briga, a magia de área vem antes do golpe de misericórdia de alvo único, e as de área mirada
+  (Rajada Glacial, Chuva de Fogo, Chuva de Flechas) vão no ponto que acerta mais criaturas, sozinho ou em grupo. Em
+  recarga, sai a de alvo único (rodízio natural pela ordem de prioridade).
+- Com mais de 40% de mana compara dano por conjuração (o limite é a exaustão de 2 s); abaixo, dano por ponto de mana
+  (antes o corte era 70%, e o mago quase nunca passava dele).
+- Criaturas paradas no raio só impedem a área se forem mais de 2 (em grupo) ou mais de 1 (sozinho, vida > 60%).
+- Medido (`tests/tools/hero-spells.test.ts`, nível 30, 20 min, em grupo): magias de área Maguim 18 → 47, Mano Cura
+  38 → 60, Distanciado 5 → 30. Do nível 1 em 3 h sozinho: sem mudança relevante (nível e mortes iguais).
