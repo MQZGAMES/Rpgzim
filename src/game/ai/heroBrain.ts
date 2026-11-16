@@ -810,10 +810,12 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     if (goal) goTo(w, h, goal.x, goal.y);
   }
   survive(w, h);
+  // a cura do grupo vem antes de qualquer outra decisão (até do "jeito de gente": o curandeiro não some no AFK com o
+  // time apanhando)
+  if (partyOf(w, h.id)) supportParty(w, h);
   // jeito de gente: resposta "digitando", AFK, fim de sessão (sair e voltar depois)
   if (humanRoutine(w, h)) return;
   callForHelp(w, h);
-  if (partyOf(w, h.id)) supportParty(w, h); // a cura do grupo vem antes de qualquer outra decisão
   // chamado pelo grupo: larga tudo (caça, vila, loot) e vai até o líder; só as poções continuam valendo
   if ((b.summonedUntil ?? 0) > w.now && b.mode !== 'retreat') return summoned(w, h);
   // ordem tática do jogador (painel do grupo): atacar o alvo dele ou segurar a posição
@@ -1985,7 +1987,7 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   const wakesIdle = (at: { x: number; y: number }, r: number) =>
     idleAround(w, at, r) > (alliesNear(w, h) > 0 ? 2 : hpPct(h) > 0.6 ? 1 : 0);
   // o Druid em grupo é a cura do time: não gasta em dano a mana que vai salvar um colega
-  const reserve = voc === 'druid' && alliesNear(w, h) > 0 ? 0.15 : 0;
+  const reserve = voc === 'druid' && alliesNear(w, h) > 0 ? 0.3 : 0;
   // magia de área mirada (Rajada Glacial, Chuva de Fogo, Chuva de Flechas): vai no meio do bolo de criaturas na briga
   // (onde acerta mais), não só em volta do alvo atual — sozinho ou em grupo. Fica com o alvo de antes para o resto.
   const areaAt = (spellId: string, single: string, minMana: number): boolean => {
@@ -2233,7 +2235,14 @@ function supportParty(w: World, h: HeroEntity): void {
     })
     .sort((a, c) => c.risk - a.risk);
   const top = ranked[0]!;
-  if (top.pct < 0.6 || (top.pct < 0.75 && top.hitters >= 2)) {
+  // o Druid é a cura do time: mantém todos com a vida saudável (cura com 70%, ou 80% com 2+ criaturas batendo, ou
+  // quando 2+ colegas estão abaixo de 85% — a Cura Intensa pega todos de uma vez); os demais só socorrem com 60%
+  const druid = h.character.vocation === 'druid';
+  const hurt = ranked.filter((r) => r.pct < 0.85).length;
+  const needs = druid
+    ? top.pct < 0.7 || (top.pct < 0.8 && top.hitters >= 2) || hurt >= 2
+    : top.pct < 0.6 || (top.pct < 0.75 && top.hitters >= 2);
+  if (needs) {
     if (tryCast(w, h, 'sap_blessing')) {
       if (top.m.id !== h.id) heroSay(w, h, 'healAlly', { player: top.m.character.name }, 25000);
       return;

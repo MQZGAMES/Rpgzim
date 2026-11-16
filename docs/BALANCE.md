@@ -334,3 +334,15 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
 - Criaturas paradas no raio só impedem a área se forem mais de 2 (em grupo) ou mais de 1 (sozinho, vida > 60%).
 - Medido (`tests/tools/hero-spells.test.ts`, nível 30, 20 min, em grupo): magias de área Maguim 18 → 47, Mano Cura
   38 → 60, Distanciado 5 → 30. Do nível 1 em 3 h sozinho: sem mudança relevante (nível e mortes iguais).
+
+## Recalibragem de mana e cura do Druid (nov/2026)
+- Com a mana natural fixa por vocação, as magias de ataque e a Cura Intensa ficaram mais baratas (`MANA_RETUNE` em
+  `src/data/spells.ts`, herdado pelos graus II/III): Sorcerer/Druid custo base −30% e acréscimo por nível −50%;
+  Paladin e Knight −20%. Ex.: Explosão Ígnea 90 → 63, Rajada Glacial 50 → 35, Chuva de Flechas 60 → 48, Cura Intensa
+  80 → 56. Cura leve, buffs e criação de poções não mudaram.
+- Druid em grupo: cura com 70% de vida (80% com 2+ criaturas batendo, ou 2+ colegas abaixo de 85%); antes 60%. A cura
+  vem antes da rotina de "jeito de gente" e ele guarda 30% de mana para curar (antes 15%).
+- Medido em grupo (nível 30, 30 min, sementes 11/23): Curas Intensas do Druid 11/20 → 58/76; tempo com alguém < 70% de
+  vida 382/353 s → 217/214 s; < 50% 36/28 s → 27/21 s; 0 mortes. Do nível 1 em 3 h: Boladex 35/32, Maguim 31/30,
+  Mano Cura 43/44, Distanciado 37/38 (todos iguais ou um pouco acima), 0 mortes. O Sorcerer ainda bebe 560–690 poções
+  de mana em 3 h e termina sem ouro: com a magia mais barata ele lança mais (27 → 32–37 magias/min) em vez de poupar.

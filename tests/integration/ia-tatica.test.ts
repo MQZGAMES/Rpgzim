@@ -88,11 +88,11 @@ describe('personalidade', () => {
 });
 
 describe('magias de área e magias novas', () => {
-  it('área: -2 s de recarga, +1 sqm e o dobro de mana', () => {
-    expect(GAME_DATA.spells.fire_nova).toMatchObject({ radius: 4, cooldownMs: 6000, manaCost: 90 });
-    expect(GAME_DATA.spells.frost_burst).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 50 });
-    expect(GAME_DATA.spells.arrow_rain).toMatchObject({ radius: 2, cooldownMs: 4000, manaCost: 60 });
-    expect(GAME_DATA.spells.steel_whirlwind).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 60 });
+  it('área: -2 s de recarga, +1 sqm e o dobro de mana (com a recalibragem de mana de nov/2026)', () => {
+    expect(GAME_DATA.spells.fire_nova).toMatchObject({ radius: 4, cooldownMs: 6000, manaCost: 63 });
+    expect(GAME_DATA.spells.frost_burst).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 35 });
+    expect(GAME_DATA.spells.arrow_rain).toMatchObject({ radius: 2, cooldownMs: 4000, manaCost: 48 });
+    expect(GAME_DATA.spells.steel_whirlwind).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 48 });
   });
 
   it('Knight e Paladin ganharam uma magia (7 na barra padrão + 2 opcionais por vocação)', () => {

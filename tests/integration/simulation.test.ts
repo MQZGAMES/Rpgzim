@@ -1,3 +1,4 @@
+import { spellManaCost } from '../../src/domain/rules/spells';
 // Testes de integração da simulação completa (sem renderização): fluxo principal do jogador.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
@@ -249,7 +250,7 @@ describe('magias', () => {
     sim.setTarget(boar.id);
     const mana = p.character.mana;
     expect(sim.castSpell('arcane_bolt')).toBe(true);
-    expect(p.character.mana).toBe(mana - 10);
+    expect(p.character.mana).toBe(mana - spellManaCost(GAME_DATA.spells.arcane_bolt!, p.character.level));
     expect(boar.hp).toBeLessThan(boar.def.health);
     // cooldown ativo
     expect(sim.castSpell('arcane_bolt')).toBe(false);

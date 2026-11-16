@@ -80,8 +80,8 @@ describe('magos: nível mágico, cura e mana', () => {
 
   it('as magias de ataque dos magos custam mais mana conforme o nível', () => {
     const lance = D.spells.flame_lance!;
-    expect(spellManaCost(lance, 1)).toBeLessThan(30);
-    expect(spellManaCost(lance, 60)).toBeGreaterThan(45);
+    expect(spellManaCost(lance, 1)).toBeLessThan(25);
+    expect(spellManaCost(lance, 60)).toBeGreaterThan(spellManaCost(lance, 1) + 10);
     expect(spellManaCost(D.spells.light_heal!, 60)).toBe(D.spells.light_heal!.manaCost); // a cura básica não sobe
     const sim = makeSim('sorcerer');
     sim.world.player.character.level = 60;
