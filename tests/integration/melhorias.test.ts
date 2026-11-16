@@ -205,8 +205,8 @@ describe('personagens não se sobrepõem', () => {
 });
 
 describe('explosão ígnea do mago', () => {
-  it('tem raio 4, recarga de 6 s e custa 90 de mana (área: -2 s, +1 sqm, o dobro de mana)', () => {
-    expect(GAME_DATA.spells.fire_nova).toMatchObject({ radius: 4, cooldownMs: 6000, manaCost: 90 });
+  it('tem raio 4, recarga de 6 s e custa 63 de mana (área: -2 s, +1 sqm, o dobro de mana)', () => {
+    expect(GAME_DATA.spells.fire_nova).toMatchObject({ radius: 4, cooldownMs: 6000, manaCost: 63 });
   });
 });
 

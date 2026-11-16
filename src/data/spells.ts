@@ -684,6 +684,25 @@ function conjureSpell(
   };
 }
 
+// Recalibragem de mana (nov/2026): a mana natural ficou fixa por vocação (como no Tibia) e não cresce mais com o nível.
+// Magias de ataque e a Cura Intensa ficam mais baratas, e o custo cresce menos com o nível; os graus II/III herdam isso.
+// O Sorcerer gastava ~600 poções de mana em 3 h (rotação de área ≈ 38 de mana/s contra 7,5 de regeneração).
+const MANA_RETUNE: Record<string, { base: number; perLevel: number }> = {
+  sorcerer: { base: 0.7, perLevel: 0.5 },
+  druid: { base: 0.7, perLevel: 0.5 },
+  paladin: { base: 0.8, perLevel: 1 },
+  knight: { base: 0.8, perLevel: 1 },
+};
+for (const sp of list) {
+  const attack = sp.effect === 'damage';
+  const partyHeal = sp.effect === 'heal' && !!sp.partyRadius;
+  if (!attack && !partyHeal) continue;
+  const k = MANA_RETUNE[sp.vocations[0]!];
+  if (!k || sp.vocations.length > 1) continue;
+  sp.manaCost = Math.max(5, Math.round(sp.manaCost * k.base));
+  if (sp.manaPerLevel) sp.manaPerLevel = Math.round(sp.manaPerLevel * k.perLevel * 100) / 100;
+}
+
 const byId = new Map(list.map((x) => [x.id, x]));
 const conjures = CONJURES.map(conjureSpell);
 // as duas magias de criação antigas (mesmo id) viram a versão "Média" da nova série

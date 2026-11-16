@@ -80,8 +80,8 @@ describe('Corrida', () => {
 });
 
 describe('Rajada Glacial e lentidão em jogadores', () => {
-  it('magia de área: raio 2, recarga de 2 s e 50 de mana (-2 s, +1 sqm, o dobro de mana)', () => {
-    expect(GAME_DATA.spells.frost_burst).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 50 });
+  it('magia de área: raio 2, recarga de 2 s e 35 de mana (-2 s, +1 sqm, o dobro de mana)', () => {
+    expect(GAME_DATA.spells.frost_burst).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 35 });
   });
 
   it('um jogador/herói atingido (PK ligado) toma o dano e fica lento', () => {

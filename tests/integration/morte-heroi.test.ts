@@ -226,7 +226,7 @@ describe('delays fechados e Cura Intensa', () => {
         expect(allowed.has(i.use!.cooldownMs), `${i.id} ${i.use!.cooldownMs}`).toBe(true);
     const cura = GAME_DATA.spells.sap_blessing!;
     expect(cura.name).toBe('Cura Intensa I');
-    expect(cura.manaCost).toBe(80);
+    expect(cura.manaCost).toBe(56);
     expect(cura.partyRadius).toBe(12);
     expect(cura.buff).toBeUndefined();
     expect(GAME_DATA.spells.frost_burst!.cooldownMs).toBe(2000);

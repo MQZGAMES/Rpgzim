@@ -45,6 +45,19 @@ test('magias na caça', { timeout: 900_000 }, () => {
   }
   type Stat = { basic: number; aoe: number; single: number; other: number; manaPots: number; fightS: number; crowdS: number; manaSum: number; spells: Record<string, number> };
   const st = new Map<string, Stat>(heroes.map((h) => [h.id, { basic: 0, aoe: 0, single: 0, other: 0, manaPots: 0, fightS: 0, crowdS: 0, manaSum: 0, spells: {} }]));
+  let deaths = 0;
+  let lowS = 0;
+  let below70 = 0;
+  let healCasts = 0;
+  let druidHeals = 0;
+  for (const h of heroes) {
+    h.scope.events.on('playerDied', () => deaths++);
+    h.scope.events.on('spellCast', (e) => {
+      if (e.casterId !== h.id || w.data.spells[e.spellId]?.effect !== 'heal') return;
+      healCasts++;
+      if (h.character.vocation === 'druid') druidHeals++;
+    });
+  }
   for (const h of heroes) {
     const s = st.get(h.id)!;
     h.scope.events.on('attack', (e) => e.sourceId === h.id && s.basic++);
@@ -62,6 +75,8 @@ test('magias na caça', { timeout: 900_000 }, () => {
   for (let t = 0; t < minutes * 60 * 4; t++) {
     advance(sim, 250, 50);
     w.human.character.health = w.human.stats.maxHealth;
+    if (heroes.some((h) => !h.dead && h.character.health < h.stats.maxHealth * 0.5)) lowS += 0.25;
+    if (heroes.some((h) => !h.dead && h.character.health < h.stats.maxHealth * 0.7)) below70 += 0.25;
     for (const h of heroes) {
       if (!h.targetId || !w.monsters.has(h.targetId)) continue;
       const s = st.get(h.id)!;
@@ -76,5 +91,8 @@ test('magias na caça', { timeout: 900_000 }, () => {
     const top = Object.entries(s.spells).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ');
     return `${h.character.name.padEnd(12)} nv ${h.character.level} | luta ${Math.round(s.fightS)}s (2+ criaturas ${Math.round((s.crowdS / Math.max(1, s.fightS)) * 100)}%) mana média ${Math.round((s.manaSum / Math.max(1, s.fightS)) * 100)}% | básicos ${s.basic} magias área ${s.aoe} alvo ${s.single} (${((s.aoe + s.single) / Math.max(1, s.fightS / 60)).toFixed(1)}/min) | poções de mana ${s.manaPots} | ${top}`;
   });
-  process.stderr.write(`${group ? 'EM GRUPO' : 'SOZINHOS'} ${minutes} min, nível ${level}\n${lines.join('\n')}\n`);
+  process.stderr.write(
+    `${group ? 'EM GRUPO' : 'SOZINHOS'} ${minutes} min, nível ${level}\n${lines.join('\n')}\n` +
+      `GRUPO: mortes ${deaths} | alguém < 50% de vida ${Math.round(lowS)}s | alguém < 70% ${Math.round(below70)}s | curas no grupo ${healCasts} (Druid ${druidHeals})\n`,
+  );
 });
