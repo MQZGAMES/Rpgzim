@@ -3,6 +3,7 @@
 // Mais a temporada 2: XP pela metade, kit inicial com 50 poções de vida e de mana e o recomeço de todos os saves.
 import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../../src/data';
+import { difficulty } from '../../src/data/monsters';
 import { PLAYER_START } from '../../src/data/maps/world';
 import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
@@ -98,6 +99,13 @@ describe('reação humana', () => {
     const { sim, w, hs } = withHeroes(['boladex'], 15);
     const h = hs[0]!;
     const wolves = [...w.monsters.values()].filter((m) => m.def.id === 'wolf' && m.alive);
+    // só este lobo por perto: com as espécies misturadas, uma criatura mais forte ao lado fazia ele desistir da área
+    for (const m of w.monsters.values())
+      if (m !== wolves[0] && m.alive && Math.max(Math.abs(m.x - wolves[0]!.x), Math.abs(m.y - wolves[0]!.y)) <= 12) {
+        m.alive = false;
+        m.respawnAt = Infinity;
+        w.occupancy.delete(m.y * w.map.width + m.x);
+      }
     sim.teleportPlayer(...T(5, 5));
     asActor(w, h, () => sim.teleportPlayer(wolves[0]!.x - 3, wolves[0]!.y));
     h.brain.mode = 'hunt';
@@ -218,7 +226,8 @@ describe('conversa entre os heróis', () => {
 describe('temporada 2: XP pela metade e recomeço', () => {
   it('as criaturas dão metade da experiência', () => {
     expect(D.balance.creatures.xpRate).toBe(0.5);
-    expect(D.monsters.slime!.experience).toBe(Math.round(D.balance.creatures.baseExperience * 0.5));
+    // (vezes o prêmio de dificuldade do nível 1: criaturas mais fortes dão mais XP, ver difficulty em monsters.ts)
+    expect(D.monsters.slime!.experience).toBe(Math.round(D.balance.creatures.baseExperience * 0.5 * difficulty(1).reward));
   });
 
   it('todo personagem novo começa com o equipamento básico e 50 poções de vida e 50 de mana', () => {

@@ -1267,4 +1267,21 @@ export const CHARACTERS: CharacterSpec[] = [
     held: 'spear',
     ramps: { skin: P.goblin, hair: P.hairBlack, cloth: P.leather, accent: P.bone, pants: P.leather, boots: P.goblin, gear: P.gold },
   },
+  // ---- variedade dos biomas (nov/2026)
+  {
+    id: 'skeleton_archer',
+    head: 'skull',
+    body: 'tunic',
+    gear: 'bandana',
+    held: 'bow',
+    ramps: { skin: [...P.bone, P.white], hair: P.bone, cloth: P.leather.map((c) => mix(c, P.black, 0.25)), accent: P.leather, gear: P.green, pants: [...P.bone, P.white], boots: P.bone },
+  },
+  {
+    id: 'reaper',
+    head: 'skull',
+    body: 'robe',
+    gear: 'hood',
+    held: 'spear',
+    ramps: { skin: [...P.bone, P.white], hair: P.bone, cloth: P.stone.map((c) => mix(c, P.black, 0.6)), accent: P.purple, gear: P.stone.map((c) => mix(c, P.black, 0.7)), gearAccent: P.purple, boots: P.stone },
+  },
 ];

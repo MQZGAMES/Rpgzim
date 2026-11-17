@@ -7,7 +7,7 @@ import { PixelCanvas } from './lib/canvas.ts';
 import { gridSheet, packAtlas, type AtlasEntry } from './lib/atlas.ts';
 import { buildTileset } from './tiles.ts';
 import { CHARACTERS, FRAME_H, FRAME_W, buildCharacterSheet } from './characters.ts';
-import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBearFrames, buildBoarFrames, buildDragonFrames, buildIceWolfFrames, buildScorpionFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames, buildDireWolfFrames, buildElderBearFrames, buildRedScorpionFrames, buildBehemothFrames, buildIceDragonFrames, buildFireDrakeFrames, buildElderDragonFrames, buildVoidHorrorFrames, buildBogSlimeFrames, buildMagmaSlimeFrames, buildMarshToadFrames, buildCaveSpiderFrames, buildWidowSpiderFrames, buildHyenaFrames, buildStormWolfFrames, buildRhinoBoarFrames, buildCaveBearFrames, buildWyvernFrames, buildBasiliskFrames, buildCrystalScorpionFrames, buildJackalFrames, buildCrocodileFrames } from './monsters.ts';
+import { BOAR_H, BOAR_W, SLIME_H, SLIME_W, buildBearFrames, buildBoarFrames, buildDragonFrames, buildIceWolfFrames, buildScorpionFrames, buildSlimeFrames, buildSpiderFrames, buildToadFrames, buildWolfFrames, buildDireWolfFrames, buildElderBearFrames, buildRedScorpionFrames, buildBehemothFrames, buildIceDragonFrames, buildFireDrakeFrames, buildElderDragonFrames, buildVoidHorrorFrames, buildBogSlimeFrames, buildMagmaSlimeFrames, buildMarshToadFrames, buildCaveSpiderFrames, buildWidowSpiderFrames, buildHyenaFrames, buildStormWolfFrames, buildRhinoBoarFrames, buildCaveBearFrames, buildWyvernFrames, buildBasiliskFrames, buildCrystalScorpionFrames, buildJackalFrames, buildCrocodileFrames, buildFoxFrames, buildLionessFrames, buildGlacierWolfFrames, buildFieldSpiderFrames, buildJungleSpiderFrames, buildLeechFrames, buildPoisonToadFrames, buildLizardFrames, buildSwampGatorFrames, buildDesertLizardFrames, buildPolarBearFrames, buildRedWyvernFrames } from './monsters.ts';
 import { buildObjects } from './objects.ts';
 import { buildIcons } from './icons.ts';
 import { buildFx } from './fx.ts';
@@ -82,6 +82,19 @@ const monsterSheets: [string, PixelCanvas[], number, number, 'blob' | 'quad'][] 
   // biomas novos
   ['jackal', buildJackalFrames(), 32, 24, 'quad'],
   ['crocodile', buildCrocodileFrames(), 40, 26, 'quad'],
+  // variedade dos biomas (nov/2026)
+  ['fox', buildFoxFrames(), 32, 24, 'quad'],
+  ['lioness', buildLionessFrames(), 32, 24, 'quad'],
+  ['glacier_wolf', buildGlacierWolfFrames(), 32, 24, 'quad'],
+  ['field_spider', buildFieldSpiderFrames(), 28, 24, 'blob'],
+  ['jungle_spider', buildJungleSpiderFrames(), 28, 24, 'blob'],
+  ['leech', buildLeechFrames(), SLIME_W, SLIME_H, 'blob'],
+  ['poison_toad', buildPoisonToadFrames(), 24, 24, 'blob'],
+  ['lizard', buildLizardFrames(), 40, 26, 'quad'],
+  ['swamp_gator', buildSwampGatorFrames(), 40, 26, 'quad'],
+  ['desert_lizard', buildDesertLizardFrames(), 40, 26, 'quad'],
+  ['polar_bear', buildPolarBearFrames(), 36, 28, 'quad'],
+  ['red_wyvern', buildRedWyvernFrames(), 44, 34, 'quad'],
 ];
 for (const [key, frames, fw, fh, kind] of monsterSheets) {
   const file = `mon_${key}.png`;

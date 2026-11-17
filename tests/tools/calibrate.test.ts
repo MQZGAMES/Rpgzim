@@ -13,8 +13,10 @@ import { makeSim } from '../helpers';
 
 const SLOTS: EquipSlot[] = ['mainHand', 'offHand', 'head', 'body', 'legs', 'feet', 'ring', 'amulet'];
 
-export function idealHero(vocation: 'knight' | 'paladin' | 'sorcerer' | 'druid', level: number) {
-  const sim = makeSim(vocation, { seed: 5 });
+type Voc = 'knight' | 'paladin' | 'sorcerer' | 'druid';
+
+/** Herói "ideal" do nível (melhor equipamento disponível, skills típicas) dentro de uma simulação já criada. */
+function addIdealHero(sim: ReturnType<typeof makeSim>, vocation: Voc, level: number): HeroEntity {
   const w = sim.world;
   const hero = Object.values(GAME_DATA.heroes).find((d) => d.vocation === vocation)!;
   const c = createCharacter(GAME_DATA, { id: hero.slotId, name: hero.name, vocation, now: 0, position: w.map.playerStart });
@@ -34,7 +36,21 @@ export function idealHero(vocation: 'knight' | 'paladin' | 'sorcerer' | 'druid',
   c.inventory[0] = { itemId: GAME_DATA.items.potion_health_supreme ? 'potion_health_supreme' : 'potion_health', count: 8 };
   h.stats = computeStats(GAME_DATA, c);
   c.health = h.stats.maxHealth;
-  return { w, h };
+  return h;
+}
+
+export function idealHero(vocation: Voc, level: number) {
+  const sim = makeSim(vocation, { seed: 5 });
+  return { w: sim.world, h: addIdealHero(sim, vocation, level) };
+}
+
+/** Os quatro (Knight, Paladin, Sorcerer e Druid) ideais do nível, juntos num grupo de heróis. */
+export function idealParty(level: number) {
+  const sim = makeSim('knight', { seed: 5 });
+  const w = sim.world;
+  const hs = (['knight', 'paladin', 'sorcerer', 'druid'] as const).map((v) => addIdealHero(sim, v, level));
+  w.social.heroParties.push({ leaderId: hs[0]!.id, members: hs.map((h) => h.id), formation: 'free', targeting: 'nearest', friendlyFire: false, trail: [] });
+  return { w, hs };
 }
 
 const protos = (id: string, n: number) => Array.from({ length: n }, () => ({ def: GAME_DATA.monsters[id]!, hp: GAME_DATA.monsters[id]!.health }) as unknown as MonsterEntity);
@@ -51,6 +67,36 @@ test('calibração: margem por nível/criatura', () => {
       const row = mons.slice(0, 4).map((m) => `${m.id}(L${m.level}) ${fightMargin(w, h, protos(m.id, 3)).toFixed(2)}`);
       out.push(`L${String(L).padStart(3)} hp ${h.stats.maxHealth} arm ${h.stats.armor} ${h.stats.weapon.itemId} | ${row.join(' · ') || '-'}`);
     }
+  }
+  process.stderr.write(out.join('\n') + '\n');
+});
+
+/**
+ * Sozinho x em time (nov/2026): margem de cada espécie contra os heróis do nível dela, com os grupos pequenos do mapa
+ * (1 e 2 criaturas) e o time de 4 contra 2 e 3. Meta: até o anel 4 dá para caçar sozinho; no anel 5 (borda, nível 72+)
+ * ninguém aguenta sozinho (margem < 1) e o time de 4 aguenta. A margem do time é a do membro mais frágil.
+ */
+test('calibração: sozinho x em time', () => {
+  const out: string[] = ['espécie         nível | sozinho, 1 criatura (K P S D) | sozinho, 2 (K P S D) | time de 4: 2 e 3 (pior membro)'];
+  const mons = Object.values(GAME_DATA.monsters).sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
+  const solo = new Map<string, ReturnType<typeof idealHero>>();
+  const party = new Map<number, ReturnType<typeof idealParty>>();
+  const f = (v: number) => v.toFixed(1).padStart(5);
+  for (const m of mons) {
+    const L = m.level ?? 1;
+    const row1: string[] = [];
+    const row2: string[] = [];
+    for (const v of ['knight', 'paladin', 'sorcerer', 'druid'] as const) {
+      const key = `${v}:${L}`;
+      if (!solo.has(key)) solo.set(key, idealHero(v, L));
+      const { w, h } = solo.get(key)!;
+      row1.push(f(fightMargin(w, h, protos(m.id, 1))));
+      row2.push(f(fightMargin(w, h, protos(m.id, 2))));
+    }
+    if (!party.has(L)) party.set(L, idealParty(L));
+    const { w, hs } = party.get(L)!;
+    const team = (n: number) => Math.min(...hs.map((h) => fightMargin(w, h, protos(m.id, n))));
+    out.push(`${m.id.padEnd(16)} L${String(L).padStart(3)} |${row1.join('')} |${row2.join('')} | ${f(team(2))}${f(team(3))}`);
   }
   process.stderr.write(out.join('\n') + '\n');
 });

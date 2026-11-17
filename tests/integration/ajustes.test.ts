@@ -55,7 +55,15 @@ function openField(sim: GameSimulation): { x: number; y: number } {
         let ok = true;
         for (let k = -9; k <= 9 && ok; k++) ok = free(x + k, y);
         for (let k = -4; k <= 4 && ok; k++) ok = free(x, y + k);
-        if (ok && [...w.monsters.values()].every((m) => chebyshev(m, { x, y }) > 10)) return { x, y };
+        if (!ok) continue;
+        // as criaturas em volta saem de cena (o mapa tem um grupo a cada ~10 tiles): o teste controla quem luta
+        for (const m of w.monsters.values())
+          if (m.alive && chebyshev(m, { x, y }) <= 12) {
+            m.alive = false;
+            m.respawnAt = Infinity;
+            w.occupancy.delete(m.y * w.map.width + m.x);
+          }
+        return { x, y };
       }
   throw new Error('sem campo aberto');
 }

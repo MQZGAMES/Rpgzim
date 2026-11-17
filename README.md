@@ -586,16 +586,17 @@ Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
   bordas de caminhos, calçamento e água na cor de cada bioma, e **lava animada** (intransponível). Objetos novos:
   pinheiros com neve, árvores secas, acácias, árvores de pântano, cactos, rochas com neve, basalto com veios de lava,
   rochas vermelhas e cristais de gelo.
-- **Estradas** saem dos quatro portões e um **anel viário** (a 36 tiles da muralha) liga os braços. **Sem santuários**
-  desde a 2ª versão: a única área protegida é a vila (Templo e construções) — quem caça longe planeja a volta.
+- **Sem estradas** desde a 3ª versão (abaixo): fora da muralha é campo aberto, com um pátio livre na frente de cada
+  portão e uma placa no começo de cada anel. **Sem santuários** desde a 2ª versão: a única área protegida é a vila
+  (Templo e construções) — quem caça longe planeja a volta.
 - **Marcos**: Acampamento Goblin, Acampamento dos Bandidos, Toca do Yeti, Lago Congelado, Oásis Escondido, Ruínas do
   Faraó, Acampamento dos Senhores da Guerra, Lago de Lava e Cratera do Vulcão, Cemitério dos Reis, Cripta Profunda,
   Fortaleza Orc, Forte do Chefe Goblin (o chefe saiu da área de iniciante), Cidadela Sombria, Cripta do Lich, Covil do
   Dragão, Portal Infernal e Trono do Abismo.
-- **Criaturas por bioma**: 578 criaturas em 173 pontos (antes 255), cada espécie com 2–3 pontos de surgimento
-  espalhados pela zona; na mesma faixa de nível as direções dividem algumas espécies e têm outras próprias. **Seis
-  criaturas novas**: Chacal da Savana (9), Saqueador do Deserto (15), Crocodilo do Brejo (23), Múmia (34), Yeti (39) e
-  Colosso de Gelo (92).
+- **Criaturas por bioma**: 1.187 criaturas em 665 grupos pequenos espalhados pela zona inteira (3ª versão, abaixo), 4 a
+  6 espécies por zona; na mesma faixa de nível as direções dividem algumas espécies e têm outras próprias. Criaturas
+  dos biomas: Chacal da Savana (9), Saqueador do Deserto (15), Crocodilo do Brejo (23), Múmia (34), Yeti (39) e
+  Colosso de Gelo (92), mais as 14 da 3ª versão.
 - **Saves antigos**: a posição salva num mapa anterior volta ao templo (versão do mapa no save), sem perder nada.
 
 ### 2ª versão: área dobrada, sem santuários (nov/2026)
@@ -622,4 +623,22 @@ Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
   só nas magias que usam ML e "1 casa" no singular.
 - **Fala dos heróis**: "vou caçar X em Y" passa a dizer a zona certa (antes toda caça fora de um marco virava "Campos do
   Norte").
+
+### 3ª versão: sem estradas, o dobro de criaturas, mais espécies e criaturas mais fortes (nov/2026)
+- **Sem estradas nem trilhas** fora da muralha (as ruas da vila continuam). Na frente de cada portão fica um pátio livre
+  (nenhuma árvore ou pedra fecha a saída) e no começo de cada anel uma placa com a zona e a faixa de nível.
+- **O dobro de criaturas** (578 → 1.187) em **grupos menores** — 1 ou 2 até o anel 3, 1 a 3 no anel 4 e 2 ou 3 na borda
+  (antes 3 ou 4 por ponto) — espalhados pela zona inteira (um grupo a cada ~10 tiles; antes ficavam juntos em poucos
+  pontos). As espécies de marco (acampamentos, ruínas, covis) continuam em volta do marco.
+- **14 espécies novas**, para cada zona ter 4 a 6 criaturas diferentes (antes 2 a 4): Aranha do Capim (1), Raposa
+  Vermelha (3), Lagarto do Campo (5), Sanguessuga do Brejo (5), Esqueleto Arqueiro (15), Jacaré do Pântano (15), Leoa
+  da Savana (18), Sapo Venenoso (26), Aranha da Selva (28), Lagarto das Dunas (31), Urso Polar (34), Serpe Rubra (55),
+  Lobo Glacial (58) e Ceifador (87). Usam os corpos existentes com paleta, marcas e tamanho próprios; o loot vem de uma
+  espécie parecida da mesma faixa. As zonas também misturam espécies das vizinhas.
+- **Criaturas mais fortes**: vida e ataque ×1,15 no começo, crescendo até ×1,5 no nível 70. **Na borda do mundo** (nível
+  72+) sobem até ×2,2 de vida e ×2,6 de ataque: um personagem do mesmo nível precisa de time; um mais forte (nível ou
+  equipamento acima) consegue sozinho. XP e ouro crescem junto (vida × √ataque): ×1,24 no começo, ×1,8 no nível 70 e
+  ×3,5 na borda (dividida pelo time).
+- **Desempenho**: as criaturas ganham desenho, nome e barra só quando aparecem na tela pela primeira vez; com o dobro de
+  criaturas o jogo usa menos memória que antes (73 MB contra 76 MB) e continua a 60 FPS no desktop.
 

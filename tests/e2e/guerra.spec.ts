@@ -3,7 +3,8 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  // limpeza numa página do site que não carrega o jogo (ver o beforeEach de game.spec.ts)
+  await page.goto('/favicon.png');
   await page.evaluate(async () => {
     localStorage.clear();
     await new Promise<void>((res) => {

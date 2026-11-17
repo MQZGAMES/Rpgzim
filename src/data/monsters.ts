@@ -65,15 +65,31 @@ function tierPower(t: number): { hp: number; atk: number; xp: number; gold: numb
   };
 }
 
+/**
+ * Dificuldade (nov/2026, 2ª leva): todas as criaturas ficaram mais fortes e as da borda do mundo (nível 72+, o anel
+ * mais distante) muito mais — são para time. Vida e ataque: ×1,15 no começo, crescendo até ×1,5 no nível 70; dali até o
+ * nível 80 sobem para ×2,2 de vida e ×2,6 de ataque. XP e ouro: vida × √ataque — o tempo para matar mais um prêmio
+ * pelo risco (mais poção, mais fuga, mais idas à vila); na borda a XP é ×3,5, dividida pelo time.
+ */
+export function difficulty(level: number): { hp: number; atk: number; reward: number } {
+  const base = 1.15 + 0.35 * Math.min(1, level / 70);
+  const edge = Math.max(0, Math.min(1, (level - 70) / 10));
+  const hp = base + 0.7 * edge;
+  const atk = base + 1.1 * edge;
+  return { hp, atk, reward: hp * Math.sqrt(atk) };
+}
+
 function build(s: Species): MonsterDef {
   const c = BALANCE.creatures;
   const f = (s.tier >= 4 ? STEP_LATE : STEP)[s.step] * (s.elite ?? 1);
   const pw = tierPower(s.tier);
-  const hp = Math.round(c.baseHealth * pw.hp * f);
+  const level = TIER_LEVEL[s.tier]! + s.step * (s.tier === 0 ? 2 : 3);
+  const hard = difficulty(level);
+  const hp = Math.round(c.baseHealth * pw.hp * f * hard.hp);
   // dano elemental ignora a armadura: nas faixas tardias (onde a armadura vale muito) ele é menor que o físico
   const elemental = s.tier >= 4 && s.attack.element !== 'physical' ? LATE_ELEMENTAL : 1;
-  const atk = c.baseAttack * pw.atk * f * elemental;
-  const goldAvg = c.baseGold * pw.gold * (s.tier >= 4 ? STEP_LATE : STEP)[s.step] * (s.elite ? 4 : 1);
+  const atk = c.baseAttack * pw.atk * f * elemental * hard.atk;
+  const goldAvg = c.baseGold * pw.gold * (s.tier >= 4 ? STEP_LATE : STEP)[s.step] * (s.elite ? 4 : 1) * hard.reward;
   return {
     id: s.id,
     name: s.name,
@@ -81,7 +97,7 @@ function build(s: Species): MonsterDef {
     sprite: s.sprite,
     directions: s.directions,
     health: hp,
-    experience: Math.max(1, Math.round(c.baseExperience * pw.xp * f * (c.xpRate ?? 1))),
+    experience: Math.max(1, Math.round(c.baseExperience * pw.xp * f * (c.xpRate ?? 1) * hard.reward)),
     // ritmo de celular: criaturas um pouco mais lentas que o jogador (dá para fugir e se posicionar)
     speed: Math.round(s.speed * c.speedScale * 100) / 100,
     armor: Math.round(1 + s.tier * 3 + s.step),
@@ -101,7 +117,7 @@ function build(s: Species): MonsterDef {
     respawnMs: s.respawnMs,
     shadow: s.shadow,
     scale: s.scale,
-    level: TIER_LEVEL[s.tier]! + s.step * (s.tier === 0 ? 2 : 3),
+    level,
     elite: !!s.elite,
   };
 }

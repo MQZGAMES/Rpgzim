@@ -9,9 +9,12 @@
 //   4     77–103   44–71     Geleira Eterna        Dunas Rubras           Pântano Corrompido      Charneca das Presas
 //   5     104–138  72–103    Pico do Inverno       Vulcão Adormecido      Necrópole Esquecida     Abismo Primordial
 //
-// Estradas saem dos quatro portões e um anel viário liga os braços. Entre os braços, nos anéis externos, cristas de
-// pedra (com passagens) separam os biomas. A única área protegida fora das construções da vila é o Templo: não há
-// santuários no caminho (2ª versão, nov/2026) — quem caça longe precisa planejar a volta.
+// Sem estradas (nov/2026, 3ª versão): fora da muralha o mundo é campo aberto; só um pátio livre na frente de cada
+// portão. Entre os braços, nos anéis externos, cristas de pedra (com passagens) separam os biomas. A única área
+// protegida fora das construções da vila é o Templo: não há santuários no caminho — quem caça longe planeja a volta.
+//
+// Criaturas (3ª versão): o dobro (1.156), em grupos pequenos (1–2 até o anel 3, 1–3 no anel 4 e 2–3 na borda)
+// espalhados pela zona inteira, e 4 a 6 espécies por zona.
 import { Biome, Terrain, type MapBuilder } from '../../game/world/MapBuilder';
 import { MONSTERS } from '../monsters';
 import {
@@ -33,12 +36,14 @@ type Pt = { x: number; y: number };
 
 interface SpawnSpec {
   monster: string;
-  /** Pontos de surgimento (padrão 3) e criaturas por ponto (padrão 3 até o anel 3, 4 nos anéis 4 e 5). */
-  points?: number;
-  count?: number;
-  radius?: number;
+  /** Parte das criaturas da zona que é desta espécie (padrão 1; as de marco usam `points`). */
+  weight?: number;
   /** Surge em volta deste marco (acampamento, ruína, covil), em vez de espalhado pela zona. */
   near?: Pt;
+  /** Pontos de surgimento em volta do marco (padrão 4). */
+  points?: number;
+  /** Tamanho do grupo [mín, máx] (padrão: o do anel). */
+  group?: readonly [number, number];
 }
 
 interface ZoneSpec {
@@ -71,49 +76,31 @@ const BORDER: Record<Sector, readonly string[]> = {
   W: ['rock_medium', 'tree_dead_b', 'rock_basalt'],
 };
 
-// ------------------------------------------------------------------ estradas
+// ------------------------------------------------------------------ portões
+/** Os portões na linha da muralha. Sem estradas: na frente de cada um fica só um pátio livre (nada de árvore ou pedra). */
 const GATE = {
   N: { x: TOWN_BOX.x0 + 22, y: TOWN_BOX.y0 },
   S: { x: TOWN_BOX.x0 + 35, y: TOWN_BOX.y1 },
   E: { x: TOWN_BOX.x1, y: TOWN_BOX.y0 + 20 },
   W: { x: TOWN_BOX.x0, y: TOWN_BOX.y0 + 20 },
 } as const;
+const GATE_YARDS = [
+  { x: GATE.N.x - 4, y: GATE.N.y - 10, w: 9, h: 8 },
+  { x: GATE.S.x - 4, y: GATE.S.y + 3, w: 9, h: 8 },
+  { x: GATE.E.x + 3, y: GATE.E.y - 4, w: 8, h: 9 },
+  { x: GATE.W.x - 10, y: GATE.W.y - 4, w: 8, h: 9 },
+] as const;
 
-const ROADS: readonly (readonly [number, number][])[] = [
-  // norte: do portão, desvia para o meio do braço e sobe reto
-  [[GATE.N.x, GATE.N.y], [GATE.N.x, GATE.N.y - 6], [TOWN_CX, GATE.N.y - 16], [TOWN_CX, 4]],
-  // sul: reto
-  [[GATE.S.x, GATE.S.y], [GATE.S.x, WORLD_H - 4]],
-  // leste e oeste: do portão (avenida), descem para o meio do braço
-  [[GATE.E.x, GATE.E.y], [GATE.E.x + 8, GATE.E.y], [GATE.E.x + 18, TOWN_CY], [WORLD_W - 4, TOWN_CY]],
-  [[GATE.W.x, GATE.W.y], [GATE.W.x - 8, GATE.W.y], [GATE.W.x - 18, TOWN_CY], [4, TOWN_CY]],
+/** Criaturas por anel (somando as quatro direções): o dobro da 2ª versão. */
+const RING_CREATURES = [144, 216, 236, 268, 292] as const;
+/** Tamanho dos grupos [mín, máx] por anel: pequenos, para preencher o mapa (antes 3 ou 4 por ponto). */
+const RING_GROUP: readonly (readonly [number, number])[] = [
+  [1, 2],
+  [1, 2],
+  [1, 2],
+  [1, 3],
+  [2, 3],
 ];
-/** Anel viário a 36 tiles da muralha (meio do anel 2): liga os quatro braços sem passar pela vila. */
-const RING_ROAD_D = 36;
-const RING_ROAD: readonly [number, number][] = [
-  [TOWN_BOX.x0 - RING_ROAD_D, TOWN_BOX.y0 - RING_ROAD_D],
-  [TOWN_BOX.x1 + RING_ROAD_D, TOWN_BOX.y0 - RING_ROAD_D],
-  [TOWN_BOX.x1 + RING_ROAD_D, TOWN_BOX.y1 + RING_ROAD_D],
-  [TOWN_BOX.x0 - RING_ROAD_D, TOWN_BOX.y1 + RING_ROAD_D],
-  [TOWN_BOX.x0 - RING_ROAD_D, TOWN_BOX.y0 - RING_ROAD_D],
-];
-
-function segDist(p: Pt, a: readonly [number, number], b: readonly [number, number]): number {
-  const [ax, ay] = a;
-  const [bx, by] = b;
-  const vx = bx - ax;
-  const vy = by - ay;
-  const len = vx * vx + vy * vy || 1;
-  const t = Math.max(0, Math.min(1, ((p.x - ax) * vx + (p.y - ay) * vy) / len));
-  return Math.hypot(p.x - (ax + vx * t), p.y - (ay + vy * t));
-}
-/** Distância até as estradas dos braços e até o anel viário (que conta como 2 tiles mais longe: é só uma trilha). */
-function roadDist(p: Pt): number {
-  let best = Infinity;
-  for (const r of ROADS) for (let i = 0; i < r.length - 1; i++) best = Math.min(best, segDist(p, r[i]!, r[i + 1]!));
-  for (let i = 0; i < RING_ROAD.length - 1; i++) best = Math.min(best, segDist(p, RING_ROAD[i]!, RING_ROAD[i + 1]!) + 2);
-  return best;
-}
 
 // ------------------------------------------------------------------ marcos (acampamentos, ruínas, lagos, covis)
 // `d` em tiles da muralha (ver os anéis no topo) e `t` de −1 a 1 de lado a lado do braço; na área dobrada cada marco
@@ -161,29 +148,29 @@ const M = {
 // ------------------------------------------------------------------ zonas
 const ZONES: ZoneSpec[] = [
   // ---- norte (gelo)
-  { id: 'north_fields', name: 'Campos do Norte', sector: 'N', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'tree_pine', 'bush', 'rock_small'], propDensity: 0.06, decor: ['decor_flowers_white', 'decor_tallgrass', 'decor_pebbles'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'boar' }] },
-  { id: 'taiga', name: 'Taiga dos Pinheiros', sector: 'N', ring: 1, biome: Biome.Grass, dark: true, props: ['tree_pine', 'tree_pine_b', 'tree_pine', 'tree_pine_snow', 'bush_dark'], propDensity: 0.15, decor: ['decor_leaves', 'decor_mushrooms', 'decor_pebbles'], decorDensity: 0.07, species: [{ monster: 'wolf' }, { monster: 'bandit', near: M.banditCamp }, { monster: 'bear' }] },
-  { id: 'tundra', name: 'Tundra Uivante', sector: 'N', ring: 2, biome: Biome.Snow, props: ['tree_pine_snow', 'tree_pine_snow_b', 'rock_snow', 'tree_dead'], propDensity: 0.08, decor: ['decor_snow_tuft', 'decor_ice_crack'], decorDensity: 0.07, species: [{ monster: 'ice_wolf' }, { monster: 'cave_bear' }, { monster: 'yeti', near: M.yetiDen }] },
-  { id: 'glacier', name: 'Geleira Eterna', sector: 'N', ring: 3, biome: Biome.Snow, props: ['tree_pine_snow_b', 'rock_snow', 'crystal_ice', 'rock_snow_large'], propDensity: 0.05, decor: ['decor_ice_crack', 'decor_snow_tuft'], decorDensity: 0.06, species: [{ monster: 'elder_bear' }, { monster: 'ice_dragon', near: M.frozenLake }, { monster: 'wraith', near: M.glacierCrystals }] },
-  { id: 'peak', name: 'Pico do Inverno', sector: 'N', ring: 4, biome: Biome.Snow, dark: true, props: ['rock_snow', 'crystal_ice', 'rock_snow_large', 'crystal_ice'], propDensity: 0.05, decor: ['decor_snow_tuft', 'decor_ice_crack'], decorDensity: 0.05, species: [{ monster: 'storm_wolf' }, { monster: 'crystal_scorpion', near: M.peakCrystals }, { monster: 'frost_colossus' }] },
+  { id: 'north_fields', name: 'Campos do Norte', sector: 'N', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'tree_pine', 'bush', 'rock_small'], propDensity: 0.06, decor: ['decor_flowers_white', 'decor_tallgrass', 'decor_pebbles'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'field_spider' }, { monster: 'fox' }, { monster: 'boar' }] },
+  { id: 'taiga', name: 'Taiga dos Pinheiros', sector: 'N', ring: 1, biome: Biome.Grass, dark: true, props: ['tree_pine', 'tree_pine_b', 'tree_pine', 'tree_pine_snow', 'bush_dark'], propDensity: 0.15, decor: ['decor_leaves', 'decor_mushrooms', 'decor_pebbles'], decorDensity: 0.07, species: [{ monster: 'wolf' }, { monster: 'spider' }, { monster: 'cave_spider' }, { monster: 'bandit', near: M.banditCamp }, { monster: 'bear' }] },
+  { id: 'tundra', name: 'Tundra Uivante', sector: 'N', ring: 2, biome: Biome.Snow, props: ['tree_pine_snow', 'tree_pine_snow_b', 'rock_snow', 'tree_dead'], propDensity: 0.08, decor: ['decor_snow_tuft', 'decor_ice_crack'], decorDensity: 0.07, species: [{ monster: 'ice_wolf' }, { monster: 'cave_bear' }, { monster: 'polar_bear' }, { monster: 'troll' }, { monster: 'yeti', near: M.yetiDen }] },
+  { id: 'glacier', name: 'Geleira Eterna', sector: 'N', ring: 3, biome: Biome.Snow, props: ['tree_pine_snow_b', 'rock_snow', 'crystal_ice', 'rock_snow_large'], propDensity: 0.05, decor: ['decor_ice_crack', 'decor_snow_tuft'], decorDensity: 0.06, species: [{ monster: 'dire_wolf' }, { monster: 'elder_bear' }, { monster: 'glacier_wolf' }, { monster: 'ice_dragon', near: M.frozenLake }, { monster: 'wraith', near: M.glacierCrystals }] },
+  { id: 'peak', name: 'Pico do Inverno', sector: 'N', ring: 4, biome: Biome.Snow, dark: true, props: ['rock_snow', 'crystal_ice', 'rock_snow_large', 'crystal_ice'], propDensity: 0.05, decor: ['decor_snow_tuft', 'decor_ice_crack'], decorDensity: 0.05, species: [{ monster: 'storm_wolf' }, { monster: 'stone_golem' }, { monster: 'crystal_scorpion', near: M.peakCrystals }, { monster: 'frost_colossus' }] },
   // ---- leste (sol)
-  { id: 'east_fields', name: 'Campos do Leste', sector: 'E', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'tree_oak_b', 'bush', 'bush_berry'], propDensity: 0.07, decor: ['decor_flowers_yellow', 'decor_tallgrass', 'decor_pebbles'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'goblin', near: M.goblinCamp }] },
-  { id: 'savanna', name: 'Savana Dourada', sector: 'E', ring: 1, biome: Biome.Dry, props: ['tree_acacia', 'bush', 'rock_small', 'tree_acacia'], propDensity: 0.04, decor: ['decor_dry_tuft', 'decor_pebbles'], decorDensity: 0.09, species: [{ monster: 'jackal' }, { monster: 'nomad' }, { monster: 'orc', near: M.orcCamp }] },
-  { id: 'desert', name: 'Mar de Areia', sector: 'E', ring: 2, biome: Biome.Sand, props: ['cactus', 'cactus_b', 'rock_small', 'rock_red'], propDensity: 0.035, decor: ['decor_sand_stones', 'decor_skull'], decorDensity: 0.05, species: [{ monster: 'scorpion' }, { monster: 'hyena' }, { monster: 'rhino_boar' }, { monster: 'mummy', near: M.pharaohRuins }] },
-  { id: 'red_dunes', name: 'Dunas Rubras', sector: 'E', ring: 3, biome: Biome.Sand, dark: true, props: ['rock_red', 'rock_red_large', 'cactus_b', 'tree_dead'], propDensity: 0.045, decor: ['decor_sand_stones', 'decor_skull', 'decor_crack'], decorDensity: 0.05, species: [{ monster: 'red_scorpion' }, { monster: 'orc_warlord', near: M.warCamp }, { monster: 'basilisk' }] },
-  { id: 'volcano', name: 'Vulcão Adormecido', sector: 'E', ring: 4, biome: Biome.Ash, props: ['rock_basalt', 'rock_basalt_large', 'tree_dead_b', 'rock_basalt'], propDensity: 0.05, decor: ['decor_ember', 'decor_crack'], decorDensity: 0.07, species: [{ monster: 'behemoth' }, { monster: 'fire_drake', near: M.lavaLake }, { monster: 'stone_golem', near: M.crater }, { monster: 'magma_slime' }] },
+  { id: 'east_fields', name: 'Campos do Leste', sector: 'E', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'tree_oak_b', 'bush', 'bush_berry'], propDensity: 0.07, decor: ['decor_flowers_yellow', 'decor_tallgrass', 'decor_pebbles'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'field_spider' }, { monster: 'lizard' }, { monster: 'goblin', near: M.goblinCamp }] },
+  { id: 'savanna', name: 'Savana Dourada', sector: 'E', ring: 1, biome: Biome.Dry, props: ['tree_acacia', 'bush', 'rock_small', 'tree_acacia'], propDensity: 0.04, decor: ['decor_dry_tuft', 'decor_pebbles'], decorDensity: 0.09, species: [{ monster: 'jackal' }, { monster: 'nomad' }, { monster: 'bandit' }, { monster: 'lioness' }, { monster: 'orc', near: M.orcCamp }] },
+  { id: 'desert', name: 'Mar de Areia', sector: 'E', ring: 2, biome: Biome.Sand, props: ['cactus', 'cactus_b', 'rock_small', 'rock_red'], propDensity: 0.035, decor: ['decor_sand_stones', 'decor_skull'], decorDensity: 0.05, species: [{ monster: 'scorpion' }, { monster: 'hyena' }, { monster: 'rhino_boar' }, { monster: 'desert_lizard' }, { monster: 'mummy', near: M.pharaohRuins }] },
+  { id: 'red_dunes', name: 'Dunas Rubras', sector: 'E', ring: 3, biome: Biome.Sand, dark: true, props: ['rock_red', 'rock_red_large', 'cactus_b', 'tree_dead'], propDensity: 0.045, decor: ['decor_sand_stones', 'decor_skull', 'decor_crack'], decorDensity: 0.05, species: [{ monster: 'ogre' }, { monster: 'red_wyvern' }, { monster: 'red_scorpion' }, { monster: 'orc_warlord', near: M.warCamp }, { monster: 'basilisk' }] },
+  { id: 'volcano', name: 'Vulcão Adormecido', sector: 'E', ring: 4, biome: Biome.Ash, props: ['rock_basalt', 'rock_basalt_large', 'tree_dead_b', 'rock_basalt'], propDensity: 0.05, decor: ['decor_ember', 'decor_crack'], decorDensity: 0.07, species: [{ monster: 'behemoth' }, { monster: 'fire_drake', near: M.lavaLake }, { monster: 'stone_golem', near: M.crater }, { monster: 'magma_slime' }, { monster: 'demon' }] },
   // ---- sul (água)
-  { id: 'marsh_edge', name: 'Margem do Pântano', sector: 'S', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'bush', 'tree_swamp', 'bush_dark'], propDensity: 0.07, decor: ['decor_reeds', 'decor_flowers_blue', 'decor_tallgrass'], decorDensity: 0.08, species: [{ monster: 'toad' }, { monster: 'bog_slime' }] },
-  { id: 'swamp', name: 'Pântano Sombrio', sector: 'S', ring: 1, biome: Biome.Mud, props: ['tree_swamp', 'bush_dark', 'tree_dead', 'tree_swamp'], propDensity: 0.11, decor: ['decor_mud_bubbles', 'decor_reeds', 'decor_mushrooms'], decorDensity: 0.08, species: [{ monster: 'marsh_toad' }, { monster: 'cave_spider' }, { monster: 'widow_spider' }] },
-  { id: 'jungle', name: 'Selva Alagada', sector: 'S', ring: 2, biome: Biome.Grass, dark: true, props: ['tree_swamp', 'tree_forest', 'bush_dark', 'tree_swamp'], propDensity: 0.16, decor: ['decor_mushrooms', 'decor_leaves', 'decor_reeds'], decorDensity: 0.07, species: [{ monster: 'crocodile', near: M.jungleLake }, { monster: 'green_wyvern' }, { monster: 'troll' }] },
-  { id: 'corrupt_swamp', name: 'Pântano Corrompido', sector: 'S', ring: 3, biome: Biome.Mud, dark: true, props: ['tree_dead', 'tree_dead_b', 'tree_swamp', 'bush_dark'], propDensity: 0.09, decor: ['decor_mud_bubbles', 'decor_skull'], decorDensity: 0.06, species: [{ monster: 'ogre' }, { monster: 'skeleton_knight' }, { monster: 'basilisk' }] },
-  { id: 'necropolis', name: 'Necrópole Esquecida', sector: 'S', ring: 4, biome: Biome.Ash, dark: true, props: ['tree_dead_b', 'rock_basalt', 'rock_medium', 'tree_dead'], propDensity: 0.05, decor: ['decor_skull', 'decor_ember', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'death_knight', near: M.necropolis }, { monster: 'arch_lich', near: M.crypt }, { monster: 'void_horror' }] },
+  { id: 'marsh_edge', name: 'Margem do Pântano', sector: 'S', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'bush', 'tree_swamp', 'bush_dark'], propDensity: 0.07, decor: ['decor_reeds', 'decor_flowers_blue', 'decor_tallgrass'], decorDensity: 0.08, species: [{ monster: 'toad' }, { monster: 'leech' }, { monster: 'lizard' }, { monster: 'bog_slime' }] },
+  { id: 'swamp', name: 'Pântano Sombrio', sector: 'S', ring: 1, biome: Biome.Mud, props: ['tree_swamp', 'bush_dark', 'tree_dead', 'tree_swamp'], propDensity: 0.11, decor: ['decor_mud_bubbles', 'decor_reeds', 'decor_mushrooms'], decorDensity: 0.08, species: [{ monster: 'marsh_toad' }, { monster: 'cave_spider' }, { monster: 'skeleton_archer' }, { monster: 'swamp_gator' }, { monster: 'widow_spider' }] },
+  { id: 'jungle', name: 'Selva Alagada', sector: 'S', ring: 2, biome: Biome.Grass, dark: true, props: ['tree_swamp', 'tree_forest', 'bush_dark', 'tree_swamp'], propDensity: 0.16, decor: ['decor_mushrooms', 'decor_leaves', 'decor_reeds'], decorDensity: 0.07, species: [{ monster: 'crocodile', near: M.jungleLake }, { monster: 'poison_toad' }, { monster: 'jungle_spider' }, { monster: 'green_wyvern' }, { monster: 'troll' }] },
+  { id: 'corrupt_swamp', name: 'Pântano Corrompido', sector: 'S', ring: 3, biome: Biome.Mud, dark: true, props: ['tree_dead', 'tree_dead_b', 'tree_swamp', 'bush_dark'], propDensity: 0.09, decor: ['decor_mud_bubbles', 'decor_skull'], decorDensity: 0.06, species: [{ monster: 'ogre' }, { monster: 'skeleton_knight' }, { monster: 'basilisk' }, { monster: 'wraith' }] },
+  { id: 'necropolis', name: 'Necrópole Esquecida', sector: 'S', ring: 4, biome: Biome.Ash, dark: true, props: ['tree_dead_b', 'rock_basalt', 'rock_medium', 'tree_dead'], propDensity: 0.05, decor: ['decor_skull', 'decor_ember', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'death_knight', near: M.necropolis }, { monster: 'reaper' }, { monster: 'demon' }, { monster: 'arch_lich', near: M.crypt }, { monster: 'void_horror' }] },
   // ---- oeste (montanhas)
-  { id: 'green_hills', name: 'Colinas Verdes', sector: 'W', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'rock_small', 'rock_medium', 'bush'], propDensity: 0.07, decor: ['decor_pebbles', 'decor_flowers_pink', 'decor_tallgrass'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'boar' }] },
-  { id: 'ancient_ruins', name: 'Ruínas Antigas', sector: 'W', ring: 1, biome: Biome.Grass, props: ['tree_forest', 'rock_medium', 'rock_large', 'bush_dark'], propDensity: 0.09, decor: ['decor_pebbles', 'decor_crack', 'decor_leaves'], decorDensity: 0.07, species: [{ monster: 'wolf' }, { monster: 'skeleton', near: M.ruins }, { monster: 'spider', near: M.ruins2 }] },
-  { id: 'iron_mountains', name: 'Montanhas de Ferro', sector: 'W', ring: 2, biome: Biome.Grass, dark: true, props: ['rock_large', 'rock_large_b', 'rock_medium', 'tree_pine'], propDensity: 0.1, decor: ['decor_pebbles', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'goblin_chief', points: 1, count: 1, radius: 2, near: M.goblinWarCamp }, { monster: 'orc_shaman', near: M.orcFort }, { monster: 'dark_knight', near: M.citadel }, { monster: 'lich', near: M.lichCrypt }] },
-  { id: 'heath', name: 'Charneca das Presas', sector: 'W', ring: 3, biome: Biome.Dry, dark: true, props: ['rock_medium', 'bush_dark', 'tree_dead', 'rock_large_b'], propDensity: 0.07, decor: ['decor_dry_tuft', 'decor_pebbles', 'decor_skull'], decorDensity: 0.06, species: [{ monster: 'young_dragon', points: 2, count: 1, radius: 3, near: M.dragonLair }, { monster: 'dire_wolf' }, { monster: 'ogre' }] },
-  { id: 'abyss', name: 'Abismo Primordial', sector: 'W', ring: 4, biome: Biome.Ash, dark: true, props: ['rock_basalt', 'rock_basalt_large', 'tree_dead_b', 'rock_basalt'], propDensity: 0.06, decor: ['decor_ember', 'decor_skull', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'demon', near: M.infernalPortal }, { monster: 'elder_dragon', points: 2, count: 1, radius: 3, near: M.abyssRuins }, { monster: 'void_horror' }] },
+  { id: 'green_hills', name: 'Colinas Verdes', sector: 'W', ring: 0, biome: Biome.Grass, props: ['tree_oak', 'rock_small', 'rock_medium', 'bush'], propDensity: 0.07, decor: ['decor_pebbles', 'decor_flowers_pink', 'decor_tallgrass'], decorDensity: 0.06, species: [{ monster: 'slime' }, { monster: 'field_spider' }, { monster: 'fox' }, { monster: 'boar' }] },
+  { id: 'ancient_ruins', name: 'Ruínas Antigas', sector: 'W', ring: 1, biome: Biome.Grass, props: ['tree_forest', 'rock_medium', 'rock_large', 'bush_dark'], propDensity: 0.09, decor: ['decor_pebbles', 'decor_crack', 'decor_leaves'], decorDensity: 0.07, species: [{ monster: 'wolf' }, { monster: 'skeleton', near: M.ruins }, { monster: 'spider', near: M.ruins2 }, { monster: 'skeleton_archer' }, { monster: 'bear' }] },
+  { id: 'iron_mountains', name: 'Montanhas de Ferro', sector: 'W', ring: 2, biome: Biome.Grass, dark: true, props: ['rock_large', 'rock_large_b', 'rock_medium', 'tree_pine'], propDensity: 0.1, decor: ['decor_pebbles', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'orc' }, { monster: 'cave_bear' }, { monster: 'goblin_chief', points: 1, group: [1, 1], near: M.goblinWarCamp }, { monster: 'orc_shaman', near: M.orcFort }, { monster: 'dark_knight', near: M.citadel }, { monster: 'lich', near: M.lichCrypt }] },
+  { id: 'heath', name: 'Charneca das Presas', sector: 'W', ring: 3, biome: Biome.Dry, dark: true, props: ['rock_medium', 'bush_dark', 'tree_dead', 'rock_large_b'], propDensity: 0.07, decor: ['decor_dry_tuft', 'decor_pebbles', 'decor_skull'], decorDensity: 0.06, species: [{ monster: 'young_dragon', points: 2, group: [1, 1], near: M.dragonLair }, { monster: 'dire_wolf' }, { monster: 'ogre' }, { monster: 'skeleton_knight' }, { monster: 'orc_warlord' }] },
+  { id: 'abyss', name: 'Abismo Primordial', sector: 'W', ring: 4, biome: Biome.Ash, dark: true, props: ['rock_basalt', 'rock_basalt_large', 'tree_dead_b', 'rock_basalt'], propDensity: 0.06, decor: ['decor_ember', 'decor_skull', 'decor_crack'], decorDensity: 0.06, species: [{ monster: 'behemoth' }, { monster: 'death_knight' }, { monster: 'demon', near: M.infernalPortal }, { monster: 'elder_dragon', points: 2, group: [1, 1], near: M.abyssRuins }, { monster: 'void_horror' }] },
 ];
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -230,7 +217,7 @@ export function buildBiomes(b: MapBuilder): void {
   // a região da zona vale para o mapa todo (a forma é livre: quem decide é a tabela); só a passada fica no retângulo
   for (const [i, z] of ZONES.entries())
     b.zoneRegion({ id: z.id, name: z.name, x: 0, y: 0, w: WORLD_W, h: WORLD_H, pz: false, music: 'wild', priority: 1 }, inZone(z), box[i]);
-  roads(b);
+  gateYards(b);
   landmarks(b);
   ridges(b);
   b.forestBorder(3, (x, y) => BORDER[sectorAt(x, y) ?? 'N']);
@@ -254,16 +241,18 @@ function paintBiomes(b: MapBuilder): void {
   });
 }
 
-function roads(b: MapBuilder): void {
-  for (const r of ROADS) b.path(r as [number, number][], 3);
-  b.path(RING_ROAD as [number, number][], 2);
-  // placas no começo de cada anel, à beira da estrada
+/**
+ * Sem estradas: na frente de cada portão fica um pátio livre (nenhuma árvore ou pedra fecha a saída da vila) e, no
+ * começo de cada anel, uma placa no meio do braço dizendo a zona e a faixa de nível.
+ */
+function gateYards(b: MapBuilder): void {
+  for (const r of GATE_YARDS) b.reserve(r);
   for (const s of ['N', 'E', 'S', 'W'] as const)
     for (let r = 1; r < RINGS.length; r++) {
       const z = ZONES.find((zz) => zz.sector === s && zz.ring === r)!;
       const p = armPoint(s, RINGS[r]!.d0 + 1, 0);
-      const road = s === 'N' ? { x: TOWN_CX, y: p.y } : s === 'S' ? { x: GATE.S.x, y: p.y } : { x: p.x, y: TOWN_CY };
-      const sign = s === 'N' || s === 'S' ? { x: road.x - 3, y: road.y } : { x: road.x, y: road.y - 3 };
+      const mid = s === 'N' ? { x: TOWN_CX, y: p.y } : s === 'S' ? { x: GATE.S.x, y: p.y } : { x: p.x, y: TOWN_CY };
+      const sign = s === 'N' || s === 'S' ? { x: mid.x - 3, y: mid.y } : { x: mid.x, y: mid.y - 3 };
       const [lo, hi] = RINGS[r]!.levels;
       b.propAbs('sign', sign.x, sign.y, { soft: true });
       b.signs.push({ ...sign, text: `${z.name} — criaturas do nível ${lo} ao ${hi}. Quanto mais longe da vila, mais perigoso.` });
@@ -389,16 +378,19 @@ function landmarks(b: MapBuilder): void {
 
 // ------------------------------------------------------------------ criaturas
 /**
- * Pontos de surgimento de cada espécie da zona: a zona é dividida em faixas de distância, da espécie mais fraca (mais
- * perto da vila) para a mais forte (mais longe). Os pontos ficam afastados das estradas, da água e da lava e uns dos
- * outros, espalhados de lado a lado do braço; as espécies de marco surgem em volta do marco. Na área dobrada o número de
- * pontos e de criaturas é o mesmo de antes (575): elas ficam mais espalhadas, não mais numerosas.
+ * Criaturas (3ª versão, nov/2026): cada zona recebe a sua parte das criaturas do anel (RING_CREATURES ÷ 4), em grupos
+ * pequenos (RING_GROUP) espalhados pela zona inteira. Cada espécie tem uma faixa de distância larga dentro do anel (a
+ * mais fraca perto da vila, a mais forte longe; as faixas vizinhas se sobrepõem, então as espécies se misturam) e as de
+ * marco surgem em volta do marco. Os pontos ficam fora d'água e da lava, alcançáveis a pé e afastados uns dos outros:
+ * cada ponto novo vai para o lugar mais vazio da faixa (um campo de distância até o ponto mais próximo).
  */
-/** Distância máxima (euclidiana) de um ponto ao vizinho mais próximo da mesma espécie, por anel. */
-const MAX_GAP = [31, 44, 53, 70, 78] as const;
+const SPREAD_GAP = 6;
+const NEAR_GAP = 4;
+const FIELD_R = 24;
+/** As criaturas de um grupo nascem até este número de tiles do ponto. */
+const SPAWN_RADIUS = 3;
 
 function spawns(b: MapBuilder): void {
-  const taken: Pt[] = [];
   const wet = (p: Pt) => {
     for (let dy = -2; dy <= 2; dy++)
       for (let dx = -2; dx <= 2; dx++) {
@@ -430,86 +422,97 @@ function spawns(b: MapBuilder): void {
     const i = b.idx(p.x, p.y);
     return b.solid[i] === 1 || b.buildingAt[i]! >= 0 || !reach[i];
   };
+  // campo de distância (Chebyshev, limitado a FIELD_R) até o ponto de surgimento mais próximo
+  const field = new Uint8Array(WORLD_W * WORLD_H).fill(FIELD_R);
+  const mark = (p: Pt) => {
+    for (let y = Math.max(0, p.y - FIELD_R); y <= Math.min(WORLD_H - 1, p.y + FIELD_R); y++)
+      for (let x = Math.max(0, p.x - FIELD_R); x <= Math.min(WORLD_W - 1, p.x + FIELD_R); x++) {
+        const i = y * WORLD_W + x;
+        const d = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
+        if (d < field[i]!) field[i] = d;
+      }
+  };
   const { box } = zones();
   for (const [zi, z] of ZONES.entries()) {
     const inside = inZone(z);
-    const sorted = [...z.species].sort((a, c) => (MONSTERS[a.monster]?.level ?? 0) - (MONSTERS[c.monster]?.level ?? 0));
-    // faixas de distância só entre as espécies espalhadas (as de marco ficam onde o marco estiver)
-    const spread = sorted.filter((sp) => !sp.near);
-    // (o anel 1 começa a 7 tiles da muralha: raio de surgimento + folga, ver abaixo)
-    const d0 = Math.max(RINGS[z.ring]!.d0, 7);
+    for (const sp of z.species) if (!MONSTERS[sp.monster]) throw new Error(`Criatura inexistente na zona ${z.id}: ${sp.monster}`);
+    const target = Math.round(RING_CREATURES[z.ring]! / 4);
+    const d0 = Math.max(RINGS[z.ring]!.d0, SPAWN_RADIUS + 4);
     const d1 = Math.min(RINGS[z.ring]!.d1, SPAWN_MAX_D);
-    sorted.forEach((sp, k0) => {
-      const k = Math.max(0, spread.indexOf(sp));
-      if (!MONSTERS[sp.monster]) throw new Error(`Criatura inexistente na zona ${z.id}: ${sp.monster}`);
-      const points = sp.points ?? 3;
-      // 3 por ponto até o anel 3 (grupos de 4 viravam trem para quem luta de longe); 4 nos anéis externos (respawn lento)
-      const count = sp.count ?? (z.ring <= 2 ? 3 : 4);
-      const radius = sp.radius ?? 4;
-      // faixa de distância desta espécie dentro do anel (as de marco ficam onde o marco estiver)
-      const lo = d0 + ((d1 - d0) * k) / Math.max(1, spread.length);
-      const hi = d0 + ((d1 - d0) * (k + 1)) / Math.max(1, spread.length);
-      const gather = (lo: number, hi: number): Pt[] => {
-        const cands: Pt[] = [];
-        const step = sp.near ? 1 : 2;
-        // em volta do marco (±12: os lagos maiores ocupavam quase toda a busca de ±8) ou o retângulo da zona; a grade de
-        // passo 2 fica alinhada ao mundo (células ímpares, como antes)
-        const zb = box[zi]!;
-        const area = sp.near ? { x: sp.near.x - 12, y: sp.near.y - 12, w: 25, h: 25 } : { x: Math.max(3, zb.x | 1), y: Math.max(3, zb.y | 1), w: zb.w, h: zb.h };
-        for (let y = area.y; y < Math.min(area.y + area.h, WORLD_H - 3); y += step)
-          for (let x = area.x; x < Math.min(area.x + area.w, WORLD_W - 3); x += step) {
-            const p = { x, y };
-            if (!b.inside(x, y) || !inside(x, y)) continue;
-            // longe da muralha: as criaturas surgem num raio em volta do ponto e não podem nascer dentro da vila
-            if (townDistance(x, y).d < radius + 3) continue;
-            if (!sp.near) {
-              const { d } = townDistance(x, y);
-              if (d < lo || d > hi || roadDist(p) < 5) continue;
-            }
-            if (wet(p) || blocked(p)) continue;
-            if (taken.some((t) => Math.max(Math.abs(t.x - x), Math.abs(t.y - y)) < (sp.near ? 4 : 9))) continue;
-            cands.push(p);
-          }
-        return cands;
-      };
-      // a faixa da espécie; se ela não tiver lugar (estrada, poças), o anel inteiro
-      let cands = gather(lo, hi);
-      if (cands.length < points && !sp.near) cands = gather(d0, d1);
-      // amostragem pelo ponto mais distante, mas dentro de um território de caça: cada ponto novo fica a no máximo
-      // MAX_GAP do mais próximo já escolhido (a mesma distância entre pontos do mapa antes de dobrar a área). Sem o
-      // limite, na área dobrada os pontos da mesma espécie ficavam 1,5× mais longe uns dos outros e quem luta corpo a
-      // corpo andava muito mais entre uma leva e outra (o Knight perdia ~15% de nível em 3 h).
-      const gap = MAX_GAP[z.ring]!;
-      const chosen: Pt[] = [];
-      while (chosen.length < points && cands.length) {
-        let best = -1;
-        let bestScore = -Infinity;
-        let loose = -1;
-        let looseScore = -Infinity;
-        for (let i = 0; i < cands.length; i++) {
-          const c = cands[i]!;
-          const minD = chosen.length ? Math.min(...chosen.map((q) => Math.hypot(q.x - c.x, q.y - c.y))) : 0;
-          const score = minD + b.hash(c.x, c.y, 900 + k0) * (sp.near ? 3 : 6) - (sp.near ? Math.hypot(c.x - sp.near.x, c.y - sp.near.y) * 0.3 : 0);
-          if (score > looseScore) {
-            looseScore = score;
-            loose = i;
-          }
-          if (!sp.near && chosen.length && minD > gap) continue;
-          if (score > bestScore) {
-            bestScore = score;
-            best = i;
-          }
+    const zb = box[zi]!;
+    let placed = 0;
+    let seq = 0;
+    // candidatos: células livres da zona (passo 2, alinhado ao mundo) ou em volta do marco (±12, passo 1)
+    const gather = (sp: SpawnSpec, lo: number, hi: number): Pt[] => {
+      const out: Pt[] = [];
+      const step = sp.near ? 1 : 2;
+      const area = sp.near ? { x: sp.near.x - 12, y: sp.near.y - 12, w: 25, h: 25 } : { x: Math.max(3, zb.x | 1), y: Math.max(3, zb.y | 1), w: zb.w, h: zb.h };
+      for (let y = Math.max(3, area.y); y < Math.min(area.y + area.h, WORLD_H - 3); y += step)
+        for (let x = Math.max(3, area.x); x < Math.min(area.x + area.w, WORLD_W - 3); x += step) {
+          if (!inside(x, y)) continue;
+          const { d } = townDistance(x, y);
+          if (d < SPAWN_RADIUS + 4) continue; // o grupo nasce fora da vila
+          if (!sp.near && (d < lo || d > hi)) continue;
+          const p = { x, y };
+          if (wet(p) || blocked(p)) continue;
+          out.push(p);
         }
-        // nenhum lugar dentro do território (canto da zona): aceita o melhor fora dele em vez de perder o ponto
-        const p = cands.splice(best >= 0 ? best : loose, 1)[0]!;
-        if (chosen.some((q) => Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y)) < (sp.near ? 4 : 9))) continue;
-        chosen.push(p);
+      return out;
+    };
+    // o candidato mais vazio (campo de distância), com um pouco de ruído; em volta de um marco, o mais perto dele
+    const pick = (cands: Pt[], sp: SpawnSpec, salt: number): Pt | null => {
+      const gap = sp.near ? NEAR_GAP : SPREAD_GAP;
+      let best: Pt | null = null;
+      let bestScore = -Infinity;
+      for (const c of cands) {
+        const f = field[c.y * WORLD_W + c.x]!;
+        if (f < gap) continue;
+        const score = f + b.hash(c.x, c.y, salt) * 3 - (sp.near ? Math.hypot(c.x - sp.near.x, c.y - sp.near.y) * 0.4 : 0);
+        if (score > bestScore) {
+          bestScore = score;
+          best = c;
+        }
       }
-      if (!chosen.length) throw new Error(`Sem lugar para ${sp.monster} na zona ${z.id}`);
-      chosen.forEach((p, i) => {
-        taken.push(p);
-        b.spawn(`${z.id}_${sp.monster}_${i}`, sp.monster, p.x, p.y, radius, count);
-      });
+      return best;
+    };
+    const place = (sp: SpawnSpec, p: Pt): number => {
+      const [lo, hi] = sp.group ?? RING_GROUP[z.ring]!;
+      const count = lo + Math.floor(b.hash(p.x, p.y, 77) * (hi - lo + 1));
+      b.spawn(`${z.id}_${sp.monster}_${seq++}`, sp.monster, p.x, p.y, SPAWN_RADIUS, count);
+      mark(p);
+      placed += count;
+      return count;
+    };
+    // 1) as de marco: alguns pontos em volta do marco
+    z.species.forEach((sp, k) => {
+      if (!sp.near) return;
+      const cands = gather(sp, 0, 0);
+      let n = 0;
+      for (let i = 0; i < (sp.points ?? 4); i++) {
+        const p = pick(cands, sp, 900 + k * 31 + i);
+        if (!p) break;
+        place(sp, p);
+        n++;
+      }
+      if (!n) throw new Error(`Sem lugar para ${sp.monster} na zona ${z.id}`);
+    });
+    // 2) as espalhadas: o resto da cota da zona, dividido pelo peso, cada uma na sua faixa (larga) de distância
+    const spread = z.species.filter((sp) => !sp.near).sort((a, c) => (MONSTERS[a.monster]!.level ?? 0) - (MONSTERS[c.monster]!.level ?? 0));
+    const weights = spread.reduce((s, sp) => s + (sp.weight ?? 1), 0);
+    const remaining = Math.max(0, target - placed);
+    spread.forEach((sp, k) => {
+      const quota = Math.round((remaining * (sp.weight ?? 1)) / weights);
+      const mid = d0 + ((d1 - d0) * (k + 0.5)) / spread.length;
+      const half = Math.max(5, (d1 - d0) * 0.4);
+      let cands = gather(sp, mid - half, mid + half);
+      if (cands.length < 4) cands = gather(sp, d0, d1);
+      let got = 0;
+      for (let i = 0; got < quota; i++) {
+        const p = pick(cands, sp, 1300 + k * 31 + i);
+        if (!p) break;
+        got += place(sp, p);
+      }
+      if (!got) throw new Error(`Sem lugar para ${sp.monster} na zona ${z.id}`);
     });
   }
 }
