@@ -257,8 +257,9 @@ retirar) — e pensado primeiro para o celular.
   lanças, Varinhas, Cajados, Escudos, Livros, Capacetes, Armaduras, Calças, Botas, Anéis, Amuletos, Poções de vida e
   de mana — cada uma mostra quanto está à venda, ou quanto você tem) → **lista** com filtro por vocação (Todas, a sua
   ou uma específica) e ordem por **nível** ou **preço** (crescente/decrescente) → **item**. Também dá para procurar
-  pelo nome. O filtro **Somente disponível** (no topo) esconde o que não dá para negociar agora: comprando, só o que
-  alguém vende (ou a loja tem); vendendo, só o que você tem na mochila. Categorias vazias somem.
+  pelo nome. O filtro **Somente disponível** (no topo) esconde o que não dá para negociar agora: comprando, só o que tem
+  anúncio de venda de outra pessoa no mercado (o que só a loja vende não entra); vendendo, só o que você tem na
+  mochila. Categorias vazias somem.
 - **Na lista, ao lado de cada item**: nível para usar, atributos (Atq, Def/Arm, Vida, Mana, ML…), se é **▲ melhor** ou
   **▼ pior** que o que você usa (com +/− de ataque e defesa), *requer nv X* ou *não usa*, e o preço do modo: comprando, o
   **menor anúncio** (e quantos há); vendendo, a **maior oferta de compra** e o **último negócio**.

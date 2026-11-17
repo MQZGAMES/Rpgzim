@@ -290,8 +290,17 @@ test('mercado: corretor ao lado da banqueira, vender (categoria → item → anu
   await expect(page.locator('[data-testid^=market-mine-]').first()).toBeVisible();
   // poções (travadas) ficaram de fora: nenhuma foi anunciada
   expect((await api(page, (a) => a.player())).inventory.some((s) => s.itemId.startsWith('potion_'))).toBe(true);
-  // Comprar → filtros da lista (vocação e ordenação)
+  // Comprar + "Somente disponível": só categorias com anúncio de venda de outra pessoa (o número no canto); o que só a
+  // loja vende não conta. Sem nenhum anúncio, aparece o aviso
   await page.getByTestId('market-mode-buy').click();
+  await page.getByTestId('market-only-available').click();
+  const cats = page.locator('[data-testid^=market-cat-]');
+  const shown = await cats.count();
+  if (!shown) await expect(page.getByTestId('market-nothing-available')).toBeVisible();
+  for (let i = 0; i < shown; i++) await expect(cats.nth(i)).toContainText(/\d/);
+  await page.getByTestId('market-only-available').click();
+  await expect(page.getByTestId('market-cat-sword')).toBeVisible();
+  // Comprar → filtros da lista (vocação e ordenação)
   await page.getByTestId('market-cat-sword').click();
   await page.getByTestId('market-voc-all').click();
   await page.getByTestId('market-sort-level-desc').click();
