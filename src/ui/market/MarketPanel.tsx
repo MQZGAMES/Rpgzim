@@ -60,12 +60,15 @@ export function MarketPanel() {
   const vocOk = (it: CatalogItem) =>
     voc === 'all' || !it.vocations || it.vocations.includes((voc === 'mine' ? vocation : voc) as never);
   const viewAll = screen.kind === 'list' && screen.cat === 'all';
-  /** Dá para comprar agora: alguém anuncia no mercado ou a loja vende. */
-  const buyable = (it: CatalogItem) => priceOf(it) !== null || market.quotes[it.itemId]?.shopSells != null;
+  /** Tem anúncio de venda de outra pessoa no mercado agora (as próprias ofertas não contam). */
+  const listed = (it: CatalogItem) => market.quotes[it.itemId]?.ask != null;
+  /** Dá para comprar agora: alguém anuncia no mercado ou a loja vende (a lista "Todos" mostra os dois). */
+  const buyable = (it: CatalogItem) => listed(it) || market.quotes[it.itemId]?.shopSells != null;
   const listFor = (items: CatalogItem[]) =>
     items
       .filter((it) => (mode === 'sell' ? (market.owned[it.itemId] ?? 0) > 0 : true))
-      .filter((it) => mode === 'sell' || !(onlyAvailable || viewAll) || buyable(it))
+      // comprando, "Somente disponível" = só o que tem anúncio de venda (o que a loja vende não conta)
+      .filter((it) => mode === 'sell' || (onlyAvailable ? listed(it) : !viewAll || buyable(it)))
       .filter(vocOk)
       .sort((a, b) => {
         if (sort.startsWith('level'))
@@ -158,11 +161,7 @@ export function MarketPanel() {
               variant={onlyAvailable ? 'gold' : 'stone'}
               className={chip(onlyAvailable)}
               onClick={() => setOnlyAvailable(!onlyAvailable)}
-              title={
-                mode === 'sell'
-                  ? 'Só o que você tem para vender'
-                  : 'Só o que tem para comprar (no mercado ou na loja)'
-              }
+              title={mode === 'sell' ? 'Só o que você tem para vender' : 'Só o que alguém está vendendo no mercado'}
               data-testid="market-only-available"
             >
               {onlyAvailable ? '✓ ' : ''}Somente disponível
@@ -207,7 +206,7 @@ export function MarketPanel() {
             <Categories
               mode={tradeMode}
               onlyAvailable={onlyAvailable}
-              buyable={buyable}
+              forSale={listed}
               catalog={catalog}
               query={query}
               setQuery={setQuery}
@@ -295,7 +294,7 @@ export function MarketPanel() {
 function Categories({
   mode,
   onlyAvailable,
-  buyable,
+  forSale,
   catalog,
   query,
   setQuery,
@@ -305,9 +304,10 @@ function Categories({
   onItem,
 }: {
   mode: 'buy' | 'sell';
-  /** Esconde as categorias sem nada disponível (vendendo: sem itens seus; comprando: nada para comprar). */
+  /** Esconde as categorias sem nada disponível (vendendo: sem itens seus; comprando: sem anúncio de venda). */
   onlyAvailable: boolean;
-  buyable: (it: CatalogItem) => boolean;
+  /** O item tem anúncio de venda de outra pessoa no mercado. */
+  forSale: (it: CatalogItem) => boolean;
   catalog: CatalogItem[];
   query: string;
   setQuery: (q: string) => void;
@@ -329,7 +329,7 @@ function Categories({
   const total = MARKET_CATEGORIES.reduce((s, c) => s + count(c.id), 0);
   const available = (cat: MarketCategoryId) =>
     catalog.some(
-      (c) => c.category === cat && (mode === 'sell' ? (market.owned[c.itemId] ?? 0) > 0 : buyable(c)),
+      (c) => c.category === cat && (mode === 'sell' ? (market.owned[c.itemId] ?? 0) > 0 : forSale(c)),
     );
   return (
     <div data-testid="market-categories">
