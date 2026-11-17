@@ -39,7 +39,7 @@ describe('criaturas tardias', () => {
     const onMap = new Set(sim.world.map.spawns.map((s) => s.monsterId));
     const sheets = new Set(Object.keys(manifest.sheets));
     const late = CREATURE_LADDER.filter((r) => r.tier >= 6);
-    expect(late.length).toBe(21); // 16 tardias + 4 das Terras do Sul + o Colosso de Gelo
+    expect(late.length).toBe(24); // 16 tardias + 4 das Terras do Sul + o Colosso de Gelo + Serpe Rubra, Lobo Glacial e Ceifador
     expect(Math.max(...Object.values(GAME_DATA.monsters).map((m) => m.level ?? 0))).toBeGreaterThanOrEqual(
       100,
     );

@@ -455,6 +455,43 @@ Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e
   **76 MB**. Entrar no jogo: 6,2 s → 5,7 s. Montagem do mundo (Node): 0,41 s → 0,45 s com a tabela de zonas (sem ela,
   0,89 s). Objetos de cenário 5.772 → 9.844.
 
+## 3ª versão do mundo: o dobro de criaturas, mais fortes, sem estradas (nov/2026)
+- **Sem estradas**: fora da muralha só há um pátio livre na frente de cada portão (`GATE_YARDS`) e as placas de anel.
+- **Criaturas**: 1.187 (antes 578) em 665 pontos (antes 173). Por anel, somando as direções: 144, 216, 236, 268 e 292
+  (`RING_CREATURES`). Grupos (`RING_GROUP`): 1–2 nos anéis 1 a 3, 1–3 no anel 4, 2–3 na borda; no mapa ficaram 252
+  grupos de 1, 304 de 2 e 109 de 3. Cada ponto novo vai para o lugar mais vazio da faixa da espécie (campo de
+  distância): um grupo a cada ~10 tiles, distância mínima de 6. A faixa de cada espécie ocupa 80% do anel (as vizinhas
+  se misturam); as de marco ficam em até 4 pontos em volta do marco.
+- **Espécies**: 66 (14 novas); 4 a 6 por zona (antes 2 a 4).
+- **Dificuldade** (`difficulty` em `src/data/monsters.ts`): vida e ataque ×(1,15 + 0,35·min(1, nível/70)); da borda em
+  diante (nível 70 → 80) mais +0,7 de vida e +1,1 de ataque, chegando a ×2,2 e ×2,6. XP e ouro × vida·√ataque (o tempo
+  para matar mais um prêmio pelo risco): ×1,24 no nível 1, ×1,57 no 40, ×1,84 no 70 e ×3,55 na borda. Com o prêmio só
+  pela vida, a subida solo caía 20–31% e o Sorcerer ficava sem ouro.
+- **Régua** (`tests/tools/calibrate.test.ts`, "sozinho x em time": herói ideal do nível da espécie, melhor equipamento e
+  8 poções): na borda, um herói sozinho contra 2 criaturas fica com margem 0,1–2,0 (a maioria abaixo de 1, que é onde
+  ele desiste), e o time de 4 contra 3 com 1,4–6,1. O Knight ainda dá conta sozinho do Behemoth (físico): é o "um
+  personagem forte consegue".
+- **Medição** (`hero-life`, 3 h do nível 1, sementes 11/23, nível; sem mortes em nenhuma):
+
+  | Versão | Boladex | Maguim | Mano Cura | Distanciado | Média |
+  |---|---|---|---|---|---|
+  | 2ª versão (publicada) | 41/43 | 46/37 | 51/50 | 49/46 | 45,4 |
+  | 3ª versão, XP × vida | 29/34 | 29/28 | 48/48 | 36/40 | 36,5 |
+  | 3ª versão, XP × vida·√ataque (final) | **46/38** | **34/30** | **51/55** | **39/39** | **41,5** |
+
+- **Borda** (`hero-spells`, nível 85 com 3 milhões no banco para a IA comprar o melhor equipamento, 25 min, abates de
+  criaturas de nível 72+): antes, sozinhos 309/381 e em time 302/305 (a borda era o terreno normal deles); agora,
+  sozinhos 60/46 (quase só Behemoth) e em time 70/36 (Behemoth, Colosso de Gelo, Lobo da Tempestade, Escorpião de
+  Cristal). Nenhuma morte.
+- **Guerra** (`war-life`, 30 min, sementes 7/8, mortes por PK): cada um por si 4+1 (antes 3+0), guildas 2+0 (antes
+  1+3); recuo 12–17%.
+- **Ponto de atenção — economia do Sorcerer**: ele bebe ~750 poções de mana em 3 h, como antes, mas termina com ~0 de
+  ouro (antes 5–11 mil): com as criaturas mais fortes a régua dele escolhe presas mais fracas, que rendem pouco ouro.
+  Sem mortes e ainda subindo (30–34 em 3 h), mas é o primeiro ajuste a fazer.
+- **Desempenho**: simulação sem tela ~40% mais cara (CPU de uma vida de 3 h: ~150 s contra 70–125 s, com 4 rodando
+  juntas). No navegador (desktop), com as criaturas desenhadas só quando aparecem na tela: memória 73–74 MB (antes
+  76–77), entrar no jogo 2,4 s (antes 2,6), 60 FPS. Montagem do mundo 0,5 s.
+
 ## Magic Level: avaliação (nov/2026)
 Só avaliação, sem mudança. Números de `spellRange` (média antes de armadura/resistência) com o ML medido em 3 h
 (Sorcerer 38 no nv 40, Druid 32 no nv 50, Paladin 21 no nv 42, Knight 13 no nv 44); níveis 70/100 com ML projetado

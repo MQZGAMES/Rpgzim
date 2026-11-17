@@ -46,6 +46,14 @@ test('magias na caça', { timeout: 900_000 }, () => {
   type Stat = { basic: number; aoe: number; single: number; other: number; manaPots: number; fightS: number; crowdS: number; manaSum: number; spells: Record<string, number> };
   const st = new Map<string, Stat>(heroes.map((h) => [h.id, { basic: 0, aoe: 0, single: 0, other: 0, manaPots: 0, fightS: 0, crowdS: 0, manaSum: 0, spells: {} }]));
   let deaths = 0;
+  // abates por espécie (nível) e XP ganha: mostra onde eles caçam (sozinhos x em grupo) e quanto rende
+  const kills: Record<string, number> = {};
+  const xp0 = heroes.reduce((s, h) => s + h.character.experience, 0);
+  sim.events.on('entityDied', (e) => {
+    if (e.kind !== 'monster') return;
+    const def = w.monsters.get(e.entityId)?.def;
+    if (def) kills[`${def.id}(${def.level})`] = (kills[`${def.id}(${def.level})`] ?? 0) + 1;
+  });
   let lowS = 0;
   let below70 = 0;
   let coveredS = 0;
@@ -101,6 +109,7 @@ test('magias na caça', { timeout: 900_000 }, () => {
   });
   process.stderr.write(
     `${group ? 'EM GRUPO' : 'SOZINHOS'} ${minutes} min, nível ${level}\n${lines.join('\n')}\n` +
-      `GRUPO: mortes ${deaths} | junto do Druid ${Math.round(coveredS)}s, nisso alguém < 50% ${Math.round(lowS)}s e < 70% ${Math.round(below70)}s | curas no grupo ${healCasts} (Druid ${druidHeals})\n`,
+      `GRUPO: mortes ${deaths} | junto do Druid ${Math.round(coveredS)}s, nisso alguém < 50% ${Math.round(lowS)}s e < 70% ${Math.round(below70)}s | curas no grupo ${healCasts} (Druid ${druidHeals})\n` +
+      `ABATES: ${Object.entries(kills).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-'} | XP somada ${heroes.reduce((s, h) => s + h.character.experience, 0) - xp0}\n`,
   );
 });

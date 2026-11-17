@@ -260,7 +260,8 @@ export class EntityViews {
     scene.textures.get('icons').setFilter(0);
     const p = world.player;
     this.player = new CreatureView(scene, p.id, p.character.vocation, 'humanoid', 's', 1);
-    for (const m of world.monsters.values()) this.addMonster(m);
+    // as criaturas ganham desenho, nome e barra só quando aparecem na tela pela primeira vez (ver sync): são mais de mil
+    // no mundo, e criar todas na largada custava tempo de carga e memória (cada nome é uma textura)
     for (const n of world.npcs.values()) this.addNpc(n);
   }
 
@@ -333,11 +334,11 @@ export class EntityViews {
     const visible = (e: { x: number; y: number }) => !view || (e.x * 16 + 8 >= view.x - M && e.x * 16 + 8 <= view.right + M && e.y * 16 >= view.y - M && e.y * 16 <= view.bottom + M);
     for (const m of w.monsters.values()) {
       let v = this.monsters.get(m.id);
-      if (!v) v = this.addMonster(m);
       if (!m.alive || !visible(m)) {
-        v.container.setVisible(false);
+        v?.container.setVisible(false);
         continue;
       }
+      if (!v) v = this.addMonster(m);
       if (!v.container.visible || v.dead) {
         v.revive();
         v.container.setVisible(true);

@@ -57,8 +57,11 @@ async function createCharacter(page: Page, vocation: string, name: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  // cada teste começa sem saves
-  await page.goto('/');
+  // cada teste começa sem saves. A limpeza roda numa página do mesmo site que NÃO carrega o jogo: abrindo '/', o jogo
+  // começava a criar os heróis, a exclusão do banco ficava pendente (conexão aberta) e só acontecia na navegação
+  // seguinte — apagava os heróis recém-criados e deixava a marca "heróis criados" no localStorage (o jogo abria sem
+  // nenhum herói, de vez em quando, na suíte completa)
+  await page.goto('/favicon.png');
   await page.evaluate(async () => {
     localStorage.clear();
     await new Promise<void>((res) => {

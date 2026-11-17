@@ -930,5 +930,59 @@ export function buildBasiliskFrames(): PixelCanvas[] {
 /** Crocodilo do Brejo: o mesmo corpo baixo, em verde-lodo, sem crista vermelha e com olho amarelo. */
 export function buildCrocodileFrames(): PixelCanvas[] {
   const L: LizardLook = { scale: mixRamp(P.forest, P.mud, 0.35), belly: P.dry[3]!, crest: P.forest[1]!, eye: P.gold[4]! };
-  return [basiliskFrame(0, false, L), basiliskFrame(1, false, L), basiliskFrame(2, false, L), basiliskFrame(0, true, L)];
+  return lizardSet(L);
+}
+
+const lizardSet = (L: LizardLook): PixelCanvas[] => [basiliskFrame(0, false, L), basiliskFrame(1, false, L), basiliskFrame(2, false, L), basiliskFrame(0, true, L)];
+
+// ================================================================== variedade dos biomas (nov/2026)
+// Os mesmos corpos com marcas próprias (manchas, crina, geada, verrugas, padrão do dorso) e outra escala no jogo.
+
+/** Raposa Vermelha: laranja-ferrugem com peito claro e crina escura (o jogo a desenha menor que o lobo). */
+export function buildFoxFrames(): PixelCanvas[] {
+  return canineSet({ fur: mixRamp(P.fire, P.leather, 0.42), belly: P.bone[3]!, eye: P.gold[4]!, mane: mixRamp(P.leather, P.black, 0.3) });
+}
+/** Leoa da Savana: dourada, de focinho e crina curta mais escuros. */
+export function buildLionessFrames(): PixelCanvas[] {
+  return canineSet({ fur: mixRamp(P.gold, P.dune, 0.5), belly: P.dune[4]!, eye: P.gold[5]!, mane: mixRamp(P.dirt, P.gold, 0.35) });
+}
+/** Lobo Glacial: branco-azulado, geada nas costas e pintas de gelo. */
+export function buildGlacierWolfFrames(): PixelCanvas[] {
+  return canineSet({ fur: mixRamp(P.snow, P.ice, 0.35), belly: P.white, eye: P.teal[4]!, spots: P.ice[1]!, frost: true });
+}
+/** Aranha do Capim: pequena, marrom-esverdeada, com a cruz clara no dorso. */
+export function buildFieldSpiderFrames(): PixelCanvas[] {
+  return spiderSet({ body: mixRamp(P.leather, P.green, 0.45), mark: P.sand, pattern: 'cross' });
+}
+/** Aranha da Selva: verde-veneno com a ampulheta amarela e olhos acesos. */
+export function buildJungleSpiderFrames(): PixelCanvas[] {
+  return spiderSet({ body: mixRamp(P.green, P.forest, 0.35), mark: P.gold, pattern: 'hourglass', glowEyes: true });
+}
+/** Sanguessuga do Brejo: lodo vinho-escuro que se arrasta (corpo de slime com bolhas). */
+export function buildLeechFrames(): PixelCanvas[] {
+  return slimeSet({ body: mixRamp(P.blood, P.mud, 0.4), kind: 'bog' });
+}
+/** Sapo Venenoso: roxo vivo, cheio de verrugas (cospe veneno). */
+export function buildPoisonToadFrames(): PixelCanvas[] {
+  return toadSet(mixRamp(P.purple, P.pink, 0.3), true);
+}
+/** Lagarto do Campo: verde-folha, pequeno, de crista baixa. */
+export function buildLizardFrames(): PixelCanvas[] {
+  return lizardSet({ scale: mixRamp(P.green, P.nature, 0.35), belly: P.sand[3]!, crest: P.green[1]!, eye: P.gold[4]! });
+}
+/** Jacaré do Pântano: oliva-amarelado (o crocodilo é verde-escuro), dorso de lodo e olho vermelho. */
+export function buildSwampGatorFrames(): PixelCanvas[] {
+  return lizardSet({ scale: mixRamp(P.dry, P.mud, 0.45), belly: P.sand[2]!, crest: P.mud[2]!, eye: P.red[4]! });
+}
+/** Lagarto das Dunas: cor de areia queimada, crista vermelha. */
+export function buildDesertLizardFrames(): PixelCanvas[] {
+  return lizardSet({ scale: mixRamp(P.dune, P.redsand, 0.4), belly: P.sand[3]!, crest: P.red[3]!, eye: P.gold[5]! });
+}
+/** Urso Polar: pelagem branca com geada, focinho escuro. */
+export function buildPolarBearFrames(): PixelCanvas[] {
+  return bearSet({ fur: mixRamp(P.snow, P.marble, 0.3), muzzle: P.stone[1]!, frost: true });
+}
+/** Serpe Rubra: serpe vermelha das dunas, membrana escura e olho dourado. */
+export function buildRedWyvernFrames(): PixelCanvas[] {
+  return dragonSet({ scale: mixRamp(P.red, P.redsand, 0.3), belly: P.dune, membrane: mixRamp(P.red, P.black, 0.35), horn: P.bone, eye: P.gold[4]!, wyvern: true });
 }
