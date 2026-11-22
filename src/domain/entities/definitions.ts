@@ -146,7 +146,7 @@ export interface SpellDef {
   effect: SpellEffectType;
   element: Element;
   formula?: SpellFormula;
-  buff?: { kind: BuffKind; value: number; durationMs: number };
+  buff?: { kind: BuffKind; value: number; durationMs: number; reflectRatio?: number };
   /** Efeito adicional aplicado aos alvos atingidos. */
   slow?: { factor: number; durationMs: number };
   /** Magias de criação: tamanho da poção (1 = pequena … 5 = divina), para ordenar. */

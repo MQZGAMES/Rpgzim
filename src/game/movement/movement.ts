@@ -80,11 +80,30 @@ export function resolveStuck(w: World, m: PlayerEntity, blockedBy: string | null
   m.stuckAt = w.now;
   if (w.now - m.stuckSince < SWAP_AFTER_MS) return;
   const other = w.human.id === blockedBy ? w.human : w.heroes.get(blockedBy);
-  if (!other) return;
+  if (!other || other.dead || m.dead || isMoving(other, w.now)) return;
+  const dx = other.x - m.x;
+  const dy = other.y - m.y;
+  // Require an adjacent actor and a clear approach, including diagonal corners.
+  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1) return;
+  if (!blockedOnlyByActor(w, other.x, other.y, m.id)) return;
+  if (isPz(w.map, other.x, other.y) && isPzLocked(w, m.id)) return;
+  if (!canStep((x, y) => staticFree(w, x, y), m.x, m.y, dx, dy)) return;
   // ninguém é empurrado (nem puxado) para dentro de uma área protegida: a troca na borda da PZ não acontece
   // (lá dentro os personagens já atravessam um ao outro)
-  if (isPz(w.map, m.x, m.y) || isPz(w.map, other.x, other.y)) return;
-  swapPlaces(w, m, other);
+  if (!isPz(w.map, m.x, m.y) && !isPz(w.map, other.x, other.y)) {
+    swapPlaces(w, m, other);
+  } else {
+    // Sem poder trocar, pula apenas o personagem: pouso livre depois dele.
+    const nx = other.x + dx;
+    const ny = other.y + dy;
+    if (!canEnter(w, nx, ny, false, m.id) || occupant(w, nx, ny) !== undefined) return;
+    const free = (x: number, y: number) => staticFree(w, x, y) && !(isPz(w.map, x, y) && isPzLocked(w, m.id));
+    if (!canStep(free, other.x, other.y, dx, dy)) return;
+    teleport(w, m, nx, ny);
+    m.facing = facingFrom(dx, dy, m.facing);
+    m.path = null;
+    m.chasePath = null;
+  }
   m.stuckWith = null;
   m.stuckSince = 0;
   other.stuckWith = null;
@@ -109,7 +128,7 @@ function swapPlaces(w: World, a: PlayerEntity, b: PlayerEntity): void {
 }
 
 /** Tempo de insistência antes de os personagens trocarem de lugar. */
-export const SWAP_AFTER_MS = 5000;
+export const SWAP_AFTER_MS = 3000;
 /** Sem tentar passar por este tempo, a insistência é esquecida. */
 const STUCK_FORGET_MS = 1500;
 
@@ -122,7 +141,9 @@ export function removeOccupant(w: World, m: Mover): void {
   if (w.occupancy.get(i) !== m.id) return;
   w.occupancy.delete(i);
   // outro personagem dividindo o tile (área protegida) volta a ser o ocupante
-  const other = [w.human, ...w.heroes.values()].find((a) => !a.dead && a.id !== m.id && a.x === m.x && a.y === m.y);
+  const other = [w.human, ...w.heroes.values()].find(
+    (a) => !a.dead && a.id !== m.id && a.x === m.x && a.y === m.y,
+  );
   if (other) w.occupancy.set(i, other.id);
 }
 

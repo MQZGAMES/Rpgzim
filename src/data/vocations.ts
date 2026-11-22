@@ -120,7 +120,7 @@ export const VOCATIONS: Readonly<Record<VocationId, VocationDef>> = {
     skillMultipliers: { sword: 1, axe: 1, club: 1, distance: 1.6, shielding: 1, magic: 3 },
     magicGrowth: 1.4,
     damage: { melee: 1.3, distance: 0.7, magic: 0.7, healing: 0.75 },
-    physicalReduction: 0.12,
+    physicalReduction: 0.20,
     baseSpeed: 2.9,
     attackIntervalMs: 1400,
     spells: ['brutal_strike', 'steel_whirlwind', 'iron_roar', 'light_heal', 'war_cry', 'haste', 'crippling_blow', 'berserk', 'second_wind'].concat(extraSpellsFor('knight')),

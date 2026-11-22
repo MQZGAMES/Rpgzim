@@ -404,18 +404,19 @@ export function damagePlayer(
   raw: number,
   element: Element,
   source: DamageSource,
-  fixed = false,
+  fixed: boolean | 'reflected' = false,
 ): void {
   const p = w.player;
+  const reflected = fixed === 'reflected';
   if (p.dead || w.now < p.invulnerableUntil) return;
   touchCombat(w, p.id); // ser atacado (por personagem, NPC ou criatura) renova a caveira que está acabando
   const pos = { x: p.x, y: p.y };
   const hasShield = p.stats.shieldDefense > 0;
   const cfg = w.data.balance.combat;
   // treino (qualquer elemento): até 2 atacantes por janela e só se o jogador estiver lutando
-  if (shieldingTryCounts(p.shieldTraining, w.now, source.id, hasShield, p.lastAttackAt, cfg))
+  if (!reflected && shieldingTryCounts(p.shieldTraining, w.now, source.id, hasShield, p.lastAttackAt, cfg))
     trainPlayerSkill(w, 'shielding', cfg.shieldingTriesPerHit);
-  if (element === 'physical' && hasShield) {
+  if (!reflected && element === 'physical' && hasShield) {
     const chance = blockChance(
       p.stats.skills.shielding,
       p.stats.shieldDefense,
@@ -448,7 +449,7 @@ export function damagePlayer(
         w.rng,
       );
   // PvP: golpes e magias de um personagem em outro (jogador ou NPC humano) causam só uma fração do dano
-  if (source.kind === 'player' && source.id !== p.id && res.damage > 0)
+  if (!reflected && source.kind === 'player' && source.id !== p.id && res.damage > 0)
     res.damage = Math.max(1, Math.round(res.damage * cfg.pvpDamageMultiplier));
   // Escudo de Mana: o dano sai da mana primeiro; o que passar (mana zerada) atinge a vida
   let toHealth = res.damage;
@@ -468,7 +469,9 @@ export function damagePlayer(
   }
   recordDamage(w, p.id, source.id, res.damage); // de quem veio o dano (decide quem matou)
   const manaLoss = res.damage - toHealth;
-  p.character.health = Math.max(0, p.character.health - toHealth);
+  const healthLost = Math.min(p.character.health, toHealth);
+  p.character.health -= healthLost;
+  const lethal = p.character.health <= 0;
   w.events.emit('damage', {
     targetId: p.id,
     sourceId: source.id,
@@ -478,7 +481,30 @@ export function damagePlayer(
     blocked: res.absorbed && manaLoss === 0,
     position: pos,
   });
-  if (p.character.health <= 0) killPlayer(w, source);
+  if (!reflected && healthLost > 0 && source.id !== p.id) {
+    reflectDamage(w, p, source, element, healthLost);
+  }
+  if (lethal) {
+    p.character.health = 0;
+    killPlayer(w, source);
+  }
+}
+
+function reflectDamage(w: World, defender: PlayerEntity, source: DamageSource, element: Element, healthLost: number): void {
+  const defense = defender.buffs.find((buff) => buff.kind === 'defense' && buff.expiresAt > w.now);
+  const ratio = defense?.sourceSpell ? w.data.spells[defense.sourceSpell]?.buff?.reflectRatio ?? 0 : 0;
+  const damage = Math.round(healthLost * ratio);
+  if (damage <= 0) return;
+
+  if (source.kind === 'monster') {
+    const monster = w.monsters.get(source.id);
+    if (monster) damageMonster(w, monster, damage, element, defender.id);
+    return;
+  }
+  const attacker = actorById(w, source.id);
+  if (attacker && !canAttackActor(w, defender, attacker)) {
+    asActor(w, attacker, () => damagePlayer(w, damage, element, actorSource(defender), 'reflected'));
+  }
 }
 
 function killPlayer(w: World, killer: DamageSource): void {

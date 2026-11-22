@@ -502,6 +502,14 @@ export class GameSimulation {
         p.path.shift();
         return;
       }
+      // PZ passage can relocate the actor and clear its route inside tryStep.
+      // Replan from the landing tile before inspecting the old route again.
+      if (!p.path) {
+        const goal = p.pathGoal;
+        p.path = goal ? pathTo(w, p, goal, false, { maxNodes: 120000 }) : null;
+        if (!p.path) p.pathGoal = null;
+        return;
+      }
       // bloqueado (ex.: monstro ou outro personagem no caminho). Com muita gente no mundo, replanejar a rota inteira a
       // cada quadro era o maior custo do jogo (A* de até 120 mil nós por herói travado, 60 vezes por segundo):
       // 1) herói espera um instante antes de replanejar (como gente esperando o outro passar); o jogador, não;

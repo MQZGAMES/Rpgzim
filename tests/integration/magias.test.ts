@@ -6,7 +6,7 @@ import { levelSpeedBonus } from '../../src/domain/rules/stats';
 import { createCharacter } from '../../src/domain/rules/character';
 import { countItem } from '../../src/domain/rules/inventory';
 import { chebyshev } from '../../src/domain/value-objects/position';
-import { actorSource, damagePlayer } from '../../src/game/combat/combat';
+import { actorSource, damagePlayer, monsterSource } from '../../src/game/combat/combat';
 import { canEnter } from '../../src/game/movement/movement';
 import { isPz } from '../../src/game/world/GameMap';
 import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
@@ -239,6 +239,22 @@ describe('segurar o atalho: alvo morto ou fora da tela passa para o mais próxim
 });
 
 describe('recargas e flechas', () => {
+  it.each([
+    ['arrow_rain', 2000],
+    ['brutal_strike', 2000],
+    ['stunning_arrow', 4000],
+    ['divine_shot', 4000],
+    ['crippling_blow', 4000],
+    ['sacred_fire', 4000],
+    ['hunters_focus', 8000],
+    ['iron_roar', 8000],
+    ['flame_lance', 4000],
+    ['ice_shard', 4000],
+    ['fire_nova', 6000],
+  ] as const)('keeps the expected cooldown for %s', (spellId, cooldownMs) => {
+    expect(GAME_DATA.spells[spellId]?.cooldownMs).toBe(cooldownMs);
+  });
+
   it('Redemoinho de Aço e Flecha Sagrada têm 2 s de exaustão', () => {
     expect(GAME_DATA.spells.steel_whirlwind?.cooldownMs).toBe(2000);
     expect(GAME_DATA.spells.holy_arrow?.cooldownMs).toBe(2000);
@@ -282,5 +298,69 @@ describe('nomes dos atores no código', () => {
     const sim = makeSim('knight');
     expect(actorSource(sim.world.human)).toMatchObject({ id: sim.world.human.id, kind: 'player' });
     void asActor;
+  });
+});
+
+describe('Iron Roar reflection', () => {
+  function setupReflectingKnight() {
+    const sim = makeSim('knight');
+    clearMonsters(sim);
+    levelUp(sim);
+    const w = sim.world;
+    const spot = field(sim);
+    sim.teleportPlayer(spot.x, spot.y);
+    expect(sim.castSpell('iron_roar')).toBe(true);
+    return { sim, w, spot };
+  }
+
+  it('reflects half of life lost after mitigation and awards experience for a kill', () => {
+    const { sim, w, spot } = setupReflectingKnight();
+    const p = w.player;
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    put(sim, m, spot.x + 1, spot.y);
+    m.hp = 1000;
+    const initialHealth = p.character.health;
+    damagePlayer(w, 100, 'fire', monsterSource(m));
+    const lost = initialHealth - p.character.health;
+    expect(lost).toBe(65);
+    expect(m.hp).toBe(1000 - Math.round(lost / 2));
+
+    const xp = p.character.experience;
+    m.hp = 1;
+    damagePlayer(w, 100, 'fire', monsterSource(m));
+    expect(m.alive).toBe(false);
+    expect(p.character.experience).toBe(xp + m.def.experience);
+  });
+
+  it('does not reflect a blow after the buff expires', () => {
+    const { w } = setupReflectingKnight();
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    m.hp = 1000;
+    w.now += 4000;
+    damagePlayer(w, 100, 'fire', monsterSource(m));
+    expect(m.hp).toBe(1000);
+  });
+
+  it('reflects once when both fighters have Iron Roar', () => {
+    const { sim, w, spot } = setupReflectingKnight();
+    const p = w.player;
+    const def = GAME_DATA.heroes.boladex!;
+    const h = sim.addHero(def, createCharacter(GAME_DATA, {
+      id: def.slotId, name: def.name, vocation: 'knight', now: 0, position: spot,
+    }));
+    put(sim, h, spot.x + 1, spot.y);
+    w.social.pvp = true;
+    asActor(w, h, () => {
+      levelUp(sim);
+      expect(sim.castSpell('iron_roar')).toBe(true);
+    });
+    const playerHealth = p.character.health;
+    const heroHealth = h.character.health;
+    damagePlayer(w, 100, 'fire', actorSource(h));
+    const lost = playerHealth - p.character.health;
+    expect(lost).toBe(Math.round(65 * w.data.balance.combat.pvpDamageMultiplier));
+    expect(heroHealth - h.character.health).toBe(Math.round(lost / 2));
   });
 });
