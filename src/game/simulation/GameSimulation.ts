@@ -68,7 +68,6 @@ import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, normalizeHotbar, normalizeHotba
 import {
   PARTY_FAIL_MESSAGE,
   acceptInvite,
-  actorName,
   partyOf,
   actorById,
   configureParty,
@@ -883,8 +882,8 @@ export class GameSimulation {
     const w = this.world;
     const h = w.heroes.get(id);
     if (!h || !summonHero(w, h, w.human.id)) return false;
-    const party = partyOf(w, id)!;
-    const to = party.leaderId === id ? w.human.character.name : actorName(w, party.leaderId);
+    // chamado por você: vem até você (seja você o líder ou não)
+    const to = w.human.character.name;
     w.events.emit('message', {
       text: `${h.character.name} parou o que fazia e está indo até ${to}.`,
       kind: 'system',

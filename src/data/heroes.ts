@@ -105,6 +105,10 @@ const boladex: HeroDef = {
       'Só sobraram {potions} poções! Vou à vila vender o loot e comprar mais.',
       'Poção acabando... passo na vila e já volto pra caça.',
     ],
+    potionsWarning: [
+      'Ei, líder: só tenho {potions} poções! Fico aqui com você, mas quando der passa na vila.',
+      'Atenção: {potions} poções na mochila. Não saio do grupo, mas tá apertado.',
+    ],
     lure: ['Vem todo mundo pra cá! Atrás de mim, pessoal!', 'Puxei a tela inteira: agora é com vocês!'],
     helpCall: ['Socorro, grupo! Tô cercado aqui!', 'Ajuda aqui, pessoal! Rápido!'],
     dangerSeen: ['Cuidado: {player} tá por aqui. Esse aí é perigoso!', 'Olho no {player}, galera. Vou sair de perto.'],
@@ -184,6 +188,10 @@ const maguim: HeroDef = {
       'Poção quase no fim... vou reabastecer e já retorno.',
       'Só {potions} poções. Hora de ir à vila repor o estoque.',
     ],
+    potionsWarning: [
+      'Líder, restam {potions} poções. Sigo contigo, mas convém reabastecer logo.',
+      'Só {potions} poções comigo. Continuo firme, mas fique de olho.',
+    ],
     lure: ['Puxando a criaturada pro nosso lado!', 'Cheguem, cheguem... é só mirar!'],
   },
 };
@@ -226,6 +234,10 @@ const manoCura: HeroDef = {
       'Minhas poções estão acabando, vou à vila e volto rapidinho.',
       'Só {potions} poções restantes. Reabastecer é sabedoria.',
     ],
+    potionsWarning: [
+      'Aviso ao líder: {potions} poções restantes. Não saio do seu lado.',
+      'Minhas poções: {potions}. Estou com você, mas a vila nos espera em breve.',
+    ],
     lure: ['Atraí todos eles, fiquem atrás de mim!', 'Vou trazer a criaturada, preparem a mira!'],
   },
 };
@@ -266,6 +278,10 @@ const distanciado: HeroDef = {
     lowPotions: [
       'Poções no fim. Vou vender o loot, repor e voltar à mira.',
       'Só {potions} poções. Hora de reabastecer.',
+    ],
+    potionsWarning: [
+      'Líder, {potions} poções sobrando. Sigo na mira, mas logo preciso repor.',
+      'Só {potions} poções. Não largo o grupo; avisa quando formos à vila.',
     ],
     lure: ['Puxando todos para a nossa linha de tiro!', 'Atenção: lá vêm eles, mirem!'],
   },

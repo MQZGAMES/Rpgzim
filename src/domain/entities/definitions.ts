@@ -394,6 +394,7 @@ export type HeroLineKey =
   | 'flee'
   | 'pkWish'
   | 'lowPotions'
+  | 'potionsWarning'
   | 'lure'
   | 'recover'
   | 'helpCall'
