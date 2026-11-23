@@ -89,10 +89,10 @@ describe('personalidade', () => {
 });
 
 describe('magias de área e magias novas', () => {
-  it('área: -2 s de recarga, +1 sqm e o dobro de mana (com a recalibragem de mana de nov/2026)', () => {
+  it('keeps the expected radius, cooldown and mana cost for area spells', () => {
     expect(GAME_DATA.spells.fire_nova).toMatchObject({ radius: 4, cooldownMs: 6000, manaCost: 63 });
     expect(GAME_DATA.spells.frost_burst).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 35 });
-    expect(GAME_DATA.spells.arrow_rain).toMatchObject({ radius: 2, cooldownMs: 4000, manaCost: 48 });
+    expect(GAME_DATA.spells.arrow_rain).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 36 });
     expect(GAME_DATA.spells.steel_whirlwind).toMatchObject({ radius: 2, cooldownMs: 2000, manaCost: 48 });
   });
 

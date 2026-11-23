@@ -196,21 +196,21 @@ describe('personagens não se sobrepõem', () => {
     expect(canEnter(w, h.x, h.y, false, w.human.id)).toBe(false);
   });
 
-  it('insistindo por mais de 5 s os personagens trocam de lugar', () => {
+  it('swaps adjacent characters after 3 seconds of trying to pass', () => {
     const { sim, h, w } = withHero();
     const spot = openField(sim);
     sim.teleportPlayer(spot.x, spot.y);
     putAt(sim, h, spot.x + 1, spot.y);
     const before = { x: w.human.x, y: w.human.y };
     const heroBefore = { x: h.x, y: h.y };
-    // menos de 5 s: ainda não troca
-    w.human.stuckSince = w.now - 3000;
+    // Just before the threshold, neither actor moves.
+    w.human.stuckSince = w.now - 2999;
     w.human.stuckAt = w.now;
     w.human.stuckWith = h.id;
     resolveStuck(w, w.human, h.id);
     expect([w.human.x, w.human.y]).toEqual([before.x, before.y]);
-    // mais de 5 s: troca
-    w.human.stuckSince = w.now - 6000;
+    // At the threshold, the actors swap places.
+    w.human.stuckSince = w.now - 3000;
     w.human.stuckAt = w.now;
     resolveStuck(w, w.human, h.id);
     expect([w.human.x, w.human.y]).toEqual([heroBefore.x, heroBefore.y]);
