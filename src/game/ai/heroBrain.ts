@@ -202,6 +202,8 @@ export interface HeroBrainState {
   chaseSeen?: { id: string; d: number; x?: number; y?: number };
   /** Chamado pelo grupo: larga o que está fazendo e vai até o líder (até este instante). */
   summonedUntil?: number;
+  /** Ida à vila pedida por você no painel do grupo (vale mesmo com o líder fora da vila). */
+  townOrdered?: boolean;
   summonTo?: string;
   /** Poções de mana bebidas (instante, mana): o consumo real decide o estoque de mana, como o de vida. */
   manaLog: { at: number; mana: number }[];
@@ -759,6 +761,7 @@ function setMode(w: World, h: HeroEntity, mode: HeroMode, durationMs = 0): void 
   }
   if (mode !== 'pk') b.pkTargetId = null;
   if (mode !== 'follow') h.following = false;
+  if (mode !== 'town') b.townOrdered = false;
   h.brain.mode = mode;
   h.brain.modeUntil = durationMs ? w.now + durationMs : 0;
   h.brain.stepStartedAt = w.now;
@@ -808,6 +811,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
     if (goal) goTo(w, h, goal.x, goal.y);
   }
   survive(w, h);
+  stayWithHuman(w, h);
   // a cura do grupo vem antes de qualquer outra decisão (até do "jeito de gente": o curandeiro não some no AFK com o
   // time apanhando)
   if (partyOf(w, h.id)) supportParty(w, h);
@@ -815,7 +819,7 @@ export function updateHeroBrain(w: World, h: HeroEntity): void {
   if (humanRoutine(w, h)) return;
   callForHelp(w, h);
   // chamado pelo grupo: larga tudo (caça, vila, loot) e vai até o líder; só as poções continuam valendo
-  if ((b.summonedUntil ?? 0) > w.now && b.mode !== 'retreat') return summoned(w, h);
+  if ((b.summonedUntil ?? 0) > w.now && (b.mode !== 'retreat' || b.summonTo === w.human.id)) return summoned(w, h);
   // ordem tática do jogador (painel do grupo): atacar o alvo dele ou segurar a posição
   if (b.order && (w.now > b.order.until || !partyOf(w, h.id))) b.order = null;
   if (b.order && b.mode !== 'retreat' && orderTick(w, h)) return;
@@ -955,7 +959,7 @@ function unstick(w: World, h: HeroEntity): void {
   h.path = null;
   sidestep(w, h);
   b.retreatWhy = 'travado apanhando sem alcançar ninguém';
-  if (b.mode !== 'retreat') setMode(w, h, 'retreat');
+  if (b.mode !== 'retreat' && !loyalToHuman(w, h)) setMode(w, h, 'retreat');
 }
 
 /** Bebe a poção de vida e anota a cura (o consumo real define o estoque). */
@@ -1280,8 +1284,8 @@ function survive(w: World, h: HeroEntity): void {
   // (a régua trabalha com a média e achava a luta folgada; era assim que o Chefe Goblin matava os magos novatos)
   const lethal = attackers.find((m) => isLethal(h, m));
   if (lethal) hb.avoid[lethal.def.id] = Math.max(hb.avoid[lethal.def.id] ?? 0, w.now + 25 * 60000);
-  if (
-    (outmatched ||
+  const wouldFlee =
+    outmatched ||
       swarmed ||
       train ||
       dry ||
@@ -1289,10 +1293,13 @@ function survive(w: World, h: HeroEntity): void {
       bleeding ||
       plunge ||
       lethal ||
-      (pct < 0.32 - t.bravery * 0.12 && noPotions)) &&
-    h.brain.mode !== 'retreat' &&
-    !isPz(w.map, h.x, h.y)
-  ) {
+      (pct < 0.32 - t.bravery * 0.12 && noPotions);
+  // grupo com você de líder (ou chamado por você): não foge nem larga o time — recua para perto dos colegas e segue
+  // bebendo; o Knight fica na frente segurando as criaturas
+  if (wouldFlee && loyalToHuman(w, h)) {
+    if (attackers.length && h.character.vocation !== 'knight') kiteToAlly(w, h, attackers);
+    if (h.character.vocation === 'knight' && attackers.length) tryCast(w, h, 'iron_roar');
+  } else if (wouldFlee && h.brain.mode !== 'retreat' && !isPz(w.map, h.x, h.y)) {
     heroSay(w, h, 'retreat', {}, 20000);
     h.brain.bold = Math.max(-1, h.brain.bold - 0.12); // fugiu: da próxima vez pensa duas vezes
     h.brain.retreatWhy = `${recover ? 'recuperar ' : ''}${bleeding ? 'sangrando ' : ''}${plunge ? 'despencando ' : ''}${lethal ? 'letal ' : ''}${outmatched ? 'régua ' : ''}${swarmed ? 'cercado ' : ''}${train ? 'trem ' : ''}${dry ? 'seco ' : ''}margem=${a.margin.toFixed(2)} vida=${Math.round(pct * 100)}% pots=${potionsOf(w, h)} alvos=${a.mons.map((m) => m.def.id).join('+')}`;
@@ -2014,7 +2021,7 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
   const wakesIdle = (at: { x: number; y: number }, r: number) =>
     idleAround(w, at, r) > (alliesNear(w, h) > 0 ? 2 : hpPct(h) > 0.6 ? 1 : 0);
   // o Druid em grupo é a cura do time: não gasta em dano a mana que vai salvar um colega
-  const reserve = voc === 'druid' && alliesNear(w, h) > 0 ? 0.3 : 0;
+  const reserve = voc === 'druid' && alliesNear(w, h) > 0 ? (loyalToHuman(w, h) ? 0.45 : 0.3) : 0;
   // magia de área mirada (Rajada Glacial, Chuva de Fogo, Chuva de Flechas): vai no meio do bolo de criaturas na briga
   // (onde acerta mais), não só em volta do alvo atual — sozinho ou em grupo. Fica com o alvo de antes para o resto.
   const areaAt = (spellId: string, single: string, minMana: number): boolean => {
@@ -2295,7 +2302,11 @@ function supportParty(w: World, h: HeroEntity): void {
   // quando 2+ colegas estão abaixo de 85% — a Cura Intensa pega todos de uma vez); os demais só socorrem com 60%
   const druid = h.character.vocation === 'druid';
   const hurt = ranked.filter((r) => r.pct < 0.85).length;
-  const needs = druid
+  // no seu grupo a cura é a prioridade: cura mais cedo (quem apanha com 85%, qualquer um com 75%)
+  const loyal = druid && loyalToHuman(w, h);
+  const needs = loyal
+    ? top.pct < 0.75 || (top.pct < 0.85 && top.hitters >= 1) || hurt >= 2
+    : druid
     ? top.pct < 0.7 || (top.pct < 0.8 && top.hitters >= 2) || hurt >= 2
     : top.pct < 0.6 || (top.pct < 0.75 && top.hitters >= 2);
   if (needs) {
@@ -2332,10 +2343,11 @@ const PARTY_SUPPORT_RANGE = 6;
  * A isca só vale para monstros perto do grupo: o herói não larga o time para persegui-lo longe.
  * Retorna true quando o herói assumiu a isca (o turno dele é o de puxar o monstro).
  */
-function baitMonsters(w: World, h: HeroEntity): boolean {
+function baitMonsters(w: World, h: HeroEntity, tank = false): boolean {
   const leader = groupLeader(w, h) ?? h;
   const members = nearbyPartyMembers(w, h, BAIT_RANGE);
-  if (!members.length || !wellStocked(w, h)) return false;
+  // (o tanque do seu grupo protege o time sempre; os outros só com poção de sobra)
+  if (!members.length || (!tank && !wellStocked(w, h))) return false;
   // monstro que está perseguindo ou atacando um colega (e não o próprio herói), perto do grupo; atiradores primeiro
   const threat = [...w.monsters.values()]
     .filter(
@@ -2424,8 +2436,8 @@ const LURE_RANGE = 7;
  * próxima (perto do líder) para trazê-la até o grupo — quem leva as pancadas é ele, não os colegas frágeis.
  */
 function lureMonsters(w: World, h: HeroEntity, leader: PlayerEntity): boolean {
-  if (h.character.vocation !== 'knight' || hpPct(h) < 0.7 || isPz(w.map, h.x, h.y) || !wellStocked(w, h))
-    return false;
+  const stocked = leader.id === w.human.id ? potionsOf(w, h) > 0 : wellStocked(w, h);
+  if (h.character.vocation !== 'knight' || hpPct(h) < 0.7 || isPz(w.map, h.x, h.y) || !stocked) return false;
   if (leader.character.health / Math.max(1, leader.stats.maxHealth) < 0.5) return false; // time ferido: nada de puxar mais
   const target = [...w.monsters.values()]
     .filter(
@@ -3272,6 +3284,29 @@ function partyMembers(w: World, h: HeroEntity): string[] {
   return partyOf(w, h.id)?.members ?? [];
 }
 
+/** Aviso de poções: com você de líder, o herói avisa quando restam até tantas poções de vida. */
+const POTION_WARNING = 5;
+
+/**
+ * Leal a você: está no seu grupo com você de líder (seguindo) ou foi chamado por você. Não foge, não vai à vila por
+ * conta própria e não sai do grupo — faz de tudo para ficar perto de você.
+ */
+function loyalToHuman(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  if ((b.summonedUntil ?? 0) > w.now && b.summonTo === w.human.id) return true;
+  const l = groupLeader(w, h);
+  return !!l && l.id === w.human.id && followingHuman(w, h);
+}
+
+/** Rede de segurança: se algo o mandou recuar ou à vila longe de você, volta a seguir. */
+function stayWithHuman(w: World, h: HeroEntity): void {
+  const b = h.brain;
+  if (h.dead || !loyalToHuman(w, h)) return;
+  const back = followingHuman(w, h) ? 'follow' : 'decide';
+  if (b.mode === 'retreat') setMode(w, h, back);
+  else if (b.mode === 'town' && !b.townOrdered && !inTown(w, w.human)) setMode(w, h, back);
+}
+
 /** Está num grupo em que o humano é o líder (formação seguir/fila): acompanha o líder em vez de seguir os próprios planos. */
 function followingHuman(w: World, h: HeroEntity): boolean {
   const l = groupLeader(w, h);
@@ -3520,8 +3555,10 @@ export function answerInviteNow(w: World, h: HeroEntity): void {
 export function summonHero(w: World, h: HeroEntity, callerId: string): boolean {
   const party = partyOf(w, h.id);
   if (!party || h.dead || !party.members.includes(callerId)) return false;
-  h.brain.summonedUntil = w.now + 90000;
-  h.brain.summonTo = party.leaderId === h.id ? callerId : party.leaderId;
+  // chamado por você: vai até você (não até o líder) e insiste até chegar
+  const byHuman = callerId === w.human.id;
+  h.brain.summonedUntil = w.now + (byHuman ? 10 * 60000 : 90000);
+  h.brain.summonTo = byHuman || party.leaderId === h.id ? callerId : party.leaderId;
   asActor(w, h, () => {
     setTarget(w, null);
     h.path = null;
@@ -3568,32 +3605,32 @@ function follow(w: World, h: HeroEntity): void {
   if (leader.x !== b.leaderLastPos.x || leader.y !== b.leaderLastPos.y) {
     b.leaderLastPos = { x: leader.x, y: leader.y };
     b.leaderIdleSince = w.now;
-  } else if (
-    !heroLed &&
-    !atWar(w) &&
-    w.now - b.leaderIdleSince > 4 * 60000 &&
-    !isPz(w.map, leader.x, leader.y)
-  ) {
-    heroSay(w, h, 'partyLeave', { player: leader.character.name }, 0);
-    leaveParty(w, h.id);
-    return setMode(w, h, 'decide');
   }
+  // (com você de líder ele nunca sai do grupo por conta própria, mesmo com você parado)
   // o grupo caça num lugar mais difícil que o dele? sente o risco, estoca mais poção e vai comprar antes de faltar
   const around = monstersNear(w, leader, 12);
   if (around.length && fightMargin(w, h, around.slice(0, 6)) < 2.6) b.heavyUntil = w.now + 10 * 60000;
   // com o jogador de líder o herói só se afasta (vai à vila) quando as poções de cura estão no fim; com líder herói,
   // quando o estoque já não cobre a caça pesada
-  const needSupplies = heroLed
-    ? b.heavyUntil > w.now && potionHeal(w, h) < healGoal(h, w.now) * 0.35
-    : potionsOf(w, h) <= LOW_POTIONS + 1 && canResupply(w, h);
-  if (needSupplies && !engagedByMonsters(w, h) && !isPzLocked(w, h.id)) {
-    if (!heroLed) heroSay(w, h, 'lowPotions', { potions: potionsOf(w, h) }, 0);
+  // com você de líder ele NÃO vai sozinho à vila: só avisa quando as poções estão no fim (quem decide é você)
+  if (!heroLed) {
+    const pots = potionsOf(w, h);
+    if (pots <= POTION_WARNING) heroSay(w, h, 'potionsWarning', { potions: pots }, pots === 0 ? 45000 : 90000);
+  } else if (
+    b.heavyUntil > w.now &&
+    potionHeal(w, h) < healGoal(h, w.now) * 0.35 &&
+    !engagedByMonsters(w, h) &&
+    !isPzLocked(w, h.id)
+  )
     return planTown(w, h, undefined, 'follow');
-  }
   giftPotion(w, h);
   heroSay(w, h, 'followLeader', { player: leader.character.name }, 8 * 60000);
   // Isca: um monstro perseguindo um colega? o herói chama a atenção dele para si.
-  if (h.character.vocation === 'knight' && baitMonsters(w, h)) return;
+  if (h.character.vocation === 'knight') {
+    // tanque: com criatura em cima dele, mantém o Brado de Ferro (menos dano e reflexo) ativo
+    if (!heroLed && engagedByMonsters(w, h) && !h.buffs.some((x) => x.kind === 'defense')) tryCast(w, h, 'iron_roar');
+    if (baitMonsters(w, h, !heroLed)) return;
+  }
   keepHaste(w, h); // seguindo: Corrida sempre ativa (depois de proteger o grupo)
   // PK segue o líder: ataca o personagem que o líder ataca (se o PK do mundo permitir) e solta a vítima quando ele para
   // (na guerra também o inimigo que está batendo num colega: todo mundo nele)
@@ -3758,6 +3795,7 @@ function selfDefense(w: World, h: HeroEntity): boolean {
     return true;
   if ((hpPct(h) > 0.35 && ratio + backup > 0.7) || hpPct(h) > 0.8) return startPk(w, h, foe.id, 'revenge');
   if (atWar(w)) return warFlee(w, h, foe) || startPk(w, h, foe.id, 'revenge');
+  if (loyalToHuman(w, h)) return false; // com você de líder ele não foge: segue o grupo (e o alvo do líder)
   heroSay(w, h, 'flee', { player: foe.character.name }, 20000);
   if (b.mode !== 'retreat') setMode(w, h, 'retreat');
   return true;
@@ -4606,6 +4644,7 @@ export function orderHero(
     // vila: vende, guarda, repõe e se cura; sem nada a resolver, passa pelo templo mesmo assim
     planTown(w, h, undefined, 'follow', true);
     if (b.mode !== 'town') planTown(w, h, [{ kind: 'heal' }], 'follow');
+    if (b.mode === 'town') b.townOrdered = true;
     heroSay(w, h, 'town', {}, 0);
   });
   return ok;
@@ -4703,6 +4742,7 @@ function watchDanger(w: World, h: HeroEntity): boolean {
   if (!foe) return false;
   if (strengthWithAllies(w, h) / Math.max(1, power(foe)) >= 1.15) return false;
   heroSay(w, h, 'dangerSeen', { player: foe.character.name }, 30000);
+  if (loyalToHuman(w, h)) return false; // só avisa: com você de líder ninguém sai do grupo
   if (isPz(w.map, h.x, h.y) || isPzLocked(w, h.id)) return false;
   if (chebyshev(foe, h) <= 6 || hasLineOfSight(w, h, foe)) {
     if (b.quarry) b.avoid[b.quarry] = Math.max(b.avoid[b.quarry] ?? 0, w.now + 8 * 60000);
