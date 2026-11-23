@@ -242,7 +242,7 @@ describe('velocidade por nível e Corrida do seguidor', () => {
     advance(sim, 3000, 50);
     expect(h.buffs.some((b) => b.kind === 'haste')).toBe(true);
     const first = h.buffs.find((b) => b.kind === 'haste')!.expiresAt;
-    advance(sim, 28000, 100);
+    advance(sim, 58000, 100);
     const now = h.buffs.find((b) => b.kind === 'haste');
     expect(now).toBeDefined(); // renovou antes de acabar
     expect(now!.expiresAt).toBeGreaterThan(first);

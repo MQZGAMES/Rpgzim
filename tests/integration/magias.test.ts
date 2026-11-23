@@ -64,7 +64,7 @@ function levelUp(sim: GameSimulation, level = 20, magic = 12) {
 }
 
 describe('Corrida', () => {
-  it('é de todas as vocações, acelera 30 s e desfaz a lentidão', () => {
+  it('é de todas as vocações, acelera 1 min e desfaz a lentidão', () => {
     for (const v of Object.values(GAME_DATA.vocations)) expect(v.spells).toContain('haste');
     const sim = makeSim('knight');
     clearMonsters(sim);
@@ -76,7 +76,7 @@ describe('Corrida', () => {
     expect(sim.castSpell('haste')).toBe(true);
     expect(p.stats.speed).toBeGreaterThan(base + 0.5); // Corrida dá +0,7
     expect(p.slowUntil).toBe(0); // a lentidão acabou
-    advance(sim, 30200, 100);
+    advance(sim, 60200, 100);
     expect(p.stats.speed).toBeCloseTo(
       GAME_DATA.vocations[p.character.vocation].baseSpeed + levelSpeedBonus(p.character.level),
       5,
@@ -286,9 +286,9 @@ describe('recargas e flechas', () => {
       GAME_DATA.items.bow_hunting!.weapon!.attack,
     );
   });
-  it('Corrida: dura 30 s e a exaustão é de só 2 s (dá para renovar sempre)', () => {
+  it('Corrida: dura 1 min e a exaustão é de só 2 s (dá para renovar sempre)', () => {
     const s = GAME_DATA.spells.haste!;
-    expect(s.buff!.durationMs).toBe(30000);
+    expect(s.buff!.durationMs).toBe(60000);
     expect(s.cooldownMs).toBe(2000);
   });
 });
@@ -338,9 +338,19 @@ describe('Iron Roar reflection', () => {
     const m = [...w.monsters.values()][0]!;
     m.alive = true;
     m.hp = 1000;
-    w.now += 4000;
+    w.now += 120000;
     damagePlayer(w, 100, 'fire', monsterSource(m));
     expect(m.hp).toBe(1000);
+  });
+
+  it('lasts 2 minutes: still reflects at 119 s', () => {
+    const { w } = setupReflectingKnight();
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    m.hp = 1000;
+    w.now += 119000;
+    damagePlayer(w, 100, 'fire', monsterSource(m));
+    expect(m.hp).toBeLessThan(1000);
   });
 
   it('reflects once when both fighters have Iron Roar', () => {
