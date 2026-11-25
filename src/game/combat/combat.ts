@@ -32,6 +32,7 @@ import {
   sparMode,
   killCredits,
   onPlayerDeath,
+  savePk,
   recordDamage,
   registerAggression,
   registerPlayerKill,
@@ -595,6 +596,7 @@ function killPlayer(w: World, killer: DamageSource): void {
   // PvP Enforced: a experiência que a vítima perdeu vai para quem a matou, dividida em partes iguais
   if (w.social.enforced && credits.length) shareDeathXp(w, credits, before - c.experience, c.name);
   onPlayerDeath(w, p.id);
+  savePk(w, p); // o que fica salvo também perde o PZ lock (senão ele volta ao reabrir o jogo)
   if (!sparring) dropDeathLoot(w, p, skullBefore === 'red');
 }
 
