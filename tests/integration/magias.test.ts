@@ -302,6 +302,10 @@ describe('nomes dos atores no código', () => {
 });
 
 describe('Iron Roar reflection', () => {
+  /** Arma de dano fixo (10): o ataque normal do Knight vale sempre 10, então o reflexo vale 5. */
+  function fixedWeapon(p: { stats: { weapon: unknown } }) {
+    p.stats.weapon = { ...(p.stats.weapon as object), training: true, damage: [10, 10] };
+  }
   function setupReflectingKnight() {
     const sim = makeSim('knight');
     clearMonsters(sim);
@@ -310,30 +314,40 @@ describe('Iron Roar reflection', () => {
     const spot = field(sim);
     sim.teleportPlayer(spot.x, spot.y);
     expect(sim.castSpell('iron_roar')).toBe(true);
+    fixedWeapon(w.player);
     return { sim, w, spot };
   }
 
-  it('reflects half of life lost after mitigation and awards experience for a kill', () => {
+  it('reflects 50% of the knight normal attack, whatever damage he received', () => {
+    const { sim, w, spot } = setupReflectingKnight();
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    put(sim, m, spot.x + 1, spot.y);
+    m.hp = 1000;
+    damagePlayer(w, 100, 'fire', monsterSource(m));
+    expect(m.hp).toBe(995);
+    damagePlayer(w, 8, 'fire', monsterSource(m));
+    expect(m.hp).toBe(990);
+  });
+
+  it('the reflected damage ignores armor and resistances, and a kill gives experience', () => {
     const { sim, w, spot } = setupReflectingKnight();
     const p = w.player;
     const m = [...w.monsters.values()][0]!;
     m.alive = true;
     put(sim, m, spot.x + 1, spot.y);
+    (m as { def: object }).def = { ...m.def, armor: 999, resistances: { physical: 0.9 } };
     m.hp = 1000;
-    const initialHealth = p.character.health;
-    damagePlayer(w, 100, 'fire', monsterSource(m));
-    const lost = initialHealth - p.character.health;
-    expect(lost).toBe(65);
-    expect(m.hp).toBe(1000 - Math.round(lost / 2));
-
+    damagePlayer(w, 50, 'physical', monsterSource(m));
+    expect(m.hp).toBe(995);
     const xp = p.character.experience;
-    m.hp = 1;
-    damagePlayer(w, 100, 'fire', monsterSource(m));
+    m.hp = 5;
+    damagePlayer(w, 50, 'physical', monsterSource(m));
     expect(m.alive).toBe(false);
     expect(p.character.experience).toBe(xp + m.def.experience);
   });
 
-  it('does not reflect a blow after the buff expires', () => {
+  it('does not reflect after the buff expires (2 minutes)', () => {
     const { w } = setupReflectingKnight();
     const m = [...w.monsters.values()][0]!;
     m.alive = true;
@@ -350,12 +364,11 @@ describe('Iron Roar reflection', () => {
     m.hp = 1000;
     w.now += 119000;
     damagePlayer(w, 100, 'fire', monsterSource(m));
-    expect(m.hp).toBeLessThan(1000);
+    expect(m.hp).toBe(995);
   });
 
-  it('reflects once when both fighters have Iron Roar', () => {
+  it('in PvP the reflection ignores the attacker armor and the PvP reduction, and reflects once', () => {
     const { sim, w, spot } = setupReflectingKnight();
-    const p = w.player;
     const def = GAME_DATA.heroes.boladex!;
     const h = sim.addHero(def, createCharacter(GAME_DATA, {
       id: def.slotId, name: def.name, vocation: 'knight', now: 0, position: spot,
@@ -366,11 +379,10 @@ describe('Iron Roar reflection', () => {
       levelUp(sim);
       expect(sim.castSpell('iron_roar')).toBe(true);
     });
-    const playerHealth = p.character.health;
+    fixedWeapon(h);
+    h.stats.armor = 500;
     const heroHealth = h.character.health;
     damagePlayer(w, 100, 'fire', actorSource(h));
-    const lost = playerHealth - p.character.health;
-    expect(lost).toBe(Math.round(65 * w.data.balance.combat.pvpDamageMultiplier));
-    expect(heroHealth - h.character.health).toBe(Math.round(lost / 2));
+    expect(heroHealth - h.character.health).toBe(5);
   });
 });
