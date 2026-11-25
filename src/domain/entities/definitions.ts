@@ -340,6 +340,8 @@ export interface BalanceConfig {
     speedScale: number;
     /** Escala da experiência que todas as criaturas dão (0,5 = metade). */
     xpRate?: number;
+    /** Escala da vida de todas as criaturas (2 = dobro). */
+    hpRate?: number;
   };
 }
 
