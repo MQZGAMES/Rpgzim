@@ -11,7 +11,7 @@ reais do jogo em [`BALANCE-REPORT.md`](BALANCE-REPORT.md) por `tests/tools/balan
 - **Skills** (Sword/Axe/Club/Distance/Shielding): tentativas para subir do nível n = `22 · 1,12^(n − 10) · multiplicador`.
   Multiplicador menor = vocação aprende mais rápido (Knight 1 nas armas corpo a corpo, Paladin 1 em Distance).
 - **Magic Level**: mana gasta para subir do ML n = `60 · 1,25^n · multiplicador` (magos 1, Paladin 1,4, Knight 3).
-- **Morte**: perde 50% de um nível de XP (se o XP do nível atual não cobre, o resto sai do nível anterior e o personagem desce de nível; ex.: 10% no nível N vira 60% do N-1) e treino de skills, que nunca caem abaixo de 10.
+- **Morte**: perde 100% de um nível de XP (`player.deathXpPenalty = 1`; o que falta no nível atual sai do anterior, então o personagem desce um nível mantendo o mesmo progresso: 40% no nível N vira 40% do N-1) e 100% do treino de um nível em cada skill (`player.deathSkillPenalty = 1`), que nunca caem abaixo de 10 (ML 0). Era 50% até nov/2026.
 - **PvP**: golpes e magias de um personagem em outro (jogador ou NPC humano) causam 50% do dano (`combat.pvpDamageMultiplier`); em criaturas o dano é cheio.
 - **Mana natural**: a cada 2 s, só a base da vocação (Sorcerer/Druid 15, Paladin 10, Knight 5), sem bônus de nível, como no Tibia; na PZ não volta. A mana de verdade vem das poções.
 - **Varinhas e cajados**: não gastam mana nem treinam Magic Level (o ML sobe gastando mana em magias). Exceção: a Varinha de Treino gasta 3 de mana por disparo para treinar ML.
@@ -308,7 +308,7 @@ Maguim ≈ nível 25–27 · Mano Cura ≈ 17–20 · Distanciado ≈ 12–14 (a
   alcance); com a mochila cheia, fica no chão o que vale menos.
 - **Tipo de mundo** (Configurações): Sem PvP · PvP (caveiras, PZ lock, morte injusta) · PvP Enforced (todos se atacam
   sem caveira nem morte injusta; fica o PZ lock de combate; as perdas da morte continuam). No PvP Enforced, a XP que a
-  vítima perde (50%, ver morte) vai para quem bateu nela no último minuto, em partes iguais (nov/2026): matar gente
+  vítima perde (1 nível, ver morte) vai para quem bateu nela no último minuto, em partes iguais (nov/2026): matar gente
   passa a render XP, mas só o que a vítima perdeu — nenhuma XP é criada.
 - **Mochila 28, depósito 50** (eram 20 e 40; nov/2026): mais loot por viagem de caça, o que ajuda no mapa maior
   (menos idas à vila por mochila cheia).

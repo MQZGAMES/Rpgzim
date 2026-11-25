@@ -58,6 +58,21 @@ describe('experiência e nível', () => {
     expect(progress).toBeLessThan(0.65);
   });
 
+  it('com a penalidade do jogo (1 nível inteiro), desce um nível mantendo o mesmo progresso (40% -> 40%)', () => {
+    expect(BALANCE.player.deathXpPenalty).toBe(1);
+    const floor = totalXpForLevel(6, xp);
+    const span = totalXpForLevel(7, xp) - floor;
+    const res = applyDeathPenalty(6, floor + Math.floor(span * 0.4), 1, xp);
+    expect(res.level).toBe(5);
+    expect(res.levelsLost).toBe(1);
+    const prevFloor = totalXpForLevel(5, xp);
+    const progress = (res.experience - prevFloor) / (floor - prevFloor);
+    expect(progress).toBeGreaterThan(0.38);
+    expect(progress).toBeLessThan(0.42);
+    // no nível 1 fica em 0 de XP (não existe nível abaixo)
+    expect(applyDeathPenalty(1, totalXpForLevel(2, xp) - 1, 1, xp)).toMatchObject({ level: 1, experience: 0 });
+  });
+
   it('a penalidade de morte nunca passa do nível 1 nem do XP zero', () => {
     const res = applyDeathPenalty(1, 5, 0.5, xp);
     expect(res.level).toBe(1);
