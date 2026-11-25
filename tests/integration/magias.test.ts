@@ -347,6 +347,33 @@ describe('Iron Roar reflection', () => {
     expect(p.character.experience).toBe(xp + m.def.experience);
   });
 
+  it('reflects even when the shield blocks the blow', () => {
+    const { sim, w, spot } = setupReflectingKnight();
+    const p = w.player;
+    const m = [...w.monsters.values()][0]!;
+    m.alive = true;
+    put(sim, m, spot.x + 1, spot.y);
+    m.hp = 1000;
+    p.stats = { ...p.stats, shieldDefense: 50 };
+    // dados do jogo são compartilhados entre os testes: força o bloqueio só neste golpe e restaura
+    const balance = w.data.balance as { combat: typeof w.data.balance.combat };
+    const combat = balance.combat;
+    balance.combat = { ...combat, blockChanceBase: 1, maxBlockChance: 1 };
+    const health = p.character.health;
+    const blocked: boolean[] = [];
+    w.events.on('damage', (e) => {
+      if (e.targetId === p.id) blocked.push(e.blocked);
+    });
+    try {
+      damagePlayer(w, 100, 'physical', monsterSource(m));
+    } finally {
+      balance.combat = combat;
+    }
+    expect(blocked).toEqual([true]);
+    expect(p.character.health).toBe(health);
+    expect(m.hp).toBe(995);
+  });
+
   it('does not reflect after the buff expires (2 minutes)', () => {
     const { w } = setupReflectingKnight();
     const m = [...w.monsters.values()][0]!;

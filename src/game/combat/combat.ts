@@ -433,6 +433,8 @@ export function damagePlayer(
         blocked: true,
         position: pos,
       });
+      // Brado de Ferro: o golpe bloqueado pelo escudo também devolve o reflexo
+      if (!reflected && source.id !== p.id) reflectDamage(w, p, source);
       return;
     }
   }
@@ -481,7 +483,7 @@ export function damagePlayer(
     blocked: res.absorbed && manaLoss === 0,
     position: pos,
   });
-  // Brado de Ferro: cada golpe que chega (bloqueado pelo escudo não conta) devolve parte do ataque normal do defensor
+  // Brado de Ferro: cada golpe que chega (inclusive o bloqueado, acima) devolve parte do ataque normal do defensor
   if (!reflected && source.id !== p.id) reflectDamage(w, p, source);
   if (lethal) {
     p.character.health = 0;
