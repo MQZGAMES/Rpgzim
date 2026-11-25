@@ -492,6 +492,12 @@ Ajustes centralizados em `src/data/pricing.ts` (valem para o `value` dos itens e
   juntas). No navegador (desktop), com as criaturas desenhadas só quando aparecem na tela: memória 73–74 MB (antes
   76–77), entrar no jogo 2,4 s (antes 2,6), 60 FPS. Montagem do mundo 0,5 s.
 
+## Vida ×2 e XP −50% (nov/2026)
+- `BALANCE.creatures.hpRate = 2`: a vida de toda criatura dobra (depois da escada de faixas e de `difficulty`).
+- `BALANCE.creatures.xpRate` 0,5 → 0,25: a XP de toda criatura cai pela metade (1/4 da base; mínimo 1).
+- Ataque, ouro e loot não mudaram (o ouro continua × vida·√ataque **sem** o `hpRate`): cada abate leva ~2× mais tempo,
+  então ouro por hora e XP por hora caem juntos (XP por hora ~1/4 da anterior).
+
 ## Magic Level: avaliação (nov/2026)
 Só avaliação, sem mudança. Números de `spellRange` (média antes de armadura/resistência) com o ML medido em 3 h
 (Sorcerer 38 no nv 40, Druid 32 no nv 50, Paladin 21 no nv 42, Knight 13 no nv 44); níveis 70/100 com ML projetado

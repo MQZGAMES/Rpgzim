@@ -85,7 +85,7 @@ function build(s: Species): MonsterDef {
   const pw = tierPower(s.tier);
   const level = TIER_LEVEL[s.tier]! + s.step * (s.tier === 0 ? 2 : 3);
   const hard = difficulty(level);
-  const hp = Math.round(c.baseHealth * pw.hp * f * hard.hp);
+  const hp = Math.round(c.baseHealth * pw.hp * f * hard.hp * (c.hpRate ?? 1));
   // dano elemental ignora a armadura: nas faixas tardias (onde a armadura vale muito) ele é menor que o físico
   const elemental = s.tier >= 4 && s.attack.element !== 'physical' ? LATE_ELEMENTAL : 1;
   const atk = c.baseAttack * pw.atk * f * elemental * hard.atk;

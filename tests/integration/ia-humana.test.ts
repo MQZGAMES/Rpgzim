@@ -223,11 +223,16 @@ describe('conversa entre os heróis', () => {
   });
 });
 
-describe('temporada 2: XP pela metade e recomeço', () => {
-  it('as criaturas dão metade da experiência', () => {
-    expect(D.balance.creatures.xpRate).toBe(0.5);
+describe('temporada 2: XP reduzida e recomeço', () => {
+  it('as criaturas dão 1/4 da experiência base (metade da temporada 2)', () => {
+    expect(D.balance.creatures.xpRate).toBe(0.25);
     // (vezes o prêmio de dificuldade do nível 1: criaturas mais fortes dão mais XP, ver difficulty em monsters.ts)
-    expect(D.monsters.slime!.experience).toBe(Math.round(D.balance.creatures.baseExperience * 0.5 * difficulty(1).reward));
+    expect(D.monsters.slime!.experience).toBe(Math.round(D.balance.creatures.baseExperience * 0.25 * difficulty(1).reward));
+  });
+
+  it('as criaturas têm o dobro de vida', () => {
+    expect(D.balance.creatures.hpRate).toBe(2);
+    expect(D.monsters.slime!.health).toBe(Math.round(D.balance.creatures.baseHealth * difficulty(1).hp * 2));
   });
 
   it('todo personagem novo começa com o equipamento básico e 50 poções de vida e 50 de mana', () => {
