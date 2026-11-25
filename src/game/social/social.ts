@@ -837,11 +837,21 @@ export function registerPlayerKill(
     );
 }
 
-/** Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). */
+/**
+ * Morreu: perde o PZ lock; a caveira vermelha continua contando, as demais somem (renasce sem caveira). O que ele fez
+ * na vida anterior também acaba: o dano que causou em outros personagens não conta mais como participação numa morte
+ * (antes, se alguém em quem ele bateu morresse depois, ele ganhava PZ lock de 5 min e caveira já no templo) e os
+ * ataques dele deixam de valer como agressão recente.
+ */
 export function onPlayerDeath(w: World, id: string): void {
   w.social.pzLocks.delete(id);
   w.social.damageLog.delete(id);
   if (skullOf(w, id)?.kind !== 'red') w.social.skulls.delete(id);
+  for (const [victim, list] of w.social.damageLog) {
+    const kept = list.filter((d) => d.id !== id);
+    if (kept.length !== list.length) w.social.damageLog.set(victim, kept);
+  }
+  for (const key of [...w.social.aggressions.keys()]) if (key.startsWith(`${id}>`)) w.social.aggressions.delete(key);
 }
 
 // ------------------------------------------------------------------ persistência (tempo real, vale entre sessões)
