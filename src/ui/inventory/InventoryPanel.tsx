@@ -7,6 +7,9 @@ import type { ItemView } from '../../integration/game-ui-bridge/snapshot';
 import { ItemIcon, Panel, PixelButton } from '../common/primitives';
 import { ItemCell, ItemStats } from './ItemCell';
 
+type SortKey = 'type' | 'value';
+type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null;
+
 type Selection = { from: 'bag'; index: number } | { from: 'slot'; slot: EquipSlot } | null;
 
 const SLOT_ICON: Record<EquipSlot, string> = {
@@ -152,6 +155,37 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
   const stats = useSnap((s) => s.stats);
   const [sel, setSel] = useState<Selection>(null);
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  // ordenação: o mesmo botão de novo inverte a ordem (tipo: grupos ao contrário; valor: menor→maior / maior→menor)
+  const [sort, setSort] = useState<SortState>(null);
+  // seleção de vários itens (para travar ou jogar no chão de uma vez)
+  const [multi, setMulti] = useState(false);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [confirmDrop, setConfirmDrop] = useState(false);
+  const applySort = (key: SortKey) => {
+    const dir = sort?.key === key && sort.dir === 'asc' ? 'desc' : 'asc';
+    session.sortInventory(key, dir);
+    setSort({ key, dir });
+    setSel(null);
+    setPicked([]);
+    setConfirmDrop(false);
+  };
+  const toggleMulti = () => {
+    setMulti((m) => !m);
+    setPicked([]);
+    setSel(null);
+    setConfirmDrop(false);
+  };
+  const togglePick = (i: number) => {
+    if (!inv[i]) return;
+    setConfirmDrop(false);
+    setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : [...p, i]));
+  };
+  // itens escolhidos que ainda existem (a mochila muda com loot, poções bebidas etc.)
+  const pickedItems = picked.filter((i) => inv[i]).map((i) => inv[i]!);
+  const lockable = pickedItems.filter((it) => it.value > 0);
+  const allLocked = lockable.length > 0 && lockable.every((it) => it.locked);
+  const sortLabel = (key: SortKey, text: string) =>
+    `${text}${sort?.key === key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}`;
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), 1800);
@@ -199,7 +233,56 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
     );
   };
 
-  const details = selected ? (
+  const multiActions = multi && (
+    <div className="frame-slot flex shrink-0 flex-wrap items-center gap-1 !border-[5px] p-1" data-testid="bag-multi-actions">
+      <span className="px-1 text-[12px] text-parchment" data-testid="bag-picked-count">
+        {pickedItems.length} {pickedItems.length === 1 ? 'selecionado' : 'selecionados'}
+      </span>
+      <PixelButton
+        className="!border-[5px] px-2 text-[12px]"
+        onClick={() => {
+          setConfirmDrop(false);
+          setPicked(pickedItems.length === inv.filter(Boolean).length ? [] : inv.map((it, i) => (it ? i : -1)).filter((i) => i >= 0));
+        }}
+        data-testid="bag-pick-all"
+      >
+        {pickedItems.length && pickedItems.length === inv.filter(Boolean).length ? 'Nenhum' : 'Todos'}
+      </PixelButton>
+      <PixelButton
+        className="!border-[5px] px-2 text-[12px]"
+        disabled={!lockable.length}
+        title={allLocked ? 'Voltam a entrar no "Vender tudo"' : 'Ficam fora do "Vender tudo" das lojas'}
+        onClick={() => session.setSellLocks(lockable.map((it) => it.itemId), !allLocked)}
+        data-testid="bag-multi-lock"
+      >
+        <span className="inline-flex items-center gap-1">
+          <ItemIcon icon="ui_lock" size={14} className={allLocked ? '' : 'opacity-60 grayscale'} />
+          {allLocked ? 'Destravar' : 'Travar venda'}
+        </span>
+      </PixelButton>
+      <PixelButton
+        className="!border-[5px] px-2 text-[12px]"
+        variant={confirmDrop ? 'gold' : undefined}
+        disabled={!pickedItems.length}
+        title="Deixa os itens no chão embaixo de você, num saco de loot"
+        onClick={() => {
+          if (!confirmDrop) return setConfirmDrop(true);
+          session.dropMany(picked.filter((i) => inv[i]));
+          setPicked([]);
+          setConfirmDrop(false);
+        }}
+        data-testid="bag-multi-drop"
+      >
+        {confirmDrop ? `Confirmar (${pickedItems.length})` : 'Jogar no chão'}
+      </PixelButton>
+    </div>
+  );
+
+  const details = multi ? (
+    <p className="frame-tooltip text-[11px] leading-snug text-muted">
+      Toque nos itens para marcar ou desmarcar. Depois trave a venda ou jogue os marcados no chão. Toque em "Sair da seleção" para voltar.
+    </p>
+  ) : selected ? (
     <ItemDetails item={selected} equipped={sel?.from === 'bag' ? equippedSame : undefined} />
   ) : (
     <p className="frame-tooltip text-[11px] leading-snug text-muted">
@@ -207,7 +290,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
       melhor que o equipado.
     </p>
   );
-  const actions = selected && (
+  const actions = !multi && selected && (
     <div
       className="frame-slot flex shrink-0 flex-wrap items-center gap-1 !border-[5px] p-1"
       data-testid="bag-actions"
@@ -293,6 +376,8 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
               <span className="flex items-center gap-1 text-gold-light">
                 <ItemIcon icon="ui_coin" size={14} /> {gold}
               </span>
+            </div>
+            <div className="mb-1 flex flex-wrap items-center gap-1" data-testid="bag-tools">
               <PixelButton
                 className="!border-[5px] px-1 text-[11px]"
                 onClick={() => session.organizeInventory()}
@@ -300,6 +385,31 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
                 data-testid="bag-organize"
               >
                 Organizar
+              </PixelButton>
+              <PixelButton
+                className="!border-[5px] px-1 text-[11px]"
+                onClick={() => applySort('type')}
+                title="Ordena por tipo (armas, equipamentos, poções, loot). Toque de novo para inverter."
+                data-testid="bag-sort-type"
+              >
+                {sortLabel('type', 'Tipo')}
+              </PixelButton>
+              <PixelButton
+                className="!border-[5px] px-1 text-[11px]"
+                onClick={() => applySort('value')}
+                title="Ordena pelo valor de cada unidade: ↑ do mais barato ao mais caro, ↓ o contrário. Toque de novo para inverter."
+                data-testid="bag-sort-value"
+              >
+                {sortLabel('value', 'Valor')}
+              </PixelButton>
+              <PixelButton
+                className="!border-[5px] px-1 text-[11px]"
+                variant={multi ? 'gold' : undefined}
+                onClick={toggleMulti}
+                title="Marcar vários itens para travar a venda ou jogar no chão de uma vez"
+                data-testid="bag-multi"
+              >
+                {multi ? 'Sair da seleção' : 'Selecionar'}
               </PixelButton>
             </div>
             <div
@@ -311,9 +421,9 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
                 <ItemCell
                   key={i}
                   item={it}
-                  active={sel?.from === 'bag' && sel.index === i}
-                  onTap={() => setSel(it ? { from: 'bag', index: i } : null)}
-                  onDoubleTap={() => quickUse(i)}
+                  active={multi ? picked.includes(i) && !!it : sel?.from === 'bag' && sel.index === i}
+                  onTap={() => (multi ? togglePick(i) : setSel(it ? { from: 'bag', index: i } : null))}
+                  onDoubleTap={multi ? undefined : () => quickUse(i)}
                   testId={`bag-${i}`}
                   iconSize={28}
                   diff={it?.slot ? statDiff(it, eq[it.slot]) : null}
@@ -326,6 +436,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
         <div className="flex min-h-0 flex-1 flex-col gap-1 max-lg:landscape:w-[236px] max-lg:landscape:flex-none lg:w-[220px] lg:flex-none">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{details}</div>
           {actions}
+          {multiActions}
         </div>
       </div>
       {notice && (

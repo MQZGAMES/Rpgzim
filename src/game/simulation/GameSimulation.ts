@@ -63,6 +63,7 @@ import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
 import { setSellLock } from '../../domain/rules/economy';
+import { sortInventory, type InventorySortKey, type SortDir } from '../../domain/rules/inventory';
 import { manaPerTick } from '../../domain/rules/regen';
 import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, normalizeHotbar, normalizeHotbarSets, switchHotbarSet, type HotbarEntry } from '../../domain/rules/hotbar';
 import {
@@ -730,6 +731,17 @@ export class GameSimulation {
   drop(index: number): void {
     dropItem(this.world, index);
   }
+  /** Joga vários itens da mochila no chão de uma vez (mesmo saco embaixo do personagem). */
+  dropMany(indices: readonly number[]): void {
+    // removeAt deixa o espaço vazio sem deslocar os outros: os índices continuam valendo
+    for (const i of [...new Set(indices)]) dropItem(this.world, i);
+  }
+  /** Ordena a mochila por tipo ou valor (junta pilhas e tira os espaços vazios). */
+  sortInventory(key: InventorySortKey, dir: SortDir): void {
+    sortInventory(this.world.data, this.world.player.character.inventory, key, dir);
+    this.world.events.emit('itemsChanged', {});
+    this.world.events.emit('saveRequested', { reason: 'inventory' });
+  }
   /** Compacta a mochila sem alterar a ordem relativa dos itens. */
   organizeInventory(): void {
     const inv = this.world.player.character.inventory;
@@ -823,6 +835,16 @@ export class GameSimulation {
     Object.assign(this.world.auto, patch);
   }
 
+  /** Trava/destrava a venda de vários itens de uma vez (uma mensagem só). */
+  setSellLocks(itemIds: readonly string[], locked: boolean): void {
+    const w = this.world;
+    const ids = [...new Set(itemIds)].filter((id) => (w.data.items[id]?.value ?? 0) > 0);
+    if (!ids.length) return;
+    for (const id of ids) setSellLock(w.player.character, id, locked);
+    message(w, `${ids.length} ${ids.length > 1 ? 'itens' : 'item'}: venda ${locked ? 'travada (não entra no "Vender tudo")' : 'destravada'}.`, 'system');
+    w.events.emit('itemsChanged', {});
+    w.events.emit('saveRequested', { reason: 'lock' });
+  }
   setSellLock(itemId: string, locked: boolean): void {
     const w = this.world;
     const def = w.data.items[itemId];

@@ -90,3 +90,46 @@ export function compact(data: GameData, inv: Inventory): void {
   inv.fill(null);
   for (const st of items) addItem(data, inv, st.itemId, st.count);
 }
+
+export type InventorySortKey = 'type' | 'value';
+export type SortDir = 'asc' | 'desc';
+
+/** Ordem dos tipos na mochila: armas e equipamento primeiro, depois consumíveis e, por fim, loot. */
+const TYPE_ORDER: readonly string[] = [
+  'weapon',
+  'shield',
+  'spellbook',
+  'helmet',
+  'armor',
+  'legs',
+  'boots',
+  'amulet',
+  'ring',
+  'potion',
+  'food',
+  'loot',
+];
+
+/**
+ * Organiza a mochila: junta pilhas incompletas, tira os espaços vazios e ordena.
+ * - "type": pela ordem dos tipos (`desc` inverte os grupos); dentro do tipo, do mais valioso ao mais barato.
+ * - "value": pelo valor de uma unidade (`asc` = mais barato primeiro); empate pelo tipo e pelo nome.
+ */
+export function sortInventory(data: GameData, inv: Inventory, key: InventorySortKey, dir: SortDir): void {
+  compact(data, inv);
+  const items = inv.filter((s): s is ItemStack => s !== null);
+  const typeRank = (s: ItemStack) => {
+    const i = TYPE_ORDER.indexOf(data.items[s.itemId]?.type ?? 'loot');
+    return i < 0 ? TYPE_ORDER.length : i;
+  };
+  const value = (s: ItemStack) => data.items[s.itemId]?.value ?? 0;
+  const name = (s: ItemStack) => data.items[s.itemId]?.name ?? s.itemId;
+  const sign = dir === 'asc' ? 1 : -1;
+  items.sort((a, b) => {
+    if (key === 'type')
+      return sign * (typeRank(a) - typeRank(b)) || value(b) - value(a) || name(a).localeCompare(name(b), 'pt-BR');
+    return sign * (value(a) - value(b)) || typeRank(a) - typeRank(b) || name(a).localeCompare(name(b), 'pt-BR');
+  });
+  inv.fill(null);
+  items.forEach((s, i) => (inv[i] = s));
+}
