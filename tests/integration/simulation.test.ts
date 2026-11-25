@@ -195,7 +195,8 @@ describe('combate e progressão', () => {
   });
 
   it.each([
-    { label: 'com XP sobrando no nível, perde XP e mantém o nível', progress: 0.8, level: 3 },
+    // a morte tira um nível inteiro de XP (deathXpPenalty = 1): sempre desce um nível, com qualquer progresso
+    { label: 'com muito XP no nível, desce para o nível anterior', progress: 0.8, level: 2 },
     { label: 'com pouco XP no nível, desce para o nível anterior', progress: 0.1, level: 2 },
   ])('jogador morre e renasce no templo: $label', ({ progress, level }) => {
     const sim = makeSim('sorcerer', { seed: 9 });
