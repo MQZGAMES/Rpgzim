@@ -202,6 +202,8 @@ export interface HeroBrainState {
   chaseSeen?: { id: string; d: number; x?: number; y?: number };
   /** Chamado pelo grupo: larga o que está fazendo e vai até o líder (até este instante). */
   summonedUntil?: number;
+  /** Paladin solo lurando: sentido em que circula, quando troca, e a criatura que está puxando agora. */
+  kite?: { dir: 1 | -1; flipAt: number; pullId: string | null; pullUntil: number };
   /** Ida à vila pedida por você no painel do grupo (vale mesmo com o líder fora da vila). */
   townOrdered?: boolean;
   summonTo?: string;
@@ -1242,7 +1244,10 @@ function survive(w: World, h: HeroEntity): void {
   const outmatched = !!a && a.mons.length > 0 && a.margin < fleeMargin && (pct < 0.65 || shieldLow);
   // cercado só pesa quando a luta não é folgada (com a régua em dia e poções, é só bater e beber)
   // (o Knight gosta do cerco: só conta para ele quando quer mesmo sair — morrendo, sem poções ou perdendo)
+  // Paladin solo lurando: o trem e o bolo são o plano (ele circula longe delas); só foge pelos outros motivos
+  const kiting = kiteWorks(w, h);
   const swarmed =
+    !kiting &&
     attackers.length >= 4 && pct < 0.7 && a.margin < 1.5 && (h.character.vocation !== 'knight' || wantsBreakout(w, h));
   // "trem" de criaturas atrás dele e a luta não é segura: sai antes de a vida (ou o escudo) começar a cair
   // (já cercado — 2+ encostadas — e com vida e poções, correr só entrega as costas: as criaturas contornam e alcançam)
@@ -1250,6 +1255,7 @@ function survive(w: World, h: HeroEntity): void {
     attackers.filter((m) => chebyshev(m, h) <= 1).length >= 2 && pct > 0.6 && potionsOf(w, h) >= 4;
   const train =
     !!a &&
+    !kiting &&
     !pinned &&
     a.mons.filter((m) => m.targetId === h.id).length >= 3 &&
     a.margin < fleeMargin + 0.35 - h.brain.bold * 0.1;
@@ -1726,6 +1732,8 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     hm.lastTarget = null;
     hm.lookUntil = w.now + profileOf(h).reactionMs * (1.2 + w.rng.next() * 1.6);
   }
+  // Paladin solo: lura (puxa mais criaturas enquanto a régua de kiting aprova) e escolhe o alvo do trem
+  if (!training && soloKiter(w, h) && kiteTick(w, h)) return;
   if (target) {
     // alvo fora do alcance: persegue com Corrida ativa (renovando sempre que possível)
     if (chebyshev(target, h) > Math.max(1, h.stats.weapon.range)) keepHaste(w, h);
@@ -1733,12 +1741,12 @@ function hunt(w: World, h: HeroEntity, training: boolean, assisting = false): vo
     const adjacent = [...w.monsters.values()].filter((m) => m.alive && chebyshev(m, h) <= 1);
     if (!training || assisting) {
       if (castsNow(w, h, adjacent.length)) fightSpells(w, h, target, adjacent.length);
-      keepDistance(w, h);
+      if (!soloKiter(w, h)) keepDistance(w, h);
     }
     // Loot no mesmo passo do combate: o que já está ao alcance é pego sem largar a criatura e, se for
     // seguro, ele já vai buscando o que caiu mais longe (sobreviver e atacar continuam em primeiro lugar).
     collectLootWhileFighting(w, h);
-    chaseLoot(w, h, target);
+    if (!soloKiter(w, h) || !kiteTrain(w, h).length) chaseLoot(w, h, target);
     return;
   }
   // pega o loot da tela toda antes de procurar o próximo (a menos que alguém esteja batendo nele)
@@ -2028,7 +2036,9 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
     const spell = w.data.spells[spellId];
     if (!spell || manaPct <= minMana || !spell.vocations.includes(voc)) return false;
     const cl = bestClusterTarget(w, h, spell.range, spell.radius ?? 1);
-    if (!cl || cl.n < 2 || wakesIdle(cl.m, spell.radius ?? 1) || !aoeWorth(w, h, spellId, single, cl.n, rich)) return false;
+    const lure = voc === 'paladin' && soloKiter(w, h);
+    if (!cl || cl.n < 2 || (!lure && (wakesIdle(cl.m, spell.radius ?? 1) || !aoeWorth(w, h, spellId, single, cl.n, rich))))
+      return false;
     const keep = target.id;
     if (cl.m.id !== keep) setTarget(w, cl.m.id);
     const ok = tryCast(w, h, spellId);
@@ -2117,6 +2127,8 @@ function fightSpells(w: World, h: HeroEntity, target: MonsterEntity, adjacent: n
       if (manaPct > 0.2 + reserve) cast('earth_thorn');
       return;
     case 'paladin': {
+      // lurando sozinho: a Chuva de Flechas no bolo vem primeiro (é para isso que ele junta as criaturas)
+      if (soloKiter(w, h) && areaAt('arrow_rain', 'holy_arrow', 0.2)) return;
       if (dist <= 6 && manaPct > 0.4) tryCast(w, h, 'hunters_focus');
       // perto demais (corpo a corpo) ou fugindo: a flecha que deixa lento — dá tempo de recuar ou de alcançar
       if (
@@ -2169,6 +2181,183 @@ function keepDistance(w: World, h: HeroEntity): void {
   }
   const step = backlineStep(w, h, melee, tank, currentTarget(w) ?? null, Math.max(1, h.stats.weapon.range));
   if (step) tryStep(w, h, step.dx, step.dy, speedOf(w, h), false);
+}
+
+// ------------------------------------------------------------------ Paladin solo: lurar e circular
+/** Até quantas criaturas o Paladin solo junta no trem. */
+const KITE_MAX = 8;
+/** Distância que ele mantém das criaturas corpo a corpo. */
+const KITE_GAP = 3;
+/** Fração da régua normal exigida para puxar mais uma criatura corpo a corpo (mais lenta que ele, quase não acerta). */
+const KITE_MELEE_SHARE = 0.25;
+
+/** Paladin com arco caçando sozinho (sem grupo, ou só treino no grupo). */
+function soloKiter(w: World, h: HeroEntity): boolean {
+  if (h.character.vocation !== 'paladin' || h.stats.weapon.kind !== 'distance' || h.dead) return false;
+  if (h.brain.mode !== 'hunt') return false;
+  const p = partyOf(w, h.id);
+  return !p || !!p.friendlyFire;
+}
+
+/** Criaturas que estão atrás dele (o trem). */
+function kiteTrain(w: World, h: HeroEntity): MonsterEntity[] {
+  return [...w.monsters.values()].filter((m) => m.alive && m.targetId === h.id && chebyshev(m, h) <= 12);
+}
+
+/** Criatura corpo a corpo que ele deixa para trás andando (mais lenta que ele, com folga). */
+function outrunnable(w: World, h: HeroEntity, m: MonsterEntity): boolean {
+  const mine = h.stats.speed + (h.character.mana > h.stats.maxMana * 0.15 ? 0.5 : 0); // conta com a Corrida
+  return m.def.attack.range <= 2 && m.def.speed * (w.now < m.slowUntil ? m.slowFactor : 1) < mine * 0.92;
+}
+
+/**
+ * Régua do kiting: as corpo a corpo que ele deixa para trás contam só uma fração do dano (quase não alcançam); as de
+ * longe e as rápidas contam inteiras.
+ */
+function kiteMargin(w: World, h: HeroEntity, mons: readonly MonsterEntity[]): number {
+  const full = mons.filter((m) => !outrunnable(w, h, m));
+  const slow = mons.filter((m) => outrunnable(w, h, m));
+  const a = full.length ? fightMargin(w, h, full) : Infinity;
+  const b = slow.length ? fightMargin(w, h, slow) / KITE_MELEE_SHARE : Infinity;
+  return 1 / (1 / a + 1 / b);
+}
+
+/** O kiting está dando certo: lurando sozinho, com vida, e o trem é de criaturas que ele deixa para trás. */
+function kiteWorks(w: World, h: HeroEntity): boolean {
+  if (!soloKiter(w, h) || hpPct(h) < 0.45) return false;
+  const train = kiteTrain(w, h);
+  if (!train.length) return false;
+  if (train.some((m) => isLethal(h, m))) return false;
+  return train.filter((m) => !outrunnable(w, h, m)).length <= 1 && kiteMargin(w, h, train) >= needMargin(w, h) * 0.6;
+}
+
+/**
+ * Turno do Paladin solo: puxa a próxima criatura (a mais perto, da caça ou que ele aguenta) enquanto a vida, a mana e
+ * as poções deixam, e com o trem formado escolhe o alvo (a mais ferida ao alcance). Retorna true se tomou o turno.
+ */
+function kiteTick(w: World, h: HeroEntity): boolean {
+  const b = h.brain;
+  const k = (b.kite ??= { dir: w.rng.chance(0.5) ? 1 : -1, flipAt: 0, pullId: null, pullUntil: 0 });
+  const train = kiteTrain(w, h);
+  const range = Math.max(1, h.stats.weapon.range);
+  keepHaste(w, h);
+  // puxando: segue no alvo até ele vir (ou desistir depois de alguns segundos)
+  if (k.pullId) {
+    const m = w.monsters.get(k.pullId);
+    if (m?.alive && m.targetId !== h.id && w.now < k.pullUntil) {
+      if (h.targetId !== m.id) setTarget(w, m.id);
+      return true;
+    }
+    k.pullId = null;
+  }
+  const manaPct = h.character.mana / Math.max(1, h.stats.maxMana);
+  const canPull =
+    train.length < KITE_MAX &&
+    hpPct(h) >= 0.7 &&
+    manaPct >= 0.3 &&
+    potionsOf(w, h) > LOW_POTIONS + 2 &&
+    train.filter((m) => !outrunnable(w, h, m)).length === 0;
+  if (canPull) {
+    const quarry = b.quarry;
+    const preyXp = w.data.monsters[quarry ?? '']?.experience ?? 0;
+    const pull = [...w.monsters.values()]
+      .filter(
+        (m) =>
+          m.alive &&
+          !m.targetId &&
+          m.state !== 'returning' &&
+          !isPz(w.map, m.x, m.y) &&
+          chebyshev(m, h) <= range + 2 &&
+          outrunnable(w, h, m) &&
+          !isLethal(h, m) &&
+          // a presa da caça, ou outra que renda quase o mesmo XP (criatura fraca no caminho não vale o trem)
+          (m.def.id === quarry || (!((b.avoid[m.def.id] ?? 0) > w.now) && m.def.experience >= preyXp * 0.6)) &&
+          hasLineOfSight(w, h, m),
+      )
+      .sort((a, c) => chebyshev(a, h) - chebyshev(c, h))
+      .find((m) => kiteMargin(w, h, [...new Set([...train, m, ...monstersNear(w, m, 2)])]) >= needMargin(w, h));
+    if (pull) {
+      k.pullId = pull.id;
+      k.pullUntil = w.now + 3500;
+      setTarget(w, pull.id);
+      if (train.length >= 2) heroSay(w, h, 'lure', {}, 60000);
+      return true;
+    }
+  }
+  if (!train.length) return false;
+  // alvo: entre as que estão ao alcance, a mais ferida (morre logo e o trem diminui); a Chuva de Flechas cuida do bolo
+  const inRange = train.filter((m) => chebyshev(m, h) <= range && hasLineOfSight(w, h, m));
+  const pick = (inRange.length ? inRange : train).sort(
+    (a, c) => a.hp / a.def.health - c.hp / c.def.health || chebyshev(a, h) - chebyshev(c, h),
+  )[0]!;
+  const cur = currentTarget(w);
+  if (!cur || !train.includes(cur) || chebyshev(cur, h) > range) setTarget(w, pick.id);
+  return false;
+}
+
+/**
+ * Passo do kiting (a cada passo da simulação): com uma criatura corpo a corpo a menos de KITE_GAP, anda em volta do
+ * bolo — de lado, como gente, e não só para trás —, longe delas, sem entrar em canto, sem acordar mais do que quer e
+ * sem perder o alvo do alcance. De vez em quando troca o sentido (e troca quando o caminho fecha).
+ */
+function kiteStep(w: World, h: HeroEntity): void {
+  if (!soloKiter(w, h) || isMoving(h, w.now) || isPz(w.map, h.x, h.y)) return;
+  const melee = kiteTrain(w, h).filter((m) => m.def.attack.range <= 2);
+  if (!melee.length) return;
+  const near = Math.min(...melee.map((m) => chebyshev(m, h)));
+  if (near > KITE_GAP) return; // longe o bastante: fica parado atirando
+  const b = h.brain;
+  const k = (b.kite ??= { dir: 1, flipAt: 0, pullId: null, pullUntil: 0 });
+  if (w.now >= k.flipAt) {
+    if (k.flipAt) k.dir = k.dir === 1 ? -1 : 1;
+    k.flipAt = w.now + 6000 + w.rng.next() * 7000;
+  }
+  h.path = null;
+  h.pathGoal = null;
+  const cx = melee.reduce((s, m) => s + m.x, 0) / melee.length;
+  const cy = melee.reduce((s, m) => s + m.y, 0) / melee.length;
+  let rx = h.x - cx;
+  let ry = h.y - cy;
+  const len = Math.hypot(rx, ry) || 1;
+  rx /= len;
+  ry /= len;
+  const tx = -ry * k.dir;
+  const ty = rx * k.dir;
+  const target = currentTarget(w);
+  const range = Math.max(1, h.stats.weapon.range);
+  const home = b.spot ?? { x: h.x, y: h.y };
+  const free = (x: number, y: number) => canEnter(w, x, y, false, h.id) && !isPz(w.map, x, y);
+  const options: { dx: number; dy: number; score: number }[] = [];
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++) {
+      if (!dx && !dy) continue;
+      const n = { x: h.x + dx, y: h.y + dy };
+      if (!free(n.x, n.y)) continue;
+      // diagonal rente a árvore/parede não passa (o movimento não corta quina)
+      if (dx && dy && (!free(h.x + dx, h.y) || !free(h.x, h.y + dy))) continue;
+      const gap = Math.min(...melee.map((m) => chebyshev(m, n)));
+      let open = 0;
+      for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) if ((ox || oy) && free(n.x + ox, n.y + oy)) open++;
+      const dl = Math.hypot(dx, dy);
+      const tangent = (dx * tx + dy * ty) / dl;
+      const outward = (dx * rx + dy * ry) / dl;
+      const score =
+        Math.min(gap, KITE_GAP + 1) * 3 +
+        tangent * 1.6 +
+        outward * 0.6 +
+        open * 0.35 -
+        (chebyshev(n, home) > 10 ? 1.5 : 0) -
+        idleAround(w, n, 3) * 0.8 -
+        (target && chebyshev(target, n) > range ? 1.2 : 0) -
+        (gap <= 1 ? 6 : 0) + // encostado só se não houver outra saída (parado ele apanha do mesmo jeito)
+        w.rng.next() * 0.4;
+      options.push({ dx, dy, score });
+    }
+  options.sort((a, c) => c.score - a.score);
+  // sem saída boa de lado: troca o sentido para a próxima volta
+  if (!options.length || options[0]!.score < (KITE_GAP - 1) * 3) k.flipAt = w.now;
+  // tenta da melhor para a pior (uma criatura pode ter acabado de entrar na casa escolhida)
+  for (const o of options) if (tryStep(w, h, o.dx, o.dy, speedOf(w, h), false)) return;
 }
 
 /**
@@ -3460,6 +3649,7 @@ function keepHaste(w: World, h: HeroEntity): void {
 
 /** Passo contínuo de quem segue o líder (a cada passo da simulação, não só a cada pensamento de 300 ms). */
 export function heroFollowTick(w: World, h: HeroEntity): void {
+  if (h.brain.mode === 'hunt' && !h.dead) return kiteStep(w, h);
   if (h.brain.mode !== 'follow' || h.dead || isMoving(h, w.now) || h.path?.length) return;
   if (currentTarget(w) || currentActorTarget(w)) return;
   trailStep(w, h, followGap(h));
