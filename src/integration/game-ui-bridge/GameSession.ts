@@ -1,4 +1,5 @@
 import { migrateAuto, type AutoSettings } from '../../game/ai/autoPlay';
+import type { InventorySortKey, SortDir } from '../../domain/rules/inventory';
 // Sessão de jogo: liga simulação, persistência, áudio e interface. É a camada de integração explícita
 // entre React e Phaser: o Phaser chama `frame()` a cada quadro; o React lê as stores e envia comandos.
 import { parseHotbarEntry, type HotbarEntry } from '../../domain/rules/hotbar';
@@ -675,6 +676,20 @@ export class GameSession {
   /** Soltou um atalho que estava pressionado: a magia que ficou na fila (alvo fora de alcance) não dispara depois. */
   cancelQueuedSpell(): void {
     this.sim.world.player.queuedSpell = null;
+  }
+  sortInventory(key: InventorySortKey, dir: SortDir): void {
+    this.sim.sortInventory(key, dir);
+    this.audio.play('ui');
+    this.dirty = true;
+  }
+  dropMany(indices: readonly number[]): void {
+    this.sim.dropMany(indices);
+    this.dirty = true;
+  }
+  setSellLocks(itemIds: readonly string[], locked: boolean): void {
+    this.sim.setSellLocks(itemIds, locked);
+    this.audio.play('ui');
+    this.dirty = true;
   }
   organizeInventory(): void {
     this.sim.organizeInventory();
