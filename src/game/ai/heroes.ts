@@ -88,6 +88,8 @@ export function addHero(w: World, hero: HeroDef, character: CharacterState, rest
     brain: newHeroBrain(),
   } satisfies HeroEntity as HeroEntity;
   h.scope.events = heroBus(w, h, w.human.scope.events);
+  // cada herói pensa numa fase própria do ciclo de 300 ms (fixa pelo id): todos no mesmo quadro davam engasgos
+  h.brain.nextThinkAt = w.now + ([...hero.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 300);
   // cada herói nasce num ponto próprio do templo (nunca na frente de quem acabou de entrar no jogo)
   const seed = [...hero.id].reduce((a, ch) => a + ch.charCodeAt(0), 0);
   const pos = character.position;

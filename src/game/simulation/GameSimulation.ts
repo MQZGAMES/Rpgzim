@@ -397,7 +397,8 @@ export class GameSimulation {
         heroFollowTick(w, h);
         this.tickActor(step);
       });
-    for (const m of w.monsters.values()) updateMonster(w, m);
+    const actors = allActors(w);
+    for (const m of w.monsters.values()) updateMonster(w, m, actors);
     updateCityGuards(w);
     updateNpcs(w);
     this.updateRest();

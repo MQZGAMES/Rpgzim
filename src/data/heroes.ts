@@ -287,13 +287,6 @@ const distanciado: HeroDef = {
   },
 };
 
-export const HEROES: Readonly<Record<string, HeroDef>> = {
-  [boladex.id]: boladex,
-  [maguim.id]: maguim,
-  [manoCura.id]: manoCura,
-  [distanciado.id]: distanciado,
-};
-
 /** Falas neutras (sem o nome de nenhum herói) para personagens criados pelo jogador que jogam sozinhos. */
 const neutral: Partial<Record<keyof HeroDef['lines'], readonly string[]>> = {
   levelUp: ['Nível {level}! Subindo!', 'Mais um nível: {level}!'],
@@ -302,6 +295,140 @@ const neutral: Partial<Record<keyof HeroDef['lines'], readonly string[]>> = {
   sell: ['Vendido! +{gold} de ouro na bolsa.', 'Negócio fechado.'],
   bank: ['Guardando um pouco no banco.', 'Ouro no banco, cabeça tranquila.'],
   status: ['Nível {level}, {area}. {gold} de ouro e {potions} poções.'],
+};
+
+
+type Lines = Partial<Record<keyof HeroDef['lines'], readonly string[]>>;
+const BASE_BY_VOCATION: Record<HeroDef['vocation'], HeroDef> = {
+  knight: boladex,
+  sorcerer: maguim,
+  druid: manoCura,
+  paladin: distanciado,
+};
+
+/** Mais um personagem da casa: as falas do herói da mesma vocação (sem as que citam o nome dele) e as próprias. */
+function member(
+  id: string,
+  name: string,
+  title: string,
+  vocation: HeroDef['vocation'],
+  temperament: HeroDef['temperament'],
+  own: Lines,
+): HeroDef {
+  const lines = { ...BASE_BY_VOCATION[vocation].lines, ...neutral, ...own } as HeroDef['lines'];
+  return { id, slotId: id, name, title, vocation, temperament, lines };
+}
+
+// ------------------------------------------------------------------ os outros 20 da casa (5 de cada vocação)
+const CREW: HeroDef[] = [
+  // Knights
+  member('ferrolho', 'Ferrolho', 'Knight teimoso', 'knight', { bravery: 0.85, greed: 0.4, discipline: 0.6, sociability: 0.5, caution: 0.35 }, {
+    hunt: ['Ferrolho trancou a porta: ninguém passa! Bora em {monster}.', '{area}, aí vou eu.'],
+    levelUp: ['Nível {level}! Mais duro que porta de cofre.', 'Nível {level}. Ninguém me abre.'],
+    death: ['{monster} arrombou o Ferrolho... vergonha.', 'Até cadeado quebra, {monster}.'],
+  }),
+  member('brutamontes', 'Brutamontes', 'Knight de força bruta', 'knight', { bravery: 0.9, greed: 0.55, discipline: 0.35, sociability: 0.65, caution: 0.25 }, {
+    hunt: ['ESMAGAR {monster}!', 'Brutamontes com fome de {area}!'],
+    levelUp: ['NÍVEL {level}! MAIS FORTE!', 'Nível {level}. Músculo novo.'],
+    death: ['{monster} bateu mais forte... impossível!', 'Brutamontes caiu. Brutamontes volta.'],
+    greetPlayer: ['E aí, {player}! Quer ver eu levantar um javali?', 'Fala, {player}! Bora bater em coisa?'],
+  }),
+  member('escudao', 'Escudão', 'Knight protetor', 'knight', { bravery: 0.7, greed: 0.35, discipline: 0.75, sociability: 0.8, caution: 0.55 }, {
+    hunt: ['Escudo erguido. {monster}, vem que eu seguro.', 'Partiu {area}, alguém quer cobertura?'],
+    levelUp: ['Nível {level}! Escudo mais firme.', 'Nível {level}: mais gente cabe atrás de mim.'],
+    greetPlayer: ['{player}, se apertar, fica atrás de mim!', 'Oi, {player}! Precisa de um tanque?'],
+  }),
+  member('marretinha', 'Marretinha', 'Knight baixinho e bravo', 'knight', { bravery: 0.8, greed: 0.65, discipline: 0.45, sociability: 0.6, caution: 0.4 }, {
+    hunt: ['Pequeno, mas a marreta é grande! {monster}, segura!', '{area}: hora da marretada.'],
+    levelUp: ['Nível {level}! Cresci... no nível.', 'Nível {level}! Marreta afiada.'],
+    death: ['{monster} me pegou de surpresa... eu tava abaixado!', 'Marretinha amassado.'],
+  }),
+  member('dona_bigorna', 'Dona Bigorna', 'Knight veterana', 'knight', { bravery: 0.65, greed: 0.45, discipline: 0.85, sociability: 0.55, caution: 0.6 }, {
+    hunt: ['Na minha época, {monster} era mais difícil. Vamos.', '{area}, como nos velhos tempos.'],
+    levelUp: ['Nível {level}. Experiência não se compra.', 'Nível {level}, crianças. Aprendam.'],
+    greetPlayer: ['Olá, {player}. Já comeu hoje? Caçar com fome não presta.', 'Bom te ver, {player}.'],
+  }),
+  // Paladins
+  member('mira_certa', 'Mira Certa', 'Paladin preciso', 'paladin', { bravery: 0.55, greed: 0.5, discipline: 0.85, sociability: 0.45, caution: 0.6 }, {
+    hunt: ['Alvo: {monster}. Distância: perfeita.', '{area}. Vento a favor.'],
+    levelUp: ['Nível {level}. Nem pisquei.', 'Nível {level}! Na mosca.'],
+    death: ['{monster} estava fora da mira... raro.', 'Errei uma. Só uma.'],
+  }),
+  member('flechinha', 'Flechinha', 'Paladin animado', 'paladin', { bravery: 0.65, greed: 0.45, discipline: 0.45, sociability: 0.85, caution: 0.45 }, {
+    hunt: ['Flechinha na área! Bora, {monster}!', '{area} tá cheio de alvo, que delícia!'],
+    levelUp: ['NÍVEL {level}!!! Alguém viu? Alguém viu?', 'Nível {level}! Tô voando igual flecha!'],
+    greetPlayer: ['Oiê, {player}! Quer ver minha mira?', '{player}! Bora caçar juntinho?'],
+  }),
+  member('olho_de_lince', 'Olho de Lince', 'Paladin observador', 'paladin', { bravery: 0.45, greed: 0.55, discipline: 0.7, sociability: 0.35, caution: 0.75 }, {
+    hunt: ['Vi {monster} lá longe. Ninguém escapa do Lince.', '{area}. Eu vejo tudo daqui.'],
+    levelUp: ['Nível {level}. Enxergo ainda mais longe.', 'Nível {level}.'],
+    dangerSeen: ['Vi {player} de longe. Perigoso. Saindo.', '{player} na área... olho aberto, galera.'],
+  }),
+  member('arqueira_juju', 'Arqueira Juju', 'Paladin aventureira', 'paladin', { bravery: 0.7, greed: 0.6, discipline: 0.55, sociability: 0.7, caution: 0.45 }, {
+    hunt: ['Juju partiu pra {area}! Quem vem?', '{monster}, prepara que lá vem flecha!'],
+    levelUp: ['Nível {level}! Juju tá on!', 'Nível {level}, e o arco ainda nem esquentou.'],
+    death: ['Ai, {monster}... essa doeu.', 'Juju caiu, mas Juju volta!'],
+  }),
+  member('ze_besta', 'Zé Besta', 'Paladin piadista', 'paladin', { bravery: 0.6, greed: 0.65, discipline: 0.4, sociability: 0.8, caution: 0.5 }, {
+    hunt: ['Zé Besta e sua besta contra {monster}. Sacou? Besta!', 'Vou pra {area}, se eu voltar conto a piada.'],
+    levelUp: ['Nível {level}! Nada mal pra um besta.', 'Nível {level}! Errei uma flecha e acertei a promoção.'],
+    death: ['{monster} me pegou... que besteira.', 'Morri de rir. E de {monster}.'],
+  }),
+  // Sorcerers
+  member('faisquinha', 'Faísquinha', 'Sorcerer iniciante', 'sorcerer', { bravery: 0.55, greed: 0.5, discipline: 0.5, sociability: 0.75, caution: 0.55 }, {
+    hunt: ['Faísca na mão, {monster} na mira!', '{area}, vou dar um choquinho.'],
+    levelUp: ['Nível {level}! Já sou faísca média.', 'Nível {level}! Tá ficando quente!'],
+  }),
+  member('pavio_curto', 'Pavio Curto', 'Sorcerer esquentado', 'sorcerer', { bravery: 0.85, greed: 0.6, discipline: 0.3, sociability: 0.45, caution: 0.3 }, {
+    hunt: ['{monster} me olhou torto. VAI QUEIMAR.', 'Tô de mau humor. {area}, se prepara.'],
+    levelUp: ['Nível {level}. E daí? Quero o próximo.', 'Nível {level}! Agora sim explode mais.'],
+    death: ['{monster}... você vai ver quando eu voltar!', 'Isso não vai ficar assim!'],
+  }),
+  member('chamuscado', 'Chamuscado', 'Sorcerer desastrado', 'sorcerer', { bravery: 0.6, greed: 0.5, discipline: 0.4, sociability: 0.65, caution: 0.5 }, {
+    hunt: ['Dessa vez não queimo a sobrancelha. {monster}, lá vou eu.', '{area}... alguém tem um balde?'],
+    levelUp: ['Nível {level}! Só um pouco chamuscado.', 'Nível {level}! Cheirinho de cabelo queimado.'],
+    death: ['Acho que a explosão foi pra trás...', '{monster} e eu, ambos tostados.'],
+  }),
+  member('tia_labareda', 'Tia Labareda', 'Sorcerer experiente', 'sorcerer', { bravery: 0.6, greed: 0.45, discipline: 0.8, sociability: 0.6, caution: 0.65 }, {
+    hunt: ['Vamos, {monster}. A tia tem compromisso às seis.', '{area}: fogo baixo, cozimento lento.'],
+    levelUp: ['Nível {level}, meu bem. Sem pressa.', 'Nível {level}. A receita é paciência.'],
+    greetPlayer: ['Oi, {player}, querido! Comeu direito?', '{player}! Cuidado com o fogo, viu?'],
+  }),
+  member('trovaozinho', 'Trovãozinho', 'Sorcerer barulhento', 'sorcerer', { bravery: 0.75, greed: 0.55, discipline: 0.45, sociability: 0.7, caution: 0.4 }, {
+    hunt: ['BRUUUM! {monster}, ouviu esse trovão?', '{area} vai ficar elétrica!'],
+    levelUp: ['NÍVEL {level}! KABUM!', 'Nível {level}! Mais volts!'],
+  }),
+  // Druids
+  member('folhagem', 'Folhagem', 'Druid tranquilo', 'druid', { bravery: 0.45, greed: 0.35, discipline: 0.6, sociability: 0.75, caution: 0.7 }, {
+    hunt: ['A natureza chama: {area}.', '{monster} faz parte do ciclo... e vai voltar ao ciclo.'],
+    levelUp: ['Nível {level}. Cresço devagar, como árvore.', 'Nível {level}. Raízes mais fundas.'],
+  }),
+  member('dona_salvia', 'Dona Sálvia', 'Druid curandeira', 'druid', { bravery: 0.4, greed: 0.3, discipline: 0.75, sociability: 0.85, caution: 0.75 }, {
+    hunt: ['Vou colher umas ervas em {area}. E bater em {monster}.', 'Chá depois da caça, combinado?'],
+    levelUp: ['Nível {level}! Minhas ervas agradecem.', 'Nível {level}. A cura fica mais forte.'],
+    greetPlayer: ['{player}, você tá pálido. Quer uma cura?', 'Oi, {player}! Se machucar, me chama.'],
+  }),
+  member('raizinha', 'Raizinha', 'Druid curiosa', 'druid', { bravery: 0.55, greed: 0.5, discipline: 0.45, sociability: 0.7, caution: 0.55 }, {
+    hunt: ['O que será que tem em {area}? Vou ver!', '{monster}! Que bicho interessante. Vou acertar ele.'],
+    levelUp: ['Nível {level}! Brotei mais um pouco.', 'Nível {level}! Que legal!'],
+  }),
+  member('curandeiro_tonho', 'Curandeiro Tonho', 'Druid do interior', 'druid', { bravery: 0.6, greed: 0.45, discipline: 0.55, sociability: 0.8, caution: 0.6 }, {
+    hunt: ['Ô {monster}, vem cá que o Tonho te benze.', 'Bora pra {area}, sô.'],
+    levelUp: ['Nível {level}, uai! Que beleza.', 'Nível {level}. Coisa boa demais da conta.'],
+    greetPlayer: ['Ô {player}, chega mais, sô!', 'Bão, {player}? Precisa de reza?'],
+  }),
+  member('brisa_mansa', 'Brisa Mansa', 'Druid do gelo', 'druid', { bravery: 0.5, greed: 0.4, discipline: 0.7, sociability: 0.5, caution: 0.65 }, {
+    hunt: ['Um ventinho gelado em {area}...', '{monster}, sente esse frio?'],
+    levelUp: ['Nível {level}. Calma como a brisa.', 'Nível {level}. O inverno chegou.'],
+  }),
+];
+
+export const HEROES: Readonly<Record<string, HeroDef>> = {
+  [boladex.id]: boladex,
+  [maguim.id]: maguim,
+  [manoCura.id]: manoCura,
+  [distanciado.id]: distanciado,
+  ...Object.fromEntries(CREW.map((h) => [h.id, h])),
 };
 
 /**

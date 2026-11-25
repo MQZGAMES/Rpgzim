@@ -20,16 +20,19 @@ export async function ensureHeroSaves(saves: SaveService, data: GameData): Promi
       reset++;
     }
   }
-  // os personagens da casa só são criados uma vez por temporada: se o jogador apagar um, ele não volta
+  // cada personagem da casa é criado uma vez por temporada: se o jogador apagar um, ele não volta. A marca guarda quem já
+  // foi criado, para que personagens novos da casa apareçam também para quem já jogava ("1" = só os 4 primeiros)
   const seededKey = `rpgzim.heroesSeeded.${SEASON}`;
+  const seeded = seededHeroes(readSeedMark(seededKey));
+  const todo = Object.values(data.heroes).filter((h) => !seeded.has(h.slotId));
+  if (!todo.length) return reset;
   try {
-    if (localStorage.getItem(seededKey)) return reset;
-    localStorage.setItem(seededKey, '1');
+    localStorage.setItem(seededKey, JSON.stringify([...seeded, ...todo.map((h) => h.slotId)]));
   } catch {
     /* sem armazenamento: cria o que faltar, como antes */
   }
   const existing = new Set((await saves.list().catch(() => [])).map((s) => s.slotId));
-  for (const hero of Object.values(data.heroes)) {
+  for (const hero of todo) {
     if (existing.has(hero.slotId)) continue;
     const c = createCharacter(data, {
       id: hero.slotId,
@@ -41,6 +44,29 @@ export async function ensureHeroSaves(saves: SaveService, data: GameData): Promi
     await saves.save(c).catch(() => undefined);
   }
   return reset;
+}
+
+/** Os 4 personagens da casa da primeira versão (a marca antiga "1" quer dizer que esses já foram criados). */
+const FIRST_HEROES = ['boladex', 'maguim', 'mano_cura', 'distanciado'];
+
+function readSeedMark(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Quem já foi criado nesta temporada, pela marca salva (null = ninguém; "1" = os 4 primeiros; lista JSON). */
+export function seededHeroes(mark: string | null): Set<string> {
+  if (!mark) return new Set();
+  if (mark === '1') return new Set(FIRST_HEROES);
+  try {
+    const list = JSON.parse(mark) as unknown;
+    return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : FIRST_HEROES);
+  } catch {
+    return new Set(FIRST_HEROES);
+  }
 }
 
 /**
