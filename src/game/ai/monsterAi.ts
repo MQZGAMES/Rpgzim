@@ -61,10 +61,15 @@ function speedOf(w: World, m: MonsterEntity): number {
 const targetable = (w: World, a: PlayerEntity) => !a.dead && !isPz(w.map, a.x, a.y);
 
 /** Personagem atacável mais próximo dentro do raio (ou null). */
-function nearestActor(w: World, m: MonsterEntity, radius: number): PlayerEntity | null {
+function nearestActor(
+  w: World,
+  m: MonsterEntity,
+  radius: number,
+  actors: readonly PlayerEntity[] = allActors(w),
+): PlayerEntity | null {
   let best: PlayerEntity | null = null;
   let bestD = Infinity;
-  for (const a of allActors(w)) {
+  for (const a of actors) {
     if (!targetable(w, a)) continue;
     const d = chebyshev(m, a);
     if (d <= radius && d < bestD) {
@@ -81,14 +86,25 @@ function actorById(w: World, id: string | null): PlayerEntity | null {
   return w.heroes.get(id) ?? null;
 }
 
-export function updateMonster(w: World, m: MonsterEntity): void {
+/**
+ * Um passo da criatura. `actors` é a lista de personagens do quadro (a simulação monta uma vez e passa para todas as
+ * criaturas: com dezenas de personagens, montar a lista em cada uma pesava mais que a própria IA).
+ */
+export function updateMonster(w: World, m: MonsterEntity, actors: readonly PlayerEntity[] = allActors(w)): void {
   if (!m.alive) {
     if (w.now >= m.respawnAt) respawn(w, m);
     return;
   }
   settle(m, w.now);
-  const sleepDist = Math.min(...allActors(w).map((a) => chebyshev(m, a)));
-  if (sleepDist > w.data.balance.world.aiSleepDistance && m.state !== 'returning') {
+  // alguém a até aiSleepDistance? (para no primeiro: a maioria das criaturas está longe de todo mundo e dorme)
+  const sleepRange = w.data.balance.world.aiSleepDistance;
+  let awake = false;
+  for (const a of actors)
+    if (chebyshev(m, a) <= sleepRange) {
+      awake = true;
+      break;
+    }
+  if (!awake && m.state !== 'returning') {
     // ninguém por perto: quem perseguia desiste e volta para casa; os demais "dormem"
     if (m.state === 'chasing' || m.state === 'attacking') {
       m.state = 'returning';
@@ -97,22 +113,23 @@ export function updateMonster(w: World, m: MonsterEntity): void {
     } else return;
   }
   // alvo atual (ou o mais próximo para quem está ocioso)
+  // (o mais próximo no raio de ataque é o mesmo nas consultas abaixo: calcula uma vez)
+  const nearest = nearestActor(w, m, m.def.aggroRadius, actors);
   let p = actorById(w, m.targetId);
   if (m.state === 'chasing' || m.state === 'attacking') {
     if (!p || !targetable(w, p)) {
-      p = nearestActor(w, m, m.def.aggroRadius);
+      p = nearest;
       m.targetId = p?.id ?? null;
     }
   } else if (m.state === 'idle' || m.state === 'wandering') {
-    p = nearestActor(w, m, m.def.aggroRadius);
+    p = nearest;
     m.targetId = p?.id ?? null;
   } else if (m.state === 'returning') {
-    p = nearestActor(w, m, 2);
+    p = nearestActor(w, m, 2, actors);
   }
   // Se outro personagem estiver estritamente mais perto, trocar de alvo é melhor do que ignorar
   // a ameaça próxima. Empates mantêm o alvo atual (quem o monstro já está atacando ou quem o atraiu).
   // Durante a isca (taunt) o monstro não troca: foi o conjure que puxou a atenção dele.
-  const nearest = nearestActor(w, m, m.def.aggroRadius);
   if (nearest && w.now >= m.tauntUntil && (!p || chebyshev(m, nearest) < chebyshev(m, p))) {
     p = nearest;
     m.targetId = nearest.id;

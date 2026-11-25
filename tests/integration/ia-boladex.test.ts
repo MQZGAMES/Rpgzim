@@ -83,10 +83,8 @@ describe('os outros heróis: cada vocação com a sua lógica', () => {
     return { sim, w: sim.world, h: sim.addHero(hero, c) as HeroEntity };
   };
 
-  it('existem Boladex, Maguim, Mano Cura e Distanciado, um de cada vocação', () => {
-    const voc = Object.values(GAME_DATA.heroes)
-      .map((x) => x.vocation)
-      .sort();
+  it('existem Boladex, Maguim, Mano Cura e Distanciado, um de cada vocação (além dos outros 20 da casa)', () => {
+    const voc = ['boladex', 'maguim', 'mano_cura', 'distanciado'].map((id) => GAME_DATA.heroes[id]?.vocation).sort();
     expect(voc).toEqual(['druid', 'knight', 'paladin', 'sorcerer']);
     expect(GAME_DATA.heroes.maguim?.name).toBe('Maguim');
     expect(GAME_DATA.heroes.mano_cura?.name).toBe('Mano Cura');
