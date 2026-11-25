@@ -481,20 +481,40 @@ export function damagePlayer(
     blocked: res.absorbed && manaLoss === 0,
     position: pos,
   });
-  if (!reflected && healthLost > 0 && source.id !== p.id) {
-    reflectDamage(w, p, source, element, healthLost);
-  }
+  // Brado de Ferro: cada golpe que chega (bloqueado pelo escudo não conta) devolve parte do ataque normal do defensor
+  if (!reflected && source.id !== p.id) reflectDamage(w, p, source);
   if (lethal) {
     p.character.health = 0;
     killPlayer(w, source);
   }
 }
 
-function reflectDamage(w: World, defender: PlayerEntity, source: DamageSource, element: Element, healthLost: number): void {
+/**
+ * Dano bruto de um ataque normal do personagem (a mesma rolagem do golpe básico com a arma atual, sem errar nem
+ * armadura do alvo).
+ */
+function rollBasicDamage(w: World, a: PlayerEntity): number {
+  const weapon = a.stats.weapon;
+  const voc = w.data.vocations[a.character.vocation];
+  if (weapon.training && weapon.damage) return rollRange(weapon.damage as [number, number], w.rng);
+  if (weapon.kind === 'wand') return rollWandDamage(weapon.damage ?? [4, 8], a.stats.magicLevel, voc.damage.magic, w.rng);
+  const mod = weapon.kind === 'distance' ? voc.damage.distance * (1 + a.stats.distanceDamageBonus) : voc.damage.melee;
+  return rollWeaponDamage(
+    { level: a.character.level, skill: weaponSkillLevel(a.stats), weaponAttack: weapon.attack, vocationModifier: mod },
+    w.rng,
+  );
+}
+
+/**
+ * Reflexo do Brado de Ferro: a cada golpe recebido, o atacante leva `reflectRatio` do ATAQUE NORMAL do defensor
+ * (não do dano recebido). Esse dano não se defende: ignora armadura, resistências, bloqueio de escudo e a redução de PvP.
+ */
+function reflectDamage(w: World, defender: PlayerEntity, source: DamageSource): void {
   const defense = defender.buffs.find((buff) => buff.kind === 'defense' && buff.expiresAt > w.now);
   const ratio = defense?.sourceSpell ? w.data.spells[defense.sourceSpell]?.buff?.reflectRatio ?? 0 : 0;
-  const damage = Math.round(healthLost * ratio);
-  if (damage <= 0) return;
+  if (ratio <= 0) return;
+  const damage = Math.max(1, Math.round(rollBasicDamage(w, defender) * ratio));
+  const element = defender.stats.weapon.element;
 
   if (source.kind === 'monster') {
     const monster = w.monsters.get(source.id);

@@ -381,7 +381,7 @@ const list: SpellDef[] = [
     name: 'Brado de Ferro',
     words: 'ferrum clamor',
     icon: 'spell_iron_roar',
-    description: 'Reduz em 35% o dano por 2 minutos e devolve ao atacante 50% da vida perdida a cada golpe.',
+    description: 'Reduz em 35% o dano por 2 minutos. A cada golpe recebido, o atacante leva 50% do seu ataque normal, sem defesa.',
     vocations: ['knight'],
     minLevel: 4,
     minMagicLevel: 0,
