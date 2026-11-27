@@ -217,11 +217,18 @@ export function nearbyLootBags(w: World): LootContainer[] {
  * Pega tudo dos sacos ao alcance (filtro opcional): primeiro o ouro, depois as pilhas de maior valor de venda, de
  * qualquer saco; com a mochila cheia, o que vale menos fica no chão.
  */
-export function takeAllNearbyLoot(w: World, accept: (bag: LootContainer) => boolean = () => true): void {
+export function takeAllNearbyLoot(
+  w: World,
+  accept: (bag: LootContainer) => boolean = () => true,
+  opts: { gold?: boolean; item?: (st: { itemId: string; count: number }) => boolean } = {},
+): void {
   const bags = nearbyLootBags(w).filter(accept);
-  for (const bag of bags) if (bag.gold > 0) takeLoot(w, bag.id, -1);
+  if (opts.gold !== false) for (const bag of bags) if (bag.gold > 0) takeLoot(w, bag.id, -1);
+  const pick = opts.item ?? (() => true);
   const stacks = bags
-    .flatMap((bag) => bag.items.map((st) => ({ bag, st, value: lootUnitValue(w, st.itemId) * st.count })))
+    .flatMap((bag) =>
+      bag.items.filter(pick).map((st) => ({ bag, st, value: lootUnitValue(w, st.itemId) * st.count })),
+    )
     .sort((a, b) => b.value - a.value);
   for (const { bag, st } of stacks) {
     const i = bag.items.indexOf(st);

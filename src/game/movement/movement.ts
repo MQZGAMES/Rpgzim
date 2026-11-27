@@ -8,7 +8,7 @@ import { cellIndex, inBounds, isPz, isSolid } from '../world/GameMap';
 import type { Mover, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { warnThrottled } from '../simulation/World';
-import { isPzLocked, pzLockMs } from '../social/social';
+import { isPzLocked, pzLockMs, sameParty } from '../social/social';
 import { canStep, findPath } from './pathfinding';
 
 export function isMoving(m: Mover, now: number): boolean {
@@ -78,7 +78,9 @@ export function resolveStuck(w: World, m: PlayerEntity, blockedBy: string | null
     return;
   }
   m.stuckAt = w.now;
-  if (w.now - m.stuckSince < SWAP_AFTER_MS) return;
+  const forcing = isForcing(w, m);
+  const wait = forcing ? FORCE_HOP_AFTER_MS : sameGroup(w, m.id, blockedBy) ? PARTY_SWAP_AFTER_MS : SWAP_AFTER_MS;
+  if (w.now - m.stuckSince < wait) return;
   const other = w.human.id === blockedBy ? w.human : w.heroes.get(blockedBy);
   if (!other || other.dead || m.dead || isMoving(other, w.now)) return;
   const dx = other.x - m.x;
@@ -89,20 +91,13 @@ export function resolveStuck(w: World, m: PlayerEntity, blockedBy: string | null
   if (isPz(w.map, other.x, other.y) && isPzLocked(w, m.id)) return;
   if (!canStep((x, y) => staticFree(w, x, y), m.x, m.y, dx, dy)) return;
   // ninguém é empurrado (nem puxado) para dentro de uma área protegida: a troca na borda da PZ não acontece
-  // (lá dentro os personagens já atravessam um ao outro)
-  if (!isPz(w.map, m.x, m.y) && !isPz(w.map, other.x, other.y)) {
+  // (lá dentro os personagens já atravessam um ao outro). Quem força o caminho (direcional segurado ou clique no
+  // mapa) pula a fila inteira de personagens até o primeiro tile livre (ex.: fileira dupla na porta da loja).
+  if (!forcing && !isPz(w.map, m.x, m.y) && !isPz(w.map, other.x, other.y)) {
     swapPlaces(w, m, other);
-  } else {
-    // Sem poder trocar, pula apenas o personagem: pouso livre depois dele.
-    const nx = other.x + dx;
-    const ny = other.y + dy;
-    if (!canEnter(w, nx, ny, false, m.id) || occupant(w, nx, ny) !== undefined) return;
-    const free = (x: number, y: number) => staticFree(w, x, y) && !(isPz(w.map, x, y) && isPzLocked(w, m.id));
-    if (!canStep(free, other.x, other.y, dx, dy)) return;
-    teleport(w, m, nx, ny);
-    m.facing = facingFrom(dx, dy, m.facing);
-    m.path = null;
-    m.chasePath = null;
+  } else if (!hopOver(w, m, dx, dy)) {
+    if (isPz(w.map, m.x, m.y) || isPz(w.map, other.x, other.y)) return;
+    swapPlaces(w, m, other); // sem pouso livre depois da fila: troca com o primeiro
   }
   m.stuckWith = null;
   m.stuckSince = 0;
@@ -127,6 +122,48 @@ function swapPlaces(w: World, a: PlayerEntity, b: PlayerEntity): void {
   w.events.emit('actorsSwapped', { firstId: a.id, secondId: b.id });
 }
 
+/** Jogador forçando o caminho: segurando o direcional ou andando por um clique no mapa (não o seguir automático). */
+function isForcing(w: World, m: PlayerEntity): boolean {
+  if (m.id !== w.human.id) return false;
+  return !!m.heldDir || (!!m.path?.length && !m.following);
+}
+
+function sameGroup(w: World, a: string, b: string): boolean {
+  return sameParty(w, a, b);
+}
+
+/**
+ * Pula a fila de personagens na direção (dx, dy): pousa no primeiro tile livre depois deles (até `MAX_HOP` tiles).
+ * Só atravessa personagens: parede, criatura ou PZ trancada no meio impedem o pulo.
+ */
+function hopOver(w: World, m: PlayerEntity, dx: number, dy: number): boolean {
+  const free = (x: number, y: number) => staticFree(w, x, y) && !(isPz(w.map, x, y) && isPzLocked(w, m.id));
+  let px = m.x;
+  let py = m.y;
+  for (let k = 1; k <= MAX_HOP; k++) {
+    const x = m.x + dx * k;
+    const y = m.y + dy * k;
+    if (!canStep(free, px, py, dx, dy)) return false;
+    if (k >= 2 && canEnter(w, x, y, false, m.id) && occupant(w, x, y) === undefined) {
+      teleport(w, m, x, y);
+      m.facing = facingFrom(dx, dy, m.facing);
+      m.path = null;
+      m.chasePath = null;
+      return true;
+    }
+    if (!blockedOnlyByActor(w, x, y, m.id) && !(isPz(w.map, x, y) && occupant(w, x, y) !== undefined)) return false;
+    px = x;
+    py = y;
+  }
+  return false;
+}
+
+/** Tiles que um pulo atravessa no máximo (fila de até 3 personagens). */
+const MAX_HOP = 4;
+/** Forçando o caminho, o pulo sai depois desta insistência (curta: não parece travado, nem pula sem querer). */
+export const FORCE_HOP_AFTER_MS = 450;
+/** Colegas de grupo trocam de lugar quase na hora (o líder nunca fica preso atrás de quem o segue). */
+export const PARTY_SWAP_AFTER_MS = 300;
 /** Tempo de insistência antes de os personagens trocarem de lugar. */
 export const SWAP_AFTER_MS = 3000;
 /** Sem tentar passar por este tempo, a insistência é esquecida. */

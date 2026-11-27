@@ -211,35 +211,45 @@ export function PartyPanel() {
             {party.members.map((m) => (
               <div
                 key={m.id}
-                className={`frame-slot flex flex-wrap items-center gap-x-2 gap-y-1 !border-[6px] px-1 py-[2px] text-[12px] ${m.near ? '' : 'opacity-70'}`}
+                className={`frame-slot flex flex-col gap-1 !border-[6px] px-1 py-[3px] text-[12px] ${m.near ? '' : 'opacity-70'}`}
                 data-testid={`party-member-${m.isYou ? 'you' : m.id}`}
               >
-                {m.isLeader ? (
-                  <ItemIcon icon="ui_crown" size={14} title="Líder" />
-                ) : (
-                  <span className="w-[14px]" />
-                )}
-                <span
-                  className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}
-                  title={m.activity ? `${m.persona} · ${m.activity}` : undefined}
-                >
-                  {m.name}
-                  {m.isYou ? ' (você)' : ''} <span className="text-muted">nv {m.level}</span>
-                  {m.persona && (
-                    <span className="block truncate text-[10px] text-muted">
-                      {m.persona} · {m.dead ? 'morto' : m.activity}
-                    </span>
+                {/* linha 1: líder, nome e (sem cortar) nível e vocação */}
+                <div className="flex min-w-0 items-center gap-1">
+                  {m.isLeader ? (
+                    <ItemIcon icon="ui_crown" size={14} title="Líder" />
+                  ) : (
+                    <span className="w-[14px] shrink-0" />
                   )}
-                </span>
-                <Bar
-                  className="w-[60px]"
-                  value={m.dead ? 0 : m.hp}
-                  max={m.maxHp}
-                  color="var(--color-heal)"
-                  height={4}
-                />
-                {/* ações: no celular estreito vão para a linha de baixo (o nome e a vida continuam legíveis) */}
-                <div className="ml-auto flex shrink-0 gap-1">
+                  <span
+                    className={`min-w-0 flex-1 truncate ${m.isYou ? 'text-gold-light' : 'text-[#7fd8ff]'}`}
+                    title={m.name}
+                  >
+                    {m.name}
+                    {m.isYou ? ' (você)' : ''}
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap text-[11px] text-muted" data-testid={`party-level-${m.isYou ? 'you' : m.id}`}>
+                    Nv {m.level} · {m.vocation}
+                  </span>
+                </div>
+                {/* linha 2: vida e mana com números, distância */}
+                <div className="flex items-center gap-2 text-[10px] text-muted">
+                  <div className="min-w-0 flex-1">
+                    <Bar value={m.dead ? 0 : m.hp} max={m.maxHp} color="var(--color-heal)" height={4} />
+                    <Bar className="mt-[2px]" value={m.dead ? 0 : m.mana} max={m.maxMana} color="var(--color-mana)" height={3} />
+                  </div>
+                  <span className="shrink-0 whitespace-nowrap tabular-nums">
+                    {m.dead ? 'morto' : `${Math.ceil(m.hp)}/${m.maxHp}`}
+                    {!m.isYou && ` · ${m.distance} sqm`}
+                  </span>
+                </div>
+                {m.persona && (
+                  <div className="truncate text-[10px] text-muted" title={`${m.persona} · ${m.activity ?? ''}`}>
+                    {m.persona} · {m.dead ? 'morto' : m.activity}
+                  </div>
+                )}
+                {/* ações numa linha própria: o nome e a vida continuam legíveis no celular estreito */}
+                <div className="flex justify-end gap-1">
                   {!m.isYou && !m.dead && (
                     <TapButton
                       className="btn-pixel flex h-8 items-center justify-center !border-[6px] px-1 text-[10px]"

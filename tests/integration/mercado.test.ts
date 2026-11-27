@@ -63,15 +63,18 @@ describe('mercado: o corretor e o que ele negocia', () => {
     expect(w.ui.market).toBeNull();
   });
 
-  it('só equipamentos e poções: materiais de criaturas ficam para as lojas', () => {
+  it('equipamentos, poções e (nov/2026) materiais de criaturas; comida e o resto ficam para as lojas', () => {
     const { sim, w } = setup();
     expect(marketable(D.items.sword_iron)).toBe(true);
     expect(marketable(D.items.potion_health)).toBe(true);
-    expect(marketable(D.items.bone_fragment)).toBe(false);
+    expect(marketable(D.items.bone_fragment)).toBe(true);
     expect(marketable(D.items.meat)).toBe(false);
     w.human.character.inventory[0] = { itemId: 'bone_fragment', count: 10 };
-    expect(sim.marketOffer('sell', 'bone_fragment', 10, 5)).toBe(false);
-    expect(countItem(w.human.character.inventory, 'bone_fragment')).toBe(10);
+    expect(sim.marketOffer('sell', 'bone_fragment', 10, 5)).toBe(true);
+    expect(countItem(w.human.character.inventory, 'bone_fragment')).toBe(0);
+    w.human.character.inventory[0] = { itemId: 'meat', count: 3 };
+    expect(sim.marketOffer('sell', 'meat', 3, 5)).toBe(false);
+    expect(countItem(w.human.character.inventory, 'meat')).toBe(3);
   });
 
   it('sem limite de ofertas por personagem', () => {
@@ -156,17 +159,18 @@ describe('mercado: livro de ofertas', () => {
     p.inventory = p.inventory.map(() => null);
     p.inventory[0] = { itemId: 'sword_iron', count: 1 };
     p.inventory[1] = { itemId: 'potion_health', count: 5 };
-    p.inventory[2] = { itemId: 'bone_fragment', count: 4 }; // não é do mercado: fica
+    p.inventory[2] = { itemId: 'meat', count: 4 }; // não é do mercado: fica
     p.depot[0] = { itemId: 'potion_health', count: 3 };
     offer(w, 'sell', 'a', 'sword_iron', 2, 260); // já anunciaram: um abaixo
     offer(w, 'buy', 'b', 'sword_iron', 1, 200); // não vende para a oferta de compra: anuncia acima dela
     const suggested = priceGuide(D, w.market, 'potion_health', p.id).sellSuggest; // ninguém vendendo
     const bank = p.bankGold;
-    const ids = ['sword_iron', 'potion_health', 'bone_fragment', 'helmet_iron', 'axe_hand'];
-    // travados (poções sempre; o que o jogador travou com o cadeado) ficam de fora sem a confirmação à parte
+    const ids = ['sword_iron', 'potion_health', 'meat', 'helmet_iron', 'axe_hand'];
+    // travados (poções que ele já tinha entram travadas; o que o jogador travou com o cadeado) ficam de fora sem a
+    // confirmação à parte. `kept` = unidades travadas de cada item
     p.inventory[3] = { itemId: 'axe_hand', count: 1 };
     sim.setSellLock('axe_hand', true);
-    expect(buildSnapshot(sim, 1).market!.kept).toMatchObject({ sword_iron: false, potion_health: true, axe_hand: true });
+    expect(buildSnapshot(sim, 1).market!.kept).toMatchObject({ sword_iron: 0, potion_health: 8, axe_hand: 1 });
     expect(sim.marketSellAll(ids)).toBe(true);
     expect(w.market.offers.filter((o) => o.ownerId === p.id).map((o) => o.itemId)).toEqual(['sword_iron']);
     expect(countItem(p.inventory, 'potion_health') + countItem(p.depot, 'potion_health')).toBe(8);
@@ -180,7 +184,7 @@ describe('mercado: livro de ofertas', () => {
     expect(mine.find((o) => o.itemId === 'sword_iron')).toMatchObject({ side: 'sell', count: 1, price: 259 });
     expect(mine.find((o) => o.itemId === 'potion_health')).toMatchObject({ side: 'sell', count: 8, price: suggested });
     expect(countItem(p.inventory, 'potion_health') + countItem(p.depot, 'potion_health')).toBe(0);
-    expect(countItem(p.inventory, 'bone_fragment')).toBe(4);
+    expect(countItem(p.inventory, 'meat')).toBe(4);
     expect(p.bankGold).toBe(bank);
     expect(offersFor(w.market, 'sword_iron', 'buy')).toHaveLength(1);
     // nada mais para anunciar
@@ -221,7 +225,7 @@ describe('mercado: livro de ofertas', () => {
 });
 
 describe('mercado: categorias, filtros e comparação', () => {
-  it('cada equipamento e poção cai numa categoria (armas por tipo, defesa, acessórios, poções)', () => {
+  it('cada equipamento, poção e material cai numa categoria (armas por tipo, defesa, acessórios, poções, materiais)', () => {
     expect(categoryOf(D.items.sword_iron)).toBe('sword');
     expect(categoryOf(D.items.axe_battle)).toBe('axe');
     expect(categoryOf(D.items.bow_elven)).toBe('distance');
@@ -231,7 +235,8 @@ describe('mercado: categorias, filtros e comparação', () => {
     expect(categoryOf(D.items.spellbook)).toBe('spellbook');
     expect(categoryOf(D.items.legs_plate)).toBe('legs');
     expect(categoryOf(D.items.potion_mana_great)).toBe('potion_mana');
-    expect(categoryOf(D.items.bone_fragment)).toBeNull();
+    expect(categoryOf(D.items.bone_fragment)).toBe('material');
+    expect(categoryOf(D.items.meat)).toBeNull();
     const cat = buildCatalog(D);
     expect(cat.every((c) => marketable(D.items[c.itemId]))).toBe(true);
     expect(cat.find((c) => c.itemId === 'sword_steel')).toMatchObject({ minLevel: 8, attack: 20 });
@@ -268,7 +273,7 @@ describe('mercado: os heróis negociam', () => {
     const robe = w.market.offers.find((o) => o.ownerId === h.character.id && o.itemId === 'robe_mystic');
     expect(robe?.side).toBe('sell');
     expect(robe!.price).toBeGreaterThan(Math.round(1100 * 0.35)); // mais que a loja pagaria
-    expect(countItem(inv, 'bone_fragment')).toBe(10); // material: só a loja compra
+    expect(countItem(inv, 'bone_fragment')).toBe(10); // material: o herói não anuncia (só vende para oferta de compra)
   });
 
   it('announces all surplus from bag and depot even with four existing listings', () => {

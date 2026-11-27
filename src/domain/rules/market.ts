@@ -1,5 +1,5 @@
 // Mercado de Pedraluz: livro de ofertas por item (inspirado no Market do Tibia e no Grand Exchange do RuneScape).
-// - Só equipamentos e poções: materiais, comida e munição são das lojas.
+// - Equipamentos, poções e materiais de criaturas (nov/2026); comida e munição são das lojas.
 // - Ofertas de VENDA (o item fica guardado pelo mercado) e de COMPRA (o ouro fica reservado), sem limite de quantidade.
 // - Quem compra paga sempre o menor preço anunciado; quem vende recebe sempre a maior oferta de compra. Uma oferta que
 //   alcança o preço do outro lado fecha na hora pelo preço de quem já estava esperando (como no Grand Exchange).
@@ -84,15 +84,20 @@ export const HISTORY_KEEP = 20;
 
 export const emptyMarket = (): MarketState => ({ offers: [], history: {}, proceeds: {}, parcels: {}, log: {}, seq: 0 });
 
-/** O mercado só aceita equipamentos e poções (os itens diversos ficam com as lojas). */
+/** O mercado negocia equipamentos, poções e (nov/2026) materiais de criaturas que têm valor. */
 export function marketable(def: ItemDef | undefined): boolean {
-  return !!def && (!!def.slot || def.type === 'potion');
+  return !!def && (!!def.slot || def.type === 'potion' || isMaterial(def));
+}
+
+/** Material de criatura (pele, dente, pó...): empilha e tem valor de venda. */
+export function isMaterial(def: ItemDef | undefined): boolean {
+  return !!def && def.type === 'loot' && !!def.stackable && def.value > 0;
 }
 
 export type MarketFail = 'notMarketable' | 'empty' | 'price' | 'qty' | 'gone' | 'gold' | 'room' | 'none';
 
 export const MARKET_FAIL_MESSAGE: Record<MarketFail, string> = {
-  notMarketable: 'O mercado só negocia equipamentos e poções. Materiais e outros itens vão para as lojas.',
+  notMarketable: 'O mercado não negocia este item: só equipamentos, poções e materiais de criaturas.',
   empty: 'Você não tem esse item (mochila ou depósito).',
   price: 'Escolha um preço de pelo menos 1 de ouro.',
   qty: 'Escolha a quantidade.',

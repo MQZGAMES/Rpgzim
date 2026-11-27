@@ -633,7 +633,7 @@ export function formationSpot(
     const spot = p.trail[Math.min(p.trail.length - 1, (order + 1) * 2)] ?? leader;
     return { x: spot.x, y: spot.y, tolerance: 0 };
   }
-  return { x: leader.x, y: leader.y, tolerance: 1 }; // colado: ao lado do líder
+  return { x: leader.x, y: leader.y, tolerance: 2 }; // perto do líder, com 1 tile vazio entre os dois
 }
 
 /** Caveira ativa do personagem (ou null). */

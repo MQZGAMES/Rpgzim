@@ -82,7 +82,7 @@ test('vida do Boladex', { timeout: 600_000 }, () => {
     .join(' · ');
   process.stderr.write(
     (process.env.HERO_QUIET ? '' : log.join('\n')) +
-      `\n\nECONOMIA\n${econ.join('\n')}\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths} | ml ${ch.skills.magic.level} poçõesMana ${manaDrunk}\nequip: ${eq}\nmochila: ${ch.inventory
+      `\n\nECONOMIA\n${econ.join('\n')}\nTEMPO: ${dist}\nRESUMO ${minutes} min (cpu ${((performance.now() - t0) / 1000).toFixed(1)} s): nível ${ch.level} xp ${ch.experience} | sword ${ch.skills.sword.level} shield ${ch.skills.shielding.level} | ouro ${ch.gold} banco ${ch.bankGold} | kills ${kills} mortes ${ch.stats.deaths} | ml ${ch.skills.magic.level} poçõesMana ${manaDrunk} | estilo ${(h.brain as { session?: { style: string } }).session?.style ?? '-'} | poções ${Object.entries(used).filter(([k]) => k.startsWith('potion_')).reduce((a, [, v]) => a + v, 0)}\nequip: ${eq}\nmochila: ${ch.inventory
         .filter(Boolean)
         .map((s) => `${s!.itemId}x${s!.count}`)
         .join(', ')}\n`,

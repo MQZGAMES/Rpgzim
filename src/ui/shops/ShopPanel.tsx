@@ -37,8 +37,8 @@ export function ShopPanel() {
   const [cat, setCat] = useState<CategoryFilter>('all');
   const [mineOnly, setMineOnly] = useState(false);
   if (!shop) return null;
-  const all = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0, market: o.market })) : shop.buys
-          .map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned, market: null }))
+  const all = tab === 'buy' ? shop.sells.map((o) => ({ item: o.item, price: o.price, extra: o.canAfford ? '' : 'caro', owned: 0, sellable: 0, market: o.market })) : shop.buys
+          .map((o) => ({ item: o.item, price: o.price, extra: '', owned: o.owned, sellable: o.sellable, market: null }))
           // o que você tem para vender aparece primeiro (maior valor total no topo)
           .sort((a, b) => Number(b.owned > 0) - Number(a.owned > 0) || b.owned * b.price - a.owned * a.price);
   // categorias que esta loja tem (na ordem do mercado), para os filtros
@@ -49,8 +49,8 @@ export function ShopPanel() {
     // comprar: o que você já pode usar primeiro, depois pelo nível (do menor para o maior) e pelo preço
     .sort((a, b) => (tab === 'buy' ? Number(usableNow(b.item)) - Number(usableNow(a.item)) || a.item.minLevel - b.item.minLevel || a.price - b.price : 0));
   // itens travados (cadeado) não entram no "vender tudo"
-  const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned * o.price), 0);
-  const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.owned), 0);
+  const sellAllTotal = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.sellable * o.price), 0);
+  const sellAllUnits = shop.buys.reduce((s, o) => s + (o.item.kept ? 0 : o.sellable), 0);
   const sel = list.find((o) => o.item.itemId === selId) ?? null;
   const maxQty = sel ? (tab === 'buy' ? Math.max(1, Math.min(100, Math.floor((gold + bank) / Math.max(1, sel.price)))) : Math.max(1, sel.owned)) : 1;
   const q = Math.min(qty, maxQty);
@@ -126,7 +126,7 @@ export function ShopPanel() {
               <ItemIcon icon={o.item.icon} size={32} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  {o.item.kept && <ItemIcon icon="ui_lock" size={12} title="Venda travada" />}
+                  {tab === 'sell' && (o.item.kept || o.sellable < o.owned) && <ItemIcon icon="ui_lock" size={12} title={o.item.kept ? 'Venda travada' : `${o.owned - o.sellable} travado(s)`} />}
                   <span className="min-w-0 truncate text-[13px]">{o.item.name}</span>
                   <ItemStats item={o.item} size="md" />
                   {o.item.slot && <ShopDiff item={o.item} equipped={eq[o.item.slot]} />}

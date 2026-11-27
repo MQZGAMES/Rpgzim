@@ -7,6 +7,8 @@ import type { ItemId, VocationId } from '../value-objects/ids';
 export interface ItemStack {
   itemId: ItemId;
   count: number;
+  /** Trava de venda desta unidade (só itens que não empilham; os empilháveis travam pelo tipo, em `flags`). */
+  locked?: boolean;
 }
 
 export interface SkillState {

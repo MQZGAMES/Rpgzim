@@ -2,7 +2,7 @@
 import type { CharacterState } from '../entities/character';
 import type { EquipSlot, ItemDef } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
-import { addItem, canFit, removeAt } from './inventory';
+import { addItem, addStack, canFit, removeAt } from './inventory';
 
 export type EquipFailReason = 'notEquipable' | 'vocation' | 'level' | 'inventoryFull' | 'empty';
 
@@ -90,7 +90,7 @@ export function equipFromInventory(data: GameData, c: CharacterState, index: num
   const taken = removeAt(inv, index, 1)!;
   for (const s of displaced) {
     const st = c.equipment[s]!;
-    if (addItem(data, inv, st.itemId, st.count) < st.count) return { ok: false, reason: 'inventoryFull' };
+    if (addStack(data, inv, st) < st.count) return { ok: false, reason: 'inventoryFull' };
   }
   for (const s of displaced) delete c.equipment[s];
   c.inventory.splice(0, c.inventory.length, ...inv);
@@ -103,7 +103,7 @@ export function unequip(data: GameData, c: CharacterState, slot: EquipSlot): Equ
   if (!st) return { ok: false, reason: 'empty' };
   if (!canFit(data, c.inventory, st.itemId, st.count)) return { ok: false, reason: 'inventoryFull' };
   delete c.equipment[slot];
-  addItem(data, c.inventory, st.itemId, st.count);
+  addStack(data, c.inventory, st);
   return { ok: true, slot };
 }
 

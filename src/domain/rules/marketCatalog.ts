@@ -5,7 +5,7 @@ import type { EquipSlot, ItemDef } from '../entities/definitions';
 import type { GameData } from '../entities/gameData';
 import type { VocationId } from '../value-objects/ids';
 import { itemAttack, itemDefense, itemScore } from './itemPower';
-import { marketable } from './market';
+import { isMaterial, marketable } from './market';
 
 export type MarketCategoryId =
   | 'sword'
@@ -23,14 +23,15 @@ export type MarketCategoryId =
   | 'ring'
   | 'amulet'
   | 'potion_health'
-  | 'potion_mana';
+  | 'potion_mana'
+  | 'material';
 
 export interface MarketCategory {
   id: MarketCategoryId;
   name: string;
   /** Ícone (de um item típico da categoria). */
   icon: string;
-  group: 'Armas' | 'Defesa' | 'Acessórios' | 'Poções';
+  group: 'Armas' | 'Defesa' | 'Acessórios' | 'Poções' | 'Materiais';
 }
 
 export const MARKET_CATEGORIES: readonly MarketCategory[] = [
@@ -50,11 +51,13 @@ export const MARKET_CATEGORIES: readonly MarketCategory[] = [
   { id: 'amulet', name: 'Amuletos', icon: 'item_amulet_guard', group: 'Acessórios' },
   { id: 'potion_health', name: 'Poções de vida', icon: 'item_potion_health_great', group: 'Poções' },
   { id: 'potion_mana', name: 'Poções de mana', icon: 'item_potion_mana_great', group: 'Poções' },
+  { id: 'material', name: 'Materiais de criaturas', icon: 'item_wolf_pelt', group: 'Materiais' },
 ];
 
 /** Categoria do item no mercado (null = o mercado não negocia). */
 export function categoryOf(def: ItemDef | undefined): MarketCategoryId | null {
   if (!def || !marketable(def)) return null;
+  if (isMaterial(def)) return 'material';
   if (def.type === 'potion') return def.use?.mana && !def.use.heal ? 'potion_mana' : 'potion_health';
   const w = def.weapon;
   if (def.slot === 'mainHand' && w) {
@@ -79,6 +82,7 @@ export function categoryOf(def: ItemDef | undefined): MarketCategoryId | null {
 /** Atributos resumidos para a lista (ex.: "Atq 24 · Def 8", "Mana +150 · ML +2", "Cura 180"). */
 export function shortStats(def: ItemDef): string {
   const parts: string[] = [];
+  if (isMaterial(def)) return 'Material';
   if (def.type === 'potion') {
     if (def.use?.heal) parts.push(`Cura ${def.use.heal}`);
     if (def.use?.mana) parts.push(`Mana ${def.use.mana}`);

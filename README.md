@@ -65,7 +65,7 @@ npm run test:e2e     # fluxos no navegador (Playwright, usa o Chrome instalado)
   **18 criaturas em 6 patamares** (cada patamar tem o dobro de vida e ataque do anterior; ver `docs/BALANCE.md`),
   com IA que contorna obstáculos (A*) e, ao se afastar demais do ponto de nascimento (3× a distância antiga),
   volta por teleporte com a vida cheia; loot, ouro, 3 lojas,
-  **Banco de Pedraluz** (depósito de 50 espaços e ouro guardado, seguros na morte; mochila de 28 espaços), NPC tutorial.
+  **Banco de Pedraluz** (depósito de 50 espaços e ouro guardado, seguros na morte; mochila de 35 espaços), NPC tutorial.
 - XP e níveis, skills (Sword/Axe/Club/Distance/Shielding) e Magic Level com curvas exponenciais.
   Shielding no estilo Tibia (até 2 atacantes por janela, só treina lutando) e **armas de treino** (ataque 1,
   dano fixo 1–2) para treinar a skill desejada sem matar o monstro rápido.
@@ -252,7 +252,7 @@ do item) e no **Grand Exchange do RuneScape** (preço de referência, botões de
 retirar) — e pensado primeiro para o celular.
 - **NPC próprio**: o **Corretor Tadeu**, na mesa ao lado da Banqueira Clara (Banco de Pedraluz). O depósito do banco não
   tem mais aba de mercado.
-- **Só equipamentos e poções.** Materiais de criaturas, comida e outros itens diversos são vendidos só nas lojas.
+- **Equipamentos, poções e materiais de criaturas** (materiais desde nov/2026). Comida e outros itens diversos são vendidos só nas lojas.
 - **Jornada em 4 toques**: *Comprar / Vender / Minhas ofertas* → **categoria** (Espadas, Machados, Maças, Arcos e
   lanças, Varinhas, Cajados, Escudos, Livros, Capacetes, Armaduras, Calças, Botas, Anéis, Amuletos, Poções de vida e
   de mana — cada uma mostra quanto está à venda, ou quanto você tem) → **lista** com filtro por vocação (Todas, a sua
@@ -614,7 +614,7 @@ Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
 ### Outras mudanças da mesma rodada (nov/2026)
 - **PvP Enforced** (Configurações → tipo de mundo): a experiência que a vítima perde ao morrer vai para quem a matou
   (quem bateu nela no último minuto), dividida em partes iguais. Nos outros tipos de mundo nada muda.
-- **Mochila de 28 espaços** (era 20) e **depósito de 50** (era 40); saves antigos crescem sem perder nada.
+- **Mochila de 35 espaços** (era 20, depois 28) e **depósito de 50** (era 40); saves antigos crescem sem perder nada.
 - **Heróis sem AFK** (ver *Temporada 2*).
 - **Desktop**: nomes de personagens e criaturas maiores e proporcionais ao zoom (18 px num monitor 1280×800, 23 px em
   1920×1080; antes 16 e 11 px fixos), escudo de grupo e caveira **ao lado do nome** (antes ficavam soltos sobre a
@@ -643,3 +643,23 @@ Pixelify Sans (logotipo), ambas SIL Open Font License, via @fontsource.
 - **Desempenho**: as criaturas ganham desenho, nome e barra só quando aparecem na tela pela primeira vez; com o dobro de
   criaturas o jogo usa menos memória que antes (73 MB contra 76 MB) e continua a 60 FPS no desktop.
 
+
+## Grupo, guerra, travas, loot e mercado (nov/2026)
+- **Formação**: quem segue o líder fica a 2 tiles dele (1 tile vazio no meio) e longe 1 tile dos colegas; ninguém para na
+  frente para onde o líder anda. Colega de grupo que bloqueia troca de lugar em 0,3 s (antes 3 s).
+- **Fila na porta**: segurando o direcional ou andando por um clique no mapa, depois de 0,45 s você pula a fila de
+  personagens (até 3 em linha) e cai no primeiro tile livre. Paredes, criaturas e PZ trancada impedem o pulo.
+- **Mochila**: 35 espaços (eram 28).
+- **Trava de venda**: equipamento trava só aquela unidade (outra igual continua vendável, e a trava vai junto ao organizar,
+  equipar e salvar). Poções e materiais travam pelo tipo: as que chegarem depois também ficam travadas. As poções não
+  ficam mais fora do "Vender tudo" sozinhas; as que você já tinha (e as do kit inicial) entram travadas uma vez.
+- **Loot automático** (Configurações): escolha ouro, equipamentos, poções e materiais, mais um valor mínimo por unidade.
+  O que você joga no chão nunca volta sozinho.
+- **Mercado**: materiais de criaturas também são negociados (categoria "Materiais"). Os heróis compram o que está
+  anunciado abaixo do que a loja paga (margem de 12% e pelo menos 2 de ouro por unidade) e revendem à loja na mesma visita.
+- **Heróis**: a cada login sorteiam o estilo da sessão (upar rápido, caçar loot, comércio, grupo, PK em minoria ou
+  equilibrado), que aparece ao lado da personalidade. Lembram quem os matou entre sessões e vão atrás quando estão mais
+  fortes. Na guerra de guildas saem à caça de inimigos com mais frequência e pedem ajuda à guilda quando sozinhos não
+  vencem. Ninguém começa briga com quem está muitos níveis acima: o limite é max(5, 15% do nível) + 2 por colega por
+  perto, até +6. Com o golpe final num inimigo quase morto, o limite não vale.
+- **Painel do grupo**: nome, nível e vocação numa linha que não quebra, mais vida, mana, distância e o que cada herói faz.

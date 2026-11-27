@@ -7,6 +7,7 @@ import { SEASON } from './season';
 import { WORLD_VERSION } from './worldVersion';
 import type { VocationId } from '../value-objects/ids';
 import { addItem } from './inventory';
+import { migratePotionLocks } from './economy';
 import { computeStats } from './stats';
 
 export const NAME_MIN = 3;
@@ -60,6 +61,8 @@ export function createCharacter(
     if (st) c.equipment[slot as keyof typeof c.equipment] = { itemId: st.itemId, count: st.count ?? 1 };
   }
   for (const st of voc.startingInventory) addItem(data, c.inventory, st.itemId, st.count);
+  // as poções do kit começam travadas (fora do "vender tudo"); destrave no cadeado se quiser vendê-las
+  migratePotionLocks(c);
   const stats = computeStats(data, c);
   c.health = stats.maxHealth;
   c.mana = stats.maxMana;

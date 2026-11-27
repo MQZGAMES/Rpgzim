@@ -20,7 +20,7 @@ import {
   type MarketFill,
   type OfferSide,
 } from '../../domain/rules/market';
-import { keptFromSellAll } from '../../domain/rules/economy';
+import { lockedOwned } from '../../domain/rules/economy';
 import { addItem, canFit, removeItem } from '../../domain/rules/inventory';
 import type { PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
@@ -206,9 +206,9 @@ export function marketSellAll(w: World, itemIds: readonly string[], includeKept 
   let soldUnits = 0;
   let soldGold = 0;
   for (const itemId of new Set(itemIds)) {
-    const have = ownedCount(c, itemId);
-    if (!have || !marketable(w.data.items[itemId])) continue;
-    if (!includeKept && keptFromSellAll(c, itemId)) continue;
+    // travados (cadeado na unidade ou no tipo) só entram com `includeKept`; o anúncio tira primeiro os destravados
+    const have = ownedCount(c, itemId) - (includeKept ? 0 : lockedOwned(w.data, c, itemId));
+    if (have <= 0 || !marketable(w.data.items[itemId])) continue;
     const price = priceGuide(w.data, w.market, itemId, c.id).sellSuggest;
     const res = placeOffer(w.data, w.market, c, 'sell', itemId, have, price, pkNow(w));
     if (!res.ok) continue;

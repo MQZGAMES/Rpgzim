@@ -177,6 +177,28 @@ function AutoOptions() {
         onChange={(v) => set({ autoLoot: v })}
         testId="auto-loot"
       />
+      {a.autoLoot && (
+        <div className="ml-4 border-l-2 border-dusk pl-3" data-testid="auto-loot-options">
+          <Check label="Ouro" checked={a.lootGold} onChange={(v) => set({ lootGold: v })} testId="auto-loot-gold" />
+          <Check label="Equipamentos" checked={a.lootGear} onChange={(v) => set({ lootGear: v })} testId="auto-loot-gear" />
+          <Check label="Poções" checked={a.lootPotions} onChange={(v) => set({ lootPotions: v })} testId="auto-loot-potions" />
+          <Check
+            label="Materiais (pele, dentes, pó...)"
+            checked={a.lootMaterials}
+            onChange={(v) => set({ lootMaterials: v })}
+            testId="auto-loot-materials"
+          />
+          <div className="flex flex-wrap items-center gap-1 py-1 text-[13px]" data-testid="auto-loot-min">
+            <span className="w-full text-[12px] text-muted">Só itens que valem pelo menos (por unidade, na loja):</span>
+            {([0, 10, 50, 200, 1000] as const).map((v) => (
+              <PixelButton key={v} variant={a.lootMinValue === v ? 'gold' : 'stone'} onClick={() => set({ lootMinValue: v })}>
+                {v === 0 ? 'Tudo' : `${v}+`}
+              </PixelButton>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted">O que você joga no chão nunca volta sozinho: pegue pela janela de loot.</p>
+        </div>
+      )}
       <Check
         label="Cura automática"
         checked={a.autoHeal}

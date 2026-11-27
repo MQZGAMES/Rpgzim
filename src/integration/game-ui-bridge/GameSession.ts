@@ -688,6 +688,9 @@ export class GameSession {
   }
   setSellLocks(itemIds: readonly string[], locked: boolean): void {
     this.sim.setSellLocks(itemIds, locked);
+  }
+  setSellLocksAt(indices: readonly number[], locked: boolean): void {
+    this.sim.setSellLocksAt(indices, locked);
     this.audio.play('ui');
     this.dirty = true;
   }
@@ -850,8 +853,8 @@ export class GameSession {
     if (this.sim.sell(itemId, qty)) this.audio.play('coin');
     this.dirty = true;
   }
-  setSellLock(itemId: string, locked: boolean): void {
-    this.sim.setSellLock(itemId, locked);
+  setSellLock(itemId: string, locked: boolean, at?: { index: number } | { slot: EquipSlot }): void {
+    this.sim.setSellLock(itemId, locked, at);
     this.audio.play('ui');
     this.dirty = true;
   }

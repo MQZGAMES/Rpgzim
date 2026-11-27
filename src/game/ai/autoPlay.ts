@@ -2,7 +2,7 @@
 // São opções do jogador (guardadas no aparelho); os heróis têm a própria IA e não passam por aqui.
 import { chebyshev } from '../../domain/value-objects/position';
 import { castCheck, castSpell } from '../abilities/spells';
-import { takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
+import { lootUnitValue, takeAllNearbyLoot, useInventoryItem } from '../inventory/inventoryService';
 import { actorById, partyOf } from '../social/social';
 import type { World } from '../simulation/World';
 import { POTION, isReady } from '../../domain/rules/cooldowns';
@@ -11,6 +11,13 @@ import { canDrink, potionKind } from '../../domain/rules/potions';
 export interface AutoSettings {
   /** Pegar o loot ao alcance sozinho. */
   autoLoot: boolean;
+  /** Gestão do loot automático: o que pegar (ouro, equipamento, poções, materiais) e o valor mínimo por unidade. */
+  lootGold: boolean;
+  lootGear: boolean;
+  lootPotions: boolean;
+  lootMaterials: boolean;
+  /** Itens que valem menos que isto por unidade (o que a loja paga) ficam no chão; 0 = pega tudo. */
+  lootMinValue: number;
   /** Cura automática (caixa principal): liga as opções abaixo. */
   autoHeal: boolean;
   /** Usar poção de cura abaixo desta fração da vida máxima. */
@@ -31,6 +38,11 @@ export interface AutoSettings {
 
 export const DEFAULT_AUTO: AutoSettings = {
   autoLoot: false,
+  lootGold: true,
+  lootGear: true,
+  lootPotions: true,
+  lootMaterials: true,
+  lootMinValue: 0,
   autoHeal: false,
   potionHp: true,
   hpBelow: 0.4,
@@ -55,6 +67,14 @@ export function migrateAuto(saved: Record<string, unknown>): Partial<AutoSetting
     potionMana: oldPotion && Number(saved.manaBelow ?? 0) > 0,
     spellHeal: oldSpell,
   };
+}
+
+/** O loot automático pega este item? (categoria marcada e valor por unidade acima do mínimo) */
+export function autoLootWants(w: World, a: AutoSettings, itemId: string): boolean {
+  const def = w.data.items[itemId];
+  if (!def) return false;
+  const ok = def.slot ? a.lootGear : def.type === 'potion' ? a.lootPotions : a.lootMaterials;
+  return ok && (a.lootMinValue <= 0 || lootUnitValue(w, itemId) >= a.lootMinValue);
 }
 
 /** Índice da poção da mochila (de vida ou de mana) conforme a preferência; -1 se não houver. */
@@ -142,6 +162,7 @@ export function updateAutoPlay(w: World): void {
       }
     }
   }
-  // pega o loot ao alcance (menos o que você mesmo jogou no chão)
-  if (a.autoLoot) takeAllNearbyLoot(w, (bag) => !bag.dropped);
+  // pega o loot ao alcance conforme a gestão do loot (nunca o que você mesmo jogou no chão: esse só pela janela de loot)
+  if (a.autoLoot)
+    takeAllNearbyLoot(w, (bag) => !bag.dropped, { gold: a.lootGold, item: (st) => autoLootWants(w, a, st.itemId) });
 }

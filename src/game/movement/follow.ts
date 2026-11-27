@@ -10,7 +10,7 @@ import type { MonsterEntity, PlayerEntity } from '../entities/types';
 import type { World } from '../simulation/World';
 import { actorById, partyOf } from '../social/social';
 import { isPz } from '../world/GameMap';
-import { greedyStepToward, pathTo, tryStep } from './movement';
+import { canEnter, greedyStepToward, occupant, pathTo, tryStep } from './movement';
 
 /** Current movement speed (tiles/s), including buffs and slows; independent of input method. */
 export function actorSpeed(w: World, p: PlayerEntity): number {
@@ -75,6 +75,57 @@ export function trailStep(w: World, p: PlayerEntity, tolerance: number): 'arrive
   // diagonal barrada: tenta cada eixo
   if (dx && dy && (tryStep(w, p, dx, 0, speed, false) || tryStep(w, p, 0, dy, speed, false))) return 'moved';
   return 'none';
+}
+
+/** Folga da formação: 1 tile vazio entre o seguidor e o líder e entre os seguidores (ninguém fica colado nem trava). */
+export const FORMATION_GAP = 2;
+
+/** Nota de um tile para quem segue: perto da distância ideal do líder, longe dos colegas e fora da frente do líder. */
+function spotScore(
+  t: { x: number; y: number },
+  leader: PlayerEntity,
+  mates: readonly PlayerEntity[],
+): number {
+  const dl = chebyshev(t, leader);
+  let s = Math.abs(dl - FORMATION_GAP) * 3 + (dl <= 1 ? 6 : 0);
+  for (const m of mates) if (chebyshev(m, t) <= 1) s += 2;
+  // à frente do líder (para onde ele está andando) é o caminho dele: evita ficar ali
+  const ldx = leader.move ? Math.sign(leader.x - leader.move.fromX) : 0;
+  const ldy = leader.move ? Math.sign(leader.y - leader.move.fromY) : 0;
+  if (ldx || ldy) {
+    for (let k = 1; k <= 2; k++) if (t.x === leader.x + ldx * k && t.y === leader.y + ldy * k) s += 5;
+  }
+  return s;
+}
+
+/**
+ * Seguidor perto do líder, mas colado nele ou num colega (ou no caminho do líder): dá um passo para um tile melhor
+ * (1 tile vazio entre todos). Retorna true se andou.
+ */
+export function spreadStep(w: World, p: PlayerEntity): boolean {
+  const party = partyOf(w, p.id);
+  if (!party || party.formation === 'free' || party.leaderId === p.id) return false;
+  const leader = actorById(w, party.leaderId);
+  if (!leader || leader.dead || chebyshev(leader, p) > FORMATION_GAP + 1) return false;
+  // dentro de área protegida os personagens se atravessam: não precisa abrir espaço
+  if (isPz(w.map, p.x, p.y)) return false;
+  const mates = party.members
+    .filter((id) => id !== p.id && id !== leader.id)
+    .map((id) => actorById(w, id))
+    .filter((a): a is PlayerEntity => !!a && !a.dead);
+  const here = spotScore(p, leader, mates);
+  if (here === 0) return false;
+  let best: { dx: number; dy: number; s: number } | null = null;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const t = { x: p.x + dx, y: p.y + dy };
+      if (!canEnter(w, t.x, t.y, false, p.id) || occupant(w, t.x, t.y) !== undefined) continue;
+      if (isPz(w.map, t.x, t.y)) continue;
+      const s = spotScore(t, leader, mates) + (dx && dy ? 0.1 : 0);
+      if (s < here - 0.5 && (!best || s < best.s)) best = { dx, dy, s };
+    }
+  return !!best && tryStep(w, p, best.dx, best.dy, actorSpeed(w, p), false);
 }
 
 /**

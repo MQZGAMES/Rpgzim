@@ -27,7 +27,7 @@ export const BALANCE: BalanceConfig = {
     shieldingMaxAttackers: 2,
     shieldingAttackWindowMs: 5000,
   },
-  player: { inventorySlots: 28, depotSlots: 50, regenTickMs: 2000, deathXpPenalty: 1, deathSkillPenalty: 1, respawnInvulnerableMs: 3000 },
+  player: { inventorySlots: 35, depotSlots: 50, regenTickMs: 2000, deathXpPenalty: 1, deathSkillPenalty: 1, respawnInvulnerableMs: 3000 },
   world: { lootDecayMs: 180000, corpseDecayMs: 15000, aiSleepDistance: 40 },
   // 6 faixas x 3 espécies; cada faixa com o dobro de vida e ataque da anterior (32x da primeira à última)
   // xpRate: experiência das criaturas a 1/4 da base (temporada 2 deixou pela metade; nov/2026 cortou mais 50%)
