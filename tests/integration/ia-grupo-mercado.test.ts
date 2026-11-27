@@ -14,6 +14,7 @@ import { heroHelpers } from '../../src/game/ai/heroBrain';
 import { rememberKill, rollSession, sessionWeights, worstKiller } from '../../src/game/ai/heroSession';
 import { FORMATION_GAP, spreadStep } from '../../src/game/movement/follow';
 import { FORCE_HOP_AFTER_MS, canEnter, resolveStuck } from '../../src/game/movement/movement';
+import { cycleActorSelection } from '../../src/game/combat/combat';
 import { acceptInvite, configureParty, invite } from '../../src/game/social/social';
 import type { HeroEntity } from '../../src/game/entities/types';
 import type { GameSimulation } from '../../src/game/simulation/GameSimulation';
@@ -261,5 +262,27 @@ describe('estilo de jogo por sessão e vingança', () => {
     rememberKill(w, 'hero:boladex', w.human.id, 100);
     rememberKill(w, 'hero:boladex', w.human.id, 200);
     expect(worstKiller(w, 'hero:boladex')).toEqual({ id: w.human.id, count: 2 });
+  });
+});
+
+describe('botão de seleção de personagens', () => {
+  it('pula quem está no seu grupo', () => {
+    const sim = makeSim('knight', { seed: 6 });
+    const w = sim.world;
+    clearMonsters(w);
+    const mate = addHero(sim, 'boladex');
+    const other = addHero(sim, 'maguim');
+    mate.brain.nextThinkAt = Infinity;
+    other.brain.nextThinkAt = Infinity;
+    invite(w, w.human.id, mate.id);
+    acceptInvite(w, mate.id, w.human.id);
+    const spot = openRow(w, 6);
+    sim.teleportPlayer(spot.x, spot.y);
+    putAt(w, mate, spot.x + 1, spot.y); // o colega está mais perto
+    putAt(w, other, spot.x + 3, spot.y);
+    cycleActorSelection(w);
+    expect(w.ui.selectedActor).toBe(other.id);
+    cycleActorSelection(w);
+    expect(w.ui.selectedActor).toBeNull(); // depois do último, desmarca (o colega nunca entra)
   });
 });
