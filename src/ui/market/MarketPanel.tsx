@@ -416,15 +416,15 @@ function QuickSellAll({ items }: { items: CatalogItem[] }) {
   const [confirming, setConfirming] = useState(false);
   const [withKept, setWithKept] = useState(false);
   const owned = items.filter((it) => (market.owned[it.itemId] ?? 0) > 0);
-  const count = (list: CatalogItem[]) => list.reduce((s, it) => s + market.owned[it.itemId]!, 0);
-  const free = owned.filter((it) => !market.kept[it.itemId]);
-  const keptUnits = count(owned) - count(free);
+  // unidades que entram: todas (com os travados) ou só as destravadas de cada item
+  const unitsOf = (it: CatalogItem, kept: boolean) =>
+    market.owned[it.itemId]! - (kept ? 0 : (market.kept[it.itemId] ?? 0));
+  const count = (list: CatalogItem[], kept = true) => list.reduce((s, it) => s + unitsOf(it, kept), 0);
+  const free = owned.filter((it) => unitsOf(it, false) > 0);
+  const keptUnits = count(owned) - count(owned, false);
   const mine = withKept ? owned : free;
-  const units = count(mine);
-  const total = mine.reduce(
-    (s, it) => s + market.owned[it.itemId]! * (market.quotes[it.itemId]?.sellSuggest ?? 0),
-    0,
-  );
+  const units = count(mine, withKept);
+  const total = mine.reduce((s, it) => s + unitsOf(it, withKept) * (market.quotes[it.itemId]?.sellSuggest ?? 0), 0);
   if (!owned.length) return null;
   const close = () => (setConfirming(false), setWithKept(false));
   if (!confirming)
@@ -434,7 +434,7 @@ function QuickSellAll({ items }: { items: CatalogItem[] }) {
         onClick={() => setConfirming(true)}
         data-testid="market-sell-all"
       >
-        Vender tudo rápido ({count(free)})
+        Vender tudo rápido ({count(free, false)})
         {keptUnits > 0 && (
           <span className="ml-1 inline-flex items-center gap-[2px] text-[11px] text-muted">
             <ItemIcon icon="ui_lock" size={11} />

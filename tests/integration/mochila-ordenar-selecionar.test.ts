@@ -68,11 +68,15 @@ describe('vários itens de uma vez', () => {
     const sim = makeSim('knight');
     const c = sim.world.player.character;
     sim.setSellLocks(['slime_gel', 'axe_hand', 'item_que_nao_existe'], true);
+    // empilhável: trava o tipo; equipamento: trava cada unidade que ele tem (não o tipo)
+    const axes = () => c.inventory.filter((s) => s?.itemId === 'axe_hand');
     expect(isLocked(c, 'slime_gel')).toBe(true);
-    expect(isLocked(c, 'axe_hand')).toBe(true);
+    expect(axes().length).toBeGreaterThan(0);
+    expect(axes().every((s) => s!.locked)).toBe(true);
+    expect(isLocked(c, 'axe_hand')).toBe(false);
     expect(isLocked(c, 'item_que_nao_existe')).toBe(false);
     sim.setSellLocks(['slime_gel', 'axe_hand'], false);
     expect(isLocked(c, 'slime_gel')).toBe(false);
-    expect(isLocked(c, 'axe_hand')).toBe(false);
+    expect(axes().some((s) => s!.locked)).toBe(false);
   });
 });

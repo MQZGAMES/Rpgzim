@@ -214,7 +214,8 @@ describe('modo guerra: IA', () => {
     const sim = makeSim('knight', { seed: 11 });
     const w = sim.world;
     const at = field(sim);
-    const strong = addHero(sim, 'boladex', 45);
+    // (nov/2026: o grupo não puxa briga com quem está muitos níveis acima; 10 níveis o grupo de 4 ainda encara)
+    const strong = addHero(sim, 'boladex', 32);
     const weak = addHero(sim, 'distanciado', 22);
     sim.setWar('ffa');
     put(sim, strong, at.x + 5, at.y);
@@ -249,6 +250,31 @@ describe('modo guerra: IA', () => {
     }
     expect(hitBy).toBeGreaterThanOrEqual(2); // o grupo foi junto, não só o líder
     expect(strong.dead).toBe(true);
+  });
+
+  it('nem em grupo puxa briga com quem está muitos níveis acima (qualquer formação)', () => {
+    for (const formation of ['follow', 'free'] as const) {
+      const sim = makeSim('knight', { seed: 11 });
+      const w = sim.world;
+      const at = field(sim);
+      const strong = addHero(sim, 'boladex', 45);
+      const weak = addHero(sim, 'distanciado', 22);
+      sim.setWar('ffa');
+      put(sim, strong, at.x + 5, at.y);
+      put(sim, weak, at.x, at.y);
+      dummy(strong);
+      const mates = [addHero(sim, 'maguim', 24), addHero(sim, 'mano_cura', 24), addHero(sim, 'extra_k', 26)];
+      mates.forEach((m, i) => put(sim, m, at.x - 1 + i, at.y + 1));
+      for (const m of mates) {
+        invite(w, weak.id, m.id);
+        acceptInvite(w, m.id, weak.id);
+      }
+      configureParty(w, weak.id, { formation });
+      expect(warOdds(w, weak, strong)).toBeGreaterThan(1.2); // em números o grupo "venceria"
+      advance(sim, 15000);
+      const hit = [weak, ...mates].some((h) => attackedRecently(w, h.id, strong.id, 15000));
+      expect(hit, formation).toBe(false);
+    }
   });
 
   it('foge quando o outro lado é forte demais', () => {

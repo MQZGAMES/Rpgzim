@@ -8,6 +8,7 @@ import { SEASON, isOldSeason, seasonReset } from '../../domain/rules/season';
 import { WORLD_VERSION } from '../../domain/rules/worldVersion';
 import { addItem } from '../../domain/rules/inventory';
 import { fixMageWeapon } from '../../domain/rules/equipment';
+import { migratePotionLocks } from '../../domain/rules/economy';
 import { isVocationId } from '../../domain/value-objects/ids';
 import { MAX_LEVEL, levelForXp } from '../../domain/rules/experience';
 import { sanitizeName } from '../../domain/rules/character';
@@ -65,7 +66,8 @@ function validStack(data: GameData, v: unknown): ItemStack | null {
   const def = data.items[v.itemId]!;
   const max = def.stackable ? (def.maxStack ?? 100) : 1;
   const count = Math.floor(num(v.count, 1, 1, max));
-  return { itemId: v.itemId, count };
+  // trava de venda da unidade (só itens que não empilham; os empilháveis travam pelo tipo, em `flags`)
+  return max === 1 && v.locked === true ? { itemId: v.itemId, count, locked: true } : { itemId: v.itemId, count };
 }
 
 /**
@@ -144,6 +146,8 @@ export function parseSave(data: GameData, raw: unknown, start?: { x: number; y: 
   };
   // magos só com varinha: arma errada sai do slot e entra a varinha/cajado do nível
   fixMageWeapon(data, character);
+  // poções deixaram de ficar fora do "vender tudo" sozinhas: as que ele já tem entram travadas (uma vez)
+  migratePotionLocks(character);
   if (isOldSeason({ season: typeof c.season === 'number' ? c.season : undefined })) {
     const fresh = seasonReset(data, character, start ?? character.position, Date.now());
     return { version: SAVE_VERSION, savedAt: Date.now(), character: fresh, reset: true };

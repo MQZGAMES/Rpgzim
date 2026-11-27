@@ -141,7 +141,7 @@ const list: NpcDef[] = [
     dialog: [
       {
         id: 'start',
-        text: 'Aqui no Mercado de Pedraluz os aventureiros negociam equipamentos e poções entre si. Quem compra paga o menor preço anunciado; quem vende recebe a maior oferta. Materiais de criaturas, só nas lojas.',
+        text: 'Aqui no Mercado de Pedraluz os aventureiros negociam equipamentos, poções e materiais de criaturas entre si. Quem compra paga o menor preço anunciado; quem vende recebe a maior oferta. Comida e itens diversos, só nas lojas.',
         options: [
           { label: 'Abrir mercado', action: 'openMarket' },
           { label: 'Como funciona?', action: 'next', goto: 'help' },

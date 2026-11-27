@@ -62,8 +62,8 @@ import {
 import { buyItem, sellItem, sellAllItems } from '../economy/shopService';
 import { refreshStats } from '../progression/progression';
 import { nearestReachable, planWalk } from '../movement/walk';
-import { setSellLock } from '../../domain/rules/economy';
-import { sortInventory, type InventorySortKey, type SortDir } from '../../domain/rules/inventory';
+import { setSellLock, setStackLock } from '../../domain/rules/economy';
+import { maxStackOf, sortInventory, type InventorySortKey, type SortDir } from '../../domain/rules/inventory';
 import { manaPerTick } from '../../domain/rules/regen';
 import { HOTBAR_SETS, HOTBAR_SIZE, assignHotbar, normalizeHotbar, normalizeHotbarSets, switchHotbarSet, type HotbarEntry } from '../../domain/rules/hotbar';
 import {
@@ -108,7 +108,7 @@ import {
   marketTakeParcels,
 } from '../economy/marketService';
 import type { OfferSide } from '../../domain/rules/market';
-import { actorSpeed, chaseStep, followCatchUp, trailStep } from '../movement/follow';
+import { actorSpeed, chaseStep, followCatchUp, spreadStep, trailStep } from '../movement/follow';
 import { DEFAULT_AUTO, updateAutoPlay, type AutoSettings } from '../ai/autoPlay';
 import {
   answerInviteNow,
@@ -477,6 +477,8 @@ export class GameSimulation {
           p.pathGoal = null;
           p.following = false;
         }
+        // colado no líder ou num colega: abre 1 tile de folga (ninguém trava ninguém)
+        if (spreadStep(w, p)) return;
       } else if (trailStep(w, p, spot.tolerance) === 'moved') {
         p.following = true; // anda pela trilha do líder: sem recalcular rota a cada passo
         return;
@@ -837,25 +839,53 @@ export class GameSimulation {
   }
 
   /** Trava/destrava a venda de vários itens de uma vez (uma mensagem só). */
+  /**
+   * Trava/destrava pelo tipo (sem posição): empilháveis travam o tipo; equipamento trava todas as unidades que você
+   * tem agora (as que chegarem depois ficam destravadas).
+   */
   setSellLocks(itemIds: readonly string[], locked: boolean): void {
     const w = this.world;
+    const c = w.player.character;
     const ids = [...new Set(itemIds)].filter((id) => (w.data.items[id]?.value ?? 0) > 0);
     if (!ids.length) return;
-    for (const id of ids) setSellLock(w.player.character, id, locked);
-    message(w, `${ids.length} ${ids.length > 1 ? 'itens' : 'item'}: venda ${locked ? 'travada (não entra no "Vender tudo")' : 'destravada'}.`, 'system');
-    w.events.emit('itemsChanged', {});
-    w.events.emit('saveRequested', { reason: 'lock' });
+    for (const id of ids) {
+      if (maxStackOf(w.data, id) > 1) setSellLock(c, id, locked);
+      else
+        for (const st of [...c.inventory, ...c.depot, ...Object.values(c.equipment)])
+          if (st && st.itemId === id) setStackLock(w.data, c, st, locked);
+    }
+    this.lockChanged(`${ids.length} ${ids.length > 1 ? 'itens' : 'item'}`, locked);
   }
-  setSellLock(itemId: string, locked: boolean): void {
+  /** Trava/destrava as unidades destas posições da mochila (equipamento: só aquela unidade; empilhável: o tipo). */
+  setSellLocksAt(indices: readonly number[], locked: boolean): void {
     const w = this.world;
+    const c = w.player.character;
+    const stacks = [...new Set(indices)]
+      .map((i) => c.inventory[i])
+      .filter((st): st is NonNullable<typeof st> => !!st && (w.data.items[st.itemId]?.value ?? 0) > 0);
+    if (!stacks.length) return;
+    for (const st of stacks) setStackLock(w.data, c, st, locked);
+    this.lockChanged(`${stacks.length} ${stacks.length > 1 ? 'itens' : 'item'}`, locked);
+  }
+  /**
+   * Trava/destrava um item. Com `at` (posição na mochila ou slot equipado) e item que não empilha, só aquela unidade;
+   * sem `at`, como `setSellLocks`.
+   */
+  setSellLock(itemId: string, locked: boolean, at?: { index: number } | { slot: EquipSlot }): void {
+    const w = this.world;
+    const c = w.player.character;
     const def = w.data.items[itemId];
     if (!def) return;
-    setSellLock(w.player.character, itemId, locked);
-    message(
-      w,
-      locked ? `${def.name}: venda travada (não entra no "Vender tudo").` : `${def.name}: venda destravada.`,
-      'system',
-    );
+    const st = at ? ('index' in at ? c.inventory[at.index] : c.equipment[at.slot]) : undefined;
+    if (st && st.itemId === itemId) setStackLock(w.data, c, st, locked);
+    else if (maxStackOf(w.data, itemId) > 1) setSellLock(c, itemId, locked);
+    else return this.setSellLocks([itemId], locked);
+    const what = maxStackOf(w.data, itemId) > 1 ? `${def.name} (todas)` : def.name;
+    this.lockChanged(what, locked);
+  }
+  private lockChanged(what: string, locked: boolean): void {
+    const w = this.world;
+    message(w, `${what}: venda ${locked ? 'travada (não entra no "Vender tudo")' : 'destravada'}.`, 'system');
     w.events.emit('itemsChanged', {});
     w.events.emit('saveRequested', { reason: 'lock' });
   }

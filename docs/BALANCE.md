@@ -523,3 +523,32 @@ Knight).
   Vital com custo por nível e ML com peso menor (~15–20% da vida), e as curas fortes com 2,5–3× a cura leve por
   lançamento (Luz Restauradora com mais peso de ML, Segundo Fôlego em % da vida; a Cura Intensa pode ficar como está
   por curar o grupo). Assim a cura forte vira a de emergência e o custo de mana da cura sobe com o nível.
+
+## Estilos de sessão, vingança, revenda e filtro de nível (nov/2026)
+- **Estilo da sessão** (`src/game/ai/heroSession.ts`), sorteado a cada login, com peso pelo temperamento:
+  upar (+1,5 nível na caça, poção ×1,35, presa "fraca" a partir de 5 níveis abaixo), loot (60% do peso da caça no
+  ouro e nos itens por minuto), comércio (35% de loot, 70% do ouro livre em revenda), grupo (+0,35 de vontade de
+  convidar), PK (minoria: peso 0 para quem não tem coragem ≥ 0,55 nem ganância ≥ 0,65; mira também outros heróis, só
+  com força ≥ 1,15×) e equilibrado (a IA de antes). Equilibrado e grupo não pesam loot: com 0,15, o Boladex nível 1
+  ia caçar javalis (mais loot, abate lento) e terminava os 90 min no nível 6 em vez de 10.
+- **Revenda**: compra no mercado o que está anunciado até max(1, ⌊pago pela loja ÷ 1,12⌋, pago − 2) e vende à loja na
+  mesma visita. Fora comércio, usa 30% do ouro livre (o das poções fica de fora).
+- **Filtro de nível** para começar briga com gente: diferença ≤ max(5, 15% do nível) + 2 por colega por perto (até +6);
+  o golpe final num inimigo com < 30% de vida não passa pelo filtro. `power` subestima quem está muito acima.
+- **Correção**: ao começar um PK o herói larga a rota anterior (antes podia seguir andando para a caça no meio da briga).
+- **Medição** (`hero-life`, 90 min do nível 1, sozinho, sementes 11 e 23, kit inicial; XP · abates · poções · mortes):
+
+  | Herói (semente) | main | este pacote (estilo sorteado) |
+  |---|---|---|
+  | Boladex (11) | 4.560 · 534 · 180 · 0 | 5.917 · 629 · 171 · 0 (comércio) |
+  | Boladex (23) | 6.007 · 615 · 206 · 0 | 6.568 · 573 · 211 · 0 (equilibrado) |
+  | Maguim (11) | 9 · 5 · 9 · 0 (travou no nível 1) | 8.485 · 765 · 465 · 0 (comércio) |
+  | Maguim (23) | 7.545 · 840 · 370 · 0 | 5.664 · 642 · 383 · 0 (grupo) |
+  | Mano Cura (11) | 8.178 · 856 · 293 · 0 | 8.942 · 723 · 379 · 0 (upar) |
+  | Mano Cura (23) | 10.841 · 835 · 357 · 0 | 9.271 · 706 · 397 · 0 (upar) |
+  | Distanciado (11) | 4.380 · 766 · 170 · 0 | 7.048 · 968 · 219 · 0 (upar) |
+  | Distanciado (23) | 5.992 · 808 · 218 · 0 | 5.313 · 792 · 210 · 0 (upar) |
+
+  XP somada sem o par do Maguim/11 (travado na main): 47.503 → 48.723 (+2,6%); com ele, +20%. Ouro + banco no fim:
+  13.878 → 9.040 (−35%): quem está "upando" compra mais poção. O estilo muda a sequência aleatória, então a variação
+  por semente (−25% a +61%) é em boa parte sorte, não efeito do estilo. Nenhuma morte nas 16 rodadas.

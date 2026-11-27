@@ -56,19 +56,35 @@ export function addItem(data: GameData, inv: Inventory, itemId: string, count: n
   return count - left;
 }
 
-/** Remove até `count` unidades (das últimas pilhas para as primeiras); retorna quantas foram removidas. */
+/**
+ * Remove até `count` unidades (das últimas pilhas para as primeiras); retorna quantas foram removidas.
+ * As unidades travadas (`locked`) saem por último: vender, usar ou jogar fora pega primeiro as destravadas.
+ */
 export function removeItem(inv: Inventory, itemId: string, count: number): number {
   let left = count;
-  for (let i = inv.length - 1; i >= 0 && left > 0; i--) {
-    const st = inv[i];
-    if (st && st.itemId === itemId) {
-      const take = Math.min(left, st.count);
-      st.count -= take;
-      left -= take;
-      if (st.count <= 0) inv[i] = null;
+  for (const pass of [false, true])
+    for (let i = inv.length - 1; i >= 0 && left > 0; i--) {
+      const st = inv[i];
+      if (st && st.itemId === itemId && !!st.locked === pass) {
+        const take = Math.min(left, st.count);
+        st.count -= take;
+        left -= take;
+        if (st.count <= 0) inv[i] = null;
+      }
     }
-  }
   return count - left;
+}
+
+/**
+ * Põe uma pilha inteira na mochila mantendo a trava da unidade (item que não empilha); empilháveis somam nas
+ * pilhas existentes. Retorna quantas unidades entraram.
+ */
+export function addStack(data: GameData, inv: Inventory, st: ItemStack): number {
+  if (maxStackOf(data, st.itemId) > 1 || !st.locked) return addItem(data, inv, st.itemId, st.count);
+  const i = inv.indexOf(null);
+  if (i < 0) return 0;
+  inv[i] = { itemId: st.itemId, count: 1, locked: true };
+  return 1;
 }
 
 export function removeAt(inv: Inventory, index: number, count: number): ItemStack | null {
@@ -77,7 +93,7 @@ export function removeAt(inv: Inventory, index: number, count: number): ItemStac
   const take = Math.min(count, st.count);
   st.count -= take;
   if (st.count <= 0) inv[index] = null;
-  return { itemId: st.itemId, count: take };
+  return st.locked ? { itemId: st.itemId, count: take, locked: true } : { itemId: st.itemId, count: take };
 }
 
 export function freeSlots(inv: Inventory): number {
@@ -88,7 +104,7 @@ export function freeSlots(inv: Inventory): number {
 export function compact(data: GameData, inv: Inventory): void {
   const items = inv.filter((s): s is ItemStack => s !== null).map((s) => ({ ...s }));
   inv.fill(null);
-  for (const st of items) addItem(data, inv, st.itemId, st.count);
+  for (const st of items) addStack(data, inv, st);
 }
 
 export type InventorySortKey = 'type' | 'value';
@@ -132,4 +148,5 @@ export function sortInventory(data: GameData, inv: Inventory, key: InventorySort
   });
   inv.fill(null);
   items.forEach((s, i) => (inv[i] = s));
+  // (compact já preservou a trava de cada unidade)
 }

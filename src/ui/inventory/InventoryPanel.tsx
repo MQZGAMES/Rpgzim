@@ -129,14 +129,17 @@ export function ItemDetails({
 }
 
 /** Trava/destrava a venda do item (o cadeado o deixa fora do "Vender tudo"). */
-function LockButton({ item }: { item: ItemView }) {
+function LockButton({ item, at }: { item: ItemView; at: { index: number } | { slot: EquipSlot } }) {
   const session = useSession();
   if (item.value <= 0) return null;
+  // equipamento: trava só esta unidade; poções e materiais: o tipo inteiro (inclusive os que chegarem depois)
+  const scope = item.slot ? 'só esta unidade' : 'todas iguais, inclusive as próximas';
   return (
     <PixelButton
       className="!border-[5px] px-2 text-[12px]"
-      onClick={() => session.setSellLock(item.itemId, !item.locked)}
-      title={item.locked ? 'Volta a entrar no "Vender tudo"' : 'Não entra no "Vender tudo" das lojas'}
+      onClick={() => session.setSellLock(item.itemId, !item.locked, at)}
+      title={item.locked ? `Volta a entrar no "Vender tudo" (${scope})` : `Não entra no "Vender tudo" das lojas (${scope})`}
+      data-testid="lock-item"
     >
       <span className="inline-flex items-center gap-1">
         <ItemIcon icon="ui_lock" size={14} className={item.locked ? '' : 'opacity-60 grayscale'} />
@@ -252,7 +255,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
         className="!border-[5px] px-2 text-[12px]"
         disabled={!lockable.length}
         title={allLocked ? 'Voltam a entrar no "Vender tudo"' : 'Ficam fora do "Vender tudo" das lojas'}
-        onClick={() => session.setSellLocks(lockable.map((it) => it.itemId), !allLocked)}
+        onClick={() => session.setSellLocksAt(picked.filter((i) => inv[i] && inv[i]!.value > 0), !allLocked)}
         data-testid="bag-multi-lock"
       >
         <span className="inline-flex items-center gap-1">
@@ -307,7 +310,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
               Usar
             </PixelButton>
           )}
-          <LockButton item={selected} />
+          <LockButton item={selected} at={{ index: sel.index }} />
           <PixelButton
             className="!border-[5px] px-2 text-[12px]"
             title="Deixa o item no chão embaixo de você (um saco de loot); jogar mais itens no mesmo lugar soma no mesmo saco"
@@ -331,7 +334,7 @@ export function InventoryPanel({ onClose }: { onClose: () => void }) {
           >
             Desequipar
           </PixelButton>
-          <LockButton item={selected} />
+          <LockButton item={selected} at={{ slot: sel.slot }} />
         </>
       ) : null}
     </div>

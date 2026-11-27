@@ -423,7 +423,8 @@ export type HeroLineKey =
   | 'warRaid'
   | 'warWin'
   | 'warBetray'
-  | 'warHelp';
+  | 'warHelp'
+  | 'warCallHelp';
 
 export interface HeroDef {
   id: string;

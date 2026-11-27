@@ -140,6 +140,11 @@ const boladex: HeroDef = {
     warWin: ['Menos um! GG, {player}.', '{player} caiu! Próximo!', 'Essa guerra é nossa!'],
     warBetray: ['Nada pessoal, {player}... é guerra.', 'Desculpa, {player}. Cada um por si!', 'Valeu pela companhia, {player}. Agora o ouro é meu.'],
     warHelp: ['Segura aí, {player}, tô chegando!', 'Aguenta, {player}! Indo te ajudar.', 'Tô indo, {player}!'],
+    warCallHelp: [
+      'Guilda, ajuda aqui! Achei o {player}, sozinho não dá.',
+      'Quem tá livre? {player} tá aqui, bora matar junto!',
+      'Reforço! O {player} tá forte, preciso de gente.',
+    ],
   },
 };
 

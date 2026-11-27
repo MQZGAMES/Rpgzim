@@ -5,7 +5,7 @@ import { createCharacter } from '../../src/domain/rules/character';
 import type { HeroEntity } from '../../src/game/entities/types';
 import { advance, makeSim } from '../helpers';
 
-it('no modo realista, nenhum herói fica AFK parado no mundo (20 min de jogo, com idas à vila)', { timeout: 120_000 }, () => {
+it('no modo realista, nenhum herói fica AFK parado no mundo (20 min de jogo, com idas à vila)', { timeout: 240_000 } /* 24 heróis por 20 min: ~115 s numa CPU livre */, () => {
   const sim = makeSim('knight', { seed: 11 });
   const w = sim.world;
   w.lifelike = true;

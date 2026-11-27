@@ -17,7 +17,7 @@ import type { GameData } from '../../domain/entities/gameData';
 import type { MarketState } from '../../domain/rules/market';
 import { countItem } from '../../domain/rules/inventory';
 import { bestPotionFor, usablePotionCount } from '../../domain/rules/potions';
-import { isSellLocked, keptFromSellAll } from '../../domain/rules/economy';
+import { isStackLocked, lockedOwned, unlockedCount } from '../../domain/rules/economy';
 import { HOTBAR_SIZE, parseHotbarEntry } from '../../domain/rules/hotbar';
 import { spellManaCost } from '../../domain/rules/spells';
 import { escrowOf, marketable, quoteBuy, parcelUnits, priceGuide, type MarketOffer, type PriceGuide } from '../../domain/rules/market';
@@ -52,6 +52,15 @@ import {
 import { allActors } from '../../game/simulation/World';
 import { heroActivity } from '../../game/ai/heroBrain';
 import { personaOf } from '../../game/ai/heroTactics';
+import { SESSION_LABEL } from '../../game/ai/heroSession';
+import type { HeroEntity } from '../../game/entities/types';
+
+/** Personalidade e o estilo de jogo da sessão (ex.: "Agressivo · focado em upar"). */
+function personaLabel(h: HeroEntity): string {
+  const style = h.brain.session?.style;
+  const label = personaOf(h.hero.temperament).label;
+  return style ? `${label} · ${SESSION_LABEL[style]}` : label;
+}
 
 export interface ItemView {
   itemId: string;
@@ -206,6 +215,10 @@ export interface UiSnapshot {
       level: number;
       hp: number;
       maxHp: number;
+      mana: number;
+      maxMana: number;
+      /** Distância até você (tiles). */
+      distance: number;
       isYou: boolean;
       isLeader: boolean;
       near: boolean;
@@ -275,7 +288,7 @@ export interface UiSnapshot {
     bankGold: number;
     /** `market`: anúncios mais baratos que a loja (preço do mais barato e quantas unidades há abaixo do preço da loja). */
     sells: { item: ItemView; price: number; canAfford: boolean; market: { price: number; units: number } | null }[];
-    buys: { item: ItemView; price: number; owned: number }[];
+    buys: { item: ItemView; price: number; owned: number; sellable: number }[];
   } | null;
   depot: { npcName: string; gold: number; bankGold: number; items: (ItemView | null)[] } | null;
   /** Mercado de Pedraluz (só com a janela do corretor aberta). */
@@ -288,7 +301,8 @@ export interface UiSnapshot {
     /** Equipamentos e poções que você tem (mochila + depósito). */
     owned: Record<string, number>;
     /** Dos que você tem, os travados (cadeado ou poção): o "vender tudo rápido" só os leva com confirmação à parte. */
-    kept: Record<string, boolean>;
+    /** Unidades travadas (cadeado) de cada item seu, na mochila e no depósito. */
+    kept: Record<string, number>;
     /** Comparação de cada item do catálogo com o que você usa (melhor, pior, igual, nível, vocação). */
     fits: Record<string, Comparison>;
     /** Unidades compradas esperando para ser retiradas. */
@@ -396,7 +410,7 @@ function marketView(sim: GameSimulation, npcName: string): NonNullable<UiSnapsho
     })),
     quotes,
     owned,
-    kept: Object.fromEntries(Object.keys(owned).map((id) => [id, keptFromSellAll(c, id)])),
+    kept: Object.fromEntries(Object.keys(owned).map((id) => [id, lockedOwned(w.data, c, id)])),
     fits,
     parcels: parcelUnits(m, c.id),
     money: c.gold + c.bankGold,
@@ -453,8 +467,8 @@ export function itemView(sim: GameSimulation, stack: ItemStack): ItemView {
     atk: itemAttack(def),
     def: itemDefense(def),
     better: isUpgrade(w.data, c, def),
-    locked: isSellLocked(c, def.id),
-    kept: keptFromSellAll(c, def.id),
+    locked: isStackLocked(w.data, c, stack),
+    kept: isStackLocked(w.data, c, stack),
     npcSell: bestNpcBuy(w.data, def.id),
     market: marketLow(w.market, def.id),
     minLevel: def.minLevel ?? 0,
@@ -568,12 +582,15 @@ function partyView(sim: GameSimulation): UiSnapshot['party'] {
           level: a.character.level,
           hp: a.character.health,
           maxHp: a.stats.maxHealth,
+          mana: Math.floor(a.character.mana),
+          maxMana: a.stats.maxMana,
+          distance: Math.max(Math.abs(a.x - p.x), Math.abs(a.y - p.y)),
           isYou: id === p.id,
           isLeader: id === party.leaderId,
           near: Math.max(Math.abs(a.x - p.x), Math.abs(a.y - p.y)) <= PARTY_SHARE_RANGE,
           dead: a.dead,
           ...(hero && hero.id !== p.id
-            ? { persona: personaOf(hero.hero.temperament).label, activity: heroActivity(w, hero) }
+            ? { persona: personaLabel(hero), activity: heroActivity(w, hero) }
             : {}),
         },
       ];
@@ -732,7 +749,7 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
       isLeader: w.social.party?.leaderId === h.id,
       skull: skullSeenBy(w, p.id, h.id),
       activity: heroActivity(w, h),
-      persona: personaOf(h.hero.temperament).label,
+      persona: personaLabel(h),
       attackBlocked: (() => {
         const f = canAttackActor(w, p, h);
         return f ? PVP_FAIL_MESSAGE[f] : null;
@@ -789,6 +806,8 @@ export function buildSnapshot(sim: GameSimulation, version: number): UiSnapshot 
               item: itemView(sim, { itemId: o.itemId, count: 1 }),
               price: o.price,
               owned: countItem(c.inventory, o.itemId),
+              /** Quantas o "Vender tudo" levaria (sem as travadas). */
+              sellable: unlockedCount(w.data, c, o.itemId),
             })),
           }
         : null,
