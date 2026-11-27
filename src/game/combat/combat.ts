@@ -36,6 +36,7 @@ import {
   recordDamage,
   registerAggression,
   registerPlayerKill,
+  sameParty,
   skullOf,
   touchCombat,
   nextLootReceiver,
@@ -125,12 +126,13 @@ export function selectedActor(w: World): PlayerEntity | null {
 
 /**
  * Botão de seleção: passa pelos personagens por perto (do mais perto ao mais longe) e, depois do último, desmarca.
+ * Quem é do seu grupo (ou da sua guilda, na guerra) fica de fora.
  * Só marca — quem ataca é o botão de ataque ou uma magia de ataque, que vão no marcado (evita PK sem querer).
  */
 export function cycleActorSelection(w: World, maxDistance = 9): void {
   const p = w.player;
   const list = allActors(w)
-    .filter((a) => a !== p && !a.dead && chebyshev(a, p) <= maxDistance)
+    .filter((a) => a !== p && !a.dead && !sameParty(w, p.id, a.id) && chebyshev(a, p) <= maxDistance)
     .sort((a, b) => chebyshev(a, p) - chebyshev(b, p) || Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
   const idx = list.findIndex((a) => a.id === w.ui.selectedActor);
   const next = !list.length || idx === list.length - 1 ? null : list[idx + 1]!;
